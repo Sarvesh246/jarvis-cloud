@@ -4,7 +4,7 @@ Use Jarvis from my phone without leaving my PC running.
 
 This repository is for a separate cloud deployment of [Hermes Agent](https://github.com/NousResearch/hermes-agent), connected to the Jarvis web interface. Keeping it separate means the local setup remains available if cloud hosting stops working. Computer access, local Ollama models and heavier rendering stay on the PC.
 
-The service runs Hermes's native API gateway in Docker. The initial cloud profile uses OpenRouter's free pool, with optional Groq and NVIDIA fallbacks. Research uses Exa, Tavily and Firecrawl when their keys are configured. The larger local FreeLLMAPI pool has not been mirrored here.
+The service runs Hermes's native API gateway in Docker. The initial cloud profile uses OpenRouter's free pool, with an optional NVIDIA fallback. Groq is left out on purpose: its free tier caps tokens per minute below the size of one agent request, and the 413 it returns makes Hermes wipe the conversation instead of falling back. Research uses Exa, Tavily and Firecrawl when their keys are configured. The larger local FreeLLMAPI pool has not been mirrored here.
 
 ## Run locally
 

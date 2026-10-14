@@ -15,8 +15,12 @@ def configuration(environ):
     cfg = json.loads((HERE / "profile.json").read_text(encoding="utf-8"))
     cfg["providers"]["cloud-openrouter"]["api"] = DEFAULT_BASE_URL
     cfg["fallback_providers"] = []
+    # Groq is deliberately absent. Its free tier caps tokens per minute below the size of a
+    # single agent request (system prompt + tool schemas + history) and answers with HTTP 413.
+    # Hermes reads any 413 as "conversation too large", compresses the history away and ends
+    # the turn without trying the next fallback, so one Groq entry broke every conversation
+    # once the OpenRouter daily pool ran out.
     for provider, variable, model, url in (
-        ("cloud-groq", "GROQ_API_KEY", "qwen/qwen3.8-27b", "https://api.groq.com/openai/v1"),
         ("cloud-nvidia", "NVIDIA_API_KEY", "nvidia/nemotron-3-ultra-550b-a55b", "https://integrate.api.nvidia.com/v1"),
     ):
         if environ.get(variable, "").strip():

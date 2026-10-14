@@ -53,10 +53,17 @@ class BootstrapTests(unittest.TestCase):
             for provider in cfg["providers"].values():
                 if "context_length" in provider:
                     self.assertGreaterEqual(provider["context_length"], 64000)
-            self.assertEqual([f["provider"] for f in cfg["fallback_providers"]], ["custom:cloud-groq", "custom:cloud-nvidia"])
+            self.assertEqual([f["provider"] for f in cfg["fallback_providers"]], ["custom:cloud-nvidia"])
             self.assertNotIn("ollama", text)
             self.assertTrue((home / "plugins/jarvis-cloud-research/plugin.yaml").exists())
             self.assertTrue((home / "SOUL.md").exists())
+
+    def test_groq_never_joins_the_chat_chain(self):
+        # Groq's per-minute token cap is smaller than one agent request; its 413 ends the turn
+        # instead of falling through, so a configured key must not put it in the chain.
+        cfg = bootstrap.configuration({"GROQ_API_KEY": "x", "NVIDIA_API_KEY": "x"})
+        self.assertNotIn("cloud-groq", cfg["providers"])
+        self.assertNotIn("groq", json.dumps(cfg["fallback_providers"]))
 
     def test_missing_optional_keys_do_not_add_fallbacks(self):
         self.assertEqual(bootstrap.configuration({})["fallback_providers"], [])
