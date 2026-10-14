@@ -9,6 +9,8 @@ import React, {
 import { ArrowDown, FileArrowUp, IconContext, Quotes } from "@phosphor-icons/react";
 import { readEvents } from "./stream.js";
 import { normalizeReplySpacing, normalizeSavedReplySpacing } from "./lib/reply-spacing.js";
+import { readSyncCache } from "./lib/chat-sync.js";
+import { useChatSync } from "./lib/use-chat-sync.js";
 import { Rail } from "./components/Rail.jsx";
 import { Header } from "./components/Header.jsx";
 import { Welcome } from "./components/Welcome.jsx";
@@ -148,13 +150,11 @@ function loadGoogle() {
   });
   return googleScript;
 }
-const KEEP = 30;
-
-/* Pinned conversations are never the ones that fall off the end. */
+/* Keep the full history: a new conversation must never delete an older one. */
 function cap(list) {
   const pinned = list.filter((chat) => chat.pinned);
   const rest = list.filter((chat) => !chat.pinned);
-  return [...pinned, ...rest].slice(0, Math.max(KEEP, pinned.length));
+  return [...pinned, ...rest];
 }
 
 /* The parts of a reply that make up one version of it. */
@@ -366,7 +366,7 @@ export function App() {
         }
         let saved = [];
         try {
-          saved = JSON.parse(
+          saved = readSyncCache(result.user.sub)?.chats || JSON.parse(
             localStorage.getItem(`jarvis-chats:${result.user.sub}`) || "[]",
           );
           saved = Array.isArray(saved)
@@ -432,20 +432,15 @@ export function App() {
     if (online && session?.offline) loadSession();
   }, [online, session?.offline]);
 
+  const syncIssue = useChatSync({
+    session, chats, setChats, busyId: busy ? activeId : null,
+    onConflict: () => showToast({ text: "Both devices edited this conversation. Your changes were kept in a device copy." }),
+  });
+
   useEffect(() => {
-    if (!session?.user || !chats.length) return;
-    const timeout = setTimeout(() => {
-      try {
-        localStorage.setItem(
-          `jarvis-chats:${session.user.sub}`,
-          JSON.stringify(cap(chats)),
-        );
-      } catch {
-        setStorageIssue(true);
-      }
-    }, 500);
-    return () => clearTimeout(timeout);
-  }, [chats, session?.user?.sub]);
+    if (chats.length && activeId && !chats.some((chat) => chat.id === activeId))
+      setActiveId(chats[0].id);
+  }, [chats, activeId]);
 
   useEffect(() => {
     if (!session?.user || session.offline) return;
@@ -1348,6 +1343,7 @@ export function App() {
             onOpenRail={() => setMenu(true)}
             onToggleRail={toggleRail}
           />
+          {syncIssue && <Notice>{syncIssue}</Notice>}
 
           <div
             className="conversation"

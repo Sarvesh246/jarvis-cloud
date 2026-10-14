@@ -3,6 +3,9 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "functions": {
+    "api/chats.js": {
+      "maxDuration": 60
+    },
     "api/chat.js": {
       "maxDuration": 300,
       "supportsCancellation": true
