@@ -104,11 +104,20 @@ export async function sessionUser(req, cfg) {
     return {
       sub: payload.sub,
       email: payload.email,
-      name: payload.name || "Sarvesh",
+      name: displayName(payload.name),
     };
   } catch {
     return null;
   }
+}
+
+function displayName(value) {
+  return (
+    (typeof value === "string" ? value : "")
+      .replace(/[\u0000-\u001f\u007f]/g, " ")
+      .trim()
+      .slice(0, 80) || "User"
+  );
 }
 
 export function googleUser(payload, nonce, cfg) {
@@ -127,7 +136,7 @@ export function googleUser(payload, nonce, cfg) {
   return {
     sub: payload.sub,
     email: payload.email.toLowerCase(),
-    name: String(payload.given_name || "Sarvesh").slice(0, 80),
+    name: displayName(payload.given_name || payload.name),
   };
 }
 

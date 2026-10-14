@@ -97,6 +97,28 @@ test("Google claims must belong to the verified owner and login nonce", () => {
   }
 });
 
+test("account names come from Google without a hard-coded personal fallback", () => {
+  const claims = {
+    sub: user.sub,
+    email: user.email,
+    email_verified: true,
+    nonce: csrf,
+  };
+  assert.equal(
+    googleUser({ ...claims, given_name: "Maya" }, csrf, cfg).name,
+    "Maya",
+  );
+  assert.equal(
+    googleUser({ ...claims, name: "Renée Lee" }, csrf, cfg).name,
+    "Renée Lee",
+  );
+  assert.equal(googleUser(claims, csrf, cfg).name, "User");
+  assert.equal(
+    googleUser({ ...claims, given_name: "  Maya\nLee  " }, csrf, cfg).name,
+    "Maya Lee",
+  );
+});
+
 test("chat input rejects model/system overrides, oversized context and invalid conversations", () => {
   const body = {
     conversationId: "c5ec5f03-1fd1-4f38-83df-b664bf78f998",

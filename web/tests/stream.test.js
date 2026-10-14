@@ -37,7 +37,7 @@ test("proxy fixes the model, scopes memory and never places the backend key in t
     {},
     res,
     { backend: "https://backend.example", apiKey: "private-test-key" },
-    { sub: "owner" },
+    { sub: "owner", name: "Maya", email: "owner@gmail.com" },
     {
       conversationId: "c5ec5f03-1fd1-4f38-83df-b664bf78f998",
       messages: [{ role: "user", content: "Hello" }],
@@ -52,6 +52,9 @@ test("proxy fixes the model, scopes memory and never places the backend key in t
   assert.equal(sent.options.headers.Authorization, "Bearer private-test-key");
   assert.equal(sent.options.headers["X-Hermes-Session-Key"], "web:owner");
   assert.equal(JSON.parse(sent.options.body).model, "jarvis");
+  const context = JSON.parse(sent.options.body).messages[0].content;
+  assert.match(context, /"display_name":"Maya"/);
+  assert.doesNotMatch(context, /owner@gmail\.com/);
   assert.match(output.join(""), /jarvis.complete/);
   assert.doesNotMatch(output.join(""), /private-test-key/);
 });
