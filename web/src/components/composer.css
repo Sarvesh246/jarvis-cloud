@@ -1,0 +1,119 @@
+.composer {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--s-3);
+  padding: var(--s-3) var(--s-3) var(--s-3) var(--s-5);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--lift-1);
+  transition:
+    border-color var(--dur-2) var(--ease),
+    box-shadow var(--dur-2) var(--ease);
+}
+
+.composer:focus-within {
+  border-color: var(--brass);
+  box-shadow:
+    var(--lift-1),
+    0 0 0 4px var(--brass-wash);
+}
+
+.composer textarea {
+  flex: 1;
+  min-width: 0;
+  max-height: 11rem;
+  padding: 0.55rem 0;
+  border: 0;
+  outline: none;
+  resize: none;
+  background: none;
+  font-size: var(--t-md);
+  line-height: 1.5;
+}
+
+.composer textarea::placeholder {
+  color: var(--muted);
+  font-family: var(--font-voice);
+  font-size: 1.1rem;
+  font-style: italic;
+}
+
+.composer-end {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+}
+
+.composer-hint {
+  display: none;
+  font-size: var(--t-xs);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+@media (hover: hover) and (min-width: 48rem) {
+  .composer:focus-within .composer-hint {
+    display: inline;
+    animation: hint-in var(--dur-3) var(--ease) both;
+  }
+}
+
+@keyframes hint-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* The one place brass is solid: Vaelo's invitation to act */
+.send {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: var(--hit);
+  height: var(--hit);
+  border-radius: 50%;
+  background: var(--brass);
+  color: var(--on-brass);
+  transition:
+    background var(--dur-2) var(--ease),
+    opacity var(--dur-2) var(--ease),
+    transform var(--dur-1) var(--ease);
+}
+
+.send svg {
+  grid-area: 1 / 1;
+  transition:
+    opacity var(--dur-2) var(--ease),
+    transform var(--dur-2) var(--ease);
+}
+
+.send .send-stop,
+.send[data-mode="stop"] .send-arrow {
+  opacity: 0;
+  transform: scale(0.6);
+}
+
+.send[data-mode="stop"] .send-stop {
+  opacity: 1;
+  transform: none;
+}
+
+.send[data-mode="stop"] {
+  background: var(--ink);
+  color: var(--surface);
+}
+
+.send:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.send:active:not(:disabled) {
+  transform: none;
+}
+
+.send:disabled {
+  background: var(--sunken);
+  color: var(--muted);
+}

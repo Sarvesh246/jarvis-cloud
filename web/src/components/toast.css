@@ -1,0 +1,50 @@
+.toast-region {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--s-6) + env(safe-area-inset-bottom));
+  z-index: 50;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+  min-height: 3rem;
+  padding: 0 var(--s-3) 0 var(--s-5);
+  border-radius: var(--r-pill);
+  background: var(--ink);
+  color: var(--canvas);
+  font-size: var(--t-sm);
+  box-shadow: var(--lift-2);
+  pointer-events: auto;
+  animation: arrive var(--dur-2) var(--ease) both;
+}
+
+.toast .text-button {
+  color: var(--brass);
+  min-height: var(--hit);
+}
+
+.toast .text-button:hover {
+  background: rgb(255 255 255 / 8%);
+}
+
+/* A gentle, in-flow notice. Earth-toned, never red, always with a way forward. */
+.notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-4);
+  padding: var(--s-2) var(--s-3) var(--s-2) var(--s-4);
+  border-radius: var(--r-md);
+  background: var(--clay-wash);
+  color: var(--ink-soft);
+  font-size: var(--t-sm);
+  animation: arrive var(--dur-2) var(--ease) both;
+}
+
+.notice[data-tone="brass"] {
+  background: var(--brass-wash);
+}

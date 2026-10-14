@@ -1,0 +1,111 @@
+.header {
+  position: relative;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-4);
+  min-height: 3.75rem;
+  padding: 0 var(--s-5);
+  padding-top: env(safe-area-inset-top);
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-width: 0;
+}
+
+.header-rail-mobile {
+  display: none;
+}
+
+.header-title,
+.header-title-input {
+  min-width: 0;
+  max-width: 32rem;
+  height: 2.25rem;
+  padding: 0 var(--s-3);
+  border-radius: var(--r-md);
+  font-family: var(--font-voice);
+  font-size: var(--t-lg);
+  line-height: 1;
+  color: var(--ink);
+}
+
+.header-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+  transition: background var(--dur-1) var(--ease);
+}
+
+.header-title:hover:not(:disabled) {
+  background: var(--brass-wash);
+}
+
+.header-title-input {
+  width: min(32rem, 60vw);
+  border: 1px solid var(--brass);
+  background: var(--surface);
+  outline: none;
+  box-shadow: 0 0 0 4px var(--brass-wash);
+}
+
+/* Vaelo's presence, in words. The dot is the Halo itself. */
+.presence {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  flex: none;
+  height: 2.25rem;
+  padding: 0 var(--s-3) 0 var(--s-2);
+  border-radius: var(--r-pill);
+  border: 1px solid var(--hairline);
+  background: var(--surface);
+  font-family: var(--font-label);
+  font-size: var(--t-xs);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+  transition:
+    border-color var(--dur-3) var(--ease),
+    color var(--dur-3) var(--ease);
+}
+
+.presence[data-tone="ready"] {
+  color: var(--muted);
+}
+
+.presence[data-tone="active"] {
+  border-color: var(--hairline-strong);
+  color: var(--brass-ink);
+}
+
+.presence[data-tone="clay"] {
+  color: var(--clay);
+  background: var(--clay-wash);
+}
+
+@media (max-width: 47.9375rem) {
+  .header {
+    padding: 0 var(--s-3);
+    padding-top: env(safe-area-inset-top);
+  }
+
+  .header-rail-mobile {
+    display: inline-grid;
+  }
+
+  .header-rail-desktop {
+    display: none;
+  }
+
+  .header-title,
+  .header-title-input {
+    font-size: var(--t-md);
+    max-width: 52vw;
+  }
+}

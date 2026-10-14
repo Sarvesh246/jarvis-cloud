@@ -1,0 +1,309 @@
+.message {
+  display: flex;
+  gap: var(--s-4);
+  width: 100%;
+}
+
+.message[data-fresh] {
+  animation: arrive var(--dur-3) var(--ease) both;
+}
+
+@keyframes arrive {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+/* You: a soft, neutral slate, aligned to the edge of the conversation */
+.message[data-role="user"] {
+  justify-content: flex-end;
+}
+
+.message[data-role="user"] .message-body {
+  max-width: min(85%, 34rem);
+  padding: var(--s-3) var(--s-4);
+  border-radius: var(--r-lg) var(--r-lg) var(--s-1) var(--r-lg);
+  background: var(--bubble);
+  color: var(--ink);
+}
+
+/* Vaelo: no bubble. It speaks directly to the page. */
+.message[data-role="assistant"] .message-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.message-halo {
+  margin-top: 0.15rem;
+}
+
+.prose {
+  font-size: var(--t-md);
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+.message[data-role="user"] .prose {
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.prose > :first-child {
+  margin-top: 0;
+}
+
+.prose > :last-child {
+  margin-bottom: 0;
+}
+
+.prose p,
+.prose ul,
+.prose ol,
+.prose blockquote {
+  margin: 0 0 var(--s-4);
+}
+
+.prose ul,
+.prose ol {
+  padding-left: var(--s-5);
+}
+
+.prose li + li {
+  margin-top: var(--s-1);
+}
+
+.prose li::marker {
+  color: var(--brass);
+}
+
+.prose h1,
+.prose h2,
+.prose h3 {
+  margin: var(--s-5) 0 var(--s-2);
+  font-family: var(--font-voice);
+  font-weight: 400;
+  line-height: 1.25;
+}
+
+.prose h1 {
+  font-size: var(--t-lg);
+}
+.prose h2 {
+  font-size: 1.25rem;
+}
+.prose h3 {
+  font-size: var(--t-md);
+  font-weight: 600;
+  font-family: var(--font-body);
+}
+
+.prose blockquote {
+  padding-left: var(--s-4);
+  border-left: 2px solid var(--brass);
+  color: var(--ink-soft);
+  font-family: var(--font-voice);
+  font-size: 1.12em;
+}
+
+.prose hr {
+  border: 0;
+  border-top: 1px solid var(--hairline);
+  margin: var(--s-5) 0;
+}
+
+.prose code {
+  padding: 0.12em 0.4em;
+  border-radius: 6px;
+  background: var(--sunken);
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-size: 0.88em;
+}
+
+.code {
+  position: relative;
+  margin: 0 0 var(--s-4);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  background: var(--sunken);
+}
+
+.code pre {
+  margin: 0;
+  padding: var(--s-4);
+  padding-top: var(--s-5);
+  overflow-x: auto;
+  line-height: 1.55;
+}
+
+.code pre code {
+  padding: 0;
+  background: none;
+  font-size: var(--t-sm);
+}
+
+.code-copy {
+  position: absolute;
+  top: var(--s-2);
+  right: var(--s-2);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  height: 1.75rem;
+  padding: 0 var(--s-2);
+  border-radius: var(--r-sm);
+  font-family: var(--font-label);
+  font-size: var(--t-xs);
+  font-weight: 700;
+  color: var(--muted);
+  opacity: 0;
+  transition:
+    opacity var(--dur-1) var(--ease),
+    background var(--dur-1) var(--ease);
+}
+
+.code:hover .code-copy,
+.code-copy:focus-visible {
+  opacity: 1;
+}
+
+.code-copy:hover {
+  background: var(--brass-wash);
+  color: var(--ink);
+}
+
+.prose table {
+  border-collapse: collapse;
+  margin: 0 0 var(--s-4);
+  font-size: var(--t-sm);
+}
+
+.prose th,
+.prose td {
+  padding: var(--s-2) var(--s-3);
+  border-bottom: 1px solid var(--hairline);
+  text-align: left;
+}
+
+/* Soft insertion point while words arrive */
+.caret {
+  display: inline-block;
+  width: 0.5em;
+  height: 0.5em;
+  margin-left: 0.2em;
+  border-radius: 50%;
+  background: var(--brass);
+  vertical-align: baseline;
+  animation: caret 1.4s ease-in-out infinite;
+}
+
+@keyframes caret {
+  0%,
+  100% {
+    opacity: 0.25;
+    transform: scale(0.8);
+  }
+  50% {
+    opacity: 0.9;
+    transform: scale(1);
+  }
+}
+
+.message-waiting {
+  margin: 0.35rem 0 0;
+  color: var(--muted);
+  font-family: var(--font-voice);
+  font-style: italic;
+  animation: waiting 3.2s ease-in-out infinite;
+}
+
+.message-note {
+  margin: var(--s-3) 0 0;
+  font-size: var(--t-sm);
+  color: var(--muted);
+}
+
+.message-note.error {
+  padding: var(--s-3) var(--s-4);
+  border-radius: var(--r-md);
+  background: var(--clay-wash);
+  color: var(--ink-soft);
+}
+
+.message-actions {
+  display: flex;
+  gap: var(--s-1);
+  margin: var(--s-2) 0 0 calc(var(--s-2) * -1);
+  opacity: 0;
+  transition: opacity var(--dur-2) var(--ease);
+}
+
+.message:hover .message-actions,
+.message:focus-within .message-actions,
+.message[data-last] .message-actions {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .message-actions {
+    opacity: 1;
+  }
+}
+
+/* Activity: what Vaelo reached for */
+.activity {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  margin: 0 0 var(--s-3);
+  padding: 0;
+  list-style: none;
+  font-size: var(--t-sm);
+  color: var(--muted);
+}
+
+.activity li {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+.activity-mark {
+  display: grid;
+  place-items: center;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 50%;
+  border: 1px solid var(--hairline-strong);
+  color: var(--on-brass);
+  transition:
+    background var(--dur-2) var(--ease),
+    border-color var(--dur-2) var(--ease);
+}
+
+.activity li[data-state="running"] .activity-mark {
+  border-color: var(--brass);
+  animation: caret 1.8s ease-in-out infinite;
+}
+
+.activity li[data-state="done"] .activity-mark {
+  background: var(--sage);
+  border-color: var(--sage);
+}
+
+.activity-state {
+  font-family: var(--font-label);
+  font-size: var(--t-xs);
+  font-weight: 600;
+  opacity: 0.8;
+}
+
+@keyframes waiting {
+  0%,
+  100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+}

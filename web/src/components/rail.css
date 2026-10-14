@@ -1,0 +1,228 @@
+.rail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  height: 100dvh;
+  padding: var(--s-5) var(--s-3) var(--s-4);
+  background: var(--rail);
+  border-right: 1px solid var(--hairline);
+  overflow: hidden;
+}
+
+.rail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--s-2);
+}
+
+.rail-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-3);
+}
+
+.rail-close {
+  display: none;
+}
+
+.rail-new {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-height: var(--hit);
+  padding: 0 var(--s-3);
+  border-radius: var(--r-md);
+  border: 1px solid var(--hairline-strong);
+  background: var(--surface);
+  font-weight: 600;
+  font-size: var(--t-sm);
+  transition:
+    border-color var(--dur-1) var(--ease),
+    background var(--dur-1) var(--ease),
+    opacity var(--dur-1) var(--ease);
+}
+
+.rail-new svg {
+  color: var(--brass-ink);
+}
+
+.rail-new:hover:not(:disabled) {
+  border-color: var(--brass);
+}
+
+.rail-new:disabled {
+  opacity: 0.5;
+}
+
+.rail-new kbd {
+  margin-left: auto;
+  font-family: var(--font-label);
+  font-size: var(--t-xs);
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.rail-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  padding: 0 var(--s-1);
+  scrollbar-width: thin;
+  scrollbar-color: var(--hairline-strong) transparent;
+}
+
+.rail-list h2 {
+  margin: 0 0 var(--s-1);
+  padding: 0 var(--s-2);
+}
+
+.rail-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  border-radius: var(--r-md);
+  transition: background var(--dur-1) var(--ease);
+}
+
+.rail-row:hover {
+  background: var(--brass-wash);
+}
+
+.rail-row[data-active="true"] {
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--hairline);
+}
+
+.rail-row[data-active="true"]::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 25%;
+  bottom: 25%;
+  width: 2px;
+  border-radius: var(--r-pill);
+  background: var(--brass);
+}
+
+.rail-link {
+  flex: 1;
+  min-width: 0;
+  min-height: var(--hit);
+  padding: 0 var(--s-3);
+  text-align: left;
+  font-size: var(--t-sm);
+  color: var(--ink-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rail-row[data-active="true"] .rail-link {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.rail-delete {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  margin-right: var(--s-1);
+  border-radius: var(--r-sm);
+  color: var(--muted);
+  opacity: 0;
+  transition:
+    opacity var(--dur-1) var(--ease),
+    color var(--dur-1) var(--ease);
+}
+
+.rail-row:hover .rail-delete,
+.rail-delete:focus-visible {
+  opacity: 1;
+}
+
+.rail-delete:hover:not(:disabled) {
+  color: var(--clay);
+}
+
+.rail-foot {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  padding-top: var(--s-3);
+  border-top: 1px solid var(--hairline);
+}
+
+.rail-note {
+  margin: 0;
+  padding: 0 var(--s-2);
+  font-size: var(--t-xs);
+  color: var(--muted);
+}
+
+.rail-account {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: 0 var(--s-1) 0 var(--s-2);
+}
+
+.rail-avatar {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background: var(--brass-wash);
+  color: var(--brass-ink);
+  font-family: var(--font-voice);
+  font-size: var(--t-md);
+}
+
+.rail-name {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--t-sm);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (hover: none) {
+  .rail-delete {
+    opacity: 1;
+    width: var(--hit);
+    height: var(--hit);
+  }
+}
+
+@media (max-width: 47.9375rem) {
+  .rail {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 30;
+    width: min(20rem, 88vw);
+    transform: translateX(-102%);
+    box-shadow: var(--lift-2);
+    transition: transform var(--dur-2) var(--ease);
+    padding-top: calc(var(--s-4) + env(safe-area-inset-top));
+    padding-bottom: calc(var(--s-4) + env(safe-area-inset-bottom));
+  }
+
+  .rail[data-open="true"] {
+    transform: none;
+  }
+
+  .rail-close {
+    display: inline-grid;
+  }
+
+  .rail-new kbd {
+    display: none;
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "Vaelo",
+  "short_name": "Vaelo",
+  "description": "A calm, capable presence for questions, ideas and everyday work.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8f4ee",
+  "theme_color": "#f8f4ee",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
