@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: jarvis-cloud
+    runtime: docker
+    plan: free
+    region: oregon
+    branch: main
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - key: API_SERVER_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false

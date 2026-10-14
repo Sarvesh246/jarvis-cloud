@@ -1,0 +1,33 @@
+{
+  "model": {"provider": "custom:cloud-openrouter", "default": "openrouter/free"},
+  "providers": {
+    "cloud-openrouter": {
+      "name": "OpenRouter free pool",
+      "api": "https://openrouter.ai/api/v1",
+      "api_key": "${OPENROUTER_API_KEY}",
+      "transport": "chat_completions",
+      "default_model": "openrouter/free",
+      "context_length": 32768,
+      "request_timeout_seconds": 60,
+      "stale_timeout_seconds": 45,
+      "models": ["openrouter/free"]
+    }
+  },
+  "agent": {"max_turns": 12},
+  "gateway": {
+    "max_concurrent_runs": 1,
+    "api_server": {"enabled": true, "max_concurrent_runs": 1, "history_tool_output_max_chars": 12000}
+  },
+  "platform_toolsets": {
+    "api_server": ["file", "terminal", "web", "memory", "session_search", "skills", "todo"]
+  },
+  "terminal": {"backend": "local", "cwd": "/opt/data/workspace", "timeout": 60},
+  "memory": {"memory_enabled": true, "user_profile_enabled": true},
+  "skills": {"creation_nudge_interval": 15},
+  "auxiliary": {"background_review": {"enabled": false}},
+  "plugins": {"enabled": ["jarvis-cloud-research"], "disabled": []},
+  "streaming": {"enabled": true},
+  "updates": {"check": false},
+  "telemetry": {"shared_metrics": {"enabled": false, "send": false}},
+  "tool_loop_guardrails": {"non_interactive_hard_stop_enabled": true}
+}
