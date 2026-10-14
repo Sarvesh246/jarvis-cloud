@@ -43,6 +43,18 @@ const PHONE = "(max-width: 47.9375rem), (pointer: coarse) and (max-height: 31.25
    to read while offline. Only the account id and display name are kept. */
 const LAST_USER_KEY = "vaelo-last-user";
 
+/* The conversation open in this tab or app window. Session storage outlives
+   a reload but not a fresh launch, which is exactly the line we want. */
+const OPEN_CHAT_KEY = "vaelo-open-chat";
+
+function readOpenChat() {
+  try {
+    return sessionStorage.getItem(OPEN_CHAT_KEY);
+  } catch {
+    return null;
+  }
+}
+
 function readLastUser() {
   try {
     const user = JSON.parse(localStorage.getItem(LAST_USER_KEY) || "null");
@@ -267,13 +279,18 @@ export function App() {
     toastTimer.current = setTimeout(() => setToast(null), 6500);
   }
 
-  /* Opening the app from its "New conversation" shortcut starts one. */
-  function takeShortcut(saved) {
-    const params = new URLSearchParams(location.search);
-    if (!params.has("new")) return saved;
-    history.replaceState(null, "", "/");
-    if (saved.length && !saved[0].messages.length) return saved;
-    return [freshChat(), ...saved];
+  /* A fresh launch opens on a new conversation, reusing an empty one rather
+     than piling them up. The chat this tab already had open (a reload, or the
+     phone reviving a backgrounded app) comes back instead, unless the app was
+     opened from its "New conversation" shortcut. */
+  function chooseOpening(saved) {
+    const shortcut = new URLSearchParams(location.search).has("new");
+    if (shortcut) history.replaceState(null, "", "/");
+    const open = readOpenChat();
+    if (!shortcut && saved.some((chat) => chat.id === open)) return { list: saved, id: open };
+    const empty = saved.find((chat) => !chat.messages.length && !chat.pinned);
+    const chat = empty || freshChat();
+    return { list: [chat, ...saved.filter((other) => other !== chat)], id: chat.id };
   }
 
   async function loadSession() {
@@ -329,14 +346,9 @@ export function App() {
         } catch {
           setStorageIssue(true);
         }
-        if (!saved.length) saved = [freshChat()];
-        const shortcut = new URLSearchParams(location.search).has("new");
-        saved = takeShortcut(saved);
-        setChats(saved);
-        const latest = shortcut
-          ? saved[0]
-          : [...saved].sort((a, b) => (b.updated || 0) - (a.updated || 0))[0];
-        setActiveId(latest.id);
+        const opening = chooseOpening(saved);
+        setChats(cap(opening.list));
+        setActiveId(opening.id);
       }
     } catch (err) {
       setError(err.message);
@@ -364,6 +376,15 @@ export function App() {
       removeEventListener("visibilitychange", ready);
     };
   }, []);
+
+  useEffect(() => {
+    if (!activeId) return;
+    try {
+      sessionStorage.setItem(OPEN_CHAT_KEY, activeId);
+    } catch {
+      /* without it, a reload opens a new conversation */
+    }
+  }, [activeId]);
 
   /* Back online after opening offline: fetch the real session quietly. */
   useEffect(() => {

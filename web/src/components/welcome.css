@@ -178,6 +178,40 @@
 /* The whole welcome fits without scrolling: it tightens in steps as the
    space between the header and the composer shrinks (Safari's toolbars,
    small phones, landscape, an open keyboard). */
+
+/* A laptop browser window: the full desktop set needs ~710px, more than
+   most windows leave between the header and the composer. */
+@media (min-width: 48rem) {
+  @container convo (max-height: 780px) {
+    .welcome {
+      padding-top: var(--s-3);
+      padding-bottom: var(--s-4);
+    }
+
+    .welcome .mark {
+      width: 56px;
+      height: 56px;
+      margin-bottom: var(--s-4);
+    }
+
+    .welcome h1 {
+      font-size: min(var(--t-xl), 2.75rem);
+    }
+
+    .welcome-line {
+      margin-bottom: var(--s-5);
+    }
+
+    .starters button {
+      padding: var(--s-3) var(--s-1);
+    }
+
+    .welcome-foot {
+      margin-top: var(--s-4);
+    }
+  }
+}
+
 @container convo (max-height: 600px) {
   .welcome {
     padding-top: var(--s-2);
