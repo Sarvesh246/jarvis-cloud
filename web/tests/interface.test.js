@@ -8,6 +8,18 @@ import { composeContent, fitHistory, readAttachment, wireMessage } from "../src/
 import { groupChats, searchChats } from "../src/lib/format.js";
 import { metricsText, parseMetrics, parseTimeline } from "../src/lib/structured.js";
 import { DEFAULTS, cleanPrefs } from "../src/lib/preferences.js";
+import {
+  MAX_VERSIONS,
+  addVersion,
+  cleanRevision,
+  collectWork,
+  currentContent,
+  docTitle,
+  parseTables,
+  revisionPrompt,
+  searchWork,
+  spliceSource,
+} from "../src/lib/library.js";
 import { answerApproval, approvalInput, chatInput, guidance, requestNote } from "../server/chat.js";
 
 test("Hermes tool events read as plain activity, including the preview Hermes sends", () => {
@@ -111,6 +123,78 @@ test("timelines keep their order and split out detail after a dash", () => {
     { when: "2021 Mar", what: "Series A", detail: "€12M, led by Partech" },
     { when: "Now", what: "Profitable" },
   ]);
+});
+
+test("the library gathers documents, longer code and tables, newest conversation first", () => {
+  const code = "```js\n" + Array.from({ length: 12 }, (_, i) => `step(${i});`).join("\n") + "\n```";
+  const table = "| City | Visitors |\n| --- | ---: |\n| Oslo | 1,200 |\n| Rome | 950 |\n| Lima | [10,400](https://x.org) |";
+  const chats = [
+    {
+      id: "old",
+      title: "Old chat",
+      updated: 1,
+      messages: [{ id: "a", role: "assistant", content: `# Launch plan\n\nShort intro.\n\n${table}` }],
+    },
+    {
+      id: "new",
+      title: "New chat",
+      updated: 2,
+      messages: [
+        { id: "u", role: "user", content: "# not mine to keep\n\nx".repeat(200) },
+        { id: "b", role: "assistant", content: `Here you go.\n\n${code}\n\n\`\`\`metrics\nPrice: $1\n\`\`\`` },
+        { id: "c", role: "assistant", content: "A short answer." },
+      ],
+      works: {
+        c: addVersion(null, "A short answer.", "A short, edited answer.", "you", "", 5),
+        gone: { versions: [{ content: "# Kept after a retry\n\nBody", at: 3, by: "vaelo" }], current: 0 },
+      },
+    },
+  ];
+  const items = collectWork(chats);
+  assert.deepEqual(
+    items.map(({ kind, title, chatId, edited }) => [kind, title, chatId, !!edited]),
+    [
+      ["document", "A short, edited answer.", "new", true],
+      ["code", "JS · 12 lines", "new", false],
+      ["document", "Kept after a retry", "new", false],
+      ["document", "Launch plan", "old", false],
+      ["table", "City, Visitors", "old", false],
+    ],
+  );
+  const tableItem = items.find((entry) => entry.kind === "table").item;
+  assert.deepEqual(tableItem.rows.at(-1), ["Lima", "10,400"]);
+  assert.equal(searchWork(items, "launch old").length, 1);
+  assert.equal(docTitle("Plain words that run on for quite a while longer than a title should, really"), "Plain words that run on for quite a while longer than a title…");
+  // tables inside code fences are code, not tables
+  assert.deepEqual(parseTables("```\n| a | b |\n| --- | --- |\n| 1 | 2 |\n```"), []);
+});
+
+test("document versions keep the original, cap the rest and always make the newest current", () => {
+  let work = addVersion(undefined, "v0", "v1", "you", "", 10);
+  assert.deepEqual(work.versions.map((v) => [v.content, v.by]), [["v0", "vaelo"], ["v1", "you"]]);
+  assert.equal(currentContent(work), "v1");
+  assert.equal(currentContent({ ...work, current: 0 }), "v0");
+  for (let i = 2; i < 30; i += 1) work = addVersion(work, "v0", `v${i}`, "vaelo", "Shorter");
+  assert.equal(work.versions.length, MAX_VERSIONS);
+  assert.equal(work.versions[0].content, "v0");
+  assert.equal(currentContent(work), "v29");
+  assert.equal(currentContent(undefined, "fallback"), "fallback");
+});
+
+test("a revision replaces exactly the selected passage and asks for nothing else", () => {
+  const source = "# Plan\n\nFirst paragraph.\n\nSecond paragraph here.\n\nThird.";
+  const start = source.indexOf("Second");
+  const end = start + "Second paragraph here.".length;
+  assert.equal(
+    spliceSource(source, start, end, "\nA better second paragraph.\n"),
+    "# Plan\n\nFirst paragraph.\n\nA better second paragraph.\n\nThird.",
+  );
+  const prompt = revisionPrompt({ source, start, end, instruction: "Make it shorter" });
+  assert.match(prompt, /Instruction: Make it shorter/);
+  assert.match(prompt, /<<<\nSecond paragraph here\.\n>>>/);
+  assert.match(prompt, /First paragraph\.\n\n\[\[PASSAGE\]\]\n\nThird\./);
+  assert.equal(cleanRevision("```markdown\nNew text\n```"), "New text");
+  assert.equal(cleanRevision("  Plain  "), "Plain");
 });
 
 test("saved preferences only ever hold known values", () => {

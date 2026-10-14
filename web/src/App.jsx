@@ -18,6 +18,7 @@ import { Settings } from "./components/Settings.jsx";
 import { Mark } from "./components/Mark.jsx";
 import { PresentationContext } from "./components/blocks/Blocks.jsx";
 import { applyPrefs, readPrefs, savePrefs } from "./lib/preferences.js";
+import { requestRevision } from "./lib/revise.js";
 import { Toast, Notice } from "./components/Toast.jsx";
 import { Opening, SignIn } from "./components/SignIn.jsx";
 import { toolInfo } from "./lib/tools.js";
@@ -683,6 +684,37 @@ export function App() {
     );
   }
 
+  /* A document's versions live with the conversation it came from */
+  function updateWork(messageId, next) {
+    setChats((current) =>
+      current.map((chat) =>
+        chat.id === activeId
+          ? { ...chat, updated: Date.now(), works: { ...chat.works, [messageId]: next } }
+          : chat,
+      ),
+    );
+  }
+
+  /* From the library: go to the conversation, then open the work beside it */
+  function openWork(entry) {
+    if (entry.chatId !== activeId) selectChat(entry.chatId);
+    setMenu(false);
+    setWorkspace(entry.item);
+  }
+
+  /* Back from a document to the reply it began as, briefly marked */
+  function revealMessage(id) {
+    if (matchMedia("(max-width: 74.9375rem)").matches) setWorkspace(null);
+    requestAnimationFrame(() => {
+      const el = document.getElementById(`m-${id}`);
+      if (!el) return;
+      pinned.current = false;
+      el.scrollIntoView({ block: "start", behavior: reducedMotion() ? "auto" : "smooth" });
+      el.dataset.found = "";
+      setTimeout(() => delete el.dataset.found, 1800);
+    });
+  }
+
   /* Swap which version of a reply is current. The shown version is the one
      Vaelo remembers, so the conversation always continues from it. */
   function selectVersion(id, index) {
@@ -1283,6 +1315,7 @@ export function App() {
             setSettingsOpen(true);
           }}
           onSignOut={logout}
+          onOpenWork={openWork}
         />
 
         <main
@@ -1348,6 +1381,7 @@ export function App() {
                       live={live}
                       streaming={live && !!message.content}
                       isLast={last && !mine}
+                      edited={(active.works?.[message.id]?.versions?.length || 0) > 1}
                       onAction={onAction}
                     />
                   );
@@ -1443,8 +1477,13 @@ export function App() {
           <Workspace
             item={workspace}
             messages={messages}
+            works={active?.works}
+            canRevise={!busy && online && !session.offline}
             onClose={() => setWorkspace(null)}
             onOpen={openFromWorkspace}
+            onWorkChange={updateWork}
+            onReveal={revealMessage}
+            onRevise={(request) => requestRevision({ csrf: session.csrf, ...request })}
           />
         )}
 

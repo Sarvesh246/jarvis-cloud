@@ -93,7 +93,14 @@ deserves to become something richer.
     paper (system, Parchment, Lamplight), a larger reading size, Adaptive or
     Minimal replies, reduced motion independent of the system, and a
     notification when a reply finishes while you're away. Kept per device.
-18. **Status changes what's already there.** While Vaelo answers, a light
+18. **Durable work lives outside the transcript.** The rail's Library
+    gathers long replies, longer code and tables from every conversation,
+    each reopening in the workspace with a way back to its reply. A
+    document can be edited directly or revised a passage at a time (select
+    it, say how it should change, preview, accept); every change is a
+    version, the original is never lost, and the conversation itself stays
+    as it was said.
+19. **Status changes what's already there.** While Vaelo answers, a light
     runs along the composer's top edge; scrolled away, the "jump" pill
     carries Vaelo's face and current action. Live status waits ~300ms
     before showing, so quick answers don't flash a state they never needed.

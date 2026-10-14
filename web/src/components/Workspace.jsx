@@ -12,6 +12,8 @@ import { Rendered, download, looksLikeSvg, useCopy, useSources } from "./blocks/
 import { SourceIcon } from "./blocks/SourceIcon.jsx";
 import { SOURCE_KINDS, kindLabel } from "../lib/sources.js";
 import { isNumericColumn, sortRows, toCSV, toTSV } from "../lib/table.js";
+import { currentContent, docTitle } from "../lib/library.js";
+import { DocumentWork } from "./DocumentWork.jsx";
 import "./workspace.css";
 
 /* The workspace opens beside the conversation only when something deserves
@@ -237,17 +239,17 @@ function TableView({ item }) {
   );
 }
 
-function DocumentView({ message, onOpen }) {
-  const sources = useSources(message?.content);
-  if (!message) return <p className="ws-empty">This reply is no longer in the conversation.</p>;
-  return (
-    <article className="ws-document prose">
-      <Rendered content={message.content} sources={sources} onOpen={onOpen} />
-    </article>
-  );
-}
-
-export function Workspace({ item, messages, onClose, onOpen }) {
+export function Workspace({
+  item,
+  messages,
+  works,
+  canRevise,
+  onClose,
+  onOpen,
+  onWorkChange,
+  onReveal,
+  onRevise,
+}) {
   const [width, setWidth] = useState(readWidth);
   const [done, copy] = useCopy();
   const panel = useRef(null);
@@ -256,6 +258,8 @@ export function Workspace({ item, messages, onClose, onOpen }) {
     () => (item?.messageId ? messages.find((m) => m.id === item.messageId) : null),
     [item?.messageId, messages],
   );
+  const work = item?.kind === "document" ? works?.[item.messageId] : undefined;
+  const documentText = currentContent(work, message?.content ?? "");
 
   /* Focus moves in when the panel opens and back to whatever opened it when
      it closes. As an overlay, Tab stays inside it. */
@@ -317,7 +321,7 @@ export function Workspace({ item, messages, onClose, onOpen }) {
   const titles = {
     code: item.title || "Code",
     sources: "Sources",
-    document: "Reply",
+    document: docTitle(documentText, "Document"),
     table: item.title || "Table",
   };
   const kinds = { code: "Workspace", sources: "Provenance", document: "Document", table: "Data" };
@@ -326,7 +330,9 @@ export function Workspace({ item, messages, onClose, onOpen }) {
       ? item.source
       : item.kind === "table"
         ? toTSV(item.columns, item.rows)
-        : message?.content || "";
+        : item.kind === "document"
+          ? documentText
+          : message?.content || "";
   function save() {
     if (item.kind === "table") return download("vaelo-table.csv", toCSV(item.columns, item.rows), "text/csv");
     if (item.kind === "document") return download("vaelo-reply.md", text, "text/markdown");
@@ -403,7 +409,18 @@ export function Workspace({ item, messages, onClose, onOpen }) {
       <div className="ws-body">
         {item.kind === "code" && <CodeView key={item.source} item={item} />}
         {item.kind === "sources" && <SourcesView message={message} focus={item.focus} />}
-        {item.kind === "document" && <DocumentView message={message} onOpen={onOpen} />}
+        {item.kind === "document" && (
+          <DocumentWork
+            key={item.messageId}
+            message={message}
+            work={work}
+            canRevise={canRevise}
+            onOpen={onOpen}
+            onRevise={onRevise}
+            onReveal={message ? () => onReveal(message.id) : undefined}
+            onWorkChange={(next) => onWorkChange(item.messageId, next)}
+          />
+        )}
         {item.kind === "table" && <TableView item={item} />}
       </div>
     </aside>

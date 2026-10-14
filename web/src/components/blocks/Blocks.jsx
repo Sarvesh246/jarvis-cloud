@@ -89,17 +89,27 @@ function languageOf(children) {
   return (code?.props?.className || "").match(/language-([\w+-]+)/)?.[1]?.toLowerCase() || "";
 }
 
-/* A fenced block is either code, or one of the shapes Vaelo can answer in. */
-function CodeBlock({ children }) {
+/* A fenced block is either code, or one of the shapes Vaelo can answer in.
+   In a mapped document each block carries where it sits in the Markdown
+   (data-src), so a selection can be traced back to the words behind it. */
+function CodeBlock({ children, "data-src": src }) {
   const language = languageOf(children);
   if (STRUCTURED.has(language)) {
     const source = textOf(children);
-    return language === "metrics" ? <Metrics source={source} /> : <Timeline source={source} />;
+    return language === "metrics" ? (
+      <Metrics source={source} src={src} />
+    ) : (
+      <Timeline source={source} src={src} />
+    );
   }
-  return <CodeFigure language={language}>{children}</CodeFigure>;
+  return (
+    <CodeFigure language={language} src={src}>
+      {children}
+    </CodeFigure>
+  );
 }
 
-function CodeFigure({ language, children }) {
+function CodeFigure({ language, src, children }) {
   const { open } = useContext(BlockContext);
   const [done, copy] = useCopy();
   const [expanded, setExpanded] = useState(false);
@@ -111,7 +121,7 @@ function CodeFigure({ language, children }) {
   const item = { kind: "code", language, source, title: language ? `${name} snippet` : "Snippet" };
 
   return (
-    <figure className="code" data-folded={folds && !expanded ? true : undefined}>
+    <figure className="code" data-src={src} data-folded={folds && !expanded ? true : undefined}>
       <figcaption className="block-bar">
         <span className="label">{language || "Code"}</span>
         <span className="block-count">{lines} {lines === 1 ? "line" : "lines"}</span>
@@ -180,15 +190,25 @@ function Delta({ item }) {
   );
 }
 
-function Metrics({ source }) {
+function Metrics({ source, src }) {
   const { presentation } = useContext(BlockContext);
   const data = useMemo(() => parseMetrics(source), [source]);
   const [done, copy] = useCopy();
-  if (!data.items.length) return <p className="block-pending">Laying out figures…</p>;
-  if (presentation === "minimal") return <pre className="block-plain">{metricsText(data)}</pre>;
+  if (!data.items.length)
+    return (
+      <p className="block-pending" data-src={src}>
+        Laying out figures…
+      </p>
+    );
+  if (presentation === "minimal")
+    return (
+      <pre className="block-plain" data-src={src}>
+        {metricsText(data)}
+      </pre>
+    );
   const [lead, ...rest] = data.items;
   return (
-    <figure className="metrics" aria-label={data.title || "Key figures"}>
+    <figure className="metrics" data-src={src} aria-label={data.title || "Key figures"}>
       <figcaption className="block-bar">
         <span className="label">Figures</span>
         {data.title && <span className="metrics-title">{data.title}</span>}
@@ -230,14 +250,24 @@ function Metrics({ source }) {
   );
 }
 
-function Timeline({ source }) {
+function Timeline({ source, src }) {
   const { presentation } = useContext(BlockContext);
   const data = useMemo(() => parseTimeline(source), [source]);
   const [done, copy] = useCopy();
-  if (!data.events.length) return <p className="block-pending">Laying out the timeline…</p>;
-  if (presentation === "minimal") return <pre className="block-plain">{timelineText(data)}</pre>;
+  if (!data.events.length)
+    return (
+      <p className="block-pending" data-src={src}>
+        Laying out the timeline…
+      </p>
+    );
+  if (presentation === "minimal")
+    return (
+      <pre className="block-plain" data-src={src}>
+        {timelineText(data)}
+      </pre>
+    );
   return (
-    <figure className="timeline" aria-label={data.title || "Timeline"}>
+    <figure className="timeline" data-src={src} aria-label={data.title || "Timeline"}>
       <figcaption className="block-bar">
         <span className="label">Timeline</span>
         {data.title && <span className="metrics-title">{data.title}</span>}
@@ -455,7 +485,7 @@ function Chart({ columns, rows, plan }) {
   );
 }
 
-function TableBlock({ node }) {
+function TableBlock({ node, "data-src": src }) {
   const { open, presentation } = useContext(BlockContext);
   const data = useMemo(() => tableData(node), [node]);
   const [sort, setSort] = useState({ column: null, direction: "asc" });
@@ -482,7 +512,7 @@ function TableBlock({ node }) {
 
   if (!data.columns.length) return null;
   return (
-    <figure className="table-block">
+    <figure className="table-block" data-src={src}>
       <figcaption className="block-bar">
         <span className="label">Table</span>
         <span className="block-count">
@@ -626,6 +656,27 @@ const components = {
 
 const remarkPlugins = [remarkGfm];
 
+/* Marks each block with where it sits in the Markdown ("start:end"), so a
+   selection in the rendered document maps back to its source words. */
+const MAPPED_TAGS = new Set([
+  "p", "li", "h1", "h2", "h3", "h4", "h5", "h6", "blockquote", "pre", "table", "hr",
+]);
+
+function rehypeSourceMap() {
+  return (tree) => {
+    const walk = (node) => {
+      const start = node.position?.start?.offset;
+      const end = node.position?.end?.offset;
+      if (node.type === "element" && MAPPED_TAGS.has(node.tagName) && start != null && end != null)
+        node.properties = { ...node.properties, dataSrc: `${start}:${end}` };
+      node.children?.forEach(walk);
+    };
+    walk(tree);
+  };
+}
+
+const mappedPlugins = [rehypeSourceMap];
+
 /* A block that fails to render stays a local problem: the reply's words
    are still shown as plain text and the rest of the conversation is intact. */
 class BlockBoundary extends React.Component {
@@ -651,7 +702,7 @@ export function useSources(content) {
   return useMemo(() => collectSources(content || ""), [content]);
 }
 
-export function Rendered({ content, sources, onOpen }) {
+export function Rendered({ content, sources, onOpen, mapped = false }) {
   const presentation = useContext(PresentationContext);
   const value = useMemo(
     () => ({
@@ -665,7 +716,11 @@ export function Rendered({ content, sources, onOpen }) {
   return (
     <BlockContext.Provider value={value}>
       <BlockBoundary content={content}>
-        <Markdown remarkPlugins={remarkPlugins} components={components}>
+        <Markdown
+          remarkPlugins={remarkPlugins}
+          rehypePlugins={mapped ? mappedPlugins : undefined}
+          components={components}
+        >
           {content}
         </Markdown>
       </BlockBoundary>

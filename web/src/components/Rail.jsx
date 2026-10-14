@@ -1,7 +1,10 @@
-import React, { useRef, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import {
+  Code,
+  FileText,
   GearSix,
   MagnifyingGlass,
+  Table,
   Plus,
   PushPin,
   PushPinSlash,
@@ -11,7 +14,58 @@ import {
 } from "@phosphor-icons/react";
 import { BrandWordmark } from "./Mark.jsx";
 import { groupChats, searchChats } from "../lib/format.js";
+import { collectWork, searchWork } from "../lib/library.js";
 import "./rail.css";
+
+const WORK_ICONS = { document: FileText, code: Code, table: Table };
+const WORK_KINDS = { document: "Document", code: "Code", table: "Table" };
+
+/* The things Vaelo has made, newest first, each a way back into the
+   workspace and the conversation it came from. */
+function Library({ items, query, activeId, onOpen }) {
+  const shown = searchWork(items, query).slice(0, 80);
+  if (!items.length)
+    return (
+      <p className="rail-empty">
+        Documents, longer code and tables Vaelo makes will gather here, so the final version is
+        never lost in a conversation.
+      </p>
+    );
+  return (
+    <section>
+      <h2 className="label" aria-live="polite">
+        {query.trim()
+          ? shown.length
+            ? `${shown.length} ${shown.length === 1 ? "match" : "matches"}`
+            : "Nothing matches"
+          : "Made with Vaelo"}
+      </h2>
+      <ul className="work-list">
+        {shown.map((entry) => {
+          const Icon = WORK_ICONS[entry.kind];
+          return (
+            <li key={entry.id}>
+              <button
+                className="work-row"
+                data-active={entry.chatId === activeId || undefined}
+                onClick={() => onOpen(entry)}
+              >
+                <Icon size={17} aria-hidden="true" className="work-icon" />
+                <span className="work-text">
+                  <span className="work-title">{entry.title}</span>
+                  <span className="work-meta">
+                    {WORK_KINDS[entry.kind]}
+                    {entry.edited && " · edited"} · {entry.chatTitle}
+                  </span>
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
 
 function Row({ chat, active, busy, excerpt, onSelect, onDelete, onPin }) {
   return (
@@ -61,9 +115,12 @@ export function Rail({
   onPin,
   onSettings,
   onSignOut,
+  onOpenWork,
 }) {
   const [query, setQuery] = useState("");
+  const [view, setView] = useState("chats");
   const field = useRef(null);
+  const work = useMemo(() => collectWork(chats), [chats]);
   const results = searchChats(
     chats.filter((chat) => chat.messages.length),
     query,
@@ -103,8 +160,8 @@ export function Rail({
           ref={field}
           type="search"
           value={query}
-          placeholder="Search conversations"
-          aria-label="Search conversations"
+          placeholder={view === "library" ? "Search the library" : "Search conversations"}
+          aria-label={view === "library" ? "Search the library" : "Search conversations"}
           onChange={(event) => setQuery(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === "Escape" && query) {
@@ -128,8 +185,36 @@ export function Rail({
         )}
       </label>
 
-      <nav className="rail-list" aria-label={results ? "Search results" : "Past conversations"}>
-        {results ? (
+      <div className="rail-views" role="tablist" aria-label="Show">
+        {[
+          ["chats", "Conversations"],
+          ["library", "Library"],
+        ].map(([id, label]) => (
+          <button
+            key={id}
+            role="tab"
+            id={`rail-tab-${id}`}
+            aria-selected={view === id}
+            aria-controls="rail-panel"
+            className="rail-view"
+            onClick={() => setView(id)}
+          >
+            {label}
+            {id === "library" && work.length > 0 && <span className="chip-count">{work.length}</span>}
+          </button>
+        ))}
+      </div>
+
+      <nav
+        className="rail-list"
+        id="rail-panel"
+        role="tabpanel"
+        aria-labelledby={`rail-tab-${view}`}
+        aria-label={view === "library" ? "Library" : results ? "Search results" : "Past conversations"}
+      >
+        {view === "library" ? (
+          <Library items={work} query={query} activeId={activeId} onOpen={onOpenWork} />
+        ) : results ? (
           <section>
             <h2 className="label" aria-live="polite">
               {results.length

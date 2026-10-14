@@ -390,7 +390,7 @@ const ERROR_ACTION = {
   auth: { label: "Sign in again", icon: SignIn, type: "signin" },
 };
 
-function MessageView({ message, fresh, busy, live, streaming, phase, isLast, onAction }) {
+function MessageView({ message, fresh, busy, live, streaming, phase, isLast, edited, onAction }) {
   const [copied, copy] = useCopy();
   const [editing, setEditing] = useState(false);
   const mine = message.role === "user";
@@ -413,6 +413,7 @@ function MessageView({ message, fresh, busy, live, streaming, phase, isLast, onA
 
   return (
     <article
+      id={`m-${message.id}`}
       className="message"
       data-role={message.role}
       data-fresh={fresh || undefined}
@@ -556,10 +557,14 @@ function MessageView({ message, fresh, busy, live, streaming, phase, isLast, onA
                 Edit
               </button>
             )}
-            {!mine && long && (
-              <button className="text-button" onClick={() => open({ kind: "document" })}>
+            {!mine && (long || edited) && (
+              <button
+                className="text-button"
+                onClick={() => open({ kind: "document" })}
+                title={edited ? "Open the edited document" : "Open as a document you can edit"}
+              >
                 <ArrowsOut size={15} />
-                Open
+                {edited ? "Open · edited" : "Open"}
               </button>
             )}
             {!mine && message.content && !busy && (

@@ -233,6 +233,106 @@
   color: var(--ink);
 }
 
+/* Conversations or the things made in them: two views of one index */
+.rail-views {
+  display: flex;
+  gap: var(--s-4);
+  margin-top: calc(var(--s-3) * -1);
+  border-bottom: 1px solid var(--hairline);
+}
+
+.rail-view {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  min-height: 2.5rem;
+  margin-bottom: -1px;
+  border-bottom: 1.5px solid transparent;
+  font-size: var(--t-sm);
+  font-weight: var(--w-ui);
+  color: var(--muted);
+  transition:
+    color var(--dur-1) var(--ease),
+    border-color var(--dur-2) var(--ease);
+}
+
+.rail-view:hover {
+  color: var(--ink);
+}
+
+.rail-view[aria-selected="true"] {
+  color: var(--ink);
+  border-color: var(--gilt);
+}
+
+.rail-view .chip-count {
+  font-size: var(--t-xs);
+}
+
+.rail-empty {
+  margin: var(--s-4) 0;
+  font-size: var(--t-sm);
+  font-style: italic;
+  color: var(--muted);
+}
+
+.work-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.work-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-3);
+  width: 100%;
+  min-height: var(--hit);
+  padding: var(--s-2) var(--s-2);
+  border-radius: var(--r-md);
+  text-align: left;
+  transition: background var(--dur-1) var(--ease);
+}
+
+.work-row:hover {
+  background: var(--gilt-wash);
+}
+
+/* Made in the conversation that's open: its title takes the gilt ink */
+.work-row[data-active] .work-title {
+  color: var(--gilt-ink);
+}
+
+.work-icon {
+  flex: none;
+  margin-top: 0.2rem;
+  color: var(--gilt);
+}
+
+.work-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.work-title,
+.work-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.work-title {
+  font-size: var(--t-sm);
+  font-weight: var(--w-ui);
+  color: var(--ink);
+}
+
+.work-meta {
+  font-size: var(--t-xs);
+  color: var(--muted);
+}
+
 .rail-foot {
   display: flex;
   flex-direction: column;

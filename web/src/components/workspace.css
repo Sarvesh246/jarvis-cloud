@@ -243,6 +243,246 @@ body.resizing iframe {
   font-size: 1.1875rem;
 }
 
+/* ---------- Documents you can work on ---------- */
+
+.doc-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s-2) var(--s-3);
+  min-height: 3rem;
+  padding: var(--s-1) var(--s-3) var(--s-1) var(--s-5);
+  border-bottom: 1px solid var(--hairline);
+}
+
+.doc-versions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  min-width: 0;
+}
+
+.doc-version-count {
+  font-size: var(--t-sm);
+  font-variant-numeric: lining-nums tabular-nums;
+  color: var(--ink-soft);
+}
+
+.doc-byline {
+  min-width: 0;
+  margin-left: var(--s-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--t-xs);
+  font-style: italic;
+  color: var(--muted);
+}
+
+.doc-bar > .doc-byline {
+  margin-left: 0;
+  flex: 1;
+}
+
+.doc-versions + .doc-tools,
+.doc-tools {
+  display: inline-flex;
+  margin-left: auto;
+  gap: 2px;
+}
+
+/* The passage Vaelo will revise is marked in place, like a pencilled bracket */
+.ws-document [data-picked] {
+  background: var(--gilt-wash);
+  box-shadow:
+    -0.6rem 0 0 var(--gilt-wash),
+    0.6rem 0 0 var(--gilt-wash),
+    -0.6rem 0 0 0 var(--gilt);
+  border-radius: 2px;
+  transition: background var(--dur-2) var(--ease);
+}
+
+.ws-document [data-picked] [data-picked] {
+  background: none;
+  box-shadow: none;
+}
+
+.doc-edit {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.doc-edit textarea {
+  flex: 1;
+  width: 100%;
+  min-height: 60vh;
+  padding: var(--s-5) var(--s-6);
+  border: 0;
+  outline: none;
+  resize: none;
+  background: var(--canvas);
+  color: var(--ink);
+  font-size: max(16px, var(--t-base));
+  line-height: 1.65;
+}
+
+.doc-edit-actions {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: var(--s-3) var(--s-5) calc(var(--s-3) + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--hairline);
+  background: var(--surface);
+}
+
+.doc-edit-actions .doc-byline {
+  flex: 1;
+  margin: 0;
+}
+
+/* Revising: a slip at the foot of the document, where the thumb already is */
+.revise {
+  position: sticky;
+  bottom: 0;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  max-height: 60%;
+  margin-top: auto;
+  padding: var(--s-3) var(--s-5) calc(var(--s-4) + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--hairline-strong);
+  background: var(--surface);
+  box-shadow: 0 -12px 30px rgb(0 0 0 / 8%);
+  overflow-y: auto;
+  animation: revise-in var(--dur-2) var(--ease) both;
+}
+
+@keyframes revise-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+.revise-head {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+}
+
+.revise-quote {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--t-sm);
+  font-style: italic;
+  color: var(--ink-soft);
+}
+
+.revise-ask {
+  display: flex;
+  gap: var(--s-2);
+}
+
+.revise-ask input {
+  flex: 1;
+  min-width: 0;
+  min-height: var(--hit);
+  padding: 0 var(--s-3);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-md);
+  background: var(--canvas);
+  color: var(--ink);
+  font-size: max(16px, var(--t-sm));
+  outline: none;
+  transition: border-color var(--dur-1) var(--ease);
+}
+
+.revise-ask input:focus {
+  border-color: var(--gilt);
+}
+
+.revise-ask input::placeholder {
+  font-style: italic;
+  color: var(--muted);
+}
+
+/* The one primary action in the panel, so it takes the gilt */
+.revise-go {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  min-height: var(--hit);
+  padding: 0 var(--s-4);
+  border-radius: var(--r-pill);
+  background: var(--gilt);
+  color: var(--on-gilt);
+  font-size: var(--t-sm);
+  font-weight: var(--w-ui);
+  white-space: nowrap;
+  transition: opacity var(--dur-1) var(--ease);
+}
+
+.revise-go:disabled {
+  opacity: 0.45;
+}
+
+.revise-quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-1);
+}
+
+.revise-quick .chip:disabled {
+  opacity: 0.45;
+}
+
+.revise-note {
+  margin: 0;
+  font-size: var(--t-xs);
+  color: var(--muted);
+}
+
+.revise-note[data-tone="problem"] {
+  color: var(--clay);
+}
+
+.revise-preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+
+.revise-status {
+  margin: 0;
+  font-style: italic;
+}
+
+.revise-text {
+  padding: var(--s-2) var(--s-3);
+  border-left: 1px solid var(--gilt);
+  font-size: var(--t-base);
+  white-space: pre-wrap;
+}
+
+.revise-text .prose,
+.revise-preview .revise-text > * {
+  white-space: normal;
+}
+
+.revise-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+}
+
 /* A table with room: a filter over every column, then the whole grid */
 .ws-filter {
   display: flex;
@@ -358,6 +598,29 @@ body.resizing iframe {
   .ws-filter {
     margin-left: var(--s-4);
     margin-right: var(--s-4);
+  }
+
+  .doc-bar {
+    padding-left: var(--s-4);
+  }
+
+  /* On a phone the tools keep their icons; the byline gets its own line */
+  .doc-tools .block-tool span {
+    display: none;
+  }
+
+  .doc-edit textarea {
+    padding: var(--s-4);
+  }
+
+  .doc-edit-actions,
+  .revise {
+    padding-left: var(--s-4);
+    padding-right: var(--s-4);
+  }
+
+  .doc-edit-actions .doc-byline {
+    display: none;
   }
 }
 

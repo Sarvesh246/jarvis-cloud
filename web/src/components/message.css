@@ -13,6 +13,19 @@
   animation: arrive var(--dur-3) var(--ease) both;
 }
 
+/* Found again from the library: a brief gilt wash says "here it is" */
+.message[data-found] {
+  animation: found 1.8s var(--ease) both;
+  border-radius: var(--r-md);
+}
+
+@keyframes found {
+  0%,
+  40% {
+    background: var(--gilt-wash);
+  }
+}
+
 @keyframes arrive {
   from {
     opacity: 0;
