@@ -34,3 +34,11 @@ python -m unittest discover -s tests -v
 ```
 
 The bootstrap checks use fake credentials and no model calls. The official Hermes image is pinned by digest so an upstream update doesn't silently change the deployment.
+
+## Phone interface
+
+The `web` directory deploys separately to [jarvis-sarvesh.vercel.app](https://jarvis-sarvesh.vercel.app). Google sign-in is restricted to the workspace owner. A server-side proxy streams Hermes replies and tool progress; the browser never receives the gateway key.
+
+From `web`, run `npm ci`, `npm test` and `npm run build`. For a full local preview including API routes, use `vercel dev` with the server environment variables from `.env.example`. `npm run dev` starts only the interface.
+
+Google's Web application client must allow the website's origin. No Google API scopes or client secret are needed for sign-in. Conversations are saved in this browser, scoped to the signed-in account; this is not cross-device storage. Render memory remains temporary.
