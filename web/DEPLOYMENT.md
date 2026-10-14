@@ -26,7 +26,8 @@ The old 30-conversation truncation has been removed.
 
 Conversation JSON is uploaded in immutable chunks, then published through an
 atomic index update. A failed upload never publishes a partial conversation.
-Old revisions and interrupted uploads remain private in the store for recovery;
-there is currently no automatic retention cleanup. The per-conversation sync
+Superseded chunks are removed after a replacement is published. Interrupted
+uploads or failed cleanup can leave private chunks; there is currently no
+background cleanup of those orphaned chunks. The per-conversation sync
 limit is 64 million JSON characters. Browser backup capacity can be smaller;
 the app shows a notice if a local save or cloud sync fails.

@@ -11,6 +11,7 @@ function memoryBlob() {
   let version = 0;
   return {
     files,
+    async del(paths) { for (const path of paths) files.delete(path); },
     async get(path) {
       const file = files.get(path);
       return file ? { stream: new Response(file.text).body, blob: { etag: file.etag } } : null;
@@ -123,6 +124,7 @@ test("conditional manifest writes preserve disjoint simultaneous changes and rej
   await Promise.all([write("one", "v-one"), write("two", "v-two")]);
   assert.equal(Object.keys((await store.manifest()).data.entries).length, 2);
   await write("one", "v-three", "v-one");
+  assert.equal(await store.read(store.partPath("one", "v-one", 0)), null);
   await assert.rejects(write("one", "v-four", "v-one"), error => error.status === 409);
   assert.equal((await store.manifest()).data.entries.one.version, "v-three");
 });

@@ -54,12 +54,22 @@
       APIs.
     </p>
     <p>
-      Website conversations are saved in the owner's browser and sent through
-      Vercel to a separate Hermes deployment on Render. Prompts and requested
+      Website conversations are saved in a private Vercel Blob store and cached
+      in the owner's browser for offline reading. Devices signed into the same
+      Google account automatically sync conversations, reply versions, pins and
+      documents. Storage credentials stay on the server; browser requests use
+      the signed-in account and protected write endpoints.
+    </p>
+    <p>
+      Prompts are sent through Vercel to a separate Hermes deployment on Render.
+      Prompts and requested
       research are processed by the configured model and search providers.
-      Conversations, memory and learned skills on Render's free instance may be
-      lost when it restarts or redeploys. Clearing site data removes the
-      browser's saved chats.
+      Memory and learned skills on Render's free instance may be lost when it
+      restarts or redeploys; the website's cloud chat history is stored separately.
+      Clearing site data removes the local cache, which is restored from cloud
+      history after sign-in. Deleting a conversation syncs its removal to other
+      devices. Replaced storage chunks are removed after the new version is saved;
+      interrupted uploads and failed cleanup may leave private storage remnants.
     </p>
     <p>
       Access tokens are stored locally on the owner's own computer. Google user

@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { get, put, BlobPreconditionFailedError } from "@vercel/blob";
+import { get, put, del, BlobPreconditionFailedError } from "@vercel/blob";
 import { HttpError } from "./security.js";
 
 export const PART_SIZE = 500_000;
@@ -14,7 +14,7 @@ export function accountPath(sub) {
 }
 
 export class ChatStore {
-  constructor(sub, storage = { get, put }) {
+  constructor(sub, storage = { get, put, del }) {
     this.prefix = accountPath(sub);
     this.storage = storage;
   }
@@ -84,6 +84,12 @@ export class ChatStore {
           access: "private", addRandomSuffix: false, contentType: "application/json",
           allowOverwrite: Boolean(current.etag), ...(current.etag ? { ifMatch: current.etag } : {}),
         });
+        // Readers of a replaced revision retry on their next sync pass. Cleanup
+        // happens only after the replacement is durably published.
+        if (entry?.parts && this.storage.del) {
+          await this.storage.del(Array.from({ length: entry.parts }, (_, part) =>
+            this.partPath(id, entry.version, part))).catch(() => {});
+        }
         return next;
       } catch (error) {
         // The first create also races safely: allowOverwrite:false is atomic.
