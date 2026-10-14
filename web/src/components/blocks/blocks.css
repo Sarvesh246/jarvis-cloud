@@ -23,6 +23,7 @@
 .block-count {
   font-size: var(--t-xs);
   color: var(--muted);
+  white-space: nowrap;
 }
 
 .block-tools {
@@ -294,6 +295,196 @@
   color: var(--ink-soft);
 }
 
+/* ---------- Figures ---------- */
+
+/* Set like a ledger: one figure leads in a light display cut, the rest
+   follow in ruled columns. */
+.metrics,
+.timeline {
+  margin: 0 0 var(--s-5);
+  border-top: 1px solid var(--hairline-strong);
+  border-bottom: 1px solid var(--hairline-strong);
+  animation: fade var(--dur-2) var(--ease) both;
+}
+
+.metrics .block-bar,
+.timeline .block-bar {
+  padding-left: 0;
+}
+
+.metrics-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--t-sm);
+  font-weight: var(--w-ui);
+  color: var(--ink-soft);
+}
+
+.metrics-lead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s-1) var(--s-3);
+  padding: var(--s-4) 0 var(--s-3);
+}
+
+.metrics-lead-label {
+  flex-basis: 100%;
+  font-size: var(--t-xs);
+  font-weight: var(--w-ui);
+  color: var(--muted);
+}
+
+.metrics-lead-value {
+  font-size: var(--t-xl);
+  font-weight: 300;
+  line-height: 1.05;
+  font-variant-numeric: lining-nums tabular-nums;
+  color: var(--ink);
+}
+
+.metrics-lead .metric-delta {
+  font-size: var(--t-base);
+}
+
+.prose .metrics-grid,
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  gap: var(--s-4) var(--s-4);
+  margin: 0;
+  padding: var(--s-4) 0;
+  border-top: 1px solid var(--hairline);
+}
+
+.metric {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.metric dt {
+  font-size: var(--t-xs);
+  font-weight: var(--w-ui);
+  color: var(--muted);
+}
+
+.metric dd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s-2);
+  margin: 0;
+}
+
+.metric-value {
+  font-size: var(--t-md);
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.metric-delta {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.25em;
+  font-size: var(--t-xs);
+  font-weight: var(--w-ui);
+  font-variant-numeric: lining-nums tabular-nums;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.metric-delta > span[aria-hidden] {
+  font-size: 0.7em;
+}
+
+.metric-delta[data-direction="up"] {
+  color: var(--sage);
+}
+
+.metric-delta[data-direction="down"] {
+  color: var(--clay);
+}
+
+.metrics-note {
+  margin: 0;
+  padding: 0 0 var(--s-3);
+  font-size: var(--t-xs);
+  font-style: italic;
+  color: var(--muted);
+}
+
+.metrics-note + .metrics-note {
+  padding-top: 0;
+}
+
+/* ---------- Timeline ---------- */
+
+.prose .timeline-list,
+.timeline-list {
+  margin: 0;
+  padding: var(--s-4) 0 var(--s-3);
+  list-style: none;
+}
+
+.timeline-list li {
+  display: grid;
+  grid-template-columns: minmax(4.5rem, 8rem) 1fr;
+  column-gap: var(--s-3);
+  margin: 0;
+  padding: 0;
+}
+
+.timeline-when {
+  font-size: var(--t-xs);
+  font-weight: var(--w-strong);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  line-height: 1.9;
+  color: var(--gilt-ink);
+  font-variant-numeric: lining-nums;
+}
+
+/* A thread runs through the events, each one a small gilt stop on it */
+.timeline-what {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding: 0 0 var(--s-4) var(--s-4);
+  border-left: 1px solid var(--hairline-strong);
+  line-height: 1.45;
+}
+
+.timeline-list li:last-child .timeline-what {
+  padding-bottom: 0;
+  border-left-color: transparent;
+}
+
+.timeline-what::before {
+  content: "";
+  position: absolute;
+  top: 0.5em;
+  left: -4.5px;
+  width: 8px;
+  height: 8px;
+  border: 1px solid var(--gilt);
+  border-radius: 50%;
+  background: var(--canvas);
+}
+
+.timeline-detail {
+  font-size: var(--t-sm);
+  color: var(--muted);
+}
+
+.block-pending {
+  font-size: var(--t-sm);
+  font-style: italic;
+  color: var(--muted);
+}
+
 /* ---------- Citations ---------- */
 
 .cite {
@@ -524,6 +715,26 @@
 
   .chart-bars {
     grid-template-columns: minmax(4.5rem, 7rem) 1fr auto;
+  }
+
+  /* Two figures abreast on a phone, the lead figure a little smaller */
+  .prose .metrics-grid,
+  .metrics-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .metrics-lead-value {
+    font-size: 2.25rem;
+  }
+
+  .metrics .block-bar,
+  .timeline .block-bar,
+  .table-block .block-bar {
+    padding-left: 0;
+  }
+
+  .timeline-list li {
+    grid-template-columns: minmax(3.75rem, 5.5rem) 1fr;
   }
 }
 

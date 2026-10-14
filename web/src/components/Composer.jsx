@@ -1,6 +1,7 @@
 import React, { forwardRef, useEffect, useRef, useState } from "react";
 import {
   ArrowUp,
+  CaretUp,
   Check,
   Globe,
   Microphone,
@@ -187,6 +188,7 @@ export const Composer = forwardRef(function Composer(
     <form
       className="composer"
       data-listening={dictation.listening || undefined}
+      data-busy={busy || undefined}
       onSubmit={(event) => {
         event.preventDefault();
         send();
@@ -246,17 +248,21 @@ export const Composer = forwardRef(function Composer(
           >
             <Paperclip size={20} />
           </button>
+          {/* The current way of answering is always in view, one tap from
+              changing; research and style live behind it. */}
           <span className="tools-anchor" ref={toolsButton}>
             <button
               type="button"
-              className="icon-button composer-tool"
-              aria-label="Tools"
-              title="Tools"
+              className="mode-button"
+              aria-label={`Response style: ${style?.label}. Tools`}
+              title="Response style and tools"
               aria-haspopup="menu"
               aria-expanded={menu}
               onClick={() => setMenu((value) => !value)}
             >
-              <SlidersHorizontal size={20} />
+              <SlidersHorizontal size={17} aria-hidden="true" />
+              <span>{style?.label}</span>
+              <CaretUp size={12} aria-hidden="true" className="mode-caret" />
             </button>
             {menu && (
               <ToolsMenu
@@ -273,23 +279,11 @@ export const Composer = forwardRef(function Composer(
           {options.research && (
             <span className="mode-chip">
               <Globe size={14} aria-hidden="true" />
-              Research
+              <span className="mode-chip-text">Research</span>
               <button
                 type="button"
                 aria-label="Turn off research"
                 onClick={() => onOptions({ research: false })}
-              >
-                <X size={12} />
-              </button>
-            </span>
-          )}
-          {options.style !== "balanced" && (
-            <span className="mode-chip">
-              {style?.label}
-              <button
-                type="button"
-                aria-label={`Return to balanced style`}
-                onClick={() => onOptions({ style: "balanced" })}
               >
                 <X size={12} />
               </button>

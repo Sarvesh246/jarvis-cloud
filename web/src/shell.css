@@ -119,6 +119,24 @@
   border-color: var(--gilt);
 }
 
+.jump[data-live] {
+  gap: var(--s-2);
+  max-width: min(26rem, calc(100% - 2rem));
+  padding-left: var(--s-2);
+  font-style: italic;
+}
+
+.jump-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.jump-arrow {
+  flex: none;
+  color: var(--muted);
+}
+
 /* Select words in a reply and ask about exactly those */
 .quote-ask {
   position: fixed;

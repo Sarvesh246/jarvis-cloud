@@ -201,8 +201,11 @@
   color: var(--muted);
 }
 
+/* A fast answer shouldn't flash a status it never needed: the live line
+   only fades in once Vaelo has taken a noticeable moment. */
 .process[data-live="true"] {
   margin-top: 0.15rem;
+  animation: fade var(--dur-2) var(--ease) 300ms both;
 }
 
 .shimmer {

@@ -170,6 +170,10 @@
   }
 }
 
+:root[data-motion="reduce"] :is(.mark-glow, .mark-hair, .mark-trace, .mark-v) {
+  animation: none !important;
+}
+
 .brandmark {
   display: inline-flex;
   align-items: baseline;

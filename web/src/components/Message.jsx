@@ -156,6 +156,23 @@ function Reasoning({ text }) {
   );
 }
 
+/* The one plain sentence for what Vaelo is doing right now. Shared by the
+   reply's live line and the "jump to latest" pill, so status reads the same
+   wherever you are looking. */
+export function liveLine(message, phase) {
+  const running = message?.activity?.findLast?.((item) => !item.done);
+  if (message?.approval?.state === "pending") return "Waiting for your answer";
+  if (phase === "waking") return "Waking up. This can take a minute";
+  if (message?.content && phase === "speaking") return "Writing";
+  if (running) {
+    const detail = toolDetail(running);
+    return `${toolInfo(running.tool ?? running.name).now}${detail ? ` · ${detail}` : ""}`;
+  }
+  if (message?.live) return message.live;
+  if (message?.reasoning) return "Thinking it through";
+  return "Thinking";
+}
+
 /* What Vaelo is doing, said once, in the place it is happening. While it
    works this is a live line; afterwards it folds into a quiet receipt
    ("Worked for 12s · Searched the web 3×") that opens to the steps. */
@@ -166,14 +183,7 @@ function Process({ message, live, phase }) {
   const running = steps.findLast?.((item) => !item.done);
 
   if (live) {
-    let line = "Thinking";
-    if (message.approval?.state === "pending") line = "Waiting for your answer";
-    else if (phase === "waking") line = "Waking up. This can take a minute";
-    else if (running) {
-      const detail = toolDetail(running);
-      line = `${toolInfo(running.tool ?? running.name).now}${detail ? ` · ${detail}` : ""}`;
-    } else if (message.live) line = message.live;
-    else if (message.reasoning) line = "Thinking it through";
+    const line = liveLine(message, phase);
     return (
       <div className="process" data-live="true">
         <span className="process-line shimmer">{line}</span>

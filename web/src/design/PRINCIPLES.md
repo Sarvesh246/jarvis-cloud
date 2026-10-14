@@ -80,8 +80,23 @@ deserves to become something richer.
     reader is at the bottom. Scrolling up stops following at once. Blocks
     that grow after their words land keep the anchor.
 15. **Modes are one step away.** Attach, write, dictate and send are always
-    visible. Research and response style live in the tools menu, and an
-    active mode stays visible as a chip you can remove.
+    visible. The current response style is always readable on the composer
+    ("Balanced ▴") and opens the tools menu; research shows as a chip you
+    can remove.
+16. **The model names the shape; the interface draws it.** Beyond Markdown,
+    Vaelo may answer with a ```` ```metrics ```` block (a few key figures,
+    the first leading) or a ```` ```timeline ```` block (events in order),
+    written as plain lines so a half-streamed block still reads. Never HTML
+    from the model. Inline stays light; tables open in the workspace to
+    filter and sort.
+17. **Richness is the reader's choice.** Settings (gear in the rail) offers
+    paper (system, Parchment, Lamplight), a larger reading size, Adaptive or
+    Minimal replies, reduced motion independent of the system, and a
+    notification when a reply finishes while you're away. Kept per device.
+18. **Status changes what's already there.** While Vaelo answers, a light
+    runs along the composer's top edge; scrolled away, the "jump" pill
+    carries Vaelo's face and current action. Live status waits ~300ms
+    before showing, so quick answers don't flash a state they never needed.
 
 ## Tokens
 

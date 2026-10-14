@@ -3,8 +3,8 @@
    its hashed scripts, styles, fonts and icons). Anything under /api, which
    is where signed-in data lives, always goes to the network and is never
    cached. */
-const SHELL = "vaelo-shell-v5";
-const PRECACHE = ["/"];
+const SHELL = "vaelo-shell-v6";
+const PRECACHE = ["/", "/prefs.js"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -21,6 +21,17 @@ self.addEventListener("activate", (event) => {
       .keys()
       .then((keys) => Promise.all(keys.filter((key) => key !== SHELL).map((key) => caches.delete(key))))
       .then(() => self.clients.claim()),
+  );
+});
+
+// "Vaelo replied" opens the app where the reply is waiting.
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((windows) => {
+      const open = windows.find((client) => new URL(client.url).origin === location.origin);
+      return open ? open.focus() : self.clients.openWindow("/");
+    }),
   );
 });
 
@@ -42,6 +53,23 @@ self.addEventListener("fetch", (event) => {
           return response;
         })
         .catch(() => caches.match("/")),
+    );
+    return;
+  }
+
+  // Saved appearance choices are applied by this small script before the
+  // page paints; newest when online, the saved copy when not.
+  if (url.pathname === "/prefs.js") {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          if (response.ok) {
+            const copy = response.clone();
+            caches.open(SHELL).then((cache) => cache.put("/prefs.js", copy));
+          }
+          return response;
+        })
+        .catch(() => caches.match("/prefs.js")),
     );
     return;
   }

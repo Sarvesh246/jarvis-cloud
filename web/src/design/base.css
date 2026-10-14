@@ -104,10 +104,20 @@ body::before {
 }
 
 @media (prefers-color-scheme: dark) {
-  body::before {
+  :root:not([data-theme="light"]) body::before {
     mix-blend-mode: screen;
     opacity: calc(var(--grain) * 0.05);
   }
+}
+
+:root[data-theme="dark"] body::before {
+  mix-blend-mode: screen;
+  opacity: calc(var(--grain) * 0.05);
+}
+
+/* Larger reading size scales the whole interface together, targets too */
+html[data-text="large"] {
+  font-size: 18px;
 }
 
 button,
@@ -252,6 +262,8 @@ a:hover {
   color: var(--muted);
 }
 
+/* Reduced motion removes movement and keeps meaning: from the system, or
+   chosen in Settings. Every state still has its words. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -261,4 +273,13 @@ a:hover {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+:root[data-motion="reduce"] *,
+:root[data-motion="reduce"] *::before,
+:root[data-motion="reduce"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
 }

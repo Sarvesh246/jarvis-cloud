@@ -93,9 +93,50 @@
   --lift-2: 0 2px 6px rgb(80 55 30 / 7%), 0 24px 56px rgb(80 55 30 / 12%);
 }
 
-/* Lamplight: warm, layered, never an inverted parchment */
+/* A chosen paper overrides the system's (Settings → Appearance) */
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+/* Lamplight: warm, layered, never an inverted parchment. Defined twice:
+   once for the system's dark mode, once for when it is chosen outright. */
+:root[data-theme="dark"] {
+  --canvas: #16110f;
+  --rail: #0e0a09;
+  --surface: #241c18;
+  --sunken: #0b0807;
+  --slip: #221a16;
+  --ink: #f6eee3;
+  --ink-soft: #e2d6c6;
+  --muted: #bcac9a;
+  --hairline: #3b302a;
+  --hairline-strong: #66564a;
+  --gilt: #dcb47c;
+  --gilt-ink: #ecc994;
+  --gilt-wash: rgb(211 172 118 / 11%);
+  --gilt-line: linear-gradient(
+    90deg,
+    transparent,
+    rgb(211 172 118 / 45%) 50%,
+    transparent
+  );
+  --on-gilt: #181311;
+  --clay: #e3a491;
+  --clay-wash: rgb(215 152 134 / 10%);
+  --sage: #9bb08f;
+  --scrim: rgb(0 0 0 / 58%);
+  --grain: 0.5;
+
+  --lift-1: 0 1px 1px rgb(0 0 0 / 30%), 0 10px 30px rgb(0 0 0 / 28%);
+  --lift-2: 0 2px 6px rgb(0 0 0 / 40%), 0 24px 56px rgb(0 0 0 / 45%);
+}
+
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --canvas: #16110f;
     --rail: #0e0a09;
     --surface: #241c18;

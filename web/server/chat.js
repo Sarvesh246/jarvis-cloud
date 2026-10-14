@@ -16,8 +16,15 @@ const STYLES = {
 const RESEARCH =
   "research with sources: use web search and extraction before answering, rely on what you find, and cite each substantive claim inline as a Markdown link to the exact page";
 
+/* The model says what shape information has; the interface decides how it
+   looks. Two shapes beyond Markdown are offered, each in plain lines so a
+   half-streamed block still reads. */
 const FORMAT =
-  "Format replies in Markdown. Put code in fenced blocks with a language tag, tabular data in Markdown tables, and link sources as Markdown links so the interface can show them as citations. A user message may end with a line like [Vaelo request: …] added by the interface; follow it for that reply and do not mention it.";
+  "Format replies in Markdown. Put code in fenced blocks with a language tag, tabular data in Markdown tables, and link sources as Markdown links so the interface can show them as citations. " +
+  "When a reply centres on a few key figures (a price, a score, a forecast), you may add a ```metrics block: an optional '# Title' line, then one 'Label: value' line per figure with an optional change in brackets such as '(+2.7%)', the most important figure first, and optional '> note' lines for timing or caveats. " +
+  "When events happen in order, you may add a ```timeline block with one 'When: what happened — optional detail' line per event. " +
+  "Use these only when the shape genuinely helps, keep prose for explanation, and never repeat the same figures in prose. " +
+  "A user message may end with a line like [Vaelo request: …] added by the interface; follow it for that reply and do not mention it.";
 
 export const LIMITS = {
   messages: 60,

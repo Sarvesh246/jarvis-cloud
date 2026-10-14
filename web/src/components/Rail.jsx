@@ -1,5 +1,6 @@
 import React, { useRef, useState } from "react";
 import {
+  GearSix,
   MagnifyingGlass,
   Plus,
   PushPin,
@@ -58,6 +59,7 @@ export function Rail({
   onSelect,
   onDelete,
   onPin,
+  onSettings,
   onSignOut,
 }) {
   const [query, setQuery] = useState("");
@@ -177,6 +179,15 @@ export function Rail({
             {user.name?.[0]}
           </span>
           <span className="rail-name">{user.name}</span>
+          <button
+            className="icon-button"
+            aria-label="Settings"
+            title="Settings"
+            aria-haspopup="dialog"
+            onClick={onSettings}
+          >
+            <GearSix size={19} />
+          </button>
           <button
             className="icon-button"
             aria-label="Sign out"

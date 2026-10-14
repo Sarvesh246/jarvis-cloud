@@ -1,0 +1,213 @@
+/* Settings: a short sheet on the same paper. Centred on wide screens, a
+   bottom sheet on a phone where the thumb already is. */
+.settings {
+  width: min(30rem, calc(100vw - 2rem));
+  max-height: min(44rem, calc(100dvh - 2rem));
+  padding: 0;
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--lift-2);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.settings[open] {
+  animation: settings-in var(--dur-2) var(--ease) both;
+}
+
+.settings::backdrop {
+  background: var(--scrim);
+}
+
+@keyframes settings-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+.settings-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  padding: var(--s-3) var(--s-5) var(--s-5);
+}
+
+.settings-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-right: calc(var(--s-3) * -1);
+}
+
+.settings-head h2 {
+  margin: 0;
+  font-size: var(--t-lg);
+  font-weight: 300;
+}
+
+.settings-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  margin: 0;
+  padding: var(--s-4) 0 0;
+  border: 0;
+  border-top: 1px solid var(--hairline);
+}
+
+.settings-group legend {
+  float: left;
+  width: 100%;
+  margin-bottom: var(--s-2);
+  padding: 0;
+}
+
+.settings-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+
+/* Each option is a real radio, drawn as a pill */
+.settings-option {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--hit);
+  padding: 0 var(--s-4);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-pill);
+  font-size: var(--t-sm);
+  font-weight: var(--w-ui);
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition:
+    background var(--dur-1) var(--ease),
+    border-color var(--dur-1) var(--ease),
+    color var(--dur-1) var(--ease);
+}
+
+.settings-option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.settings-option:hover {
+  border-color: var(--gilt);
+}
+
+.settings-option:has(input:checked) {
+  border-color: var(--gilt);
+  background: var(--gilt-wash);
+  color: var(--gilt-ink);
+}
+
+.settings-option:has(input:focus-visible) {
+  outline: 1.5px solid var(--gilt);
+  outline-offset: 3px;
+}
+
+.settings-note {
+  display: block;
+  margin: 0;
+  font-size: var(--t-xs);
+  color: var(--muted);
+}
+
+.settings-note[data-tone="problem"] {
+  color: var(--clay);
+}
+
+.settings-switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-4);
+  min-height: var(--hit);
+  font-size: var(--t-base);
+  cursor: pointer;
+}
+
+.settings-switch > span {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+/* A drawn switch: track and knob, with its state also in the checkbox */
+.settings-switch input {
+  flex: none;
+  position: relative;
+  width: 2.75rem;
+  height: 1.6rem;
+  margin: 0;
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-pill);
+  background: var(--sunken);
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  transition:
+    background var(--dur-1) var(--ease),
+    border-color var(--dur-1) var(--ease);
+}
+
+.settings-switch input::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: calc(1.6rem - 6px);
+  height: calc(1.6rem - 6px);
+  border-radius: 50%;
+  background: var(--muted);
+  transition:
+    transform var(--dur-2) var(--ease),
+    background var(--dur-1) var(--ease);
+}
+
+.settings-switch input:checked {
+  border-color: var(--gilt);
+  background: var(--gilt);
+}
+
+.settings-switch input:checked::after {
+  background: var(--on-gilt);
+  transform: translateX(1.15rem);
+}
+
+.settings-foot {
+  margin: 0;
+  font-size: var(--t-xs);
+  font-style: italic;
+  color: var(--muted);
+}
+
+@media (max-width: 47.9375rem), (pointer: coarse) and (max-height: 31.25rem) {
+  .settings {
+    width: 100%;
+    max-width: none;
+    max-height: calc(100dvh - env(safe-area-inset-top) - 2rem);
+    margin: auto 0 0;
+    border-width: 1px 0 0;
+    border-radius: var(--r-lg) var(--r-lg) 0 0;
+  }
+
+  .settings[open] {
+    animation-name: settings-up;
+  }
+
+  @keyframes settings-up {
+    from {
+      transform: translateY(100%);
+    }
+  }
+
+  .settings-body {
+    padding: var(--s-2) var(--s-4) calc(var(--s-5) + env(safe-area-inset-bottom));
+  }
+}

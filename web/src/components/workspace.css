@@ -243,6 +243,62 @@ body.resizing iframe {
   font-size: 1.1875rem;
 }
 
+/* A table with room: a filter over every column, then the whole grid */
+.ws-filter {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-height: var(--hit);
+  margin: var(--s-4) var(--s-5) 0;
+  padding: 0 var(--s-3);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-md);
+  background: var(--canvas);
+  color: var(--muted);
+  transition: border-color var(--dur-1) var(--ease);
+}
+
+.ws-filter:focus-within {
+  border-color: var(--gilt);
+}
+
+.ws-filter input {
+  flex: 1;
+  min-width: 0;
+  height: 2.5rem;
+  border: 0;
+  outline: none;
+  background: none;
+  color: var(--ink);
+  /* 16px or more keeps iOS from zooming the page on focus */
+  font-size: max(16px, var(--t-sm));
+}
+
+.ws-filter-count {
+  flex: none;
+  font-size: var(--t-xs);
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.ws-grid {
+  flex: 1;
+  min-height: 0;
+  margin: var(--s-3) 0 0;
+  padding: 0 var(--s-5) var(--s-5);
+  overflow: auto;
+  border: 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--hairline-strong) transparent;
+}
+
+.ws-grid thead {
+  background: var(--surface);
+}
+
+.ws-grid tbody tr:hover {
+  background: var(--gilt-wash);
+}
+
 /* Beside the conversation on wide screens; a sheet over it otherwise, so the
    conversation never gets squeezed into an unreadable column. */
 /* Only a sheet needs a scrim; beside the conversation it is a facing page */
@@ -293,9 +349,15 @@ body.resizing iframe {
   }
 
   .ws-sources,
-  .ws-filters {
+  .ws-filters,
+  .ws-grid {
     padding-left: var(--s-4);
     padding-right: var(--s-4);
+  }
+
+  .ws-filter {
+    margin-left: var(--s-4);
+    margin-right: var(--s-4);
   }
 }
 

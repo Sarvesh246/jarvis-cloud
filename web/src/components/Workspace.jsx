@@ -4,12 +4,14 @@ import {
   Check,
   Copy,
   DownloadSimple,
+  MagnifyingGlass,
   Printer,
   X,
 } from "@phosphor-icons/react";
 import { Rendered, download, looksLikeSvg, useCopy, useSources } from "./blocks/Blocks.jsx";
 import { SourceIcon } from "./blocks/SourceIcon.jsx";
 import { SOURCE_KINDS, kindLabel } from "../lib/sources.js";
+import { isNumericColumn, sortRows, toCSV, toTSV } from "../lib/table.js";
 import "./workspace.css";
 
 /* The workspace opens beside the conversation only when something deserves
@@ -144,6 +146,97 @@ function SourcesView({ message, focus }) {
   );
 }
 
+/* A table given room: every row, a filter across all columns, and sorting.
+   Inline it stays light; here it is a working grid. */
+function TableView({ item }) {
+  const [query, setQuery] = useState("");
+  const [sort, setSort] = useState({ column: null, direction: "asc" });
+  const numeric = useMemo(
+    () => item.columns.map((_, i) => isNumericColumn(item.rows, i)),
+    [item],
+  );
+  const shown = useMemo(() => {
+    const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    const matching = item.rows.filter((row) => {
+      const text = row.join(" ").toLowerCase();
+      return words.every((word) => text.includes(word));
+    });
+    return sortRows(matching, sort.column, sort.direction);
+  }, [item, query, sort]);
+
+  function toggle(column) {
+    const first = numeric[column] ? "desc" : "asc";
+    setSort((current) => {
+      if (current.column !== column) return { column, direction: first };
+      if (current.direction === first) return { column, direction: first === "asc" ? "desc" : "asc" };
+      return { column: null, direction: "asc" };
+    });
+  }
+
+  return (
+    <>
+      <label className="ws-filter">
+        <MagnifyingGlass size={16} aria-hidden="true" />
+        <input
+          type="search"
+          value={query}
+          placeholder="Filter rows"
+          aria-label="Filter rows"
+          onChange={(event) => setQuery(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Escape" && query) {
+              event.stopPropagation();
+              setQuery("");
+            }
+          }}
+        />
+        <span className="ws-filter-count" aria-live="polite">
+          {query ? `${shown.length} of ${item.rows.length}` : `${item.rows.length} rows`}
+        </span>
+      </label>
+      <div className="ws-grid table-block" tabIndex={0} role="region" aria-label="Table">
+        <table>
+          <thead>
+            <tr>
+              {item.columns.map((column, i) => (
+                <th
+                  key={i}
+                  scope="col"
+                  data-numeric={numeric[i] || undefined}
+                  aria-sort={
+                    sort.column === i ? (sort.direction === "asc" ? "ascending" : "descending") : undefined
+                  }
+                >
+                  <button onClick={() => toggle(i)} title="Sort by this column">
+                    {column}
+                    {sort.column === i && (
+                      <span className="sort-mark" aria-hidden="true">
+                        {sort.direction === "asc" ? "↑" : "↓"}
+                      </span>
+                    )}
+                  </button>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {shown.map((row, r) => (
+              <tr key={r}>
+                {row.map((cell, i) => (
+                  <td key={i} data-numeric={numeric[i] || undefined}>
+                    {cell}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {!shown.length && <p className="ws-empty">No rows match “{query.trim()}”.</p>}
+      </div>
+    </>
+  );
+}
+
 function DocumentView({ message, onOpen }) {
   const sources = useSources(message?.content);
   if (!message) return <p className="ws-empty">This reply is no longer in the conversation.</p>;
@@ -225,8 +318,21 @@ export function Workspace({ item, messages, onClose, onOpen }) {
     code: item.title || "Code",
     sources: "Sources",
     document: "Reply",
+    table: item.title || "Table",
   };
-  const text = item.kind === "code" ? item.source : message?.content || "";
+  const kinds = { code: "Workspace", sources: "Provenance", document: "Document", table: "Data" };
+  const text =
+    item.kind === "code"
+      ? item.source
+      : item.kind === "table"
+        ? toTSV(item.columns, item.rows)
+        : message?.content || "";
+  function save() {
+    if (item.kind === "table") return download("vaelo-table.csv", toCSV(item.columns, item.rows), "text/csv");
+    if (item.kind === "document") return download("vaelo-reply.md", text, "text/markdown");
+    const ext = item.language === "svg" ? "svg" : item.language === "html" ? "html" : "txt";
+    download(`vaelo-snippet.${ext}`, text);
+  }
 
   return (
     <aside
@@ -253,7 +359,7 @@ export function Workspace({ item, messages, onClose, onOpen }) {
       />
       <header className="ws-head">
         <div className="ws-title-group">
-          <span className="label">{item.kind === "code" ? "Workspace" : item.kind === "sources" ? "Provenance" : "Document"}</span>
+          <span className="label">{kinds[item.kind]}</span>
           <h2 id="ws-title" ref={heading} tabIndex={-1}>
             {titles[item.kind]}
           </h2>
@@ -267,13 +373,9 @@ export function Workspace({ item, messages, onClose, onOpen }) {
               </button>
               <button
                 className="block-tool icon-only"
-                title="Download"
-                aria-label="Download"
-                onClick={() =>
-                  item.kind === "code"
-                    ? download(`vaelo-snippet.${item.language === "svg" ? "svg" : item.language === "html" ? "html" : "txt"}`, text)
-                    : download("vaelo-reply.md", text, "text/markdown")
-                }
+                title={item.kind === "table" ? "Download as CSV" : "Download"}
+                aria-label={item.kind === "table" ? "Download as CSV" : "Download"}
+                onClick={save}
               >
                 <DownloadSimple size={16} />
               </button>
@@ -302,6 +404,7 @@ export function Workspace({ item, messages, onClose, onOpen }) {
         {item.kind === "code" && <CodeView key={item.source} item={item} />}
         {item.kind === "sources" && <SourcesView message={message} focus={item.focus} />}
         {item.kind === "document" && <DocumentView message={message} onOpen={onOpen} />}
+        {item.kind === "table" && <TableView item={item} />}
       </div>
     </aside>
   );

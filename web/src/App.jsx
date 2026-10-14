@@ -11,9 +11,13 @@ import { readEvents } from "./stream.js";
 import { Rail } from "./components/Rail.jsx";
 import { Header } from "./components/Header.jsx";
 import { Welcome } from "./components/Welcome.jsx";
-import { Message } from "./components/Message.jsx";
+import { Message, liveLine } from "./components/Message.jsx";
 import { Composer } from "./components/Composer.jsx";
 import { Workspace } from "./components/Workspace.jsx";
+import { Settings } from "./components/Settings.jsx";
+import { Mark } from "./components/Mark.jsx";
+import { PresentationContext } from "./components/blocks/Blocks.jsx";
+import { applyPrefs, readPrefs, savePrefs } from "./lib/preferences.js";
 import { Toast, Notice } from "./components/Toast.jsx";
 import { Opening, SignIn } from "./components/SignIn.jsx";
 import { toolInfo } from "./lib/tools.js";
@@ -198,6 +202,30 @@ const quoted = (text) =>
     .map((line) => `> ${line}`)
     .join("\n");
 
+/* Work that finishes while you're elsewhere says so where you'll see it:
+   the tab title always, the app badge and a notification if you asked. */
+async function tellReady(title, content) {
+  try {
+    await navigator.setAppBadge?.(1);
+  } catch {
+    /* badges need notification permission on some systems */
+  }
+  if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+  const body = content.replace(/```[\s\S]*?(```|$)|[#>*_`|[\]]/g, " ").replace(/\s+/g, " ").trim().slice(0, 140);
+  const options = { body, tag: "vaelo-reply", icon: "/icons/vaelo-192-v5.png", badge: "/icons/vaelo-192-v5.png" };
+  try {
+    const registration = await navigator.serviceWorker?.getRegistration();
+    if (registration) await registration.showNotification(`Vaelo replied · ${title}`, options);
+    else new Notification(`Vaelo replied · ${title}`, options);
+  } catch {
+    /* the title change still says it */
+  }
+}
+
+const reducedMotion = () =>
+  document.documentElement.dataset.motion === "reduce" ||
+  matchMedia("(prefers-reduced-motion: reduce)").matches;
+
 export function App() {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -222,6 +250,10 @@ export function App() {
   const [dragging, setDragging] = useState(false);
   const [announcement, setAnnouncement] = useState({ id: 0, text: "" });
   const [online, setOnline] = useState(() => navigator.onLine !== false);
+  const [prefs, setPrefs] = useState(readPrefs);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const prefsRef = useRef(prefs);
+  prefsRef.current = prefs;
   const swipe = useRef(null);
   const googleButton = useRef(null);
   const [gsi, setGsi] = useState("loading");
@@ -360,7 +392,9 @@ export function App() {
   useEffect(() => {
     loadSession();
     const ready = () => {
-      if (!document.hidden && document.title !== "Vaelo") document.title = "Vaelo";
+      if (document.hidden) return;
+      if (document.title !== "Vaelo") document.title = "Vaelo";
+      navigator.clearAppBadge?.().catch(() => {});
     };
     addEventListener("visibilitychange", ready);
     const goOnline = () => setOnline(true);
@@ -376,6 +410,11 @@ export function App() {
       removeEventListener("visibilitychange", ready);
     };
   }, []);
+
+  useEffect(() => {
+    applyPrefs(prefs);
+    savePrefs(prefs);
+  }, [prefs]);
 
   useEffect(() => {
     if (!activeId) return;
@@ -554,7 +593,7 @@ export function App() {
     const el = conversation.current;
     pinned.current = true;
     setAway(false);
-    el?.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    el?.scrollTo({ top: el.scrollHeight, behavior: reducedMotion() ? "auto" : "smooth" });
   }
 
   function newChat() {
@@ -1112,7 +1151,14 @@ export function App() {
       abort.current = null;
       if (succeeded) {
         announce("Vaelo replied.");
-        if (document.hidden) document.title = "Reply ready · Vaelo";
+        if (document.hidden) {
+          document.title = "Reply ready · Vaelo";
+          if (prefsRef.current.notify)
+            tellReady(
+              active.messages.length ? active.title : String(messages[0].text || messages[0].content).slice(0, 48),
+              received,
+            );
+        }
         setSettling(true);
         settleTimer.current = setTimeout(() => setSettling(false), 1500);
       }
@@ -1182,6 +1228,7 @@ export function App() {
 
   return (
     <IconContext.Provider value={{ weight: "light", size: 20 }}>
+      <PresentationContext.Provider value={prefs.presentation}>
       <div
         className="shell"
         data-collapsed={collapsed}
@@ -1231,6 +1278,10 @@ export function App() {
           onSelect={selectChat}
           onDelete={removeChat}
           onPin={togglePin}
+          onSettings={() => {
+            setMenu(false);
+            setSettingsOpen(true);
+          }}
           onSignOut={logout}
         />
 
@@ -1318,10 +1369,19 @@ export function App() {
           )}
 
           <div className="dock">
+            {/* Scrolled away while Vaelo works, the pill carries its face and
+                current action, so status shows where you are looking. */}
             {away && messages.length > 0 && (
-              <button className="jump" onClick={jumpToLatest}>
-                <ArrowDown size={15} />
-                {busy ? "Following new words" : "Latest"}
+              <button className="jump" data-live={busy || undefined} onClick={jumpToLatest}>
+                {busy ? (
+                  <>
+                    <Mark size={18} state={livePhase} />
+                    <span className="jump-text">{liveLine(messages.at(-1), livePhase)}</span>
+                  </>
+                ) : (
+                  <ArrowDown size={15} />
+                )}
+                {busy ? <ArrowDown size={14} className="jump-arrow" /> : "Latest"}
               </button>
             )}
             {cloud === "Unavailable" && online && !session.offline && (
@@ -1394,7 +1454,14 @@ export function App() {
           {announcement.id % 2 ? "​" : ""}
         </p>
         <Toast toast={toast} onDismiss={() => setToast(null)} />
+        <Settings
+          open={settingsOpen}
+          prefs={prefs}
+          onChange={(patch) => setPrefs((current) => ({ ...current, ...patch }))}
+          onClose={() => setSettingsOpen(false)}
+        />
       </div>
+      </PresentationContext.Provider>
     </IconContext.Provider>
   );
 }

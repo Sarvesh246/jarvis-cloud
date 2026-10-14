@@ -13,6 +13,7 @@ import {
 } from "@phosphor-icons/react";
 import { collectSources, domainOf, kindLabel, parseUrl, sourceKey } from "../../lib/sources.js";
 import { cellText, chartable, isNumericColumn, sortRows, toCSV, toNumber, toTSV } from "../../lib/table.js";
+import { STRUCTURED, metricsText, parseMetrics, parseTimeline, timelineText } from "../../lib/structured.js";
 import { SourceIcon } from "./SourceIcon.jsx";
 import "./blocks.css";
 
@@ -20,7 +21,16 @@ import "./blocks.css";
    block carries the controls that suit it and can be promoted into the
    workspace when it deserves more room. */
 
-const BlockContext = createContext({ sources: [], byKey: new Map(), open: () => {} });
+const BlockContext = createContext({
+  sources: [],
+  byKey: new Map(),
+  open: () => {},
+  presentation: "adaptive",
+});
+
+/* How much shape replies take on: "adaptive" (figures, timelines and charts
+   where they help) or "minimal" (plain text and tables). Set in Settings. */
+export const PresentationContext = createContext("adaptive");
 
 export function useCopy() {
   const [done, setDone] = useState(false);
@@ -74,12 +84,25 @@ export function looksLikeSvg(language, source) {
 
 const FOLD_AT = 24;
 
+function languageOf(children) {
+  const code = Array.isArray(children) ? children[0] : children;
+  return (code?.props?.className || "").match(/language-([\w+-]+)/)?.[1]?.toLowerCase() || "";
+}
+
+/* A fenced block is either code, or one of the shapes Vaelo can answer in. */
 function CodeBlock({ children }) {
+  const language = languageOf(children);
+  if (STRUCTURED.has(language)) {
+    const source = textOf(children);
+    return language === "metrics" ? <Metrics source={source} /> : <Timeline source={source} />;
+  }
+  return <CodeFigure language={language}>{children}</CodeFigure>;
+}
+
+function CodeFigure({ language, children }) {
   const { open } = useContext(BlockContext);
   const [done, copy] = useCopy();
   const [expanded, setExpanded] = useState(false);
-  const code = Array.isArray(children) ? children[0] : children;
-  const language = (code?.props?.className || "").match(/language-([\w+-]+)/)?.[1]?.toLowerCase() || "";
   const source = textOf(children).replace(/\n$/, "");
   const lines = source.split("\n").length;
   const folds = lines > FOLD_AT + 6;
@@ -136,6 +159,110 @@ function CodeBlock({ children }) {
           {expanded ? "Show less" : `Show all ${lines} lines`}
         </button>
       )}
+    </figure>
+  );
+}
+
+/* ---------- Figures and timelines ---------- */
+
+/* A few key figures read at a glance: the first leads, the rest sit in a
+   ledger beneath it. Direction is said with a glyph and in words, never by
+   colour alone. In the minimal presentation they stay plain lines. */
+function Delta({ item }) {
+  if (!item.delta) return null;
+  const word = item.direction === "up" ? "up" : item.direction === "down" ? "down" : "change";
+  return (
+    <span className="metric-delta" data-direction={item.direction}>
+      <span aria-hidden="true">{item.direction === "up" ? "▲" : item.direction === "down" ? "▼" : "◆"}</span>
+      <span className="sr-only">{word} </span>
+      {item.delta.replace(/^[↑↓▲▼]\s*/, "")}
+    </span>
+  );
+}
+
+function Metrics({ source }) {
+  const { presentation } = useContext(BlockContext);
+  const data = useMemo(() => parseMetrics(source), [source]);
+  const [done, copy] = useCopy();
+  if (!data.items.length) return <p className="block-pending">Laying out figures…</p>;
+  if (presentation === "minimal") return <pre className="block-plain">{metricsText(data)}</pre>;
+  const [lead, ...rest] = data.items;
+  return (
+    <figure className="metrics" aria-label={data.title || "Key figures"}>
+      <figcaption className="block-bar">
+        <span className="label">Figures</span>
+        {data.title && <span className="metrics-title">{data.title}</span>}
+        <span className="block-tools">
+          <button
+            className="block-tool"
+            onClick={() => copy(metricsText(data))}
+            aria-label={done ? "Copied" : "Copy figures"}
+          >
+            {done ? <Check size={15} /> : <Copy size={15} />}
+            <span>{done ? "Copied" : "Copy"}</span>
+          </button>
+        </span>
+      </figcaption>
+      <div className="metrics-lead">
+        <span className="metrics-lead-label">{lead.label}</span>
+        <span className="metrics-lead-value">{lead.value}</span>
+        <Delta item={lead} />
+      </div>
+      {rest.length > 0 && (
+        <dl className="metrics-grid">
+          {rest.map((item, i) => (
+            <div key={i} className="metric">
+              <dt>{item.label}</dt>
+              <dd>
+                <span className="metric-value">{item.value}</span>
+                <Delta item={item} />
+              </dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      {data.notes.map((note, i) => (
+        <p key={i} className="metrics-note">
+          {note}
+        </p>
+      ))}
+    </figure>
+  );
+}
+
+function Timeline({ source }) {
+  const { presentation } = useContext(BlockContext);
+  const data = useMemo(() => parseTimeline(source), [source]);
+  const [done, copy] = useCopy();
+  if (!data.events.length) return <p className="block-pending">Laying out the timeline…</p>;
+  if (presentation === "minimal") return <pre className="block-plain">{timelineText(data)}</pre>;
+  return (
+    <figure className="timeline" aria-label={data.title || "Timeline"}>
+      <figcaption className="block-bar">
+        <span className="label">Timeline</span>
+        {data.title && <span className="metrics-title">{data.title}</span>}
+        <span className="block-tools">
+          <button
+            className="block-tool"
+            onClick={() => copy(timelineText(data))}
+            aria-label={done ? "Copied" : "Copy timeline"}
+          >
+            {done ? <Check size={15} /> : <Copy size={15} />}
+            <span>{done ? "Copied" : "Copy"}</span>
+          </button>
+        </span>
+      </figcaption>
+      <ol className="timeline-list">
+        {data.events.map((event, i) => (
+          <li key={i}>
+            <span className="timeline-when">{event.when}</span>
+            <span className="timeline-what">
+              {event.what}
+              {event.detail && <span className="timeline-detail">{event.detail}</span>}
+            </span>
+          </li>
+        ))}
+      </ol>
     </figure>
   );
 }
@@ -329,12 +456,13 @@ function Chart({ columns, rows, plan }) {
 }
 
 function TableBlock({ node }) {
+  const { open, presentation } = useContext(BlockContext);
   const data = useMemo(() => tableData(node), [node]);
   const [sort, setSort] = useState({ column: null, direction: "asc" });
   const [view, setView] = useState("table");
   const [done, copy] = useCopy();
   const numeric = data.columns.map((_, i) => isNumericColumn(data.rows, i));
-  const plan = chartable(data.columns, data.rows);
+  const plan = presentation === "minimal" ? null : chartable(data.columns, data.rows);
   const order = useMemo(() => {
     const indexed = data.rows.map((row, i) => [...row, i]);
     return sortRows(indexed, sort.column, sort.direction).map((row) => row.at(-1));
@@ -395,6 +523,21 @@ function TableBlock({ node }) {
             aria-label="Download as CSV"
           >
             <DownloadSimple size={15} /> <span>CSV</span>
+          </button>
+          <button
+            className="block-tool icon-only"
+            title="Open in workspace"
+            aria-label="Open table in workspace, to filter and sort"
+            onClick={() =>
+              open({
+                kind: "table",
+                title: `Table · ${data.rows.length} ${data.rows.length === 1 ? "row" : "rows"}`,
+                columns: data.columns,
+                rows: data.rows.map((row) => row.map(cellText)),
+              })
+            }
+          >
+            <ArrowsOut size={15} />
           </button>
         </span>
       </figcaption>
@@ -509,13 +652,15 @@ export function useSources(content) {
 }
 
 export function Rendered({ content, sources, onOpen }) {
+  const presentation = useContext(PresentationContext);
   const value = useMemo(
     () => ({
       sources,
       byKey: new Map(sources.map((source) => [source.id, source])),
       open: onOpen,
+      presentation,
     }),
-    [sources, onOpen],
+    [sources, onOpen, presentation],
   );
   return (
     <BlockContext.Provider value={value}>
