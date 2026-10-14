@@ -1,20 +1,24 @@
 /* Vaelo design tokens. Everything downstream reads from here; nothing else
-   should hard-code a color, radius, space, duration or shadow. */
+   should hard-code a color, radius, space, duration or shadow.
+
+   Language: correspondence. Paper, ink and gilt hairlines. One serif voice,
+   with italic as the emotional register. */
 
 :root {
   color-scheme: light dark;
 
-  /* Type */
-  --font-body: "Manrope", ui-sans-serif, system-ui, sans-serif;
-  --font-voice: "Newsreader", "Iowan Old Style", Georgia, serif;
-  --font-label: "Nunito", "Manrope", ui-rounded, system-ui, sans-serif;
+  /* One family. Newsreader's optical sizing gives display sizes a finer cut
+     and reading sizes a sturdier one, so a single face can do every job. */
+  --font-voice: "Newsreader Variable", "Newsreader", "Iowan Old Style",
+    Georgia, serif;
+  --font-mono: ui-monospace, "Cascadia Code", Consolas, monospace;
 
-  --t-xs: 0.78rem;
-  --t-sm: 0.875rem;
-  --t-base: 1rem;
-  --t-md: 1.0625rem;
-  --t-lg: 1.375rem;
-  --t-xl: clamp(1.75rem, 1.2rem + 1.6vw, 2.5rem);
+  --t-xs: 0.8125rem;
+  --t-sm: 0.9375rem;
+  --t-base: 1.0625rem;
+  --t-md: 1.1875rem;
+  --t-lg: 1.5rem;
+  --t-xl: clamp(2.25rem, 1.4rem + 3vw, 3.5rem);
 
   /* Space: 4pt grid */
   --s-1: 0.25rem;
@@ -22,76 +26,89 @@
   --s-3: 0.75rem;
   --s-4: 1rem;
   --s-5: 1.5rem;
-  --s-6: 2rem;
-  --s-7: 3rem;
-  --s-8: 4.5rem;
+  --s-6: 2.25rem;
+  --s-7: 3.5rem;
+  --s-8: 5rem;
 
-  /* Shape */
-  --r-sm: 8px;
-  --r-md: 12px;
-  --r-lg: 20px;
+  /* Shape: restrained; pills only for the single primary action */
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 16px;
   --r-pill: 999px;
 
-  /* Motion: calm, never bouncy */
+  /* Motion: slow, eased, never bouncy */
   --ease: cubic-bezier(0.22, 0.8, 0.24, 1);
   --dur-1: 180ms;
-  --dur-2: 320ms;
-  --dur-3: 600ms;
+  --dur-2: 340ms;
+  --dur-3: 700ms;
 
   /* Layout */
-  --rail-w: 17.5rem;
-  --measure: 44rem;
+  --rail-w: 17rem;
+  --measure: 49rem;
+  --gutter: 6.5rem;
   --hit: 2.75rem;
 }
 
-/* Ivory */
+/* Parchment */
 :root {
-  --canvas: #f8f4ee;
-  --rail: #f1ebe2;
-  --surface: #fffdf9;
-  --sunken: #efe8dd;
-  --bubble: #efe8dd;
-  --ink: #2b2427;
-  --ink-soft: #4a4044;
-  --muted: #6e6266;
-  --hairline: #e6ddd2;
-  --hairline-strong: #d6cabb;
-  --brass: #a9845a;
-  --brass-ink: #7a5c3a;
-  --brass-wash: rgb(169 132 90 / 12%);
-  --on-brass: #fffdf9;
-  --clay: #a0584c;
-  --clay-wash: rgb(160 88 76 / 9%);
-  --sage: #6f8068;
-  --scrim: rgb(43 36 39 / 32%);
+  --canvas: #f6f0e6;
+  --rail: #efe7da;
+  --surface: #fbf7ef;
+  --sunken: #ece3d4;
+  --ink: #241d1b;
+  --ink-soft: #4b403b;
+  --muted: #7a6c64;
+  --hairline: #e0d4c2;
+  --hairline-strong: #cdbca3;
+  --gilt: #a67c44;
+  --gilt-ink: #765222;
+  --gilt-wash: rgb(166 124 68 / 11%);
+  --gilt-line: linear-gradient(
+    90deg,
+    transparent,
+    rgb(166 124 68 / 55%) 50%,
+    transparent
+  );
+  --on-gilt: #fbf7ef;
+  --clay: #96503f;
+  --clay-wash: rgb(150 80 63 / 9%);
+  --sage: #6b7d62;
+  --scrim: rgb(36 29 27 / 34%);
+  --grain: 0.5;
 
-  --lift-1: 0 1px 2px rgb(60 40 30 / 5%), 0 6px 20px rgb(60 40 30 / 5%);
-  --lift-2: 0 2px 6px rgb(60 40 30 / 6%), 0 16px 40px rgb(60 40 30 / 9%);
+  --lift-1: 0 1px 1px rgb(80 55 30 / 4%), 0 10px 30px rgb(80 55 30 / 6%);
+  --lift-2: 0 2px 6px rgb(80 55 30 / 7%), 0 24px 56px rgb(80 55 30 / 12%);
 }
 
-/* Dusk: layered, warm, not an inverted Ivory */
+/* Lamplight: warm, layered, never an inverted parchment */
 @media (prefers-color-scheme: dark) {
   :root {
-    --canvas: #1b1719;
-    --rail: #151113;
-    --surface: #241e21;
-    --sunken: #120e10;
-    --bubble: #2d2528;
-    --ink: #f2ebe4;
-    --ink-soft: #d9cfc7;
-    --muted: #b3a5a6;
-    --hairline: #332a2e;
-    --hairline-strong: #46393e;
-    --brass: #d2ad7c;
-    --brass-ink: #dcbb90;
-    --brass-wash: rgb(210 173 124 / 12%);
-    --on-brass: #1b1719;
-    --clay: #d49a8e;
-    --clay-wash: rgb(212 154 142 / 10%);
-    --sage: #9db296;
-    --scrim: rgb(0 0 0 / 55%);
+    --canvas: #181311;
+    --rail: #120e0d;
+    --surface: #211a17;
+    --sunken: #0f0b0a;
+    --ink: #f1e8dc;
+    --ink-soft: #d8cbbb;
+    --muted: #a8998b;
+    --hairline: #2f2622;
+    --hairline-strong: #473a32;
+    --gilt: #d3ac76;
+    --gilt-ink: #deba88;
+    --gilt-wash: rgb(211 172 118 / 11%);
+    --gilt-line: linear-gradient(
+      90deg,
+      transparent,
+      rgb(211 172 118 / 45%) 50%,
+      transparent
+    );
+    --on-gilt: #181311;
+    --clay: #d79886;
+    --clay-wash: rgb(215 152 134 / 10%);
+    --sage: #9bb08f;
+    --scrim: rgb(0 0 0 / 58%);
+    --grain: 0.9;
 
-    --lift-1: 0 1px 2px rgb(0 0 0 / 30%), 0 6px 20px rgb(0 0 0 / 25%);
-    --lift-2: 0 2px 6px rgb(0 0 0 / 35%), 0 16px 40px rgb(0 0 0 / 40%);
+    --lift-1: 0 1px 1px rgb(0 0 0 / 30%), 0 10px 30px rgb(0 0 0 / 28%);
+    --lift-2: 0 2px 6px rgb(0 0 0 / 40%), 0 24px 56px rgb(0 0 0 / 45%);
   }
 }

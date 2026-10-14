@@ -1,6 +1,9 @@
+/* A transcript, not a chat feed: each turn hangs from a small-caps label in
+   the margin, the way a letter or a play is set. */
 .message {
-  display: flex;
-  gap: var(--s-4);
+  display: grid;
+  grid-template-columns: var(--gutter) minmax(0, 1fr);
+  column-gap: var(--s-4);
   width: 100%;
 }
 
@@ -15,38 +18,46 @@
   }
 }
 
-/* You: a soft, neutral slate, aligned to the edge of the conversation */
-.message[data-role="user"] {
+.message-label {
+  display: flex;
+  align-items: center;
   justify-content: flex-end;
+  gap: var(--s-2);
+  align-self: start;
+  height: 2rem;
 }
 
-.message[data-role="user"] .message-body {
-  max-width: min(85%, 34rem);
-  padding: var(--s-3) var(--s-4);
-  border-radius: var(--r-lg) var(--r-lg) var(--s-1) var(--r-lg);
-  background: var(--bubble);
-  color: var(--ink);
+.message-label .label {
+  letter-spacing: 0.16em;
 }
 
-/* Vaelo: no bubble. It speaks directly to the page. */
-.message[data-role="assistant"] .message-body {
-  flex: 1;
+.message[data-role="assistant"] .message-label .label {
+  color: var(--gilt-ink);
+}
+
+.message-body {
   min-width: 0;
 }
 
-.message-halo {
-  margin-top: 0.15rem;
-}
-
-.prose {
-  font-size: var(--t-md);
-  line-height: 1.7;
-  overflow-wrap: anywhere;
+/* A new exchange opens with a fine rule */
+.message[data-role="user"]:not(:first-child) {
+  padding-top: var(--s-6);
+  background: linear-gradient(var(--hairline), var(--hairline)) top / 100% 1px
+    no-repeat;
 }
 
 .message[data-role="user"] .prose {
-  line-height: 1.55;
+  color: var(--ink-soft);
+  font-size: var(--t-md);
+  line-height: 1.6;
   white-space: pre-wrap;
+}
+
+.prose {
+  font-size: 1.25rem;
+  line-height: 1.68;
+  letter-spacing: -0.003em;
+  overflow-wrap: anywhere;
 }
 
 .prose > :first-child {
@@ -74,64 +85,69 @@
 }
 
 .prose li::marker {
-  color: var(--brass);
+  color: var(--gilt);
+  font-style: italic;
+}
+
+.prose strong {
+  font-weight: 600;
 }
 
 .prose h1,
 .prose h2,
 .prose h3 {
   margin: var(--s-5) 0 var(--s-2);
-  font-family: var(--font-voice);
   font-weight: 400;
-  line-height: 1.25;
+  line-height: 1.2;
+  letter-spacing: -0.015em;
 }
 
 .prose h1 {
-  font-size: var(--t-lg);
+  font-size: 1.75rem;
 }
 .prose h2 {
-  font-size: 1.25rem;
+  font-size: 1.5rem;
 }
 .prose h3 {
-  font-size: var(--t-md);
-  font-weight: 600;
-  font-family: var(--font-body);
+  font-size: 1.25rem;
+  font-style: italic;
 }
 
 .prose blockquote {
-  padding-left: var(--s-4);
-  border-left: 2px solid var(--brass);
+  padding-left: var(--s-5);
+  border-left: 1px solid var(--gilt);
   color: var(--ink-soft);
-  font-family: var(--font-voice);
-  font-size: 1.12em;
+  font-style: italic;
+  font-size: 1.1em;
 }
 
 .prose hr {
+  width: 3rem;
+  height: 1px;
+  margin: var(--s-6) auto;
   border: 0;
-  border-top: 1px solid var(--hairline);
-  margin: var(--s-5) 0;
+  background: var(--gilt);
 }
 
 .prose code {
-  padding: 0.12em 0.4em;
-  border-radius: 6px;
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
   background: var(--sunken);
-  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
-  font-size: 0.88em;
+  font-family: var(--font-mono);
+  font-size: 0.8em;
 }
 
 .code {
   position: relative;
   margin: 0 0 var(--s-4);
   border: 1px solid var(--hairline);
-  border-radius: var(--r-md);
+  border-radius: var(--r-sm);
   background: var(--sunken);
 }
 
 .code pre {
   margin: 0;
-  padding: var(--s-4);
-  padding-top: var(--s-5);
+  padding: var(--s-4) var(--s-5);
   overflow-x: auto;
   line-height: 1.55;
 }
@@ -139,7 +155,7 @@
 .code pre code {
   padding: 0;
   background: none;
-  font-size: var(--t-sm);
+  font-size: 0.78rem;
 }
 
 .code-copy {
@@ -152,9 +168,8 @@
   height: 1.75rem;
   padding: 0 var(--s-2);
   border-radius: var(--r-sm);
-  font-family: var(--font-label);
   font-size: var(--t-xs);
-  font-weight: 700;
+  font-style: italic;
   color: var(--muted);
   opacity: 0;
   transition:
@@ -168,14 +183,14 @@
 }
 
 .code-copy:hover {
-  background: var(--brass-wash);
+  background: var(--gilt-wash);
   color: var(--ink);
 }
 
 .prose table {
   border-collapse: collapse;
   margin: 0 0 var(--s-4);
-  font-size: var(--t-sm);
+  font-size: var(--t-base);
 }
 
 .prose th,
@@ -185,34 +200,52 @@
   text-align: left;
 }
 
+.prose th {
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: var(--t-xs);
+  color: var(--muted);
+}
+
 /* Soft insertion point while words arrive */
 .caret {
   display: inline-block;
-  width: 0.5em;
-  height: 0.5em;
-  margin-left: 0.2em;
+  width: 0.38em;
+  height: 0.38em;
+  margin-left: 0.25em;
   border-radius: 50%;
-  background: var(--brass);
-  vertical-align: baseline;
-  animation: caret 1.4s ease-in-out infinite;
+  background: var(--gilt);
+  vertical-align: 0.1em;
+  animation: ember 1.6s ease-in-out infinite;
 }
 
-@keyframes caret {
+@keyframes ember {
   0%,
   100% {
-    opacity: 0.25;
+    opacity: 0.3;
     transform: scale(0.8);
   }
   50% {
-    opacity: 0.9;
+    opacity: 1;
     transform: scale(1);
   }
 }
 
+@keyframes waiting {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
 .message-waiting {
-  margin: 0.35rem 0 0;
+  margin: 0.3rem 0 0;
   color: var(--muted);
-  font-family: var(--font-voice);
+  font-size: var(--t-md);
   font-style: italic;
   animation: waiting 3.2s ease-in-out infinite;
 }
@@ -220,20 +253,22 @@
 .message-note {
   margin: var(--s-3) 0 0;
   font-size: var(--t-sm);
+  font-style: italic;
   color: var(--muted);
 }
 
 .message-note.error {
   padding: var(--s-3) var(--s-4);
-  border-radius: var(--r-md);
+  border-left: 2px solid var(--clay);
   background: var(--clay-wash);
+  font-style: normal;
   color: var(--ink-soft);
 }
 
 .message-actions {
   display: flex;
   gap: var(--s-1);
-  margin: var(--s-2) 0 0 calc(var(--s-2) * -1);
+  margin: var(--s-3) 0 0 calc(var(--s-2) * -1);
   opacity: 0;
   transition: opacity var(--dur-2) var(--ease);
 }
@@ -250,15 +285,16 @@
   }
 }
 
-/* Activity: what Vaelo reached for */
+/* Activity: what Vaelo reached for, set as marginalia */
 .activity {
   display: flex;
   flex-direction: column;
   gap: var(--s-1);
-  margin: 0 0 var(--s-3);
+  margin: 0 0 var(--s-4);
   padding: 0;
   list-style: none;
   font-size: var(--t-sm);
+  font-style: italic;
   color: var(--muted);
 }
 
@@ -271,19 +307,19 @@
 .activity-mark {
   display: grid;
   place-items: center;
-  width: 1rem;
-  height: 1rem;
+  width: 0.95rem;
+  height: 0.95rem;
   border-radius: 50%;
   border: 1px solid var(--hairline-strong);
-  color: var(--on-brass);
+  color: var(--on-gilt);
   transition:
     background var(--dur-2) var(--ease),
     border-color var(--dur-2) var(--ease);
 }
 
 .activity li[data-state="running"] .activity-mark {
-  border-color: var(--brass);
-  animation: caret 1.8s ease-in-out infinite;
+  border-color: var(--gilt);
+  animation: ember 1.8s ease-in-out infinite;
 }
 
 .activity li[data-state="done"] .activity-mark {
@@ -292,18 +328,28 @@
 }
 
 .activity-state {
-  font-family: var(--font-label);
-  font-size: var(--t-xs);
-  font-weight: 600;
-  opacity: 0.8;
+  opacity: 0.75;
+}
+.activity-state::before {
+  content: "· ";
 }
 
-@keyframes waiting {
-  0%,
-  100% {
-    opacity: 0.6;
+@media (max-width: 47.9375rem) {
+  .message {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: var(--s-1);
   }
-  50% {
-    opacity: 1;
+
+  .message-label {
+    justify-content: flex-start;
+    height: auto;
+  }
+
+  .prose {
+    font-size: 1.1875rem;
+  }
+
+  .message[data-role="user"]:not(:first-child) {
+    padding-top: var(--s-5);
   }
 }

@@ -1,3 +1,4 @@
+/* The writing slip: a quiet ruled field, not a chat bubble. */
 .composer {
   display: flex;
   align-items: flex-end;
@@ -13,17 +14,17 @@
 }
 
 .composer:focus-within {
-  border-color: var(--brass);
+  border-color: var(--gilt);
   box-shadow:
     var(--lift-1),
-    0 0 0 4px var(--brass-wash);
+    0 0 0 4px var(--gilt-wash);
 }
 
 .composer textarea {
   flex: 1;
   min-width: 0;
   max-height: 11rem;
-  padding: 0.55rem 0;
+  padding: 0.5rem 0;
   border: 0;
   outline: none;
   resize: none;
@@ -34,9 +35,8 @@
 
 .composer textarea::placeholder {
   color: var(--muted);
-  font-family: var(--font-voice);
-  font-size: 1.1rem;
   font-style: italic;
+  opacity: 0.85;
 }
 
 .composer-end {
@@ -48,6 +48,7 @@
 .composer-hint {
   display: none;
   font-size: var(--t-xs);
+  font-style: italic;
   color: var(--muted);
   white-space: nowrap;
 }
@@ -65,7 +66,8 @@
   }
 }
 
-/* The one place brass is solid: Vaelo's invitation to act */
+/* Send is the only solid gilt on the screen. At rest it is an empty ring,
+   and it fills the moment there is something to send. */
 .send {
   position: relative;
   display: grid;
@@ -74,11 +76,13 @@
   width: var(--hit);
   height: var(--hit);
   border-radius: 50%;
-  background: var(--brass);
-  color: var(--on-brass);
+  border: 1px solid var(--gilt);
+  background: var(--gilt);
+  color: var(--on-gilt);
   transition:
     background var(--dur-2) var(--ease),
-    opacity var(--dur-2) var(--ease),
+    border-color var(--dur-2) var(--ease),
+    color var(--dur-2) var(--ease),
     transform var(--dur-1) var(--ease);
 }
 
@@ -102,6 +106,7 @@
 
 .send[data-mode="stop"] {
   background: var(--ink);
+  border-color: var(--ink);
   color: var(--surface);
 }
 
@@ -114,6 +119,7 @@
 }
 
 .send:disabled {
-  background: var(--sunken);
+  background: transparent;
+  border-color: var(--hairline-strong);
   color: var(--muted);
 }

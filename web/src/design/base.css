@@ -14,11 +14,34 @@ body {
   min-height: 100dvh;
   background: var(--canvas);
   color: var(--ink);
-  font-family: var(--font-body);
+  font-family: var(--font-voice);
   font-size: var(--t-base);
   line-height: 1.55;
+  font-optical-sizing: auto;
+  font-kerning: normal;
+  font-feature-settings: "liga", "kern";
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+}
+
+/* Paper tooth: a quiet grain so surfaces feel material rather than flat.
+   Static, GPU-cheap, and never above the content. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  pointer-events: none;
+  opacity: calc(var(--grain) * 0.07);
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .3 0 0 0 0 .22 0 0 0 0 .14 0 0 0 .9 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+@media (prefers-color-scheme: dark) {
+  body::before {
+    mix-blend-mode: screen;
+    opacity: calc(var(--grain) * 0.05);
+  }
 }
 
 button,
@@ -40,28 +63,42 @@ button:disabled {
 }
 
 a {
-  color: var(--brass-ink);
-  text-underline-offset: 3px;
+  color: var(--gilt-ink);
+  text-underline-offset: 4px;
   text-decoration-thickness: 1px;
+  text-decoration-color: var(--hairline-strong);
+  transition: text-decoration-color var(--dur-1) var(--ease);
+}
+
+a:hover {
+  text-decoration-color: var(--gilt);
 }
 
 :focus-visible {
-  outline: 2px solid var(--brass);
-  outline-offset: 2px;
+  outline: 1.5px solid var(--gilt);
+  outline-offset: 3px;
   border-radius: var(--r-sm);
 }
 
 ::selection {
-  background: var(--brass-wash);
+  background: var(--gilt-wash);
 }
 
+/* Small caps register: labels, group names, the quiet scaffolding */
 .label {
-  font-family: var(--font-label);
   font-size: var(--t-xs);
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  font-weight: 500;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--muted);
+}
+
+/* The thin gilt rule that closes a section the way a ledger line would */
+.rule {
+  height: 1px;
+  border: 0;
+  background: var(--gilt-line);
+  opacity: 0.7;
 }
 
 .sr-only {
@@ -73,13 +110,13 @@ a {
   white-space: nowrap;
 }
 
-/* Shared quiet controls */
+/* Quiet controls */
 .icon-button {
   display: inline-grid;
   place-items: center;
   width: var(--hit);
   height: var(--hit);
-  border-radius: var(--r-md);
+  border-radius: 50%;
   color: var(--muted);
   transition:
     background var(--dur-1) var(--ease),
@@ -87,7 +124,7 @@ a {
 }
 
 .icon-button:hover:not(:disabled) {
-  background: var(--brass-wash);
+  background: var(--gilt-wash);
   color: var(--ink);
 }
 
@@ -102,14 +139,14 @@ a {
   min-height: 2rem;
   padding: 0 var(--s-2);
   border-radius: var(--r-sm);
-  color: var(--brass-ink);
-  font-weight: 600;
+  color: var(--gilt-ink);
+  font-style: italic;
   font-size: var(--t-sm);
   transition: background var(--dur-1) var(--ease);
 }
 
 .text-button:hover:not(:disabled) {
-  background: var(--brass-wash);
+  background: var(--gilt-wash);
 }
 
 .text-button:disabled {

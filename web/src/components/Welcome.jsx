@@ -28,16 +28,25 @@ export function Welcome({ name, phase, onPick }) {
   const who = firstName(name);
   return (
     <section className="welcome" aria-label="Start a conversation">
-      <Halo size={84} state={phase} />
+      <Halo size={72} state={phase} />
       <h1>
         {greeting()}
-        {who ? `, ${who}` : ""}.
+        {who ? (
+          <>
+            , <em>{who}.</em>
+          </>
+        ) : (
+          "."
+        )}
       </h1>
       <p className="welcome-line">What would you like to take care of?</p>
       <ul className="starters">
-        {starters.map((starter) => (
+        {starters.map((starter, index) => (
           <li key={starter.title}>
             <button onClick={() => onPick(starter.text)}>
+              <span className="starter-index" aria-hidden="true">
+                {["i", "ii", "iii"][index]}.
+              </span>
               <span className="starter-title">{starter.title}</span>
               <span className="starter-note">{starter.note}</span>
               <ArrowRight size={18} aria-hidden="true" />

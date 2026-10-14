@@ -2,10 +2,31 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  width: min(100%, 34rem);
+  width: min(100%, 36rem);
   margin: auto;
   padding: var(--s-6) var(--s-4) var(--s-7);
   text-align: center;
+}
+
+/* Arrival: each line settles in, a breath apart */
+.welcome > * {
+  animation: settle var(--dur-3) var(--ease) both;
+}
+.welcome > :nth-child(2) {
+  animation-delay: 120ms;
+}
+.welcome > :nth-child(3) {
+  animation-delay: 240ms;
+}
+.welcome > :nth-child(4) {
+  animation-delay: 380ms;
+}
+
+@keyframes settle {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
 }
 
 .welcome .halo {
@@ -14,26 +35,32 @@
 
 .welcome h1 {
   margin: 0;
-  font-family: var(--font-voice);
   font-size: var(--t-xl);
-  font-weight: 400;
-  line-height: 1.15;
-  letter-spacing: -0.01em;
+  font-weight: 300;
+  line-height: 1.08;
+  letter-spacing: -0.02em;
   text-wrap: balance;
 }
 
-.welcome-line {
-  margin: var(--s-3) 0 var(--s-6);
-  color: var(--muted);
-  font-size: var(--t-md);
+.welcome h1 em {
+  font-weight: 300;
+  color: var(--gilt-ink);
 }
 
+.welcome-line {
+  margin: var(--s-3) 0 var(--s-7);
+  color: var(--muted);
+  font-size: var(--t-md);
+  font-style: italic;
+}
+
+/* Three ways in, set like a contents page */
 .starters {
   width: 100%;
   margin: 0;
   padding: 0;
   list-style: none;
-  border-top: 1px solid var(--hairline);
+  border-top: 1px solid var(--hairline-strong);
   text-align: left;
 }
 
@@ -43,36 +70,45 @@
 
 .starters button {
   display: grid;
-  grid-template-columns: 1fr auto;
-  column-gap: var(--s-4);
-  align-items: center;
+  grid-template-columns: 2.25rem 1fr auto;
+  column-gap: var(--s-2);
+  align-items: baseline;
   width: 100%;
-  min-height: 4rem;
-  padding: var(--s-3) var(--s-2);
-  border-radius: var(--r-sm);
+  padding: var(--s-4) var(--s-1);
   text-align: left;
-  transition:
-    background var(--dur-2) var(--ease),
-    padding var(--dur-2) var(--ease);
+  transition: padding var(--dur-2) var(--ease);
+}
+
+.starter-index {
+  grid-row: 1 / span 2;
+  font-size: var(--t-sm);
+  font-style: italic;
+  color: var(--gilt);
 }
 
 .starter-title {
-  grid-column: 1;
-  font-weight: 600;
+  grid-column: 2;
+  font-size: var(--t-lg);
+  line-height: 1.2;
+  letter-spacing: -0.005em;
+  transition: color var(--dur-2) var(--ease);
 }
 
 .starter-note {
-  grid-column: 1;
+  grid-column: 2;
+  margin-top: 2px;
   color: var(--muted);
   font-size: var(--t-sm);
+  font-style: italic;
 }
 
 .starters svg {
-  grid-column: 2;
+  grid-column: 3;
   grid-row: 1 / span 2;
-  color: var(--brass);
+  align-self: center;
+  color: var(--gilt);
   opacity: 0;
-  transform: translateX(-6px);
+  transform: translateX(-8px);
   transition:
     opacity var(--dur-2) var(--ease),
     transform var(--dur-2) var(--ease);
@@ -80,8 +116,12 @@
 
 .starters button:hover,
 .starters button:focus-visible {
-  background: var(--brass-wash);
-  padding-left: var(--s-4);
+  padding-left: var(--s-3);
+}
+
+.starters button:hover .starter-title,
+.starters button:focus-visible .starter-title {
+  color: var(--gilt-ink);
 }
 
 .starters button:hover svg,
@@ -98,8 +138,12 @@
     padding-top: var(--s-5);
   }
 
+  .welcome-line {
+    margin-bottom: var(--s-6);
+  }
+
   .starters svg {
-    opacity: 0.7;
+    opacity: 0.6;
     transform: none;
   }
 }

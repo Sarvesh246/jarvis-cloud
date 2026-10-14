@@ -40,10 +40,10 @@ export function groupChats(chats, now = Date.now()) {
 export function statusText({ phase, cloud, tool }) {
   if (phase === "working") return tool ? `Using ${tool.toLowerCase()}` : "Working";
   if (phase === "waking") return "Waking up";
-  if (phase === "thinking") return "Thinking";
-  if (phase === "speaking") return "Writing";
+  if (phase === "thinking") return "Thinking it through";
+  if (phase === "speaking") return "Writing to you";
   if (phase === "concern") return "Something went wrong";
-  if (cloud === "Unavailable") return "Offline";
+  if (cloud === "Unavailable") return "Out of reach";
   if (cloud === "Starting") return "Resting";
-  return "Here";
+  return "Here with you";
 }

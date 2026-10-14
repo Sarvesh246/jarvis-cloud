@@ -19,9 +19,11 @@ export function SignIn({ configured, error, buttonRef }) {
   return (
     <main className="entry">
       <div className="entry-body">
-        <Halo size={96} />
-        <Wordmark size={30} />
-        <h1>Good to see you.</h1>
+        <Halo size={88} />
+        <Wordmark size={44} />
+        <h1>
+          Good to see <em>you.</em>
+        </h1>
         <p className="entry-line">
           Sign in to pick up where you left off.
         </p>

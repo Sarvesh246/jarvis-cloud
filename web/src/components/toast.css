@@ -23,7 +23,7 @@
 }
 
 .toast .text-button {
-  color: var(--brass);
+  color: var(--gilt);
   min-height: var(--hit);
 }
 
@@ -46,5 +46,5 @@
 }
 
 .notice[data-tone="brass"] {
-  background: var(--brass-wash);
+  background: var(--gilt-wash);
 }

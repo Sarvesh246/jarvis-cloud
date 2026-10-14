@@ -1,9 +1,10 @@
+/* The rail is an index: a table of contents for your conversations. */
 .rail {
   display: flex;
   flex-direction: column;
-  gap: var(--s-4);
+  gap: var(--s-5);
   height: 100dvh;
-  padding: var(--s-5) var(--s-3) var(--s-4);
+  padding: var(--s-6) var(--s-5) var(--s-4);
   background: var(--rail);
   border-right: 1px solid var(--hairline);
   overflow: hidden;
@@ -13,13 +14,11 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 var(--s-2);
 }
 
 .rail-brand {
   display: inline-flex;
   align-items: center;
-  gap: var(--s-3);
 }
 
 .rail-close {
@@ -28,38 +27,41 @@
 
 .rail-new {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: var(--s-2);
-  min-height: var(--hit);
-  padding: 0 var(--s-3);
-  border-radius: var(--r-md);
-  border: 1px solid var(--hairline-strong);
-  background: var(--surface);
-  font-weight: 600;
-  font-size: var(--t-sm);
-  transition:
-    border-color var(--dur-1) var(--ease),
-    background var(--dur-1) var(--ease),
-    opacity var(--dur-1) var(--ease);
+  padding: var(--s-3) 0;
+  border-top: 1px solid var(--hairline-strong);
+  border-bottom: 1px solid var(--hairline-strong);
+  font-size: var(--t-base);
+  font-style: italic;
+  color: var(--ink);
+  transition: color var(--dur-2) var(--ease);
 }
 
 .rail-new svg {
-  color: var(--brass-ink);
+  align-self: center;
+  color: var(--gilt);
+  transition: transform var(--dur-2) var(--ease);
 }
 
 .rail-new:hover:not(:disabled) {
-  border-color: var(--brass);
+  color: var(--gilt-ink);
+}
+
+.rail-new:hover:not(:disabled) svg {
+  transform: rotate(90deg);
 }
 
 .rail-new:disabled {
-  opacity: 0.5;
+  opacity: 0.45;
 }
 
 .rail-new kbd {
   margin-left: auto;
-  font-family: var(--font-label);
+  font-family: var(--font-voice);
   font-size: var(--t-xs);
-  font-weight: 600;
+  font-style: normal;
+  letter-spacing: 0.08em;
   color: var(--muted);
 }
 
@@ -69,61 +71,63 @@
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: var(--s-4);
-  padding: 0 var(--s-1);
+  gap: var(--s-5);
+  margin: 0 calc(var(--s-3) * -1);
+  padding: 0 var(--s-3);
   scrollbar-width: thin;
   scrollbar-color: var(--hairline-strong) transparent;
 }
 
 .rail-list h2 {
-  margin: 0 0 var(--s-1);
-  padding: 0 var(--s-2);
+  margin: 0 0 var(--s-2);
 }
 
 .rail-row {
   position: relative;
   display: flex;
   align-items: center;
-  border-radius: var(--r-md);
-  transition: background var(--dur-1) var(--ease);
 }
 
-.rail-row:hover {
-  background: var(--brass-wash);
-}
-
-.rail-row[data-active="true"] {
-  background: var(--surface);
-  box-shadow: inset 0 0 0 1px var(--hairline);
+/* The active entry is marked the way an index marks a place: a gilt dot and
+   full ink, not a filled pill. */
+.rail-row::before {
+  content: "";
+  position: absolute;
+  left: calc(var(--s-3) * -1 + 1px);
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--gilt);
+  transform: translateY(-50%) scale(0);
+  transition: transform var(--dur-2) var(--ease);
 }
 
 .rail-row[data-active="true"]::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 25%;
-  bottom: 25%;
-  width: 2px;
-  border-radius: var(--r-pill);
-  background: var(--brass);
+  transform: translateY(-50%) scale(1);
 }
 
 .rail-link {
   flex: 1;
   min-width: 0;
-  min-height: var(--hit);
-  padding: 0 var(--s-3);
+  min-height: 2.5rem;
   text-align: left;
-  font-size: var(--t-sm);
-  color: var(--ink-soft);
+  font-size: var(--t-base);
+  line-height: 1.3;
+  color: var(--muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  transition: color var(--dur-2) var(--ease);
+}
+
+.rail-row:hover .rail-link {
+  color: var(--ink);
 }
 
 .rail-row[data-active="true"] .rail-link {
   color: var(--ink);
-  font-weight: 600;
+  font-style: italic;
 }
 
 .rail-delete {
@@ -131,8 +135,7 @@
   place-items: center;
   width: 2rem;
   height: 2rem;
-  margin-right: var(--s-1);
-  border-radius: var(--r-sm);
+  border-radius: 50%;
   color: var(--muted);
   opacity: 0;
   transition:
@@ -153,14 +156,14 @@
   display: flex;
   flex-direction: column;
   gap: var(--s-3);
-  padding-top: var(--s-3);
+  padding-top: var(--s-4);
   border-top: 1px solid var(--hairline);
 }
 
 .rail-note {
   margin: 0;
-  padding: 0 var(--s-2);
   font-size: var(--t-xs);
+  font-style: italic;
   color: var(--muted);
 }
 
@@ -168,26 +171,24 @@
   display: flex;
   align-items: center;
   gap: var(--s-3);
-  padding: 0 var(--s-1) 0 var(--s-2);
 }
 
 .rail-avatar {
   display: grid;
   place-items: center;
-  width: 2rem;
-  height: 2rem;
+  width: 2.1rem;
+  height: 2.1rem;
   border-radius: 50%;
-  background: var(--brass-wash);
-  color: var(--brass-ink);
-  font-family: var(--font-voice);
-  font-size: var(--t-md);
+  border: 1px solid var(--gilt);
+  color: var(--gilt-ink);
+  font-size: var(--t-base);
+  font-style: italic;
 }
 
 .rail-name {
   flex: 1;
   min-width: 0;
   font-size: var(--t-sm);
-  font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -206,16 +207,17 @@
     position: fixed;
     inset: 0 auto 0 0;
     z-index: 30;
-    width: min(20rem, 88vw);
+    width: min(21rem, 88vw);
     transform: translateX(-102%);
-    box-shadow: var(--lift-2);
+    box-shadow: none;
     transition: transform var(--dur-2) var(--ease);
-    padding-top: calc(var(--s-4) + env(safe-area-inset-top));
+    padding-top: calc(var(--s-5) + env(safe-area-inset-top));
     padding-bottom: calc(var(--s-4) + env(safe-area-inset-bottom));
   }
 
   .rail[data-open="true"] {
     transform: none;
+    box-shadow: var(--lift-2);
   }
 
   .rail-close {

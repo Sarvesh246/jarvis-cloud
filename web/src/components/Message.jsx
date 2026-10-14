@@ -91,13 +91,15 @@ export function Message({
       data-failed={message.failed || undefined}
       aria-label={mine ? "Your message" : "Vaelo"}
     >
-      {!mine && (
-        <Halo
-          className="message-halo"
-          size={26}
-          state={streaming ? "speaking" : waiting ? phase : "idle"}
-        />
-      )}
+      <div className="message-label">
+        {!mine && (
+          <Halo
+            size={22}
+            state={streaming ? "speaking" : waiting ? phase : "idle"}
+          />
+        )}
+        <span className="label">{mine ? "You" : "Vaelo"}</span>
+      </div>
       <div className="message-body">
         <Activity items={message.activity} />
         {message.content ? (
