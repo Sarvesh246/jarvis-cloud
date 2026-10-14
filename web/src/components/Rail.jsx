@@ -1,8 +1,50 @@
-import React from "react";
-import { Plus, SignOut, Trash, X } from "@phosphor-icons/react";
-import { Mark, Wordmark } from "./Mark.jsx";
-import { groupChats } from "../lib/format.js";
+import React, { useRef, useState } from "react";
+import {
+  MagnifyingGlass,
+  Plus,
+  PushPin,
+  PushPinSlash,
+  SignOut,
+  Trash,
+  X,
+} from "@phosphor-icons/react";
+import { BrandWordmark } from "./Mark.jsx";
+import { groupChats, searchChats } from "../lib/format.js";
 import "./rail.css";
+
+function Row({ chat, active, busy, excerpt, onSelect, onDelete, onPin }) {
+  return (
+    <div className="rail-row" data-active={active} data-excerpt={excerpt ? true : undefined}>
+      <button
+        className="rail-link"
+        disabled={busy}
+        aria-current={active ? "page" : undefined}
+        onClick={() => onSelect(chat.id)}
+      >
+        <span className="rail-title">{chat.title}</span>
+        {excerpt && <span className="rail-excerpt">{excerpt}</span>}
+      </button>
+      <button
+        className="rail-act"
+        aria-label={chat.pinned ? `Unpin ${chat.title}` : `Pin ${chat.title}`}
+        title={chat.pinned ? "Unpin" : "Pin"}
+        data-on={chat.pinned || undefined}
+        onClick={() => onPin(chat.id)}
+      >
+        {chat.pinned ? <PushPinSlash size={16} /> : <PushPin size={16} />}
+      </button>
+      <button
+        className="rail-act rail-delete"
+        aria-label={`Remove ${chat.title}`}
+        title="Remove"
+        disabled={busy}
+        onClick={() => onDelete(chat.id)}
+      >
+        <Trash size={16} />
+      </button>
+    </div>
+  );
+}
 
 export function Rail({
   chats,
@@ -15,8 +57,15 @@ export function Rail({
   onNew,
   onSelect,
   onDelete,
+  onPin,
   onSignOut,
 }) {
+  const [query, setQuery] = useState("");
+  const field = useRef(null);
+  const results = searchChats(
+    chats.filter((chat) => chat.messages.length),
+    query,
+  );
   const groups = groupChats(chats);
   const pristine = chats.length === 1 && !chats[0].messages.length;
 
@@ -29,8 +78,7 @@ export function Rail({
     >
       <div className="rail-head">
         <span className="rail-brand">
-          <Mark size={30} />
-          <Wordmark size={30} />
+          <BrandWordmark size={32} />
         </span>
         <button
           className="icon-button rail-close"
@@ -47,36 +95,79 @@ export function Rail({
         <kbd>Ctrl K</kbd>
       </button>
 
-      <nav className="rail-list" aria-label="Past conversations">
-        {groups.map((group) => (
-          <section key={group.label}>
-            <h2 className="label">{group.label}</h2>
-            {group.items.map((chat) => (
-              <div
+      <label className="rail-search">
+        <MagnifyingGlass size={16} aria-hidden="true" />
+        <input
+          ref={field}
+          type="search"
+          value={query}
+          placeholder="Search conversations"
+          aria-label="Search conversations"
+          onChange={(event) => setQuery(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Escape" && query) {
+              event.stopPropagation();
+              setQuery("");
+            }
+          }}
+        />
+        {query && (
+          <button
+            type="button"
+            className="rail-search-clear"
+            aria-label="Clear search"
+            onClick={() => {
+              setQuery("");
+              field.current?.focus();
+            }}
+          >
+            <X size={14} />
+          </button>
+        )}
+      </label>
+
+      <nav className="rail-list" aria-label={results ? "Search results" : "Past conversations"}>
+        {results ? (
+          <section>
+            <h2 className="label" aria-live="polite">
+              {results.length
+                ? `${results.length} ${results.length === 1 ? "match" : "matches"}`
+                : "Nothing matches"}
+            </h2>
+            {results.map(({ chat, excerpt }) => (
+              <Row
                 key={chat.id}
-                className="rail-row"
-                data-active={chat.id === activeId}
-              >
-                <button
-                  className="rail-link"
-                  disabled={busy}
-                  aria-current={chat.id === activeId ? "page" : undefined}
-                  onClick={() => onSelect(chat.id)}
-                >
-                  {chat.title}
-                </button>
-                <button
-                  className="rail-delete"
-                  aria-label={`Remove ${chat.title}`}
-                  disabled={busy}
-                  onClick={() => onDelete(chat.id)}
-                >
-                  <Trash size={16} />
-                </button>
-              </div>
+                chat={chat}
+                excerpt={excerpt}
+                active={chat.id === activeId}
+                busy={busy}
+                onSelect={(id) => {
+                  setQuery("");
+                  onSelect(id);
+                }}
+                onDelete={onDelete}
+                onPin={onPin}
+              />
             ))}
           </section>
-        ))}
+        ) : (
+          groups.map((group) => (
+            <section key={group.label}>
+              <h2 className="label">{group.label}</h2>
+              {group.items.map((chat) => (
+                <Row
+                  key={chat.id}
+                  chat={chat}
+                  active={chat.id === activeId}
+                  busy={busy}
+                  onSelect={onSelect}
+                  onDelete={onDelete}
+                  onPin={onPin}
+                />
+              ))}
+            </section>
+          ))
+        )}
       </nav>
 
       <div className="rail-foot">

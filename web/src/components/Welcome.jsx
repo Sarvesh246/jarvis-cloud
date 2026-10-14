@@ -11,6 +11,7 @@ export const starters = [
     title: "Think something through",
     note: "A question, with sources that hold up.",
     text: "Help me research a topic. First ask what I want to understand, then find reliable sources and explain what matters.",
+    research: true,
   },
   {
     title: "Make something",
@@ -43,7 +44,7 @@ export function Welcome({ name, phase, onPick }) {
       <ul className="starters">
         {starters.map((starter, index) => (
           <li key={starter.title}>
-            <button onClick={() => onPick(starter.text)}>
+            <button onClick={() => onPick(starter.text, { research: !!starter.research })}>
               <span className="starter-index" aria-hidden="true">
                 {["i", "ii", "iii"][index]}.
               </span>
@@ -54,6 +55,9 @@ export function Welcome({ name, phase, onPick }) {
           </li>
         ))}
       </ul>
+      <p className="welcome-foot">
+        Vaelo can make mistakes. Where it matters, it shows its sources so you can check.
+      </p>
     </section>
   );
 }

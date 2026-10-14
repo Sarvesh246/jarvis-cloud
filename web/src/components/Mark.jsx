@@ -82,3 +82,26 @@ export function Wordmark({ size = 22 }) {
     </span>
   );
 }
+
+/* The mark and the word as one: the gilt V is the first letter of "vaelo",
+   cut to cap height and set on the same baseline as the rest of the name. */
+export function BrandWordmark({ size = 30 }) {
+  const g = geometry(64);
+  return (
+    <span
+      className="brandmark"
+      style={{ "--wordmark-size": `${size}px` }}
+      role="img"
+      aria-label="vaelo"
+    >
+      <svg viewBox="6 11.2 52 41.8" className="brandmark-v" aria-hidden="true">
+        <path d={g.heavyPath} />
+        <path d={g.hairPath} />
+        {g.serifs.map(([x, y, w, h], i) => (
+          <rect key={i} x={x} y={y} width={w} height={h} />
+        ))}
+      </svg>
+      <span aria-hidden="true">aelo</span>
+    </span>
+  );
+}

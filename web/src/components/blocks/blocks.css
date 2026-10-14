@@ -1,0 +1,560 @@
+/* Typed blocks. Each is set like an inset in a printed letter: a ruled
+   caption bar in small caps, then the matter. No cards, no heavy chrome. */
+
+.block-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2) var(--s-3);
+  min-height: 2.5rem;
+  padding: 0 var(--s-2) 0 var(--s-4);
+  border-bottom: 1px solid var(--hairline);
+}
+
+.block-bar .label {
+  flex: none;
+  letter-spacing: 0.14em;
+  white-space: nowrap;
+}
+
+.block-tool {
+  white-space: nowrap;
+}
+
+.block-count {
+  font-size: var(--t-xs);
+  color: var(--muted);
+}
+
+.block-tools {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+}
+
+.block-tool {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  min-height: 2rem;
+  min-width: 2rem;
+  justify-content: center;
+  padding: 0 var(--s-2);
+  border-radius: var(--r-sm);
+  font-size: var(--t-xs);
+  color: var(--muted);
+  transition:
+    background var(--dur-1) var(--ease),
+    color var(--dur-1) var(--ease);
+}
+
+.block-tool:hover,
+.block-tool[aria-pressed="true"] {
+  background: var(--gilt-wash);
+  color: var(--ink);
+}
+
+.block-tool.icon-only {
+  padding: 0;
+}
+
+.segmented {
+  display: inline-flex;
+  margin-right: var(--s-2);
+  padding-right: var(--s-2);
+  border-right: 1px solid var(--hairline);
+}
+
+/* ---------- Code ---------- */
+
+.code {
+  margin: 0 0 var(--s-5);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  background: var(--sunken);
+  overflow: hidden;
+}
+
+.code pre {
+  margin: 0;
+  padding: var(--s-4) var(--s-5);
+  overflow-x: auto;
+  line-height: 1.6;
+  font-size: 0.8125rem;
+  tab-size: 2;
+}
+
+.code pre code {
+  padding: 0;
+  background: none;
+  font-size: inherit;
+}
+
+.code[data-folded] pre {
+  max-height: 34rem;
+  overflow-y: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, #000 80%, transparent);
+  mask-image: linear-gradient(to bottom, #000 80%, transparent);
+}
+
+.code-fold {
+  display: block;
+  width: 100%;
+  min-height: 2.5rem;
+  border-top: 1px solid var(--hairline);
+  font-size: var(--t-sm);
+  color: var(--gilt-ink);
+  transition: background var(--dur-1) var(--ease);
+}
+
+.code-fold:hover {
+  background: var(--gilt-wash);
+}
+
+/* ---------- Tables ---------- */
+
+.table-block {
+  margin: 0 0 var(--s-5);
+  border-top: 1px solid var(--hairline-strong);
+  border-bottom: 1px solid var(--hairline-strong);
+}
+
+.table-block .block-bar {
+  padding-left: 0;
+}
+
+.table-scroll {
+  max-height: 32rem;
+  overflow: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--hairline-strong) transparent;
+}
+
+/* Tables keep their natural width and scroll inside their own box rather
+   than crushing every column into a tall, narrow stack. */
+.table-block table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: collapse;
+  font-size: var(--t-base);
+  line-height: 1.45;
+}
+
+.table-block th,
+.table-block td {
+  padding: var(--s-2) var(--s-4) var(--s-2) 0;
+  border-bottom: 1px solid var(--hairline);
+  text-align: left;
+  vertical-align: top;
+}
+
+.table-block td {
+  max-width: 22rem;
+}
+
+.table-block tr:last-child td {
+  border-bottom: 0;
+}
+
+/* The whole header row sticks as one piece, so no seams show between cells */
+.table-block thead {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--canvas);
+  box-shadow: inset 0 -1px var(--hairline-strong);
+}
+
+.table-block th {
+  padding: 0;
+  border-bottom: 0;
+}
+
+.table-block th button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  width: 100%;
+  min-height: 2.5rem;
+  padding: 0 var(--s-4) 0 0;
+  font-size: var(--t-xs);
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  text-align: inherit;
+  color: var(--muted);
+  white-space: nowrap;
+  transition: color var(--dur-1) var(--ease);
+}
+
+.table-block th button:hover,
+.table-block th[aria-sort] button {
+  color: var(--ink);
+}
+
+.sort-mark {
+  color: var(--gilt);
+}
+
+.table-block th:last-child button,
+.table-block td:last-child {
+  padding-right: 0;
+}
+
+.table-block [data-numeric] {
+  text-align: right;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+/* Numbers keep their right edge; the sort arrow sits to their left */
+.table-block th[data-numeric] button {
+  flex-direction: row-reverse;
+  justify-content: flex-start;
+}
+
+/* ---------- Chart ---------- */
+
+/* Charts scroll sideways on a narrow screen instead of squeezing bars */
+.chart {
+  padding: var(--s-4) 0;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+
+.chart-bars {
+  min-width: 19rem;
+}
+
+.chart-pick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-1);
+  margin-bottom: var(--s-3);
+}
+
+.chart-summary {
+  margin: 0 0 var(--s-4);
+  font-size: var(--t-sm);
+  color: var(--muted);
+}
+
+.prose .chart-bars,
+.chart-bars {
+  display: grid;
+  grid-template-columns: minmax(6rem, max-content) 1fr auto;
+  gap: var(--s-2) var(--s-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--t-sm);
+}
+
+.chart-bars li {
+  display: contents;
+}
+
+.chart-label {
+  max-width: 14rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chart-track {
+  align-self: center;
+  height: 0.6rem;
+  border-radius: var(--r-pill);
+  background: var(--gilt-wash);
+}
+
+.chart-bar {
+  display: block;
+  width: var(--w);
+  height: 100%;
+  border-radius: inherit;
+  background: var(--gilt);
+  transform-origin: left;
+  animation: grow var(--dur-3) var(--ease) both;
+}
+
+.chart-bar[data-negative] {
+  background: var(--clay);
+}
+
+@keyframes grow {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+.chart-value {
+  text-align: right;
+  font-variant-numeric: tabular-nums lining-nums;
+  color: var(--ink-soft);
+}
+
+/* ---------- Citations ---------- */
+
+.cite {
+  position: relative;
+  display: inline-block;
+  margin-left: 0.15em;
+  line-height: 1;
+}
+
+.cite-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25em;
+  min-width: 1.5em;
+  height: 1.5em;
+  justify-content: center;
+  padding: 0 0.4em;
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-pill);
+  font-size: 0.62em;
+  font-variant-numeric: lining-nums tabular-nums;
+  vertical-align: 0.35em;
+  color: var(--gilt-ink);
+  background: var(--surface);
+  transition:
+    border-color var(--dur-1) var(--ease),
+    background var(--dur-1) var(--ease);
+}
+
+.cite-mark:hover,
+.cite:focus-within .cite-mark {
+  border-color: var(--gilt);
+  background: var(--gilt-wash);
+}
+
+.cite-card {
+  position: absolute;
+  bottom: calc(100% + 0.6rem);
+  left: 50%;
+  z-index: 15;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  width: min(19rem, calc(100vw - 2rem));
+  padding: var(--s-3) var(--s-4) var(--s-3);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  box-shadow: var(--lift-2);
+  font-size: var(--t-sm);
+  font-style: normal;
+  line-height: 1.45;
+  text-align: left;
+  color: var(--ink);
+  opacity: 0;
+  visibility: hidden;
+  transform: translate(-50%, 4px);
+  transition:
+    opacity var(--dur-1) var(--ease),
+    transform var(--dur-1) var(--ease),
+    visibility var(--dur-1);
+}
+
+.cite[data-below] .cite-card {
+  top: calc(100% + 0.6rem);
+  bottom: auto;
+}
+
+.cite[data-align="end"] .cite-card {
+  left: auto;
+  right: -0.5rem;
+  transform: translate(0, 4px);
+}
+
+.cite[data-align="start"] .cite-card {
+  left: -0.5rem;
+  transform: translate(0, 4px);
+}
+
+.cite[data-align]:hover .cite-card,
+.cite[data-align]:focus-within .cite-card {
+  transform: none;
+}
+
+/* A short delay keeps the card from flickering as the pointer passes */
+.cite:hover .cite-card,
+.cite:focus-within .cite-card {
+  opacity: 1;
+  visibility: visible;
+  transform: translate(-50%, 0);
+  transition-delay: 160ms;
+}
+
+.cite-head {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  color: var(--muted);
+  font-size: var(--t-xs);
+}
+
+.cite-kind {
+  margin-left: auto;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.cite-title {
+  font-size: var(--t-base);
+  line-height: 1.3;
+}
+
+.cite-context {
+  font-style: italic;
+  color: var(--ink-soft);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.cite-open {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  align-self: flex-start;
+}
+
+/* Touch screens have no hover: the mark opens the sources sheet instead */
+@media (hover: none) {
+  .cite-card {
+    display: none;
+  }
+}
+
+.source-strip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s-2) var(--s-3);
+  max-width: 100%;
+  margin-top: var(--s-4);
+  padding: var(--s-2) var(--s-3) var(--s-2) 0;
+  border-radius: var(--r-sm);
+  text-align: left;
+  transition: background var(--dur-1) var(--ease);
+}
+
+.source-strip:hover {
+  background: var(--gilt-wash);
+}
+
+.source-stack {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-1);
+  min-width: 0;
+}
+
+.source-pip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.source-pip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  max-width: 15rem;
+  height: 1.6rem;
+  padding: 0 var(--s-2);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-pill);
+  font-size: var(--t-xs);
+  color: var(--ink-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.source-pip svg {
+  flex: none;
+  color: var(--gilt);
+}
+
+.source-more {
+  font-size: var(--t-xs);
+  color: var(--muted);
+}
+
+.image-ref {
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  padding: var(--s-1) var(--s-3);
+  border-left: 1px solid var(--gilt);
+  color: var(--ink-soft);
+}
+
+.image-ref a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+@media (max-width: 47.9375rem) {
+  .code pre {
+    padding: var(--s-3) var(--s-4);
+  }
+
+  .block-bar {
+    padding-left: var(--s-3);
+  }
+
+  .block-count {
+    display: none;
+  }
+
+  .block-tool span {
+    display: none;
+  }
+
+  .block-tool {
+    min-width: var(--hit);
+    min-height: var(--hit);
+  }
+
+  .chart-bars {
+    grid-template-columns: minmax(4.5rem, 7rem) 1fr auto;
+  }
+}
+
+.block-fallback {
+  font-size: var(--t-sm);
+  color: var(--clay);
+}
+
+.block-plain {
+  white-space: pre-wrap;
+  font-family: var(--font-voice);
+  font-size: var(--t-base);
+}
+
+.image-inline {
+  display: inline-flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  max-width: 100%;
+  margin: var(--s-2) 0;
+}
+
+.image-inline img {
+  max-width: 100%;
+  max-height: 32rem;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+
+.image-caption {
+  font-size: var(--t-sm);
+  color: var(--muted);
+}

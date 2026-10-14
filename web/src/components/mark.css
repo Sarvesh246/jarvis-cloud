@@ -169,3 +169,23 @@
     animation: none !important;
   }
 }
+
+.brandmark {
+  display: inline-flex;
+  align-items: baseline;
+  font-family: var(--font-voice);
+  font-size: var(--wordmark-size, 30px);
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  color: var(--ink);
+}
+
+/* Sized to the face's cap height so the V reads as a letter, not an icon */
+.brandmark-v {
+  width: 0.86em;
+  height: 0.69em;
+  margin-right: -0.03em;
+  fill: var(--gilt);
+  overflow: visible;
+}

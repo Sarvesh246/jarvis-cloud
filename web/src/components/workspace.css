@@ -1,0 +1,328 @@
+/* The workspace is a facing page: same paper, a fine rule down its spine. */
+.workspace {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: none;
+  width: var(--ws-w, 32rem);
+  height: 100dvh;
+  background: var(--surface);
+  border-left: 1px solid var(--hairline);
+  animation: ws-in var(--dur-2) var(--ease) both;
+}
+
+@keyframes ws-in {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+}
+
+.ws-resize {
+  position: absolute;
+  inset: 0 auto 0 -4px;
+  z-index: 2;
+  width: 8px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.ws-resize::after {
+  content: "";
+  position: absolute;
+  inset: 0 3px;
+  background: var(--gilt);
+  opacity: 0;
+  transition: opacity var(--dur-1) var(--ease);
+}
+
+.ws-resize:hover::after,
+.ws-resize:focus-visible::after,
+body.resizing .ws-resize::after {
+  opacity: 0.6;
+}
+
+body.resizing {
+  cursor: col-resize;
+  user-select: none;
+}
+
+body.resizing iframe {
+  pointer-events: none;
+}
+
+.ws-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  min-height: 4.25rem;
+  padding: env(safe-area-inset-top) var(--s-3) 0 var(--s-5);
+  border-bottom: 1px solid var(--hairline);
+}
+
+.ws-title-group {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.ws-title-group .label {
+  font-size: 0.6875rem;
+  line-height: 1.2;
+}
+
+.ws-head h2 {
+  margin: 0;
+  font-size: var(--t-md);
+  font-weight: 400;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  outline: none;
+}
+
+.ws-head h2::first-letter {
+  text-transform: uppercase;
+}
+
+.ws-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.ws-body {
+  padding-bottom: env(safe-area-inset-bottom);
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--hairline-strong) transparent;
+}
+
+.ws-tabs {
+  display: flex;
+  gap: var(--s-4);
+  padding: 0 var(--s-5);
+  border-bottom: 1px solid var(--hairline);
+}
+
+.ws-tab {
+  min-height: 2.75rem;
+  border-bottom: 1.5px solid transparent;
+  font-size: var(--t-sm);
+  color: var(--muted);
+  transition:
+    color var(--dur-1) var(--ease),
+    border-color var(--dur-2) var(--ease);
+}
+
+.ws-tab[aria-selected="true"] {
+  color: var(--ink);
+  border-color: var(--gilt);
+}
+
+.ws-preview {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  padding: var(--s-4);
+  gap: var(--s-2);
+}
+
+.ws-preview iframe {
+  flex: 1;
+  min-height: 20rem;
+  width: 100%;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  background: #fff;
+}
+
+.ws-code {
+  flex: 1;
+  margin: 0;
+  padding: var(--s-5);
+  overflow: auto;
+  background: var(--sunken);
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  tab-size: 2;
+}
+
+.ws-note {
+  margin: 0;
+  padding: var(--s-3) var(--s-5) var(--s-5);
+  font-size: var(--t-xs);
+  color: var(--muted);
+}
+
+.ws-preview .ws-note {
+  padding: 0;
+}
+
+.ws-empty {
+  margin: var(--s-6) var(--s-5);
+  color: var(--muted);
+}
+
+.ws-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-1);
+  padding: var(--s-4) var(--s-5) 0;
+}
+
+.ws-sources {
+  margin: 0;
+  padding: var(--s-2) var(--s-5);
+  list-style: none;
+}
+
+.ws-sources li {
+  display: grid;
+  grid-template-columns: 1.75rem 1fr;
+  gap: var(--s-2);
+  padding: var(--s-4) 0;
+  border-bottom: 1px solid var(--hairline);
+  transition: background var(--dur-3) var(--ease);
+}
+
+.ws-sources li[data-focus] {
+  background: linear-gradient(90deg, var(--gilt-wash), transparent 70%);
+}
+
+.ws-source-index {
+  padding-top: 0.1rem;
+  font-size: var(--t-sm);
+  font-variant-numeric: lining-nums;
+  color: var(--gilt);
+  text-align: right;
+}
+
+.ws-sources a {
+  display: inline;
+  font-size: var(--t-base);
+  line-height: 1.35;
+  color: var(--ink);
+}
+
+.ws-sources a svg {
+  margin-left: 0.3em;
+  vertical-align: -0.1em;
+  color: var(--muted);
+}
+
+.ws-source-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--s-1);
+  margin-top: var(--s-1);
+  font-size: var(--t-xs);
+  color: var(--muted);
+}
+
+.ws-source-meta svg {
+  color: var(--gilt);
+}
+
+.ws-source-context {
+  margin: var(--s-2) 0 0;
+  font-size: var(--t-sm);
+  font-style: italic;
+  color: var(--ink-soft);
+}
+
+.ws-document {
+  padding: var(--s-6) var(--s-6) var(--s-7);
+  font-size: 1.1875rem;
+}
+
+/* Beside the conversation on wide screens; a sheet over it otherwise, so the
+   conversation never gets squeezed into an unreadable column. */
+/* Only a sheet needs a scrim; beside the conversation it is a facing page */
+.ws-scrim {
+  display: none;
+}
+
+@media (max-width: 74.9375rem) {
+  .ws-scrim {
+    display: block;
+    z-index: 39;
+  }
+
+  .workspace {
+    position: fixed;
+    inset: 0 0 0 auto;
+    z-index: 40;
+    width: min(var(--ws-w, 32rem), 92vw);
+    box-shadow: var(--lift-2);
+  }
+}
+
+@media (max-width: 47.9375rem) {
+  .workspace {
+    inset: 0;
+    width: 100%;
+    border-left: 0;
+    animation-name: ws-up;
+  }
+
+  @keyframes ws-up {
+    from {
+      opacity: 0;
+      transform: translateY(24px);
+    }
+  }
+
+  .ws-resize {
+    display: none;
+  }
+
+  .ws-head {
+    padding-left: var(--s-4);
+  }
+
+  .ws-document {
+    padding: var(--s-5) var(--s-4) var(--s-6);
+  }
+
+  .ws-sources,
+  .ws-filters {
+    padding-left: var(--s-4);
+    padding-right: var(--s-4);
+  }
+}
+
+@media print {
+  html[data-print="workspace"] body > #root .shell > :not(.workspace) {
+    display: none !important;
+  }
+
+  html[data-print="workspace"] .workspace {
+    position: static;
+    width: auto;
+    height: auto;
+    border: 0;
+    box-shadow: none;
+    background: none;
+  }
+
+  html[data-print="workspace"] .ws-head,
+  html[data-print="workspace"] .ws-resize,
+  html[data-print="workspace"] body::before {
+    display: none;
+  }
+
+  html[data-print="workspace"] .shell,
+  html[data-print="workspace"] .ws-body {
+    display: block;
+    height: auto;
+    overflow: visible;
+  }
+}

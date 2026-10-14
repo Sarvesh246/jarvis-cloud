@@ -7,6 +7,42 @@
 html {
   font-size: 16px;
   -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* The app shell owns scrolling: the page itself never bounces, drifts
+   sideways or pulls to refresh. Only the conversation, rail and panels
+   scroll, each inside itself. */
+html:has(.shell),
+html:has(.shell) body {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+button,
+a,
+summary,
+[role="button"] {
+  touch-action: manipulation;
+}
+
+/* Installed on a home screen, interface chrome behaves like an app: a long
+   press doesn't select labels or buttons. Replies stay selectable. */
+@media (display-mode: standalone) {
+  .rail,
+  .header,
+  .composer-bar,
+  .block-bar,
+  .message-label,
+  .message-actions,
+  .process-receipt,
+  .welcome .starters,
+  button {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
 }
 
 body {
@@ -66,7 +102,7 @@ a {
   color: var(--gilt-ink);
   text-underline-offset: 4px;
   text-decoration-thickness: 1px;
-  text-decoration-color: var(--hairline-strong);
+  text-decoration-color: color-mix(in srgb, var(--gilt) 55%, transparent);
   transition: text-decoration-color var(--dur-1) var(--ease);
 }
 
@@ -86,9 +122,9 @@ a:hover {
 
 /* Small caps register: labels, group names, the quiet scaffolding */
 .label {
-  font-size: var(--t-xs);
-  font-weight: 500;
-  letter-spacing: 0.14em;
+  font-size: 0.8125rem;
+  font-weight: var(--w-strong);
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--muted);
 }
@@ -140,8 +176,8 @@ a:hover {
   padding: 0 var(--s-2);
   border-radius: var(--r-sm);
   color: var(--gilt-ink);
-  font-style: italic;
   font-size: var(--t-sm);
+  font-weight: var(--w-ui);
   transition: background var(--dur-1) var(--ease);
 }
 
@@ -151,6 +187,39 @@ a:hover {
 
 .text-button:disabled {
   opacity: 0.45;
+}
+
+/* A small choosable tag: filters, chart columns */
+.chip {
+  font-weight: var(--w-ui);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  min-height: 2rem;
+  padding: 0 var(--s-3);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-pill);
+  font-size: var(--t-xs);
+  color: var(--ink-soft);
+  transition:
+    background var(--dur-1) var(--ease),
+    border-color var(--dur-1) var(--ease),
+    color var(--dur-1) var(--ease);
+}
+
+.chip:hover {
+  border-color: var(--gilt);
+}
+
+.chip[data-on] {
+  border-color: var(--gilt);
+  background: var(--gilt-wash);
+  color: var(--gilt-ink);
+}
+
+.chip-count {
+  font-variant-numeric: lining-nums;
+  color: var(--muted);
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -96,9 +96,90 @@
   justify-content: center;
   gap: var(--s-5);
   font-size: var(--t-xs);
-  font-style: italic;
 }
 
 .entry-foot a {
+  color: var(--muted);
+}
+
+/* Google draws its button in an iframe; this slot holds its place */
+.google-slot {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  min-height: 2.75rem;
+}
+
+.google-slot[data-state="failed"] .google-button {
+  display: none;
+}
+
+.google-placeholder {
+  position: absolute;
+  top: 0;
+  display: grid;
+  place-items: center;
+  width: min(100%, 20rem);
+  height: 2.75rem;
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  font-size: var(--t-sm);
+  font-weight: var(--w-ui);
+  color: var(--muted);
+  animation: ember 1.8s ease-in-out infinite;
+}
+
+@keyframes ember {
+  50% {
+    opacity: 0.6;
+  }
+}
+
+.google-slot[data-state="hidden"] .google-button,
+.google-slot[data-state="redirect"] .google-button {
+  display: none;
+}
+
+/* Vaelo's own Google button: Google's mark and words, our shape */
+.google-own {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-3);
+  width: min(100%, 20rem);
+  min-height: 2.75rem;
+  padding: 0 var(--s-5);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: var(--t-base);
+  font-weight: var(--w-strong);
+  box-shadow: var(--lift-1);
+  transition:
+    border-color var(--dur-1) var(--ease),
+    transform var(--dur-1) var(--ease);
+}
+
+.google-own:hover {
+  border-color: var(--gilt);
+}
+
+.google-own:active {
+  transform: translateY(1px);
+}
+
+.google-why {
+  max-width: 20rem;
+  margin: var(--s-3) 0 0;
+  font-size: var(--t-sm);
+  color: var(--muted);
+}
+
+.google-alt {
+  margin-top: var(--s-3);
   color: var(--muted);
 }

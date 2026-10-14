@@ -2,7 +2,9 @@
    the margin, the way a letter or a play is set. */
 .message {
   display: grid;
-  grid-template-columns: var(--gutter) minmax(0, 1fr);
+  /* Labels hang in the left margin; an equal right margin keeps the text
+     column centred over the composer. */
+  grid-template-columns: var(--gutter) minmax(0, 1fr) var(--gutter);
   column-gap: var(--s-4);
   width: 100%;
 }
@@ -39,24 +41,47 @@
   min-width: 0;
 }
 
-/* A new exchange opens with a fine rule */
+/* Your words sit on their own slip of paper, so the two voices never blur
+   together; Vaelo's reply is set directly on the page. */
 .message[data-role="user"]:not(:first-child) {
-  padding-top: var(--s-6);
-  background: linear-gradient(var(--hairline), var(--hairline)) top / 100% 1px
-    no-repeat;
+  padding-top: var(--s-4);
+}
+
+.message[data-role="user"] .message-label {
+  margin-top: 0.55rem;
+}
+
+.message[data-role="user"] .message-body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.slip {
+  max-width: 100%;
+  padding: var(--s-3) var(--s-4);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  background: var(--slip);
+}
+
+.slip[data-editing] {
+  align-self: stretch;
 }
 
 .message[data-role="user"] .prose {
-  color: var(--ink-soft);
+  color: var(--ink);
   font-size: var(--t-md);
   line-height: 1.6;
   white-space: pre-wrap;
 }
 
 .prose {
-  font-size: 1.25rem;
-  line-height: 1.68;
-  letter-spacing: -0.003em;
+  color: var(--ink);
+  font-size: var(--t-reply);
+  font-weight: var(--w-read);
+  line-height: 1.7;
+  letter-spacing: -0.002em;
   overflow-wrap: anywhere;
 }
 
@@ -86,7 +111,6 @@
 
 .prose li::marker {
   color: var(--gilt);
-  font-style: italic;
 }
 
 .prose strong {
@@ -95,11 +119,12 @@
 
 .prose h1,
 .prose h2,
-.prose h3 {
-  margin: var(--s-5) 0 var(--s-2);
-  font-weight: 400;
-  line-height: 1.2;
-  letter-spacing: -0.015em;
+.prose h3,
+.prose h4 {
+  margin: var(--s-6) 0 var(--s-2);
+  font-weight: var(--w-strong);
+  line-height: 1.25;
+  letter-spacing: -0.01em;
 }
 
 .prose h1 {
@@ -110,7 +135,9 @@
 }
 .prose h3 {
   font-size: 1.25rem;
-  font-style: italic;
+}
+.prose h4 {
+  font-size: 1.125rem;
 }
 
 .prose blockquote {
@@ -135,77 +162,6 @@
   background: var(--sunken);
   font-family: var(--font-mono);
   font-size: 0.8em;
-}
-
-.code {
-  position: relative;
-  margin: 0 0 var(--s-4);
-  border: 1px solid var(--hairline);
-  border-radius: var(--r-sm);
-  background: var(--sunken);
-}
-
-.code pre {
-  margin: 0;
-  padding: var(--s-4) var(--s-5);
-  overflow-x: auto;
-  line-height: 1.55;
-}
-
-.code pre code {
-  padding: 0;
-  background: none;
-  font-size: 0.78rem;
-}
-
-.code-copy {
-  position: absolute;
-  top: var(--s-2);
-  right: var(--s-2);
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s-1);
-  height: 1.75rem;
-  padding: 0 var(--s-2);
-  border-radius: var(--r-sm);
-  font-size: var(--t-xs);
-  font-style: italic;
-  color: var(--muted);
-  opacity: 0;
-  transition:
-    opacity var(--dur-1) var(--ease),
-    background var(--dur-1) var(--ease);
-}
-
-.code:hover .code-copy,
-.code-copy:focus-visible {
-  opacity: 1;
-}
-
-.code-copy:hover {
-  background: var(--gilt-wash);
-  color: var(--ink);
-}
-
-.prose table {
-  border-collapse: collapse;
-  margin: 0 0 var(--s-4);
-  font-size: var(--t-base);
-}
-
-.prose th,
-.prose td {
-  padding: var(--s-2) var(--s-3);
-  border-bottom: 1px solid var(--hairline);
-  text-align: left;
-}
-
-.prose th {
-  font-weight: 500;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  font-size: var(--t-xs);
-  color: var(--muted);
 }
 
 /* Soft insertion point while words arrive */
@@ -242,7 +198,6 @@
   min-height: 2rem;
   margin: 0 0 var(--s-3);
   font-size: var(--t-md);
-  font-style: italic;
   color: var(--muted);
 }
 
@@ -253,11 +208,11 @@
 .shimmer {
   background: linear-gradient(
       100deg,
-      var(--muted) 0%,
-      var(--muted) 40%,
+      var(--ink-soft) 0%,
+      var(--ink-soft) 40%,
       var(--gilt-ink) 50%,
-      var(--muted) 60%,
-      var(--muted) 100%
+      var(--ink-soft) 60%,
+      var(--ink-soft) 100%
     )
     0 0 / 250% 100%;
   -webkit-background-clip: text;
@@ -287,7 +242,6 @@
   gap: var(--s-1);
   min-height: 2rem;
   font-size: var(--t-sm);
-  font-style: italic;
   color: var(--muted);
   transition: color var(--dur-1) var(--ease);
 }
@@ -350,6 +304,186 @@
   animation: ember 1.8s ease-in-out infinite;
 }
 
+.steps li {
+  gap: var(--s-2);
+  min-height: 1.75rem;
+}
+
+.steps-icon {
+  flex: none;
+  color: var(--gilt);
+  opacity: 0.85;
+}
+
+.steps-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.steps-detail {
+  color: var(--muted);
+}
+
+.steps-time {
+  flex: none;
+  margin-left: var(--s-3);
+  font-size: var(--t-xs);
+  font-variant-numeric: tabular-nums lining-nums;
+  color: var(--muted);
+}
+
+.process-detail {
+  flex-basis: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  animation: fade var(--dur-2) var(--ease) both;
+}
+
+.context-line {
+  margin: 0 0 0 0.3rem;
+  padding-left: var(--s-4);
+  font-size: var(--t-sm);
+  color: var(--ink-soft);
+}
+
+.context-line .label {
+  margin-right: var(--s-1);
+  font-style: normal;
+}
+
+.context-mode {
+  color: var(--muted);
+}
+
+/* Files travel with the message as quiet labelled slips */
+.attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  margin: var(--s-3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.attachment {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  max-width: 100%;
+  min-height: 2.5rem;
+  padding: var(--s-1) var(--s-2) var(--s-1) var(--s-3);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  font-size: var(--t-sm);
+}
+
+.attachment svg {
+  flex: none;
+  color: var(--gilt);
+}
+
+.attachment-name {
+  min-width: 0;
+  max-width: 14rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attachment-meta {
+  font-size: var(--t-xs);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.attachment[data-state="reading"] .attachment-meta {
+  animation: ember 1.6s ease-in-out infinite;
+}
+
+.attachment:is([data-state="unsupported"], [data-state="too-large"], [data-state="empty"]) {
+  border-color: var(--clay);
+  background: var(--clay-wash);
+}
+
+.attachment:is([data-state="unsupported"], [data-state="too-large"], [data-state="empty"]) svg {
+  color: var(--clay);
+}
+
+.attachment-remove {
+  display: grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 50%;
+  font-size: 1.1rem;
+  line-height: 1;
+  color: var(--muted);
+  transition:
+    background var(--dur-1) var(--ease),
+    color var(--dur-1) var(--ease);
+}
+
+.attachment-remove:hover {
+  background: var(--gilt-wash);
+  color: var(--ink);
+}
+
+/* A pause for permission, set as a margin note in gilt, not an alarm */
+.approval {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s-2);
+  margin-top: var(--s-3);
+  padding: var(--s-3) var(--s-4);
+  border-left: 2px solid var(--gilt);
+  background: var(--gilt-wash);
+  font-size: var(--t-sm);
+  color: var(--ink-soft);
+}
+
+.approval p {
+  margin: 0;
+}
+
+.approval-head {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  color: var(--ink);
+  font-size: var(--t-base);
+}
+
+.approval-head svg {
+  flex: none;
+  color: var(--gilt-ink);
+}
+
+.approval-command {
+  align-self: stretch;
+  margin: 0;
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--r-sm);
+  background: var(--sunken);
+  overflow-x: auto;
+  font-size: 0.8125rem;
+}
+
+.approval-note {
+  color: var(--muted);
+}
+
+.message-error-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--s-1);
+}
+
 .message-note {
   display: flex;
   flex-wrap: wrap;
@@ -357,7 +491,6 @@
   gap: var(--s-1) var(--s-3);
   margin: var(--s-3) 0 0;
   font-size: var(--t-sm);
-  font-style: italic;
   color: var(--muted);
 }
 
@@ -415,7 +548,6 @@
   align-items: center;
   margin-right: var(--s-2);
   font-size: var(--t-sm);
-  font-style: italic;
   font-variant-numeric: tabular-nums;
   color: var(--muted);
 }
@@ -489,4 +621,141 @@
   .message[data-role="user"]:not(:first-child) {
     padding-top: var(--s-5);
   }
+}
+
+/* Live line, receipts and their details: legible first, quiet second */
+.process {
+  color: var(--ink-soft);
+}
+
+.process-receipt {
+  font-weight: var(--w-ui);
+  color: var(--muted);
+}
+
+.process-sub {
+  flex-basis: 100%;
+  font-size: var(--t-sm);
+  color: var(--muted);
+}
+
+.process-notes {
+  margin: 0 0 0 0.3rem;
+  padding: 0 0 0 var(--s-4);
+  list-style: none;
+  font-size: var(--t-sm);
+  color: var(--ink-soft);
+}
+
+.process-notes li + li {
+  margin-top: var(--s-1);
+}
+
+.process-notes li[data-kind="warning"] {
+  color: var(--clay);
+}
+
+.reasoning {
+  margin-left: 0.3rem;
+  padding-left: var(--s-4);
+}
+
+.reasoning-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  min-height: 2rem;
+  font-size: var(--t-sm);
+  font-weight: var(--w-ui);
+  color: var(--gilt-ink);
+}
+
+.reasoning-toggle[aria-expanded="true"] svg {
+  transform: rotate(180deg);
+}
+
+.reasoning-text {
+  max-height: 22rem;
+  margin: var(--s-2) 0 0;
+  padding: var(--s-3) var(--s-4);
+  overflow-y: auto;
+  border-left: 1px solid var(--hairline-strong);
+  background: var(--slip);
+  font-size: var(--t-sm);
+  line-height: 1.6;
+  color: var(--ink-soft);
+  white-space: pre-wrap;
+}
+
+.attachment-thumb {
+  flex: none;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: var(--r-sm);
+  object-fit: cover;
+  background: var(--sunken);
+}
+
+.attachment[data-kind="image"] {
+  padding-left: var(--s-1);
+}
+
+.approval-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  margin-top: var(--s-1);
+}
+
+.approval-allow,
+.approval-deny {
+  min-height: 2.5rem;
+  padding: 0 var(--s-4);
+  border-radius: var(--r-pill);
+  font-size: var(--t-sm);
+  font-weight: var(--w-ui);
+  transition:
+    background var(--dur-1) var(--ease),
+    border-color var(--dur-1) var(--ease),
+    opacity var(--dur-1) var(--ease);
+}
+
+.approval-allow {
+  border: 1px solid var(--gilt);
+  background: var(--gilt);
+  color: var(--on-gilt);
+}
+
+.approval-allow + .approval-allow {
+  background: transparent;
+  color: var(--gilt-ink);
+}
+
+.approval-deny {
+  border: 1px solid var(--hairline-strong);
+  color: var(--ink);
+}
+
+.approval-deny:hover {
+  border-color: var(--clay);
+  color: var(--clay);
+}
+
+.approval-allow:disabled,
+.approval-deny:disabled {
+  opacity: 0.55;
+}
+
+.approval {
+  margin-bottom: var(--s-4);
+}
+
+.approval[data-state="approved"] {
+  border-left-color: var(--sage);
+}
+
+.approval[data-state="denied"],
+.approval[data-state="expired"] {
+  border-left-color: var(--hairline-strong);
+  background: transparent;
 }

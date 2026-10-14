@@ -1,0 +1,308 @@
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import {
+  ArrowSquareOut,
+  Check,
+  Copy,
+  DownloadSimple,
+  Printer,
+  X,
+} from "@phosphor-icons/react";
+import { Rendered, download, looksLikeSvg, useCopy, useSources } from "./blocks/Blocks.jsx";
+import { SourceIcon } from "./blocks/SourceIcon.jsx";
+import { SOURCE_KINDS, kindLabel } from "../lib/sources.js";
+import "./workspace.css";
+
+/* The workspace opens beside the conversation only when something deserves
+   sustained attention: a preview, a long piece of code, a reply to read as a
+   document, the sources behind an answer. On narrow screens it becomes a
+   sheet over the conversation. */
+
+const WIDTH_KEY = "vaelo-workspace-width";
+const MIN = 320;
+const MAX = 900;
+
+function readWidth() {
+  try {
+    const value = Number(localStorage.getItem(WIDTH_KEY));
+    return value >= MIN && value <= MAX ? value : 520;
+  } catch {
+    return 520;
+  }
+}
+
+function previewDoc(language, source) {
+  const body = looksLikeSvg(language, source)
+    ? `<body style="margin:0;min-height:100vh;display:grid;place-items:center;background:#fff">${source}</body>`
+    : source;
+  return /<html[\s>]/i.test(body) ? body : `<!doctype html><meta charset="utf-8">${body}`;
+}
+
+function CodeView({ item }) {
+  const canPreview = item.language === "html" || looksLikeSvg(item.language, item.source);
+  const [tab, setTab] = useState(canPreview ? item.tab || "preview" : "code");
+  return (
+    <>
+      {canPreview && (
+        <div className="ws-tabs" role="tablist" aria-label="View">
+          {["preview", "code"].map((name) => (
+            <button
+              key={name}
+              role="tab"
+              aria-selected={tab === name}
+              className="ws-tab"
+              onClick={() => setTab(name)}
+            >
+              {name === "preview" ? "Preview" : "Code"}
+            </button>
+          ))}
+        </div>
+      )}
+      {tab === "preview" && canPreview ? (
+        <div className="ws-preview">
+          {/* No allow-scripts: previews are rendered markup only, isolated
+              from this page and its session. It takes no focus, so
+              keyboard focus can never get stranded inside it. */}
+          <iframe
+            title="Preview"
+            tabIndex={-1}
+            sandbox=""
+            referrerPolicy="no-referrer"
+            srcDoc={previewDoc(item.language, item.source)}
+          />
+          <p className="ws-note">Scripts don’t run in previews. Download the file to run it.</p>
+        </div>
+      ) : (
+        <pre className="ws-code" tabIndex={0}>
+          <code>{item.source}</code>
+        </pre>
+      )}
+    </>
+  );
+}
+
+function SourcesView({ message, focus }) {
+  const sources = useSources(message?.content);
+  const [filter, setFilter] = useState("all");
+  const list = useRef(null);
+  const kinds = SOURCE_KINDS.filter((kind) => sources.some((s) => s.kind === kind.kind));
+  const shown = filter === "all" ? sources : sources.filter((s) => s.kind === filter);
+
+  useEffect(() => {
+    if (!focus) return;
+    const el = list.current?.querySelector(`[data-id="${CSS.escape(focus)}"]`);
+    el?.scrollIntoView({ block: "center" });
+    el?.querySelector("a")?.focus({ preventScroll: true });
+  }, [focus]);
+
+  if (!sources.length) return <p className="ws-empty">This reply didn’t link any sources.</p>;
+  return (
+    <>
+      {kinds.length > 1 && (
+        <div className="ws-filters" role="radiogroup" aria-label="Filter sources">
+          {[{ kind: "all", label: "All" }, ...kinds].map((kind) => (
+            <button
+              key={kind.kind}
+              role="radio"
+              aria-checked={filter === kind.kind}
+              className="chip"
+              data-on={filter === kind.kind || undefined}
+              onClick={() => setFilter(kind.kind)}
+            >
+              {kind.label}
+              <span className="chip-count">
+                {kind.kind === "all"
+                  ? sources.length
+                  : sources.filter((s) => s.kind === kind.kind).length}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+      <ol className="ws-sources" ref={list}>
+        {shown.map((source) => (
+          <li key={source.id} data-id={source.id} data-focus={source.id === focus || undefined}>
+            <span className="ws-source-index">{source.index}</span>
+            <div>
+              <a href={source.url} target="_blank" rel="noopener noreferrer">
+                {source.title || source.domain}
+                <ArrowSquareOut size={13} aria-hidden="true" />
+              </a>
+              <span className="ws-source-meta">
+                <SourceIcon kind={source.kind} size={13} />
+                {source.domain} · {kindLabel(source.kind)}
+              </span>
+              {source.context && <p className="ws-source-context">“{source.context}”</p>}
+            </div>
+          </li>
+        ))}
+      </ol>
+      <p className="ws-note">
+        Sources can be incomplete, out of date or wrong. Open the ones that matter and check
+        them.
+      </p>
+    </>
+  );
+}
+
+function DocumentView({ message, onOpen }) {
+  const sources = useSources(message?.content);
+  if (!message) return <p className="ws-empty">This reply is no longer in the conversation.</p>;
+  return (
+    <article className="ws-document prose">
+      <Rendered content={message.content} sources={sources} onOpen={onOpen} />
+    </article>
+  );
+}
+
+export function Workspace({ item, messages, onClose, onOpen }) {
+  const [width, setWidth] = useState(readWidth);
+  const [done, copy] = useCopy();
+  const panel = useRef(null);
+  const heading = useRef(null);
+  const message = useMemo(
+    () => (item?.messageId ? messages.find((m) => m.id === item.messageId) : null),
+    [item?.messageId, messages],
+  );
+
+  /* Focus moves in when the panel opens and back to whatever opened it when
+     it closes. As an overlay, Tab stays inside it. */
+  useEffect(() => {
+    if (!item) return;
+    const opener = document.activeElement;
+    heading.current?.focus({ preventScroll: true });
+    return () => {
+      if (opener?.isConnected) opener.focus({ preventScroll: true });
+    };
+  }, [item?.kind, item?.messageId, item?.source]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(WIDTH_KEY, String(Math.round(width)));
+    } catch {
+      /* a remembered width is a nicety */
+    }
+  }, [width]);
+
+  if (!item) return null;
+
+  function trap(event) {
+    if (event.key === "Escape") {
+      event.stopPropagation();
+      onClose();
+      return;
+    }
+    if (event.key !== "Tab" || !matchMedia("(max-width: 74.9375rem)").matches) return;
+    const items = panel.current.querySelectorAll(
+      'button:not(:disabled), a[href], [tabindex="0"]',
+    );
+    const first = items[0];
+    const last = items[items.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+
+  function startResize(event) {
+    event.preventDefault();
+    const startX = event.clientX;
+    const startW = width;
+    const move = (e) => setWidth(Math.min(MAX, Math.max(MIN, startW + startX - e.clientX)));
+    const up = () => {
+      removeEventListener("pointermove", move);
+      removeEventListener("pointerup", up);
+      document.body.classList.remove("resizing");
+    };
+    document.body.classList.add("resizing");
+    addEventListener("pointermove", move);
+    addEventListener("pointerup", up);
+  }
+
+  const titles = {
+    code: item.title || "Code",
+    sources: "Sources",
+    document: "Reply",
+  };
+  const text = item.kind === "code" ? item.source : message?.content || "";
+
+  return (
+    <aside
+      ref={panel}
+      className="workspace"
+      style={{ "--ws-w": `${width}px` }}
+      aria-labelledby="ws-title"
+      onKeyDown={trap}
+    >
+      <div
+        className="ws-resize"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize workspace"
+        aria-valuemin={MIN}
+        aria-valuemax={MAX}
+        aria-valuenow={Math.round(width)}
+        tabIndex={0}
+        onPointerDown={startResize}
+        onKeyDown={(event) => {
+          if (event.key === "ArrowLeft") setWidth((w) => Math.min(MAX, w + 32));
+          if (event.key === "ArrowRight") setWidth((w) => Math.max(MIN, w - 32));
+        }}
+      />
+      <header className="ws-head">
+        <div className="ws-title-group">
+          <span className="label">{item.kind === "code" ? "Workspace" : item.kind === "sources" ? "Provenance" : "Document"}</span>
+          <h2 id="ws-title" ref={heading} tabIndex={-1}>
+            {titles[item.kind]}
+          </h2>
+        </div>
+        <div className="ws-actions">
+          {item.kind !== "sources" && (
+            <>
+              <button className="block-tool" onClick={() => copy(text)}>
+                {done ? <Check size={15} /> : <Copy size={15} />}
+                <span>{done ? "Copied" : "Copy"}</span>
+              </button>
+              <button
+                className="block-tool icon-only"
+                title="Download"
+                aria-label="Download"
+                onClick={() =>
+                  item.kind === "code"
+                    ? download(`vaelo-snippet.${item.language === "svg" ? "svg" : item.language === "html" ? "html" : "txt"}`, text)
+                    : download("vaelo-reply.md", text, "text/markdown")
+                }
+              >
+                <DownloadSimple size={16} />
+              </button>
+            </>
+          )}
+          {item.kind === "document" && (
+            <button
+              className="block-tool icon-only"
+              title="Print or save as PDF"
+              aria-label="Print or save as PDF"
+              onClick={() => {
+                document.documentElement.dataset.print = "workspace";
+                print();
+                delete document.documentElement.dataset.print;
+              }}
+            >
+              <Printer size={16} />
+            </button>
+          )}
+          <button className="icon-button" aria-label="Close workspace" title="Close (Esc)" onClick={onClose}>
+            <X size={19} />
+          </button>
+        </div>
+      </header>
+      <div className="ws-body">
+        {item.kind === "code" && <CodeView key={item.source} item={item} />}
+        {item.kind === "sources" && <SourcesView message={message} focus={item.focus} />}
+        {item.kind === "document" && <DocumentView message={message} onOpen={onOpen} />}
+      </div>
+    </aside>
+  );
+}

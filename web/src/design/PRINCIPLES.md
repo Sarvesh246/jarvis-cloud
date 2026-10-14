@@ -26,17 +26,62 @@ instead of boxes, italic for the emotional register.
 5. **Warm restraint.** Rules and tone over boxes and shadows. Gilt is
    reserved for Vaelo's presence and the one primary action. The user's side
    stays neutral.
-6. **One serif voice.** Newsreader (variable, optical sizing) is the whole
-   interface, matching the lowercase "vaelo" wordmark. Light weight at display
-   sizes, regular for reading, italic for asides (status, placeholders, notes),
-   letter-spaced capitals for labels. No sans-serif. Nothing under 13px;
-   replies at 20px / 1.68.
+6. **One serif voice, legible first.** Newsreader (variable, optical sizing)
+   is the whole interface. Light weight at display sizes, regular for
+   reading, a slightly heavier weight (`--w-ui`) for small interface text,
+   letter-spaced capitals for labels. Italic is for asides only (greetings,
+   placeholders, quotes, the live status line); controls and metadata stay
+   upright. No sans-serif. Nothing functional under 14px; replies at 19px /
+   1.7. Muted text keeps at least 5.5:1 against any surface it sits on, and
+   rules must be visible (about 2.5:1), not implied.
+   In the rail the gilt V is the first letter of the name ("Vaelo" as one
+   word); elsewhere the mark or the word stands alone.
 7. **Desktop is deliberate, mobile is its own design.** An index rail, a
-   transcript with hanging margin labels (Vaelo / You) and a composer aligned
-   to the text column on desktop. Drawer, stacked labels, bottom-anchored
-   composer and 44px targets on mobile.
+   transcript with hanging margin labels (Vaelo / You) and a text column that
+   grows with the chat area up to 60rem. Equal margins on both sides keep the
+   column, and the composer under it, centred whether the rail or workspace is
+   open. Your messages sit on their own slip so the two voices never blur. Drawer (swipe in from the edge), stacked labels, bottom-anchored composer
+   and 44px targets on mobile. The page never scrolls sideways: prose wraps,
+   and only tables, code and charts scroll horizontally inside their own
+   boxes. Installed to a home screen it behaves like an app: no bounce, no
+   tap flash, no accidental selection of controls, readable offline.
 8. **Every control earns its place.** One icon set (Phosphor, light weight),
    one radius scale, one spacing scale, one elevation scale. No emoji.
+
+## How replies are built
+
+These came out of comparing how ChatGPT, Claude, Grok, Gemini and Meta AI
+present their work. Vaelo takes the patterns and keeps its own voice. The
+rule over all of them: keep the conversation simple until the output
+deserves to become something richer.
+
+9. **A reply is typed blocks, not one blob.** Prose, code, tables, sources
+   and states each get the controls that suit them: code shows its language,
+   copy, download and a workspace view; tables sort, copy for spreadsheets,
+   export CSV and turn into a chart when the numbers would say something.
+10. **Inline first, workspace on demand.** The right-hand workspace opens
+    only for something worth sustained attention: a preview, long code, a
+    reply read as a document, the sources behind an answer. Beside the
+    conversation on wide screens, a sheet with a scrim on narrower ones,
+    full screen on a phone. Previews run no scripts.
+11. **Provenance where it's useful.** Every external link becomes a numbered
+    source with its type shown as shape and word (news, social, official,
+    research, reference). A mark previews the sentence it supports, and the
+    sources panel lists everything. Uncertainty is said beside the sources,
+    not as a disclaimer under every reply.
+12. **Show the work, not the thinking.** Tool activity is a legible timeline
+    ("Searched the web · Lyon rail ridership"), with what the reply drew on.
+    Raw reasoning is never streamed.
+13. **Every failure has its own way forward.** Offline, busy, too long, signed
+    out, interrupted and needs-approval each get their own sentence and
+    action. A failure stays local to its reply; toasts are only for things
+    that belong to no reply.
+14. **Never fight the reader's scroll.** Follow new words only while the
+    reader is at the bottom. Scrolling up stops following at once. Blocks
+    that grow after their words land keep the anchor.
+15. **Modes are one step away.** Attach, write, dictate and send are always
+    visible. Research and response style live in the tools menu, and an
+    active mode stays visible as a chip you can remove.
 
 ## Tokens
 
