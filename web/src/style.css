@@ -1,20 +1,24 @@
 :root {
   font-family:
-    -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
-  color: #252521;
-  background: #fbfbfa;
+    "Manrope",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+  color: #382e32;
+  background: #faf7f2;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   font-size: 15px;
-  --canvas: #fbfbfa;
-  --rail: #f3f2ee;
+  --canvas: #faf7f2;
+  --rail: #f2ece6;
   --surface: #fff;
-  --text: #252521;
-  --muted: #777770;
-  --border: #eaeaea;
-  --selected: #e9e8e3;
-  --accent: #346538;
+  --text: #382e32;
+  --muted: #786c70;
+  --border: #e9e0d9;
+  --selected: #e9ded7;
+  --accent: #7e5d67;
 }
 * {
   box-sizing: border-box;
@@ -46,7 +50,7 @@ button {
 }
 button:focus-visible,
 a:focus-visible {
-  outline: 2px solid #64816c;
+  outline: 2px solid #95757e;
   outline-offset: 3px;
 }
 a {
@@ -142,7 +146,7 @@ button:active:not(:disabled) {
   gap: 12px;
   min-height: 44px;
   padding: 10px 14px;
-  border: 1px solid #d9d8d1;
+  border: 1px solid #ded1ca;
   border-radius: 6px;
   background: transparent;
   text-align: left;
@@ -209,8 +213,8 @@ button:active:not(:disabled) {
   height: 32px;
   width: 32px;
   border-radius: 6px;
-  background: #e4e6df;
-  color: #4e5b4c;
+  background: #ebdcd9;
+  color: #7d5e68;
   display: grid;
   place-items: center;
   font-size: 13px;
@@ -270,7 +274,7 @@ button:active:not(:disabled) {
 .cloud-label {
   font-size: 12px;
   color: var(--muted);
-  border-left: 1px solid #dcdcd7;
+  border-left: 1px solid #dfd3cc;
   padding-left: 14px;
 }
 .connection {
@@ -323,7 +327,7 @@ button:active:not(:disabled) {
   align-items: center;
 }
 .suggestions button > svg:first-child {
-  color: #606d5c;
+  color: #9a7984;
   grid-column: 1/3;
 }
 .suggestions button > span {
@@ -419,7 +423,7 @@ button:active:not(:disabled) {
   color: var(--muted);
 }
 .message-content a {
-  color: #41674e;
+  color: #8b626d;
   text-underline-offset: 3px;
 }
 .message-content table {
@@ -459,13 +463,13 @@ button:active:not(:disabled) {
   display: flex;
   align-items: flex-end;
   gap: 14px;
-  border: 1px solid #dcdcd6;
+  border: 1px solid #dfd3cc;
   background: var(--surface);
   border-radius: 12px;
   padding: 14px;
 }
 .composer:focus-within {
-  border-color: #989f92;
+  border-color: #b3939c;
 }
 .composer textarea {
   width: 100%;
@@ -481,7 +485,7 @@ button:active:not(:disabled) {
   scrollbar-width: thin;
 }
 .composer textarea::placeholder {
-  color: #989890;
+  color: #8a7b80;
 }
 .send {
   background: var(--text);
@@ -495,7 +499,7 @@ button:active:not(:disabled) {
   flex-shrink: 0;
 }
 .send:hover:not(:disabled) {
-  background: #42463c;
+  background: #7e5d67;
 }
 .send:disabled {
   background: var(--selected);
@@ -668,39 +672,39 @@ button:active:not(:disabled) {
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --canvas: #1d1e1b;
-    --rail: #252621;
-    --surface: #252621;
-    --text: #eeeee8;
-    --muted: #a4a79a;
-    --border: #36382f;
-    --selected: #35372e;
-    --accent: #b2c5a1;
+    --canvas: #231f21;
+    --rail: #2b2528;
+    --surface: #2b2528;
+    --text: #f4ece7;
+    --muted: #b5a5ab;
+    --border: #43363d;
+    --selected: #40333a;
+    --accent: #d7b5be;
     background: var(--canvas);
     color: var(--text);
   }
   .new-chat,
   .composer {
-    border-color: #474b3f;
+    border-color: #59444f;
   }
   .avatar {
-    background: #3b4435;
-    color: #d5dfc9;
+    background: #513b45;
+    color: #ebc9d1;
   }
   .suggestions button > svg:first-child {
-    color: #b2c5a1;
+    color: #d7b5be;
   }
   .composer:focus-within {
-    border-color: #8c9681;
+    border-color: #b08f9b;
   }
   .send:hover:not(:disabled) {
-    background: #d4d8cc;
+    background: #e6d2d8;
   }
   .cloud-label {
-    border-color: #474b3f;
+    border-color: #59444f;
   }
   .message-content a {
-    color: #b7d0a6;
+    color: #dec0c9;
   }
   .chat-error {
     background: #372720;
@@ -719,5 +723,185 @@ button:active:not(:disabled) {
     transition: none !important;
     animation: none !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/* Vaelo's editorial type stays in headings; conversation text remains practical. */
+:root {
+  --display: "Newsreader", Georgia, serif;
+  --action: #70545f;
+}
+.brand {
+  font-family: var(--display);
+  font-size: 34px;
+  font-weight: 400;
+  letter-spacing: -0.06em;
+  line-height: 1;
+}
+.sidebar-heading {
+  padding-bottom: 34px;
+}
+.sidebar {
+  padding-top: 34px;
+}
+.signin h1,
+.welcome h1 {
+  font-family: var(--display);
+  font-weight: 400;
+  letter-spacing: -0.035em;
+  line-height: 1.06;
+}
+.signin h1 {
+  font-size: clamp(48px, 6vw, 76px);
+  margin: 26px 0;
+}
+.signin-content {
+  max-width: 660px;
+}
+.signin-content > p:not(.eyebrow) {
+  max-width: 390px;
+  font-size: 15px;
+}
+.signin-content > .subtle {
+  font-size: 12px !important;
+}
+.topbar strong {
+  font-family: var(--display);
+  font-size: 29px;
+  font-weight: 400;
+  letter-spacing: -0.04em;
+}
+.welcome {
+  max-width: 760px;
+  padding-top: clamp(56px, 10vh, 112px);
+}
+.welcome h1 {
+  font-size: clamp(46px, 5.2vw, 68px);
+  margin: 24px 0 22px;
+}
+.welcome h1 em {
+  font-weight: 400;
+  color: var(--action);
+}
+.welcome > p {
+  max-width: 430px;
+  font-size: 14px;
+}
+.eyebrow {
+  font-size: 13px;
+  letter-spacing: 0.015em;
+}
+.new-chat {
+  border-radius: 10px;
+  background: var(--surface);
+  border-color: var(--border);
+  font-size: 13px;
+}
+.chat-link {
+  border-radius: 9px;
+}
+.suggestions {
+  gap: 14px;
+  margin-top: 38px;
+}
+.suggestions button {
+  border-radius: 12px;
+  padding: 20px 18px;
+  background: transparent;
+  gap: 18px;
+}
+.suggestions button:hover {
+  background: var(--surface);
+  border-color: #d5bec4;
+}
+.suggestions button > span {
+  line-height: 1.6;
+  font-size: 12px;
+}
+.composer {
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: 0 4px 20px rgb(67 39 47 / 3%);
+}
+.composer textarea {
+  font-size: 14px;
+}
+.send {
+  background: var(--action);
+  color: #fff7f9;
+  border-radius: 10px;
+}
+.send:disabled {
+  background: var(--selected);
+  color: var(--muted);
+}
+.message.user {
+  border-radius: 14px;
+  background: var(--rail);
+}
+.message-label {
+  font-family: var(--display);
+  font-size: 20px;
+  font-weight: 400;
+  color: var(--action);
+  letter-spacing: -0.02em;
+}
+.connection.ready {
+  color: var(--accent);
+}
+.avatar {
+  border-radius: 10px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --action: #d7b5be;
+  }
+  .send {
+    color: #382e32;
+  }
+  .suggestions button:hover {
+    border-color: #806170;
+  }
+}
+@media (max-width: 850px) {
+  .suggestions button {
+    padding: 15px 18px;
+    gap: 14px;
+  }
+  .suggestions button > span {
+    font-size: 13px;
+  }
+}
+@media (max-width: 640px) {
+  .signin h1 {
+    font-size: 54px;
+  }
+  .signin-content {
+    padding: 48px 0;
+  }
+  .welcome {
+    padding: 52px 25px 26px;
+  }
+  .welcome h1 {
+    font-size: 53px;
+    max-width: 320px;
+  }
+  .welcome > p {
+    max-width: 300px;
+    font-size: 13px;
+    line-height: 1.8;
+  }
+  .suggestions {
+    margin-top: 30px;
+  }
+  .composer {
+    padding: 12px;
+    border-radius: 14px;
+  }
+  .composer textarea {
+    font-size: 16px;
+  }
+  .topbar {
+    padding-right: 20px;
   }
 }

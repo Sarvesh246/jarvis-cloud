@@ -44,7 +44,7 @@ export async function streamChat(req, res, cfg, user, input, request = fetch) {
   res.setHeader("X-Accel-Buffering", "no");
   res.flushHeaders?.();
   event(res, "jarvis.status", {
-    message: "Connecting to Jarvis. An idle server may take a minute to wake.",
+    message: "Connecting to Vaelo. An idle server may take a minute to wake.",
   });
   const controller = new AbortController();
   const cancel = () => controller.abort();
@@ -67,7 +67,7 @@ export async function streamChat(req, res, cfg, user, input, request = fetch) {
           messages: [
             {
               role: "system",
-              content: `Continue this private Jarvis web conversation. Conversation reference: ${input.conversationId}`,
+              content: `Continue this private Vaelo web conversation. Conversation reference: ${input.conversationId}`,
             },
             ...input.messages,
           ],
@@ -79,13 +79,13 @@ export async function streamChat(req, res, cfg, user, input, request = fetch) {
     if (!upstream.ok || !upstream.body) {
       const message =
         upstream.status === 429
-          ? "Jarvis is busy or a provider limit was reached. Try again shortly."
+          ? "Vaelo is busy or a provider limit was reached. Try again shortly."
           : upstream.status === 401
             ? "The cloud connection needs its API key updated."
-            : "Jarvis is temporarily unavailable. Please try again.";
+            : "Vaelo is temporarily unavailable. Please try again.";
       throw new HttpError(503, message);
     }
-    event(res, "jarvis.status", { message: "Jarvis is working…" });
+    event(res, "jarvis.status", { message: "Vaelo is working…" });
     // Preserve native Hermes tool/status events and OpenAI content chunks.
     for await (const chunk of upstream.body) {
       if (controller.signal.aborted) break;
@@ -103,7 +103,7 @@ export async function streamChat(req, res, cfg, user, input, request = fetch) {
         message:
           error instanceof HttpError
             ? error.message
-            : "The connection ended before Jarvis finished. Your prompt is still here; retry when ready.",
+            : "The connection ended before Vaelo finished. Your prompt is still here; retry when ready.",
       });
   } finally {
     clearTimeout(timer);

@@ -26,7 +26,7 @@ export default async function handler(req, res) {
       res,
       error instanceof HttpError
         ? error
-        : new HttpError(503, "Jarvis is starting or temporarily unavailable."),
+        : new HttpError(503, "Vaelo is starting or temporarily unavailable."),
     );
   }
 }

@@ -121,7 +121,7 @@ export function googleUser(payload, nonce, cfg) {
   ) {
     throw new HttpError(
       403,
-      "This Jarvis workspace is private. Use the owner’s Google account.",
+      "This Vaelo workspace is private. Use the owner’s Google account.",
     );
   }
   return {
@@ -192,12 +192,12 @@ export function fail(res, error) {
     error:
       error instanceof HttpError
         ? error.message
-        : "Jarvis could not complete that request.",
+        : "Vaelo could not complete that request.",
   });
 }
 
 export async function authorize(req, cfg) {
   const user = await sessionUser(req, cfg);
-  if (!user) throw new HttpError(401, "Sign in to use Jarvis.");
+  if (!user) throw new HttpError(401, "Sign in to use Vaelo.");
   return user;
 }

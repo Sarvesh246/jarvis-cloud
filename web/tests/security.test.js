@@ -147,7 +147,7 @@ test("unauthenticated chat is rejected before any upstream request", async () =>
   try {
     await handler({ method: "POST", headers: {}, body: {} }, res);
     assert.equal(res.statusCode, 401);
-    assert.equal(res.body.error, "Sign in to use Jarvis.");
+    assert.equal(res.body.error, "Sign in to use Vaelo.");
   } finally {
     globalThis.fetch = previousFetch;
   }

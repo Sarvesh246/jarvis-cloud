@@ -15,6 +15,11 @@ import {
   ListChecks,
 } from "@phosphor-icons/react";
 import { readEvents } from "./stream.js";
+import "@fontsource/manrope/latin-400.css";
+import "@fontsource/manrope/latin-500.css";
+import "@fontsource/manrope/latin-600.css";
+import "@fontsource/newsreader/latin-400.css";
+import "@fontsource/newsreader/latin-400-italic.css";
 import "./style.css";
 
 const freshChat = () => ({
@@ -26,17 +31,17 @@ const freshChat = () => ({
 const prompts = [
   {
     icon: Compass,
-    title: "Research something",
+    title: "Explore a question",
     text: "Help me research a topic. First ask what I want to understand, then find reliable sources and explain what matters.",
   },
   {
     icon: Code,
-    title: "Make something useful",
+    title: "Create something",
     text: "Help me build something useful. Ask what I have in mind, then work through a practical implementation with me.",
   },
   {
     icon: ListChecks,
-    title: "Work through a plan",
+    title: "Find a way forward",
     text: "Help me turn an idea into a practical plan. Start by asking what I want to achieve and what constraints matter.",
   },
 ];
@@ -253,7 +258,7 @@ function App() {
     setDraft("");
     setBusy(true);
     setError("");
-    setProgress("Connecting to Jarvis…");
+    setProgress("Connecting to Vaelo…");
     const controller = new AbortController();
     abort.current = controller;
     let completed = false;
@@ -284,14 +289,14 @@ function App() {
       });
       if (!response.ok) {
         const result = await response.json();
-        throw new Error(result.error || "Jarvis could not respond.");
+        throw new Error(result.error || "Vaelo could not respond.");
       }
       if (!response.body)
         throw new Error("Streaming is not available in this browser.");
       await readEvents(response.body, (name, data) => {
         if (name === "jarvis.error" || data.error)
           throw new Error(
-            data.message || data.error?.message || "Jarvis could not finish.",
+            data.message || data.error?.message || "Vaelo could not finish.",
           );
         if (name === "jarvis.complete") completed = true;
         if (name === "jarvis.status") {
@@ -300,7 +305,7 @@ function App() {
         }
         if (name === "hermes.status")
           setProgress(
-            String(data.message || data.status || "Jarvis is working…"),
+            String(data.message || data.status || "Vaelo is working…"),
           );
         if (name === "hermes.tool.progress")
           setProgress(
@@ -318,21 +323,19 @@ function App() {
         }
         if (choice?.finish_reason === "error")
           throw new Error(
-            data.hermes?.error || "Jarvis stopped before finishing.",
+            data.hermes?.error || "Vaelo stopped before finishing.",
           );
         if (choice?.finish_reason === "length")
           updateMessage({ truncated: true });
         if (data.usage) updateMessage({ tokens: data.usage.total_tokens });
       });
       if (!completed || !received.trim())
-        throw new Error(
-          "The response ended before Jarvis delivered an answer.",
-        );
+        throw new Error("The response ended before Vaelo delivered an answer.");
     } catch (err) {
       controller.abort();
       const message =
         err.name === "AbortError"
-          ? "Stopped. Jarvis may still be finishing its current tool on the server."
+          ? "Stopped. Vaelo may still be finishing its current tool on the server."
           : err.message;
       updateMessage({ failed: true, note: message });
       setError(message);
@@ -359,22 +362,22 @@ function App() {
   if (loading)
     return (
       <main className="signin">
-        <span className="brand">JARVIS</span>
+        <span className="brand">vaelo</span>
         <p role="status">Opening your workspace…</p>
       </main>
     );
   if (!session?.user)
     return (
       <main className="signin">
-        <span className="brand">JARVIS</span>
+        <span className="brand">vaelo</span>
         <div className="signin-content">
-          <p className="eyebrow">Your private workspace</p>
+          <p className="eyebrow">A space of your own</p>
           <h1>
-            A place to think.
+            Room for your
             <br />
-            And get things done.
+            next thought.
           </h1>
-          <p>Pick up a conversation with Jarvis, wherever you are.</p>
+          <p>A thoughtful companion for ideas, questions, and the everyday.</p>
           {session?.configured ? (
             <div className="google-button" ref={googleButton} />
           ) : (
@@ -413,7 +416,7 @@ function App() {
         aria-label="Chat navigation"
       >
         <div className="sidebar-heading">
-          <span className="brand">JARVIS</span>
+          <span className="brand">vaelo</span>
           <button
             className="icon-button mobile-only"
             aria-label="Close navigation"
@@ -474,8 +477,8 @@ function App() {
             >
               <SidebarSimple size={22} />
             </button>
-            <strong>Jarvis</strong>
-            <span className="cloud-label">Cloud</span>
+            <strong>Vaelo</strong>
+            <span className="cloud-label">Personal</span>
           </div>
           <span
             className={`connection ${cloud === "Connected" ? "ready" : ""}`}
@@ -487,14 +490,15 @@ function App() {
         <div className="conversation">
           {!active?.messages.length ? (
             <div className="welcome">
-              <span className="eyebrow">
-                Good to see you, {session.user.name}.
-              </span>
+              <span className="eyebrow">Hello, {session.user.name}.</span>
               <h1>
-                What are we
-                <br className="desktop-break" /> working on?
+                Where shall
+                <br className="desktop-break" /> we <em>begin?</em>
               </h1>
-              <p>Bring an idea, a question, or something to untangle.</p>
+              <p>
+                Bring a question, an idea, or something you’d like to work
+                through.
+              </p>
               <div className="suggestions">
                 {prompts.map(({ icon: Icon, title, text }) => (
                   <button
@@ -518,11 +522,11 @@ function App() {
                   key={message.id}
                   className={`message ${message.role}`}
                   aria-label={
-                    message.role === "user" ? "Your message" : "Jarvis response"
+                    message.role === "user" ? "Your message" : "Vaelo response"
                   }
                 >
                   {message.role === "assistant" && (
-                    <span className="message-label">Jarvis</span>
+                    <span className="message-label">Vaelo</span>
                   )}
                   <div className="message-content">
                     {message.content ? (
@@ -550,7 +554,7 @@ function App() {
                   </div>
                   {message.truncated && (
                     <p className="subtle">
-                      Response reached its output limit. Ask Jarvis to continue.
+                      Response reached its output limit. Ask Vaelo to continue.
                     </p>
                   )}
                   {message.failed && (
@@ -598,8 +602,8 @@ function App() {
               ref={textarea}
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
-              placeholder="Ask Jarvis anything…"
-              aria-label="Message Jarvis"
+              placeholder="Ask Vaelo anything…"
+              aria-label="Message Vaelo"
               rows={1}
               maxLength={16000}
               onKeyDown={(event) => {
@@ -635,7 +639,7 @@ function App() {
             )}
           </form>
           <p className="composer-note">
-            Free model routing. Research and tools when needed.
+            Research, writing, planning, and a little perspective.
           </p>
         </div>
       </main>
