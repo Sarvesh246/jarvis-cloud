@@ -1,3 +1,4 @@
+import { waitForBackend } from "./backend-readiness.js";
 import { HttpError } from "./security.js";
 
 /* How a reply should be shaped is a typed choice, not free text from the
@@ -158,6 +159,7 @@ export async function streamChat(req, res, cfg, user, input, request = fetch) {
   const timer = setTimeout(cancel, 285000);
   const heartbeat = setInterval(() => res.write(": keepalive\n\n"), 15000);
   try {
+    await waitForBackend(cfg.backend, { signal: controller.signal, request });
     const upstream = await request(
       `${cfg.backend.replace(/\/$/, "")}/v1/chat/completions`,
       {

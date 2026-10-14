@@ -43,6 +43,7 @@ test("proxy fixes the model, scopes memory and never places the backend key in t
       messages: [{ role: "user", content: "Hello" }],
     },
     async (url, options) => {
+      if (url.endsWith("/health")) return Response.json({ status: "ok" });
       sent = { url, options };
       return new Response(
         'data: {"choices":[{"delta":{"content":"Hi"}}]}\n\ndata: [DONE]\n\n',
@@ -77,7 +78,9 @@ test("upstream failures produce a visible error without provider bodies or secre
     { backend: "https://backend.example", apiKey: "secret" },
     { sub: "owner" },
     { conversationId: "test", messages: [] },
-    async () => new Response("sensitive error body", { status: 401 }),
+    async (url) => url.endsWith("/health")
+      ? Response.json({ status: "ok" })
+      : new Response("sensitive error body", { status: 401 }),
   );
   assert.match(output.join(""), /jarvis.error/);
   assert.doesNotMatch(output.join(""), /sensitive error body/);
