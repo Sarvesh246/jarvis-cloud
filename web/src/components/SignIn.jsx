@@ -1,12 +1,12 @@
 import React from "react";
-import { Halo, Wordmark } from "./Halo.jsx";
+import { Mark, Wordmark } from "./Mark.jsx";
 import "./entry.css";
 
 export function Opening() {
   return (
     <main className="entry">
       <div className="entry-body">
-        <Halo size={72} state="thinking" />
+        <Mark size={72} state="thinking" />
         <p role="status" className="entry-line">
           Opening your space…
         </p>
@@ -19,7 +19,7 @@ export function SignIn({ configured, error, buttonRef }) {
   return (
     <main className="entry">
       <div className="entry-body">
-        <Halo size={88} />
+        <Mark size={84} />
         <Wordmark size={44} />
         <h1>
           Good to see <em>you.</em>

@@ -1,6 +1,6 @@
 import React from "react";
 import { ArrowRight } from "@phosphor-icons/react";
-import { Halo } from "./Halo.jsx";
+import { Mark } from "./Mark.jsx";
 import { firstName, greeting } from "../lib/format.js";
 import "./welcome.css";
 
@@ -28,7 +28,7 @@ export function Welcome({ name, phase, onPick }) {
   const who = firstName(name);
   return (
     <section className="welcome" aria-label="Start a conversation">
-      <Halo size={72} state={phase} />
+      <Mark size={64} state={phase} />
       <h1>
         {greeting()}
         {who ? (

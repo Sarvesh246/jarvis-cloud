@@ -1,0 +1,171 @@
+.mark {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: var(--mark-size);
+  height: var(--mark-size);
+  color: var(--gilt);
+  --mark-glow-o: 0.35;
+  transition: color var(--dur-3) var(--ease);
+}
+
+.mark-glow {
+  position: absolute;
+  inset: -18%;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 50% 46%,
+    color-mix(in srgb, currentColor 34%, transparent) 0%,
+    transparent 64%
+  );
+  opacity: var(--mark-glow-o);
+  transition: opacity var(--dur-3) var(--ease);
+}
+
+.mark-v {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  transform-origin: 50% 80%;
+}
+
+.mark-heavy,
+.mark-hair,
+.mark-serif {
+  fill: currentColor;
+  transition: opacity var(--dur-3) var(--ease);
+}
+
+/* A brighter line that travels down the hairline while Vaelo works */
+.mark-trace {
+  stroke: var(--gilt-bright, #f3dcae);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-dasharray: 0 100;
+  opacity: 0;
+}
+
+@keyframes mark-breathe {
+  0%,
+  100% {
+    opacity: calc(var(--mark-glow-o) * 0.6);
+  }
+  50% {
+    opacity: var(--mark-glow-o);
+  }
+}
+
+@keyframes mark-hair {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes mark-trace {
+  0% {
+    stroke-dasharray: 0 100;
+    stroke-dashoffset: 0;
+    opacity: 0;
+  }
+  20% {
+    opacity: 1;
+  }
+  60% {
+    stroke-dasharray: 26 100;
+  }
+  100% {
+    stroke-dasharray: 0 100;
+    stroke-dashoffset: -100;
+    opacity: 0;
+  }
+}
+
+@keyframes mark-bow {
+  0% {
+    transform: translateY(-1.5px);
+  }
+  100% {
+    transform: none;
+  }
+}
+
+.mark[data-state="idle"] .mark-glow,
+.mark[data-state="listening"] .mark-glow {
+  animation: mark-breathe 6s ease-in-out infinite;
+}
+
+/* listening: the light lifts a little */
+.mark[data-state="listening"] {
+  --mark-glow-o: 0.7;
+}
+
+/* waking: dim and patient */
+.mark[data-state="waking"] .mark-heavy,
+.mark[data-state="waking"] .mark-serif {
+  opacity: 0.5;
+}
+.mark[data-state="waking"] .mark-hair {
+  animation: mark-hair 3.4s ease-in-out infinite;
+}
+
+/* thinking: the hairline catches the light, slowly */
+.mark[data-state="thinking"] {
+  --mark-glow-o: 0.55;
+}
+.mark[data-state="thinking"] .mark-hair {
+  animation: mark-hair 2.6s ease-in-out infinite;
+}
+.mark[data-state="thinking"] .mark-glow {
+  animation: mark-breathe 2.6s ease-in-out infinite;
+}
+
+/* working: light travels down the hairline, like a pen being drawn */
+.mark[data-state="working"] {
+  --mark-glow-o: 0.6;
+}
+.mark[data-state="working"] .mark-trace {
+  animation: mark-trace 2.2s var(--ease) infinite;
+}
+
+/* speaking: warm and steady, breathing with the words */
+.mark[data-state="speaking"] {
+  --mark-glow-o: 0.85;
+}
+.mark[data-state="speaking"] .mark-glow {
+  animation: mark-breathe 1.8s ease-in-out infinite;
+}
+
+/* settling: one small bow, then still */
+.mark[data-state="settling"] .mark-v {
+  animation: mark-bow 900ms var(--ease) both;
+}
+
+/* concern: earthen and steady, never alarming */
+.mark[data-state="concern"] {
+  color: var(--clay);
+  --mark-glow-o: 0.2;
+}
+
+.wordmark {
+  font-family: var(--font-voice);
+  font-size: var(--wordmark-size, 22px);
+  font-weight: 400;
+  letter-spacing: 0.03em;
+  line-height: 1;
+  color: var(--ink);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mark-glow,
+  .mark-hair,
+  .mark-trace,
+  .mark-v {
+    animation: none !important;
+  }
+}

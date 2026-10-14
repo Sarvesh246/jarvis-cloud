@@ -7,26 +7,35 @@ a decision is unclear, check it against these.
 writes to you the way a considered letter is set: one serif voice, rules
 instead of boxes, italic for the emotional register.
 
-1. **Presence over decoration.** The Halo is Vaelo's face. Every agent state
-   (idle, listening, waking, thinking, working, speaking, settling, concern)
-   maps to one Halo state. Nothing else animates for its own sake.
-2. **Calm tempo.** 180–600ms, `--ease`, no bounce, no spin, no flash. Ambient
+1. **Presence over decoration.** The mark is a Didone V: one weighted
+   stroke, one hairline, fine serifs. It is also Vaelo's face beside each
+   reply. Every agent state (idle, listening, waking, thinking, working,
+   speaking, settling, concern) maps to one mark state. Nothing else animates
+   for its own sake.
+2. **Say it where it happens.** Status lives inside the reply, never in a
+   header badge. While Vaelo works there is one live italic line ("Thinking",
+   "Web search", "Waking up"); afterwards it folds into a receipt ("Thought
+   for 8s · 2 steps") that opens to the steps. Stopping keeps what was
+   written and offers Continue; retrying keeps earlier versions (1 / 2);
+   any of your messages can be edited and resent; removing a conversation
+   offers Undo instead of a confirmation.
+3. **Calm tempo.** 180–600ms, `--ease`, no bounce, no spin, no flash. Ambient
    breathing is 6s. Reduced motion removes movement and keeps meaning.
-3. **Honest, reassuring states.** Say what Vaelo is doing in plain words.
+4. **Honest, reassuring states.** Say what Vaelo is doing in plain words.
    Errors never alarm: earth tone (`--clay`), a kind sentence, one action.
-4. **Warm restraint.** Rules and tone over boxes and shadows. Gilt is
+5. **Warm restraint.** Rules and tone over boxes and shadows. Gilt is
    reserved for Vaelo's presence and the one primary action. The user's side
    stays neutral.
-5. **One serif voice.** Newsreader (variable, optical sizing) is the whole
+6. **One serif voice.** Newsreader (variable, optical sizing) is the whole
    interface, matching the lowercase "vaelo" wordmark. Light weight at display
    sizes, regular for reading, italic for asides (status, placeholders, notes),
    letter-spaced capitals for labels. No sans-serif. Nothing under 13px;
    replies at 20px / 1.68.
-6. **Desktop is deliberate, mobile is its own design.** An index rail, a
+7. **Desktop is deliberate, mobile is its own design.** An index rail, a
    transcript with hanging margin labels (Vaelo / You) and a composer aligned
    to the text column on desktop. Drawer, stacked labels, bottom-anchored
    composer and 44px targets on mobile.
-7. **Every control earns its place.** One icon set (Phosphor, light weight),
+8. **Every control earns its place.** One icon set (Phosphor, light weight),
    one radius scale, one spacing scale, one elevation scale. No emoji.
 
 ## Tokens

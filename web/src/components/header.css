@@ -68,27 +68,6 @@
   outline: none;
 }
 
-/* Vaelo's presence, as a line of italic text beside its face. No pill:
-   it is a person being present, not a status badge. */
-.presence {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s-2);
-  flex: none;
-  font-size: var(--t-sm);
-  font-style: italic;
-  color: var(--muted);
-  transition: color var(--dur-3) var(--ease);
-}
-
-.presence[data-tone="active"] {
-  color: var(--gilt-ink);
-}
-
-.presence[data-tone="clay"] {
-  color: var(--clay);
-}
-
 @media (max-width: 47.9375rem) {
   .header {
     min-height: 3.75rem;
@@ -112,13 +91,6 @@
   .header-title,
   .header-title-input {
     font-size: var(--t-md);
-    max-width: 46vw;
-  }
-
-  .presence span {
-    max-width: 8.5rem;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    max-width: 72vw;
   }
 }

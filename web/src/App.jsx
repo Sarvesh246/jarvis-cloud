@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { IconContext } from "@phosphor-icons/react";
+import { ArrowDown, IconContext } from "@phosphor-icons/react";
 import { readEvents } from "./stream.js";
 import { Rail } from "./components/Rail.jsx";
 import { Header } from "./components/Header.jsx";
@@ -8,7 +8,6 @@ import { Message } from "./components/Message.jsx";
 import { Composer } from "./components/Composer.jsx";
 import { Toast, Notice } from "./components/Toast.jsx";
 import { Opening, SignIn } from "./components/SignIn.jsx";
-import { humanizeTool } from "./lib/format.js";
 import "./shell.css";
 
 const freshChat = () => ({
@@ -19,6 +18,23 @@ const freshChat = () => ({
 });
 
 const RAIL_KEY = "vaelo-rail-collapsed";
+
+/* The parts of a reply that make up one version of it. */
+const snapshot = ({ content, activity, thoughtMs, truncated, stopped, failed, note }) => ({
+  content,
+  activity,
+  thoughtMs,
+  truncated,
+  stopped,
+  failed,
+  note,
+});
+
+function kindly(err) {
+  if (err.name === "TypeError" && /fetch|network/i.test(err.message))
+    return "Vaelo couldn’t be reached. Check your connection and try again.";
+  return err.message;
+}
 
 function readCollapsed() {
   try {
@@ -37,13 +53,13 @@ export function App() {
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [livePhase, setLivePhase] = useState("idle");
-  const [tool, setTool] = useState("");
   const [settling, setSettling] = useState(false);
   const [cloud, setCloud] = useState("Connecting");
   const [menu, setMenu] = useState(false);
   const [collapsed, setCollapsed] = useState(readCollapsed);
   const [storageIssue, setStorageIssue] = useState(false);
   const [toast, setToast] = useState(null);
+  const [away, setAway] = useState(false);
   const googleButton = useRef(null);
   const abort = useRef(null);
   const textarea = useRef(null);
@@ -239,6 +255,14 @@ export function App() {
   function onScroll() {
     const el = conversation.current;
     pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 96;
+    setAway(!pinned.current);
+  }
+
+  function jumpToLatest() {
+    const el = conversation.current;
+    pinned.current = true;
+    setAway(false);
+    el?.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   }
 
   function newChat() {
@@ -254,6 +278,7 @@ export function App() {
 
   function selectChat(id) {
     pinned.current = true;
+    setAway(false);
     setActiveId(id);
     setDraft("");
     setError("");
@@ -301,21 +326,73 @@ export function App() {
     });
   }
 
-  async function send(retry = false) {
-    if (busy || !active || (!retry && !draft.trim())) return;
+  function updateChatMessage(chatId, id, patch) {
+    setChats((current) =>
+      current.map((chat) =>
+        chat.id === chatId
+          ? {
+              ...chat,
+              messages: chat.messages.map((message) =>
+                message.id === id
+                  ? {
+                      ...message,
+                      ...(typeof patch === "function" ? patch(message) : patch),
+                    }
+                  : message,
+              ),
+            }
+          : chat,
+      ),
+    );
+  }
+
+  /* Swap which version of a reply is current. The shown version is the one
+     Vaelo remembers, so the conversation always continues from it. */
+  function selectVersion(id, index) {
+    updateChatMessage(activeId, id, (message) => {
+      const versions = message.versions.map((version, i) =>
+        i === message.version ? snapshot(message) : version,
+      );
+      return { ...snapshot(versions[index]), versions, version: index };
+    });
+  }
+
+  async function send({ retry = false, text, edit } = {}) {
+    if (busy || !active) return;
     const chatId = active.id;
     const id = crypto.randomUUID();
     let messages;
-    if (retry) {
+    let versions;
+    if (edit) {
+      const at = active.messages.findIndex((message) => message.id === edit.id);
+      if (at < 0) return;
+      messages = [
+        ...active.messages.slice(0, at),
+        { id: crypto.randomUUID(), role: "user", content: edit.text },
+      ];
+    } else if (retry) {
       const lastUser = active.messages.findLastIndex(
         (message) => message.role === "user",
       );
       if (lastUser < 0) return;
       messages = active.messages.slice(0, lastUser + 1);
+      const previous = active.messages[lastUser + 1];
+      if (previous) {
+        const kept = (
+          previous.versions
+            ? previous.versions.map((version, i) =>
+                i === previous.version ? snapshot(previous) : version,
+              )
+            : [snapshot(previous)]
+        ).filter((version) => version.content);
+        if (kept.length) versions = kept;
+      }
     } else {
+      const content = (text ?? draft).trim();
+      if (!content) return;
       messages = [
         ...active.messages,
-        { id: crypto.randomUUID(), role: "user", content: draft.trim() },
+        { id: crypto.randomUUID(), role: "user", content },
       ];
     }
     const input = messages
@@ -333,44 +410,33 @@ export function App() {
                 ? chat.title
                 : messages[0].content.slice(0, 48),
               updated: Date.now(),
-              messages: [...messages, { id, role: "assistant", content: "" }],
+              messages: [
+                ...messages,
+                {
+                  id,
+                  role: "assistant",
+                  content: "",
+                  startedAt: Date.now(),
+                  ...(versions && { versions, version: versions.length }),
+                },
+              ],
             }
           : chat,
       ),
     );
     clearTimeout(settleTimer.current);
     setSettling(false);
-    setDraft("");
+    if (!retry && !edit && text === undefined) setDraft("");
     setBusy(true);
     setError("");
-    setTool("");
     setLivePhase("thinking");
     const controller = new AbortController();
     abort.current = controller;
     let completed = false;
     let received = "";
     let succeeded = false;
-    function updateMessage(patch) {
-      setChats((current) =>
-        current.map((chat) =>
-          chat.id === chatId
-            ? {
-                ...chat,
-                messages: chat.messages.map((message) =>
-                  message.id === id
-                    ? {
-                        ...message,
-                        ...(typeof patch === "function"
-                          ? patch(message)
-                          : patch),
-                      }
-                    : message,
-                ),
-              }
-            : chat,
-        ),
-      );
-    }
+    const startedAt = Date.now();
+    const updateMessage = (patch) => updateChatMessage(chatId, id, patch);
     function noteTool(name, done) {
       updateMessage((message) => {
         const list = [...(message.activity || [])];
@@ -415,7 +481,6 @@ export function App() {
         if (name === "hermes.tool.progress") {
           const raw = data.tool_name || data.name || data.function_name || "tool";
           const done = data.status === "completed";
-          setTool(done ? "" : humanizeTool(raw));
           setLivePhase(done ? "thinking" : "working");
           noteTool(raw, done);
         }
@@ -425,11 +490,11 @@ export function App() {
           );
         const choice = data.choices?.[0];
         if (choice?.delta?.content) {
+          if (!received) updateMessage({ thoughtMs: Date.now() - startedAt });
           received += choice.delta.content;
           updateMessage({ content: received });
           setLivePhase("speaking");
-          setTool("");
-        }
+              }
         if (choice?.finish_reason === "error")
           throw new Error(
             data.hermes?.error || "Vaelo stopped before finishing.",
@@ -442,27 +507,35 @@ export function App() {
       succeeded = true;
     } catch (err) {
       controller.abort();
-      const message =
-        err.name === "AbortError"
-          ? "Stopped. Vaelo may still be finishing its current step on the server."
-          : err.message;
-      updateMessage({ failed: true, note: message });
-      setError(message);
+      if (err.name === "AbortError") {
+        /* Stopping is a choice, not a failure: keep what was written. */
+        updateMessage({ stopped: true });
+      } else {
+        const message = kindly(err);
+        updateMessage({ failed: true, note: message });
+        setError(message);
+      }
     } finally {
-      updateMessage((message) =>
-        message.activity
-          ? {
-              activity: message.activity.map((item) => ({
-                ...item,
-                done: true,
-              })),
-            }
-          : {},
-      );
+      updateMessage((message) => {
+        const patch = {};
+        if (message.activity)
+          patch.activity = message.activity.map((item) => ({
+            ...item,
+            done: true,
+          }));
+        if (!received) patch.thoughtMs = Date.now() - startedAt;
+        if (message.versions) {
+          const done = { ...message, ...patch };
+          patch.versions = [
+            ...message.versions.slice(0, message.version),
+            snapshot(done),
+          ];
+        }
+        return patch;
+      });
       setBusy(false);
       setLivePhase("idle");
-      setTool("");
-      abort.current = null;
+        abort.current = null;
       if (succeeded) {
         setSettling(true);
         settleTimer.current = setTimeout(() => setSettling(false), 1500);
@@ -523,9 +596,6 @@ export function App() {
           <Header
             title={active?.title || "New conversation"}
             canRename={messages.length > 0 && !busy}
-            phase={phase}
-            cloud={cloud}
-            tool={tool}
             onRename={renameChat}
             onOpenRail={() => setMenu(true)}
             onToggleRail={toggleRail}
@@ -553,9 +623,13 @@ export function App() {
                       fresh={fresh.current.has(message.id)}
                       busy={busy}
                       phase={livePhase}
+                      live={busy && last && !mine}
                       streaming={busy && last && !mine && !!message.content}
                       isLast={last && !mine}
-                      onRetry={() => send(true)}
+                      onRetry={() => send({ retry: true })}
+                      onContinue={() => send({ text: "Continue" })}
+                      onEdit={(text) => send({ edit: { id: message.id, text } })}
+                      onVersion={(index) => selectVersion(message.id, index)}
                     />
                   );
                 })}
@@ -564,13 +638,19 @@ export function App() {
           </div>
 
           <div className="dock">
-            {error && !busy && messages.length > 0 && (
-              <Notice
-                action="Try again"
-                onAction={() => send(true)}
-                disabled={busy}
+            {away && messages.length > 0 && (
+              <button
+                className="jump"
+                aria-label="Jump to latest"
+                onClick={jumpToLatest}
               >
-                {error}
+                <ArrowDown size={16} />
+              </button>
+            )}
+            {cloud === "Unavailable" && (
+              <Notice>
+                Vaelo is out of reach right now. Messages may not go through
+                until it’s back.
               </Notice>
             )}
             {storageIssue && (

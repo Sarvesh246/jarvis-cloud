@@ -19,6 +19,11 @@
 .rail-brand {
   display: inline-flex;
   align-items: center;
+  gap: var(--s-1);
+}
+
+.rail-brand .mark {
+  margin-left: -4px;
 }
 
 .rail-close {

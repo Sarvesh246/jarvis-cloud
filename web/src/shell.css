@@ -62,6 +62,7 @@
 }
 
 .dock {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--s-3);
@@ -75,6 +76,32 @@
   .dock {
     padding-left: calc(var(--s-5) + var(--gutter) + var(--s-4));
   }
+}
+
+/* Appears only once you have scrolled away from the newest words */
+.jump {
+  position: absolute;
+  bottom: calc(100% + var(--s-3));
+  left: calc(50% + (var(--gutter) + var(--s-4)) / 2);
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  border: 1px solid var(--hairline-strong);
+  background: var(--surface);
+  color: var(--ink-soft);
+  box-shadow: var(--lift-1);
+  transform: translateX(-50%);
+  animation: fade var(--dur-2) var(--ease) both;
+  transition:
+    color var(--dur-1) var(--ease),
+    border-color var(--dur-1) var(--ease);
+}
+
+.jump:hover {
+  color: var(--gilt-ink);
+  border-color: var(--gilt);
 }
 
 .dock-note {
@@ -117,5 +144,9 @@
 
   .dock-note {
     display: none;
+  }
+
+  .jump {
+    left: 50%;
   }
 }

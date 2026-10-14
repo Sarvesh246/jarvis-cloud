@@ -40,7 +40,7 @@
   }
 }
 
-.entry-body .halo {
+.entry-body .mark {
   margin-bottom: var(--s-4);
 }
 
@@ -63,7 +63,7 @@
   font-style: italic;
 }
 
-.entry-body .halo + .entry-line {
+.entry-body .mark + .entry-line {
   margin-top: var(--s-2);
 }
 

@@ -35,15 +35,3 @@ export function groupChats(chats, now = Date.now()) {
     });
   return groups.filter((group) => group.items.length);
 }
-
-/* What the status chip says, in plain words. */
-export function statusText({ phase, cloud, tool }) {
-  if (phase === "working") return tool ? `Using ${tool.toLowerCase()}` : "Working";
-  if (phase === "waking") return "Waking up";
-  if (phase === "thinking") return "Thinking it through";
-  if (phase === "speaking") return "Writing to you";
-  if (phase === "concern") return "Something went wrong";
-  if (cloud === "Unavailable") return "Out of reach";
-  if (cloud === "Starting") return "Resting";
-  return "Here with you";
-}

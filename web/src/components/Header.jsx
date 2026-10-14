@@ -1,29 +1,13 @@
 import React, { useEffect, useRef, useState } from "react";
 import { List, SidebarSimple } from "@phosphor-icons/react";
-import { Halo } from "./Halo.jsx";
-import { statusText } from "../lib/format.js";
 import "./header.css";
 
-export function Header({
-  title,
-  canRename,
-  phase,
-  cloud,
-  tool,
-  onRename,
-  onOpenRail,
-  onToggleRail,
-}) {
+/* The header only names the conversation. What Vaelo is doing is shown
+   where it is happening: in the reply itself. */
+export function Header({ title, canRename, onRename, onOpenRail, onToggleRail }) {
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(title);
   const input = useRef(null);
-  const label = statusText({ phase, cloud, tool });
-  const tone =
-    phase === "concern" || cloud === "Unavailable"
-      ? "clay"
-      : phase === "idle" && cloud === "Connected"
-        ? "ready"
-        : "active";
 
   useEffect(() => setValue(title), [title]);
   useEffect(() => {
@@ -81,11 +65,6 @@ export function Header({
             {title}
           </button>
         )}
-      </div>
-
-      <div className="presence" data-tone={tone} role="status" aria-live="polite">
-        <Halo size={22} state={phase} />
-        <span>{label}</span>
       </div>
     </header>
   );

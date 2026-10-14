@@ -1,6 +1,6 @@
 import React from "react";
 import { Plus, SignOut, Trash, X } from "@phosphor-icons/react";
-import { Wordmark } from "./Halo.jsx";
+import { Mark, Wordmark } from "./Mark.jsx";
 import { groupChats } from "../lib/format.js";
 import "./rail.css";
 
@@ -29,7 +29,8 @@ export function Rail({
     >
       <div className="rail-head">
         <span className="rail-brand">
-          <Wordmark size={32} />
+          <Mark size={30} />
+          <Wordmark size={30} />
         </span>
         <button
           className="icon-button rail-close"
