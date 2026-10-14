@@ -48,6 +48,11 @@ class BootstrapTests(unittest.TestCase):
             cfg = json.loads(text)
             self.assertEqual(cfg["gateway"]["api_server"]["max_concurrent_runs"], 1)
             self.assertEqual(cfg["model"]["default"], "openrouter/free")
+            self.assertGreaterEqual(cfg["model"]["context_length"], 64000)
+            self.assertEqual(cfg["model"]["context_length"], cfg["providers"]["cloud-openrouter"]["context_length"])
+            for provider in cfg["providers"].values():
+                if "context_length" in provider:
+                    self.assertGreaterEqual(provider["context_length"], 64000)
             self.assertEqual([f["provider"] for f in cfg["fallback_providers"]], ["custom:cloud-groq", "custom:cloud-nvidia"])
             self.assertNotIn("ollama", text)
             self.assertTrue((home / "plugins/jarvis-cloud-research/plugin.yaml").exists())

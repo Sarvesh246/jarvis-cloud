@@ -23,7 +23,7 @@ def configuration(environ):
             cfg["providers"][provider] = {
                 "name": provider, "api": url, "api_key": "${" + variable + "}",
                 "transport": "chat_completions", "default_model": model,
-                "context_length": 32768, "models": [model],
+                "models": [model],
             }
             cfg["fallback_providers"].append({
                 "provider": "custom:" + provider, "model": model,
