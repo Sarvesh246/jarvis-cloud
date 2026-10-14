@@ -1,6 +1,7 @@
 import { readEvents } from "../stream.js";
 import { classifyError } from "./errors.js";
 import { cleanRevision, revisionPrompt } from "./library.js";
+import { normalizeReplySpacing } from "./reply-spacing.js";
 
 /* Ask Vaelo to rewrite one passage. Each revision is its own short exchange
    with a fresh reference, so it never becomes part of the conversation's
@@ -35,12 +36,12 @@ export async function requestRevision({ csrf, source, start, end, instruction, s
     const choice = data.choices?.[0];
     if (choice?.delta?.content) {
       text += choice.delta.content;
-      onText?.(text);
+      onText?.(normalizeReplySpacing(text));
     }
     if (choice?.finish_reason === "error" || (data.error && choice?.finish_reason !== "length"))
       throw new Error(data.error?.message || "Vaelo stopped before finishing.");
   });
-  const revised = cleanRevision(text);
+  const revised = cleanRevision(normalizeReplySpacing(text));
   if (!completed || !revised) throw new Error("Vaelo didn’t send a revision back. Try again.");
   return revised;
 }

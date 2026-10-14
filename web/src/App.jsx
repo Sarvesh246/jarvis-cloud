@@ -8,6 +8,7 @@ import React, {
 } from "react";
 import { ArrowDown, FileArrowUp, IconContext, Quotes } from "@phosphor-icons/react";
 import { readEvents } from "./stream.js";
+import { normalizeReplySpacing, normalizeSavedReplySpacing } from "./lib/reply-spacing.js";
 import { Rail } from "./components/Rail.jsx";
 import { Header } from "./components/Header.jsx";
 import { Welcome } from "./components/Welcome.jsx";
@@ -379,7 +380,7 @@ export function App() {
         } catch {
           setStorageIssue(true);
         }
-        const opening = chooseOpening(saved);
+        const opening = chooseOpening(saved.map(normalizeSavedReplySpacing));
         setChats(cap(opening.list));
         setActiveId(opening.id);
       }
@@ -986,6 +987,7 @@ export function App() {
     /* Words are committed once per frame, not once per network fragment. */
     const flush = () => {
       frame = 0;
+      received = normalizeReplySpacing(received);
       updateMessage({ content: received, ...(reasoning && { reasoning: reasoning.slice(-12000) }) });
     };
     const schedule = () => {
