@@ -1,0 +1,42 @@
+# Credentials and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials*.json
+providers.env
+freellmapi-keys.json
+
+# Runtime data
+data/
+uploads/
+logs/
+*.log
+*.db
+*.db-shm
+*.db-wal
+.hermes/
+
+# Dependencies and build output
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+node_modules/
+dist/
+build/
+.pytest_cache/
+.ruff_cache/
+.vercel/
+
+# Local development files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+AGENTS.md
+CLAUDE.md
+.agents/
+.claude/
+.codex/
