@@ -37,7 +37,7 @@ The bootstrap checks use fake credentials and no model calls. The official Herme
 
 ## Phone interface
 
-The `web` directory deploys separately to [jarvisassistant.vercel.app](https://jarvisassistant.vercel.app). Google sign-in is restricted to the workspace owner. A server-side proxy streams Hermes replies and tool progress; the browser never receives the gateway key.
+The `web` directory deploys separately to [jarvisassitant.vercel.app](https://jarvisassitant.vercel.app). Google sign-in is restricted to the workspace owner. A server-side proxy streams Hermes replies and tool progress; the browser never receives the gateway key.
 
 From `web`, run `npm ci`, `npm test` and `npm run build`. For a full local preview including API routes, use `vercel dev` with the server environment variables from `.env.example`. `npm run dev` starts only the interface.
 
