@@ -3,8 +3,8 @@
    its hashed scripts, styles, fonts and icons). Anything under /api, which
    is where signed-in data lives, always goes to the network and is never
    cached. */
-const SHELL = "vaelo-shell-v4";
-const PRECACHE = ["/", "/manifest.webmanifest?v=4", "/icons/vaelo-192-v4.png", "/icons/vaelo-touch-v4.png"];
+const SHELL = "vaelo-shell-v5";
+const PRECACHE = ["/"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -47,7 +47,9 @@ self.addEventListener("fetch", (event) => {
   }
 
   // Hashed build files never change, so the saved copy is always right.
-  if (url.pathname.startsWith("/assets/") || url.pathname.startsWith("/icons/")) {
+  // Icons and the manifest are left to the network: iOS reads them when the
+  // app is added to the home screen and falls back to a letter if that fails.
+  if (url.pathname.startsWith("/assets/")) {
     event.respondWith(
       caches.match(request).then(
         (hit) =>
