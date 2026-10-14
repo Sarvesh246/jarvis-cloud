@@ -13,7 +13,7 @@ export class HttpError extends Error {
 }
 
 export function settings(env = process.env) {
-  const origin = env.APP_ORIGIN || "https://jarvisassitant.vercel.app";
+  const origin = env.APP_ORIGIN || "https://vaelochat.vercel.app";
   return {
     origin,
     secure: origin.startsWith("https:"),
