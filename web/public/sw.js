@@ -3,8 +3,8 @@
    its hashed scripts, styles, fonts and icons). Anything under /api, which
    is where signed-in data lives, always goes to the network and is never
    cached. */
-const SHELL = "vaelo-shell-v1";
-const PRECACHE = ["/", "/manifest.webmanifest", "/favicon.svg", "/icons/icon-192.png"];
+const SHELL = "vaelo-shell-v2";
+const PRECACHE = ["/", "/manifest.webmanifest", "/favicon.svg", "/icons/icon-192.png", "/apple-touch-icon.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(

@@ -183,3 +183,45 @@
   margin-top: var(--s-3);
   color: var(--muted);
 }
+
+/* Sign-in fits on one screen, toolbars included */
+@media (max-width: 47.9375rem), (pointer: coarse) and (max-height: 31.25rem) {
+  .entry {
+    padding-top: var(--s-5);
+  }
+
+  .entry-body h1 {
+    margin-top: var(--s-5);
+  }
+}
+
+@media (max-height: 720px) {
+  .entry {
+    padding-top: var(--s-4);
+  }
+
+  .entry-body .mark {
+    width: 64px !important;
+    height: 64px !important;
+    margin-bottom: var(--s-2);
+  }
+
+  .entry-body .wordmark {
+    font-size: 36px !important;
+  }
+
+  .entry-body h1 {
+    margin: var(--s-4) 0 var(--s-1);
+    font-size: clamp(2rem, 8vw, 2.5rem);
+  }
+
+  .entry-line {
+    margin-bottom: var(--s-4);
+  }
+}
+
+@media (max-height: 560px) {
+  .entry-body .mark {
+    display: none;
+  }
+}

@@ -68,7 +68,7 @@
   outline: none;
 }
 
-@media (max-width: 47.9375rem) {
+@media (max-width: 47.9375rem), (pointer: coarse) and (max-height: 31.25rem) {
   .header {
     min-height: 3.75rem;
     padding: 0 var(--s-3);
@@ -92,5 +92,15 @@
   .header-title-input {
     font-size: var(--t-md);
     max-width: 72vw;
+  }
+}
+
+/* iOS Safari draws a soft blur under its status bar that can catch the top
+   of the page. In a Safari tab on a phone the header sits just below it.
+   An installed app has its own status bar and needs no extra room. */
+@media (max-width: 47.9375rem) and (display-mode: browser) {
+  .header {
+    padding-top: calc(env(safe-area-inset-top) + 0.875rem);
+    min-height: calc(3.75rem + 0.875rem);
   }
 }

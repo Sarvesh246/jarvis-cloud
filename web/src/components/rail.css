@@ -286,7 +286,7 @@
   }
 }
 
-@media (max-width: 47.9375rem) {
+@media (max-width: 47.9375rem), (pointer: coarse) and (max-height: 31.25rem) {
   .rail {
     position: fixed;
     inset: 0 auto 0 0;
@@ -310,5 +310,11 @@
 
   .rail-new kbd {
     display: none;
+  }
+}
+
+@media (max-width: 47.9375rem) and (display-mode: browser) {
+  .rail {
+    padding-top: calc(var(--s-5) + env(safe-area-inset-top) + 0.875rem);
   }
 }

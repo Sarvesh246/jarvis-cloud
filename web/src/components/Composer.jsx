@@ -158,6 +158,16 @@ export const Composer = forwardRef(function Composer(
   const reading = attachments.some((file) => file.state === "reading");
   const ready = draft.trim() || attachments.some((file) => file.state === "ready");
   const style = STYLES.find((s) => s.id === options.style);
+  /* Status that belongs to the message, not the buttons: said on its own
+     line so the instrument row never grows or shifts. */
+  const note = dictation.problem
+    ? { tone: "problem", text: dictation.problem }
+    : over
+      ? {
+          tone: "problem",
+          text: `${length.toLocaleString()} / ${MESSAGE_LIMIT.toLocaleString()} characters. Trim the message or a file.`,
+        }
+      : null;
 
   useEffect(() => {
     const el = textarea.current;
@@ -210,6 +220,9 @@ export const Composer = forwardRef(function Composer(
           }
         }}
       />
+      <p className="composer-note" id="composer-status" aria-live="polite" data-tone={note?.tone}>
+        {note?.text}
+      </p>
       <div className="composer-bar">
         <div className="composer-start">
           <input
@@ -283,21 +296,16 @@ export const Composer = forwardRef(function Composer(
             </span>
           )}
         </div>
-        <div className="composer-end">
-          <span className="composer-status" id="composer-status" aria-live="polite">
-            {dictation.problem ? (
-              dictation.problem
-            ) : over ? (
-              <span className="composer-over">
-                {length.toLocaleString()} / {MESSAGE_LIMIT.toLocaleString()} characters. Trim the
-                message or a file.
-              </span>
-            ) : dictation.listening ? (
-              <span className="composer-listening">Listening. Press the microphone to stop.</span>
-            ) : draft ? null : (
-              <span className="composer-hint">Enter to send · Shift+Enter for a new line</span>
-            )}
+        {dictation.listening && (
+          <span className="composer-live" role="status">
+            <span className="composer-dot" aria-hidden="true" />
+            <span className="composer-live-text">Listening</span>
           </span>
+        )}
+        <div className="composer-end">
+          {!draft && !note && (
+            <span className="composer-hint">Enter to send · Shift+Enter for a new line</span>
+          )}
           {dictation.supported && (
             <button
               type="button"

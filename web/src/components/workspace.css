@@ -265,7 +265,7 @@ body.resizing iframe {
   }
 }
 
-@media (max-width: 47.9375rem) {
+@media (max-width: 47.9375rem), (pointer: coarse) and (max-height: 31.25rem) {
   .workspace {
     inset: 0;
     width: 100%;
@@ -324,5 +324,12 @@ body.resizing iframe {
     display: block;
     height: auto;
     overflow: visible;
+  }
+}
+
+@media (max-width: 47.9375rem) and (display-mode: browser) {
+  .ws-head {
+    padding-top: calc(env(safe-area-inset-top) + 0.875rem);
+    min-height: calc(4.25rem + 0.875rem);
   }
 }

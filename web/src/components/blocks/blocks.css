@@ -500,7 +500,7 @@
   gap: 0.2rem;
 }
 
-@media (max-width: 47.9375rem) {
+@media (max-width: 47.9375rem), (pointer: coarse) and (max-height: 31.25rem) {
   .code pre {
     padding: var(--s-3) var(--s-4);
   }

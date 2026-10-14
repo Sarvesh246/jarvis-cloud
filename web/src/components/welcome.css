@@ -136,20 +136,98 @@
   color: var(--muted);
 }
 
-@media (max-width: 47.9375rem) {
+@media (max-width: 47.9375rem), (pointer: coarse) and (max-height: 31.25rem) {
   .welcome {
-    margin-top: var(--s-5);
-    margin-bottom: 0;
-    justify-content: flex-start;
-    padding-top: var(--s-5);
+    margin: auto;
+    padding: var(--s-4) var(--s-2);
+  }
+
+  .welcome .mark {
+    width: 52px;
+    height: 52px;
+    margin-bottom: var(--s-4);
+  }
+
+  .welcome h1 {
+    font-size: clamp(2rem, 8.5vw, 2.5rem);
   }
 
   .welcome-line {
-    margin-bottom: var(--s-6);
+    margin: var(--s-2) 0 var(--s-5);
+    font-size: var(--t-base);
+  }
+
+  .starters button {
+    padding: var(--s-3) var(--s-1);
+  }
+
+  .starter-title {
+    font-size: var(--t-md);
   }
 
   .starters svg {
     opacity: 0.6;
     transform: none;
+  }
+
+  .welcome-foot {
+    margin-top: var(--s-4);
+  }
+}
+
+/* The whole welcome fits without scrolling: it tightens in steps as the
+   space between the header and the composer shrinks (Safari's toolbars,
+   small phones, landscape, an open keyboard). */
+@container convo (max-height: 600px) {
+  .welcome {
+    padding-top: var(--s-2);
+    padding-bottom: var(--s-2);
+  }
+
+  .welcome .mark {
+    width: 44px;
+    height: 44px;
+    margin-bottom: var(--s-3);
+  }
+
+  .welcome h1 {
+    font-size: clamp(1.75rem, 7.5vw, 2.25rem);
+  }
+
+  .welcome-line {
+    margin-bottom: var(--s-4);
+  }
+
+  .starters button {
+    padding: var(--s-2) var(--s-1);
+  }
+}
+
+@container convo (max-height: 470px) {
+  .starter-note,
+  .welcome-foot {
+    display: none;
+  }
+
+  .welcome .mark {
+    width: 36px;
+    height: 36px;
+    margin-bottom: var(--s-2);
+  }
+
+  .welcome-line {
+    margin: var(--s-1) 0 var(--s-3);
+  }
+}
+
+@container convo (max-height: 340px) {
+  .welcome .mark,
+  .welcome-line {
+    display: none;
+  }
+
+  .welcome h1 {
+    margin-bottom: var(--s-3);
+    font-size: 1.5rem;
   }
 }

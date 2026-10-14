@@ -88,7 +88,7 @@
 
 @keyframes mic-breathe {
   50% {
-    box-shadow: 0 0 0 5px var(--gilt-wash);
+    box-shadow: 0 0 0 3px var(--gilt-wash);
   }
 }
 
@@ -119,7 +119,81 @@
   color: var(--ink);
 }
 
-.composer-status {
+.composer-note:empty {
+  display: none;
+}
+
+.composer-note {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin: 0;
+  padding: 0 var(--s-1);
+  font-size: var(--t-xs);
+  font-weight: var(--w-ui);
+  color: var(--muted);
+}
+
+.composer-note[data-tone="problem"] {
+  color: var(--clay);
+}
+
+.composer-note[data-tone="listening"] {
+  color: var(--gilt-ink);
+}
+
+/* Dictation is said inside the instrument row, so nothing changes height */
+.composer-live {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  /* Only ever the space left over: it never pushes the buttons */
+  flex: 1 1 0;
+  min-width: 0.75rem;
+  justify-content: flex-end;
+  font-size: var(--t-xs);
+  font-weight: var(--w-ui);
+  color: var(--gilt-ink);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.composer-live-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 22.4rem) {
+  .composer-live-text {
+    display: none;
+  }
+}
+
+.composer-dot {
+  flex: none;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--gilt);
+  animation: ember 1.6s ease-in-out infinite;
+}
+
+@keyframes ember {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* The instrument row keeps one height whatever is happening */
+.composer-bar {
+  min-height: var(--hit);
+}
+
+.composer-end {
+  flex: none;
+}
+
+.composer-hint {
   font-size: var(--t-xs);
   color: var(--muted);
   text-align: right;
@@ -130,13 +204,7 @@
   white-space: nowrap;
 }
 
-.composer-over {
-  color: var(--clay);
-}
 
-.composer-listening {
-  color: var(--gilt-ink);
-}
 
 @media (hover: hover) and (min-width: 48rem) {
   .composer:focus-within .composer-hint {
@@ -289,7 +357,7 @@
   color: var(--muted);
 }
 
-@media (max-width: 47.9375rem) {
+@media (max-width: 47.9375rem), (pointer: coarse) and (max-height: 31.25rem) {
   .composer {
     padding: var(--s-2) var(--s-2) var(--s-2) var(--s-3);
   }
@@ -299,8 +367,8 @@
     height: var(--hit);
   }
 
-  .composer-status:not(:has(.composer-over, .composer-listening)) {
-    display: none;
+  .composer-hint {
+    display: none !important;
   }
 
   /* On a phone the menu spans the slip and opens just above it */

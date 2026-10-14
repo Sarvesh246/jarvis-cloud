@@ -49,6 +49,8 @@
      The conversation itself never does. */
   overflow-x: hidden;
   overscroll-behavior: contain;
+  /* The welcome screen sizes itself to the room this area really has */
+  container: convo / size;
   scrollbar-gutter: stable both-edges;
   scrollbar-width: thin;
   scrollbar-color: var(--hairline-strong) transparent;
@@ -202,7 +204,7 @@
   }
 }
 
-@media (max-width: 47.9375rem) {
+@media (max-width: 47.9375rem), (pointer: coarse) and (max-height: 31.25rem) {
   .stage > * {
     --text: 100cqw;
   }

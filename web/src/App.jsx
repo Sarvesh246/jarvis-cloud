@@ -37,6 +37,8 @@ const freshChat = () => ({
 });
 
 const RAIL_KEY = "vaelo-rail-collapsed";
+/* A phone, upright or on its side: the layout that uses the drawer */
+const PHONE = "(max-width: 47.9375rem), (pointer: coarse) and (max-height: 31.25rem)";
 /* Who was signed in last, so the installed app can open your conversations
    to read while offline. Only the account id and display name are kept. */
 const LAST_USER_KEY = "vaelo-last-user";
@@ -1167,7 +1169,7 @@ export function App() {
           /* Swipe in from the left edge to open the conversations; swipe
              the open drawer back to close it, as in a native app. */
           const touch = event.touches[0];
-          if (innerWidth >= 768 || event.touches.length > 1) return;
+          if (!matchMedia(PHONE).matches || event.touches.length > 1) return;
           if (menu || touch.clientX < 28)
             swipe.current = { x: touch.clientX, y: touch.clientY, open: menu };
         }}

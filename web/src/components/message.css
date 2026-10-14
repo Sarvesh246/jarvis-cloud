@@ -603,7 +603,7 @@
   opacity: 0.4;
 }
 
-@media (max-width: 47.9375rem) {
+@media (max-width: 47.9375rem), (pointer: coarse) and (max-height: 31.25rem) {
   .message {
     grid-template-columns: minmax(0, 1fr);
     row-gap: var(--s-1);
