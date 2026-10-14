@@ -5,9 +5,9 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--s-4);
-  min-height: 4.25rem;
+  min-height: calc(4.25rem + var(--ios-edge, 0px));
   padding: 0 var(--s-6);
-  padding-top: env(safe-area-inset-top);
+  padding-top: calc(env(safe-area-inset-top) + var(--ios-edge, 0px));
 }
 
 /* A fine gilt line under the header, fading at both ends */
@@ -70,9 +70,9 @@
 
 @media (max-width: 47.9375rem), (pointer: coarse) and (max-height: 31.25rem) {
   .header {
-    min-height: 3.75rem;
+    min-height: calc(3.75rem + var(--ios-edge, 0px));
     padding: 0 var(--s-3);
-    padding-top: env(safe-area-inset-top);
+    padding-top: calc(env(safe-area-inset-top) + var(--ios-edge, 0px));
   }
 
   .header::after {

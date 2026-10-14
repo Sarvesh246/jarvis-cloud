@@ -45,6 +45,36 @@ summary,
   }
 }
 
+/* iOS 27 frosts the top edge of an installed web app, over whatever sits
+   there. WebKit leaves the edge clear when it finds an opaque fixed element
+   at the very top, so one paper-coloured strip holds it, and the headers
+   start a little lower so nothing tappable sits in the band either way.
+   (-webkit-touch-callout only exists in iOS WebKit.) */
+.ios-edge {
+  display: none;
+}
+
+@supports (-webkit-touch-callout: none) {
+  @media (display-mode: standalone) {
+    :root {
+      --ios-edge: 16px;
+    }
+
+    .ios-edge {
+      display: block;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      /* Above the page, below the scrim and the drawers that cover it */
+      z-index: 19;
+      height: calc(env(safe-area-inset-top) + var(--ios-edge));
+      background: var(--canvas);
+      pointer-events: none;
+    }
+  }
+}
+
 body {
   margin: 0;
   min-height: 100dvh;

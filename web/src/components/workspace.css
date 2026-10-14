@@ -56,8 +56,8 @@ body.resizing iframe {
   align-items: center;
   justify-content: space-between;
   gap: var(--s-3);
-  min-height: 4.25rem;
-  padding: env(safe-area-inset-top) var(--s-3) 0 var(--s-5);
+  min-height: calc(4.25rem + var(--ios-edge, 0px));
+  padding: calc(env(safe-area-inset-top) + var(--ios-edge, 0px)) var(--s-3) 0 var(--s-5);
   border-bottom: 1px solid var(--hairline);
 }
 
