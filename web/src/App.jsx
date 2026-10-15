@@ -28,6 +28,7 @@ import { Opening, SignIn } from "./components/SignIn.jsx";
 import { toolInfo } from "./lib/tools.js";
 import { mergePlan, readPlan } from "./lib/plan.js";
 import { classifyError } from "./lib/errors.js";
+import { JOIN_WINDOW, continueRequest, joinOnto, retryRequest } from "./lib/continuation.js";
 import { PHONE } from "./lib/use-phone.js";
 import {
   IMAGE_LIMIT,
@@ -88,8 +89,10 @@ function writeLiveReplies(value) {
   }
 }
 
-function rememberLiveReply(id, chatId) {
-  writeLiveReplies({ ...readLiveReplies(), [id]: { chatId, at: Date.now() } });
+function rememberLiveReply(id, chatId, run = id) {
+  const previous = readLiveReplies()[id];
+  const at = previous?.run === run ? previous.at : Date.now();
+  writeLiveReplies({ ...readLiveReplies(), [id]: { chatId, run, at } });
 }
 
 function forgetLiveReply(id) {
@@ -119,22 +122,29 @@ function pause(ms, signal) {
   });
 }
 
-/* Nothing is gained reading while a phone has the page asleep. */
+/* Nothing is gained asking while a phone has the page asleep or has no
+   network; the reply carries on at Vaelo meanwhile. */
 function untilVisible(signal) {
+  const ready = () => document.visibilityState === "visible" && navigator.onLine !== false;
   return new Promise((resolve, reject) => {
     if (signal.aborted) return reject(stopped());
-    if (document.visibilityState === "visible") return resolve();
-    function seen() {
-      if (document.visibilityState !== "visible") return;
-      removeEventListener("visibilitychange", seen);
-      signal.removeEventListener("abort", quit);
+    if (ready()) return resolve();
+    function check() {
+      if (!ready()) return;
+      done();
       resolve();
     }
     function quit() {
-      removeEventListener("visibilitychange", seen);
+      done();
       reject(stopped());
     }
-    addEventListener("visibilitychange", seen);
+    function done() {
+      removeEventListener("visibilitychange", check);
+      removeEventListener("online", check);
+      signal.removeEventListener("abort", quit);
+    }
+    addEventListener("visibilitychange", check);
+    addEventListener("online", check);
     signal.addEventListener("abort", quit, { once: true });
   });
 }
@@ -367,6 +377,8 @@ export function App() {
   /* Full-size images stay in memory only; conversations keep thumbnails. */
   const imageData = useRef(new Map());
   const settleTimer = useRef(0);
+  const chatsRef = useRef(chats);
+  chatsRef.current = chats;
   const active = chats.find((chat) => chat.id === activeId);
   const messages = active?.messages || [];
 
@@ -1042,13 +1054,7 @@ export function App() {
         },
       ];
     }
-    const sendable = messages.filter(
-      (message) => (message.content || message.attachments?.length) && !message.failed,
-    );
-    const wired = sendable.map((message, i) =>
-      wireMessage(message, { latest: i === sendable.length - 1, images: imageData.current }),
-    ).filter((message) => (typeof message.content === "string" ? message.content.trim() : message.content.length));
-    const { messages: input, dropped } = fitHistory(wired);
+    const { messages: input, dropped } = wireHistory(messages);
     const lastUser = messages[messages.length - 1];
     const context = {
       turns: input.length - 1,
@@ -1101,12 +1107,39 @@ export function App() {
     });
   }
 
+  /* The conversation as it is sent: what can be sent, wired, and fitted. */
+  function wireHistory(messages) {
+    const sendable = messages.filter(
+      (message) => (message.content || message.attachments?.length) && !message.failed,
+    );
+    const wired = sendable
+      .map((message, i) =>
+        wireMessage(message, { latest: i === sendable.length - 1, images: imageData.current }),
+      )
+      .filter((message) =>
+        typeof message.content === "string" ? message.content.trim() : message.content.length,
+      );
+    return fitHistory(wired);
+  }
+
+  /* The request behind a reply, rebuilt from the saved conversation (after
+     the app was reopened, the original is no longer in memory). */
+  function requestFor(chatId, id) {
+    const chat = chatsRef.current.find((item) => item.id === chatId);
+    const at = chat?.messages.findIndex((message) => message.id === id) ?? -1;
+    if (at < 1) return null;
+    const { messages } = wireHistory(chat.messages.slice(0, at));
+    return messages.length && messages.at(-1).role === "user"
+      ? { conversationId: chatId, runId: id, messages }
+      : null;
+  }
+
   /* One reply, followed until it ends. The reply itself runs on the relay
      in front of Hermes and carries on without this page, so a dropped
      connection, a locked phone or a closed app only means picking it back
      up after the last event the page saw. `start` begins a new reply;
      `resumeFrom` picks one up that was running when the app last closed. */
-  async function followReply({ chatId, id, title, start = null, resumeFrom = null }) {
+  async function followReply({ chatId, id, title, start = null, resumeFrom = null, run = id }) {
     setBusy(true);
     setError("");
     setLivePhase("thinking");
@@ -1115,8 +1148,12 @@ export function App() {
     abort.current = controller;
     replyId.current = id;
     stopping.current = false;
-    rememberLiveReply(id, chatId);
+    rememberLiveReply(id, chatId, run);
     let completed = false;
+    /* A continuation's opening is held back until it can be joined onto
+       the words already shown without repeating any of them. */
+    let joining = false;
+    let joinBuffer = "";
     let received = resumeFrom?.content || "";
     let reasoning = resumeFrom?.reasoning || "";
     let succeeded = false;
@@ -1136,7 +1173,7 @@ export function App() {
         stopped: false,
         note: undefined,
         errorKind: undefined,
-        live: "Picking up where Vaelo left off",
+        live: "",
       });
     /* Words are committed once per frame, not once per network fragment. */
     const flush = () => {
@@ -1177,7 +1214,22 @@ export function App() {
           code: data.code,
           fromServer: true,
         });
-      if (name === "jarvis.complete") completed = true;
+      if (name === "jarvis.complete") {
+        completed = true;
+        if (joining && joinBuffer) {
+          received += joinOnto(received, joinBuffer);
+          schedule();
+        }
+        joining = false;
+        joinBuffer = "";
+      }
+      /* The answer was cut off and Vaelo is carrying it on: what follows
+         joins the words already written. */
+      if (name === "jarvis.continue") {
+        joining = true;
+        joinBuffer = "";
+        return;
+      }
       /* The run ended without an answer and the proxy is asking again;
          anything that stood in for an answer so far is set aside. */
       if (name === "jarvis.retry") {
@@ -1242,8 +1294,16 @@ export function App() {
         schedule();
       }
       if (choice?.delta?.content) {
+        let piece = choice.delta.content;
+        if (joining) {
+          joinBuffer += piece;
+          if (joinBuffer.length < JOIN_WINDOW && !choice.finish_reason) return;
+          piece = joinOnto(received, joinBuffer);
+          joining = false;
+          joinBuffer = "";
+        }
         if (!received) updateMessage({ thoughtMs: Date.now() - startedAt, live: "" });
-        received += choice.delta.content;
+        received += piece;
         schedule();
         setLivePhase("speaking");
       }
@@ -1277,9 +1337,11 @@ export function App() {
       /* Ask, read, and when the connection drops, ask again from the last
          event that arrived. Only the reply's own end, or Stop, ends this. */
       let started = !start;
+      let body = start;
       let busyTries = 0;
-      let restarted = false;
+      let recoveries = 0;
       let drops = 0;
+      let stalledSince = 0;
       while (true) {
         const attempt = new AbortController();
         const endAttempt = () => attempt.abort();
@@ -1303,7 +1365,7 @@ export function App() {
         }, 5000);
         try {
           const response = started
-            ? await fetch(`/api/chat?run=${encodeURIComponent(id)}&after=${seq}`, {
+            ? await fetch(`/api/chat?run=${encodeURIComponent(run)}&after=${seq}`, {
                 signal: attempt.signal,
                 cache: "no-store",
               })
@@ -1314,7 +1376,7 @@ export function App() {
                   "Content-Type": "application/json",
                   "X-CSRF-Token": session.csrf,
                 },
-                body: JSON.stringify(start),
+                body: JSON.stringify(body),
               });
           if (!response.ok) {
             const result = await response.json().catch(() => ({}));
@@ -1366,27 +1428,50 @@ export function App() {
         } catch (err) {
           if (controller.signal.aborted) throw err;
           if (err.fromServer) {
-            /* The run hadn't reached Vaelo before the first connection
-               dropped: starting it again is safe, it has the same id. */
-            if (err.code === "run_missing" && start && seq < 0 && !restarted) {
-              restarted = true;
-              started = false;
-              continue;
+            /* Vaelo restarted (a deploy, a crash) and this reply's run went
+               with it. Nothing is lost on the page: the work carries on in a
+               new run, which continues the answer from where it stopped, or
+               picks the research back up if no answer was written yet. */
+            if (err.code === "run_missing" && recoveries < 3) {
+              const original = body || requestFor(chatId, id);
+              if (original) {
+                recoveries += 1;
+                const untouched = seq < 0 && !received && run === id;
+                if (!untouched) {
+                  run = crypto.randomUUID();
+                  if (hasAnswer(received)) {
+                    body = continueRequest(original, received, run);
+                    joining = true;
+                    joinBuffer = "";
+                  } else {
+                    const done = (chatsRef.current
+                      .find((chat) => chat.id === chatId)
+                      ?.messages.find((message) => message.id === id)?.activity || [])
+                      .map((step) => step.label || step.tool)
+                      .filter(Boolean);
+                    body = retryRequest(original, done, run);
+                  }
+                  rememberLiveReply(id, chatId, run);
+                  seq = -1;
+                  fromScratch = false;
+                } else body = original;
+                started = false;
+                continue;
+              }
             }
             /* A busy cloud (it runs one reply at a time) is waited out
-               quietly a couple of times before it is reported. */
+               quietly, for a few minutes, before it is reported. */
             const busyNow =
-              start &&
+              body &&
               !received &&
               !pendingApproval &&
-              busyTries < 2 &&
+              busyTries < 12 &&
               classifyError({ name: err.name, message: err.message, status: err.status }).kind === "busy";
             if (!busyNow) throw err;
             busyTries += 1;
             started = false;
-            updateMessage({ live: "Vaelo is finishing something else. Trying again in a moment" });
-            await pause(busyTries > 1 ? 8000 : 4000, controller.signal);
-            updateMessage({ live: "" });
+            updateMessage({ live: "Vaelo is finishing something else first" });
+            await pause(busyTries > 2 ? 15000 : 5000, controller.signal);
             continue;
           }
           /* Anything else is the connection, not the reply. */
@@ -1397,15 +1482,23 @@ export function App() {
           controller.signal.removeEventListener("abort", endAttempt);
         }
         if (completed) break;
-        drops = progressed || resumeAsked ? 0 : drops + 1;
-        if (drops > 20) {
+        /* Reconnecting is quiet: the reply on screen simply carries on.
+           Only a quarter of an hour without any progress gives up, and even
+           then the reply is picked up the next time the app opens. */
+        if (progressed) {
+          drops = 0;
+          stalledSince = 0;
+        } else {
+          drops += 1;
+          stalledSince ||= Date.now();
+        }
+        if (stalledSince && Date.now() - stalledSince > 15 * 60 * 1000) {
           lost = true;
           throw Object.assign(new Error("The connection to Vaelo keeps dropping."), { dropped: true });
         }
-        if (drops > 1) updateMessage({ live: "Reconnecting to Vaelo" });
         await untilVisible(controller.signal);
-        if (drops) await pause(Math.min(500 * 2 ** (drops - 1), 5000), controller.signal);
-        if (drops > 1) updateMessage({ live: "" });
+        if (drops && !(resumeAsked && drops === 1))
+          await pause(Math.min(500 * 2 ** (drops - 1), 10000), controller.signal);
       }
       if (!hasAnswer(received))
         throw new Error("The response ended before Vaelo delivered an answer.");
@@ -1524,6 +1617,7 @@ export function App() {
       followReply({
         chatId: chat.id,
         id,
+        run: typeof entry.run === "string" ? entry.run : id,
         title: chat.title,
         resumeFrom: {
           content: message.content || "",

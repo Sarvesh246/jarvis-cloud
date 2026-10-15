@@ -341,7 +341,7 @@ class RelayTests(unittest.TestCase):
 
     def test_an_empty_recovery_is_reported_plainly(self):
         empty = [chunk("(empty)", "stop"), "data: [DONE]"]
-        _, relay, port = self.boot([empty, empty])
+        _, relay, port = self.boot([empty, empty, empty])
         self.start(port)
         self.finished(relay)
         _, frames = self.events(port)
@@ -358,8 +358,39 @@ class RelayTests(unittest.TestCase):
         _, frames = self.events(port)
         self.assertEqual(frames[-1][1], "jarvis.complete")
 
+    def test_an_answer_cut_off_partway_is_continued_from_where_it_stopped(self):
+        hermes, relay, port = self.boot([
+            [chunk("The first half of the answer, "),
+             'data: {"choices":[{"delta":{},"finish_reason":"error"}],"error":{"message":"provider failed"}}'],
+            [chunk("and the second half.", "stop"), "data: [DONE]"],
+        ])
+        self.start(port)
+        self.finished(relay)
+        follow_up = hermes.requests[1]["body"]["messages"]
+        self.assertEqual(follow_up[-2], {"role": "assistant", "content": "The first half of the answer, "})
+        self.assertIn("Continue it from exactly where it stops", follow_up[-1]["content"])
+        _, frames = self.events(port)
+        text = "".join(data for _, _, data in frames)
+        self.assertNotIn("provider failed", text)  # the reader never sees the failure
+        names = [name for _, name, _ in frames]
+        self.assertIn("jarvis.continue", names)
+        self.assertEqual(names[-1], "jarvis.complete")
+        self.assertIn("second half", text)
+
+    def test_a_dropped_stream_mid_answer_is_continued_too(self):
+        hermes, relay, port = self.boot([
+            [chunk("Begun but never finished")],
+            [chunk(" and now finished.", "stop"), "data: [DONE]"],
+        ])
+        self.start(port)
+        self.finished(relay)
+        _, frames = self.events(port)
+        self.assertEqual(frames[-1][1], "jarvis.complete")
+        self.assertEqual(len(hermes.requests), 2)
+
     def test_an_answer_cut_off_by_hermes_is_never_reported_as_success(self):
-        _, relay, port = self.boot([[chunk("Partial answer")]])
+        cut = [chunk("Partial answer")]
+        _, relay, port = self.boot([cut, cut, cut])
         self.start(port)
         self.finished(relay)
         _, frames = self.events(port)

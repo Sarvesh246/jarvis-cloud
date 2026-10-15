@@ -35,8 +35,10 @@ RUN_BYTES = 6 * 1024 * 1024
 TOTAL_BYTES = 32 * 1024 * 1024
 KEEPALIVE_SECONDS = 10
 BODY_LIMIT = 8 * 1024 * 1024
-# A run that ended without an answer gets one more try, if this much time is left.
+# A run that ended without an answer, or was cut off mid-answer, is tried again (up to three
+# attempts in all) while this much time is left.
 RECOVERY_MIN_SECONDS = 60
+ATTEMPTS = 3
 NO_ANSWER = "Vaelo finished working but the model didn’t write an answer. Try again; a second go usually works."
 HOP_HEADERS = {
     "connection",
@@ -59,6 +61,24 @@ def recovery_note(tools):
         f"{done} Write the full answer now from what you know and found; use at most one or two "
         "more tool calls, and only if the answer truly depends on them.]"
     )
+
+
+CONTINUE_NOTE = (
+    "[Vaelo request: your reply above was cut off partway. Continue it from exactly where it "
+    "stops: don't repeat anything already written, don't start over, and don't mention the "
+    "interruption. Use more tool calls only if the rest truly depends on them.]"
+)
+# How much of a cut-off answer is sent back so the model can carry it on.
+ANSWER_KEEP = 24000
+
+
+def continuation(messages, answer):
+    """The conversation with the partial answer as the assistant's own words, so the model
+    carries on mid-thought instead of starting again."""
+    if len(answer) > ANSWER_KEEP:
+        answer = "[… the start of this reply is omitted …]\n\n" + answer[-ANSWER_KEEP:]
+    note = {"role": "user", "content": CONTINUE_NOTE}
+    return [*messages, {"role": "assistant", "content": answer}, note]
 
 
 def with_note(content, note):
@@ -271,19 +291,11 @@ class Relay:
             "status": 429,
         }
 
-    def relay(self, run, response):
+    def relay(self, run, response, seen):
         """Keep Hermes's frames as they are, reading only enough to know whether an answer
-        arrived and how the run ended. A late failure with no answer yet is held back, so a
-        recovery can still replace it."""
-        seen = {
-            "content": "",
-            "approval": False,
-            "held": None,
-            "tools": [],
-            "finished": False,
-            "failed": False,
-            "dropped": False,
-        }
+        arrived and how the attempt ended. Failure frames are held back, so a recovery or a
+        continuation can still take their place."""
+        seen.update(finished=False, failed=False, dropped=False, held=None)
         lines = []
         try:
             for raw in iter(response.readline, b""):
@@ -343,16 +355,17 @@ class Relay:
         delta = choice.get("delta") if isinstance(choice.get("delta"), dict) else {}
         content = delta.get("content")
         if isinstance(content, str):
-            # A short prefix is enough to tell an empty reply from a real one.
+            # A short prefix tells an empty reply from a real one; the answer itself is kept
+            # (bounded) so a cut-off reply can be continued from where it stopped.
             seen["content"] = (seen["content"] + content).lstrip()[:64]
+            seen["answer"] = (seen["answer"] + content)[-ANSWER_KEEP * 2:]
         finish = choice.get("finish_reason")
         if finish in ("stop", "length"):
             seen["finished"] = True
         if finish == "error" or (payload.get("error") and finish != "length"):
             seen["failed"] = True
-            if not answered(seen):
-                seen["held"] = frame
-                return
+            seen["held"] = frame
+            return
         thinking_only = (
             not isinstance(content, str)
             and delta.get("reasoning_content")
@@ -362,93 +375,62 @@ class Relay:
         run.emit(frame, optional=bool(thinking_only))
 
     def execute(self, run, body):
+        """Run the reply to a written answer. An attempt that ends with nothing written is
+        asked again for the write-up; one cut off partway (a provider failing mid-answer, a
+        dropped stream) is continued from where it stopped. The reader sees one reply."""
         started = self.clock()
         messages = body["messages"]
         timer = threading.Timer(RUN_LIMIT_SECONDS, self.time_out, args=(run,))
         timer.daemon = True
         timer.start()
+        seen = {"content": "", "answer": "", "approval": False, "tools": [], "held": None,
+                "finished": False, "failed": False, "dropped": False}
         try:
             run.event("jarvis.status", {"message": "Vaelo is working…"})
-            response, failure = self.open(run, body, messages)
-            if failure:
-                run.event("jarvis.error", failure)
-                return run.finish("error")
-            if response is None:
-                return run.finish("stopped")
-            seen = self.relay(run, response)
-            left = RUN_LIMIT_SECONDS - (self.clock() - started)
-            if (
-                not run.stopped
-                and not seen["approval"]
-                and not answered(seen)
-                and left >= RECOVERY_MIN_SECONDS
-            ):
-                run.event("jarvis.retry", {"message": "Writing up what Vaelo found"})
-                retry = [
-                    *messages[:-1],
-                    {
-                        **messages[-1],
-                        "content": with_note(
-                            messages[-1]["content"], recovery_note(seen["tools"])
-                        ),
-                    },
-                ]
-                response, failure = self.open(run, body, retry, recovering=True)
+            request = messages
+            for attempt in range(ATTEMPTS):
+                response, failure = self.open(run, body, request, recovering=attempt > 0)
                 if failure:
                     run.event("jarvis.error", failure)
                     return run.finish("error")
                 if response is None:
                     return run.finish("stopped")
-                seen = self.relay(run, response)
+                self.relay(run, response, seen)
+                cut_off = seen["dropped"] or seen["failed"] or not seen["finished"]
+                left = RUN_LIMIT_SECONDS - (self.clock() - started)
+                if run.stopped or seen["approval"] or (answered(seen) and not cut_off) \
+                        or attempt == ATTEMPTS - 1 or left < RECOVERY_MIN_SECONDS:
+                    break
+                if answered(seen):
+                    run.event("jarvis.continue", {})
+                    request = continuation(messages, seen["answer"])
+                else:
+                    run.event("jarvis.retry", {"message": "Writing up what Vaelo found"})
+                    seen.update(content="", answer="")
+                    request = [*messages[:-1], {**messages[-1], "content": with_note(
+                        messages[-1]["content"], recovery_note(seen["tools"]))}]
             if run.stopped:
                 if run.timed_out:
-                    run.event(
-                        "jarvis.error",
-                        {
-                            "code": "time_limit",
-                            "message": "This reply ran past fifteen minutes. What arrived is kept; choose Continue to pick up from there.",
-                        },
-                    )
+                    run.event("jarvis.error", {"code": "time_limit", "message":
+                              "This reply ran past fifteen minutes. What arrived is kept; choose Continue to pick up from there."})
                     return run.finish("error")
                 return run.finish("stopped")
             if not answered(seen) and not seen["approval"]:
                 if seen["held"]:
                     run.emit(seen["held"])
-                    run.event(
-                        "jarvis.error",
-                        {
-                            "message": "Vaelo stopped before finishing. Please try again."
-                        },
-                    )
+                    run.event("jarvis.error", {"message": "Vaelo stopped before finishing. Please try again."})
                 elif seen["dropped"]:
-                    run.event(
-                        "jarvis.error",
-                        {
-                            "message": "Vaelo’s server stopped before the answer. Please try again."
-                        },
-                    )
+                    run.event("jarvis.error", {"message": "Vaelo’s server stopped before the answer. Please try again."})
                 else:
-                    run.event(
-                        "jarvis.error", {"code": "no_answer", "message": NO_ANSWER}
-                    )
+                    run.event("jarvis.error", {"code": "no_answer", "message": NO_ANSWER})
                 return run.finish("error")
-            if not seen["approval"] and (
-                seen["dropped"] or not seen["finished"] or seen["failed"]
-            ):
-                run.event(
-                    "jarvis.error",
-                    {
-                        "message": "Vaelo’s server stopped before the answer finished. What arrived is kept; please retry or continue."
-                    },
-                )
+            if not seen["approval"] and (seen["dropped"] or not seen["finished"] or seen["failed"]):
+                run.event("jarvis.error", {"message": "Vaelo’s server stopped before the answer finished. What arrived is kept; please retry or continue."})
                 return run.finish("error")
             run.event("jarvis.complete", {"ok": True})
             run.finish("complete")
         except Exception:
-            run.event(
-                "jarvis.error",
-                {"message": "Vaelo hit an unexpected problem. Please try again."},
-            )
+            run.event("jarvis.error", {"message": "Vaelo hit an unexpected problem. Please try again."})
             run.finish("error")
         finally:
             timer.cancel()

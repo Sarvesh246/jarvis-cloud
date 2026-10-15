@@ -234,17 +234,24 @@ async function startRun(cfg, user, input, signal, request) {
 /* Pass the relay's numbered frames through untouched, until the run ends,
    the page leaves, or this function's time is nearly up. */
 async function followRun(res, cfg, user, runId, after, signal, request, deadline) {
-  const response = await request(`${base(cfg)}/vaelo/runs/${runId}/events?after=${after}`, {
-    signal: AbortSignal.any([signal, AbortSignal.timeout(Math.max(1, deadline - Date.now()))]),
-    headers: relayHeaders(cfg, user),
-  });
+  let response;
+  try {
+    response = await request(`${base(cfg)}/vaelo/runs/${runId}/events?after=${after}`, {
+      signal: AbortSignal.any([signal, AbortSignal.timeout(Math.max(1, deadline - Date.now()))]),
+      headers: relayHeaders(cfg, user),
+    });
+  } catch {
+    return signal.aborted ? "left" : "cut";
+  }
   if (response.status === 404) {
     await response.body?.cancel();
     return "missing";
   }
+  /* Render restarting or briefly unreachable: not the reply's failure. The
+     page waits a moment and asks again. */
   if (!response.ok || !response.body) {
     await response.body?.cancel();
-    throw new HttpError(503, "Vaelo is temporarily unavailable. Please try again.");
+    return "cut";
   }
   const decoder = new TextDecoder();
   let tail = "";
