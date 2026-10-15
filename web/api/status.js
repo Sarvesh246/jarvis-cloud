@@ -5,7 +5,11 @@ import {
   fail,
   HttpError,
 } from "../server/security.js";
+import { probeBackend, wakeBackend } from "../server/backend-readiness.js";
 
+/* Asking whether Vaelo is ready also starts waking it, so by the time a
+   message is written the cloud is usually up. A sleeping or booting server
+   is "starting", not unavailable; the page polls until it is ready. */
 export default async function handler(req, res) {
   try {
     if (req.method !== "GET") throw new HttpError(405, "Method not allowed.");
@@ -13,14 +17,9 @@ export default async function handler(req, res) {
     await authorize(req, cfg);
     if (!cfg.backend.startsWith("https://") || !cfg.apiKey)
       throw new HttpError(503, "Cloud connection is not configured.");
-    const response = await fetch(`${cfg.backend.replace(/\/$/, "")}/health`, {
-      signal: AbortSignal.timeout(65000),
-    });
-    const result = await response.json();
-    json(res, 200, {
-      ready: response.ok && result.status === "ok",
-      status: result.status || "unavailable",
-    });
+    if (await probeBackend(cfg.backend)) return json(res, 200, { ready: true, status: "ok" });
+    await wakeBackend(cfg.backend);
+    json(res, 200, { ready: false, status: "starting" });
   } catch (error) {
     fail(
       res,

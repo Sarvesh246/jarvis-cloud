@@ -5,7 +5,11 @@ import json
 import os
 from pathlib import Path
 import shutil
+import subprocess
+import sys
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.request import Request, urlopen
 
 HERE = Path(__file__).resolve().parent
 DEFAULT_BASE_URL = "https://openrouter.ai/api/v1"
@@ -15,10 +19,35 @@ GEMINI_NATIVE_URL = "https://generativelanguage.googleapis.com/v1beta"
 DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
 
 
+def freellmapi_url(environ):
+    """The router's /v1 base, or "" when it is unset or not served over HTTPS."""
+    url = environ.get("FREELLMAPI_URL", "").strip().rstrip("/")
+    if not url.startswith("https://") or not environ.get("FREELLMAPI_API_KEY", "").strip():
+        return ""
+    return url if url.endswith("/v1") else url + "/v1"
+
+
 def configuration(environ):
     cfg = json.loads((HERE / "profile.json").read_text(encoding="utf-8"))
     cfg["providers"]["cloud-openrouter"]["api"] = DEFAULT_BASE_URL
     cfg["fallback_providers"] = []
+    # A reachable FreeLLMAPI router (the same pool local Jarvis uses) leads when it is
+    # configured: it already fails over across its own providers, so OpenRouter's 50 daily
+    # requests become the first fallback instead of the whole budget. When the router is
+    # down (the PC hosting it is off, say) Hermes falls through to the chain below.
+    router = freellmapi_url(environ)
+    if router:
+        cfg["providers"]["cloud-freellmapi"] = {
+            "name": "FreeLLMAPI router", "api": router, "api_key": "${FREELLMAPI_API_KEY}",
+            "transport": "chat_completions", "default_model": "auto", "models": ["auto"],
+            "context_length": 128000, "request_timeout_seconds": 180, "stale_timeout_seconds": 150,
+        }
+        cfg["model"] = {"provider": "custom:cloud-freellmapi", "default": "auto", "context_length": 128000}
+        cfg["fallback_providers"].append({
+            "provider": "custom:cloud-openrouter", "model": "openrouter/free",
+            "base_url": DEFAULT_BASE_URL, "api_key": "${OPENROUTER_API_KEY}",
+            "api_mode": "chat_completions",
+        })
     # Groq is deliberately absent. Its free tier caps tokens per minute below the size of a
     # single agent request (system prompt + tool schemas + history) and answers with HTTP 413.
     # Hermes reads any 413 as "conversation too large", compresses the history away and ends
@@ -32,6 +61,8 @@ def configuration(environ):
                 "name": provider, "api": url, "api_key": "${" + variable + "}",
                 "transport": "chat_completions", "default_model": model,
                 "models": [model],
+                # A 550B model is slow to its first token on a long context.
+                "request_timeout_seconds": 180, "stale_timeout_seconds": 150,
             }
             cfg["fallback_providers"].append({
                 "provider": "custom:" + provider, "model": model,
@@ -98,6 +129,41 @@ def setup_server(port, missing):
     return ThreadingHTTPServer(("0.0.0.0", port), Handler)
 
 
+KEEP_AWAKE_SECONDS = 600
+
+
+def keep_awake_url(environ):
+    """Render spins a free service down after 15 idle minutes, and waking it takes minutes.
+    Render sets RENDER_EXTERNAL_URL; a request to it arrives through Render's edge, which
+    counts as inbound traffic. KEEP_AWAKE=0 turns this off (one always-on free service uses
+    about 744 of the workspace's 750 free hours a month)."""
+    if environ.get("KEEP_AWAKE", "").strip().lower() in ("0", "false", "off", "no"):
+        return ""
+    url = environ.get("RENDER_EXTERNAL_URL", "").strip().rstrip("/")
+    return url + "/health" if url.startswith("https://") else ""
+
+
+def keep_awake(url, interval=KEEP_AWAKE_SECONDS, sleep=time.sleep, request=urlopen):
+    while True:
+        sleep(interval)
+        try:
+            with request(Request(url, headers={"User-Agent": "vaelo-keep-awake"}), timeout=30) as response:
+                response.read(256)
+        except Exception:
+            pass  # a missed ping only means the next request may wake the service
+
+
+def start_keep_awake(environ):
+    url = keep_awake_url(environ)
+    if not url:
+        return None
+    # A separate process, because the gateway replaces this one through exec.
+    return subprocess.Popen(
+        [sys.executable, str(Path(__file__).resolve()), "--keep-awake", url],
+        stdin=subprocess.DEVNULL, start_new_session=True,
+    )
+
+
 def main():
     port = int(os.environ.get("PORT", "10000"))
     if not 1 <= port <= 65535:
@@ -117,9 +183,14 @@ def main():
     executable = shutil.which("hermes")
     if not executable:
         raise SystemExit("The Hermes executable is missing from the container")
+    if start_keep_awake(os.environ):
+        print("Keeping the service awake between conversations", flush=True)
     print("Starting the private Jarvis API gateway", flush=True)
     os.execv(executable, [executable, "gateway", "run"])
 
 
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) == 3 and sys.argv[1] == "--keep-awake":
+        keep_awake(sys.argv[2])
+    else:
+        main()

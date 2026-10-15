@@ -8,12 +8,12 @@
       "transport": "chat_completions",
       "default_model": "openrouter/free",
       "context_length": 200000,
-      "request_timeout_seconds": 60,
-      "stale_timeout_seconds": 45,
+      "request_timeout_seconds": 180,
+      "stale_timeout_seconds": 150,
       "models": ["openrouter/free"]
     }
   },
-  "agent": {"max_turns": 12},
+  "agent": {"max_turns": 60},
   "gateway": {
     "max_concurrent_runs": 1,
     "api_server": {"enabled": true, "max_concurrent_runs": 1, "history_tool_output_max_chars": 12000}
@@ -21,7 +21,7 @@
   "platform_toolsets": {
     "api_server": ["file", "terminal", "web", "memory", "session_search", "skills", "todo"]
   },
-  "terminal": {"backend": "local", "cwd": "/opt/data/workspace", "timeout": 60},
+  "terminal": {"backend": "local", "cwd": "/opt/data/workspace", "timeout": 180},
   "memory": {"memory_enabled": true, "user_profile_enabled": true},
   "skills": {"creation_nudge_interval": 15},
   "auxiliary": {"background_review": {"enabled": false}},

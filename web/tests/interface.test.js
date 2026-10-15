@@ -329,14 +329,15 @@ test("approvals accept only the web-safe choices and reach the exact run", async
 });
 
 test("long conversations send the newest turns that fit, starting with your message", () => {
-  const turns = Array.from({ length: 10 }, (_, i) => ({
+  const turns = Array.from({ length: 20 }, (_, i) => ({
     role: i % 2 ? "assistant" : "user",
     content: "x".repeat(10000),
   }));
   const { messages, dropped } = fitHistory(turns);
   assert.equal(messages[0].role, "user");
-  assert.ok(messages.reduce((n, m) => n + m.content.length, 0) <= 46000);
-  assert.equal(messages.length + dropped, 10);
+  assert.ok(messages.reduce((n, m) => n + m.content.length, 0) <= 110000);
+  assert.ok(dropped > 0);
+  assert.equal(messages.length + dropped, 20);
   assert.equal(messages.at(-1), turns.at(-1));
 });
 

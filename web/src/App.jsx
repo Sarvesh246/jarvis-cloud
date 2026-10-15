@@ -56,6 +56,11 @@ const LAST_USER_KEY = "vaelo-last-user";
    a reload but not a fresh launch, which is exactly the line we want. */
 const OPEN_CHAT_KEY = "vaelo-open-chat";
 
+/* A sleeping free instance can take a few minutes to boot. Render puts it to
+   sleep after 15 idle minutes, so an older "ready" is checked again. */
+const WAKE_PATIENCE_MS = 5 * 60 * 1000;
+const STALE_READY_MS = 12 * 60 * 1000;
+
 function readOpenChat() {
   try {
     return sessionStorage.getItem(OPEN_CHAT_KEY);
@@ -245,6 +250,8 @@ export function App() {
   const [settling, setSettling] = useState(false);
   const [dictating, setDictating] = useState(false);
   const [cloud, setCloud] = useState("Connecting");
+  const warming = useRef(null);
+  const lastReady = useRef(0);
   const [menu, setMenu] = useState(false);
   const [collapsed, setCollapsed] = useState(readCollapsed);
   const [storageIssue, setStorageIssue] = useState(false);
@@ -442,20 +449,51 @@ export function App() {
       setActiveId(chats[0].id);
   }, [chats, activeId]);
 
+  /* The free cloud sleeps when idle. Asking for its status wakes it, so the
+     page asks as soon as you arrive or come back, and keeps asking quietly
+     while it boots. Only minutes of silence count as out of reach. */
+  function warmCloud() {
+    if (warming.current) return warming.current;
+    const started = Date.now();
+    warming.current = (async () => {
+      while (true) {
+        try {
+          const result = await request("/api/status");
+          if (result.ready) {
+            lastReady.current = Date.now();
+            setCloud("Connected");
+            return true;
+          }
+          setCloud((current) => (current === "Unavailable" ? current : "Starting"));
+        } catch {
+          /* a function cold start or a blip; the next pass decides */
+        }
+        if (Date.now() - started > WAKE_PATIENCE_MS) {
+          setCloud("Unavailable");
+          return false;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 4000));
+      }
+    })().finally(() => {
+      warming.current = null;
+    });
+    return warming.current;
+  }
+
   useEffect(() => {
     if (!session?.user || session.offline) return;
-    let mounted = true;
-    request("/api/status")
-      .then((result) => {
-        if (mounted) setCloud(result.ready ? "Connected" : "Starting");
-      })
-      .catch(() => {
-        if (mounted) setCloud("Unavailable");
-      });
-    return () => {
-      mounted = false;
+    warmCloud();
+    const back = () => {
+      if (document.visibilityState === "visible" && Date.now() - lastReady.current > STALE_READY_MS)
+        warmCloud();
     };
-  }, [session?.user?.sub]);
+    addEventListener("visibilitychange", back);
+    addEventListener("focus", back);
+    return () => {
+      removeEventListener("visibilitychange", back);
+      removeEventListener("focus", back);
+    };
+  }, [session?.user?.sub, session?.offline]);
 
   /* Google draws its own button in an iframe. Until it appears there is a
      visible placeholder, and if it never does (a content blocker, a hung
@@ -1018,8 +1056,12 @@ export function App() {
         });
       if (name === "jarvis.complete") completed = true;
       if (name === "jarvis.status") {
-        setLivePhase(/wake|idle/i.test(data.message || "") ? "waking" : "thinking");
-        setCloud("Connected");
+        const waking = /wake|idle/i.test(data.message || "");
+        setLivePhase(waking ? "waking" : "thinking");
+        if (/working/i.test(data.message || "")) {
+          lastReady.current = Date.now();
+          setCloud("Connected");
+        }
       }
       if (name === "hermes.status") {
         const note = String(data.text || data.message || "").trim();
@@ -1084,6 +1126,21 @@ export function App() {
         );
     }
     try {
+      /* Waiting for a sleeping cloud happens here, in the page, so the
+         reply gets the request's whole time limit once it starts. */
+      if (Date.now() - lastReady.current > STALE_READY_MS) {
+        setLivePhase("waking");
+        updateMessage({ live: "Waking Vaelo up. This can take a minute" });
+        await new Promise((resolve, reject) => {
+          const stop = () => reject(Object.assign(new Error("Stopped"), { name: "AbortError" }));
+          controller.signal.addEventListener("abort", stop, { once: true });
+          warmCloud().then(resolve, resolve).finally(() =>
+            controller.signal.removeEventListener("abort", stop),
+          );
+        });
+        updateMessage({ live: "" });
+        setLivePhase("thinking");
+      }
       /* A busy cloud (it runs one reply at a time) is waited out quietly a
          couple of times before it is reported. */
       for (let attempt = 0; ; attempt += 1) {
@@ -1431,10 +1488,16 @@ export function App() {
                 {busy ? <ArrowDown size={14} className="jump-arrow" /> : "Latest"}
               </button>
             )}
+            {cloud === "Starting" && !busy && online && !session.offline && (
+              <Notice tone="brass" role="status">
+                Vaelo is waking up. Write away; your message goes as soon as
+                it’s ready.
+              </Notice>
+            )}
             {cloud === "Unavailable" && online && !session.offline && (
-              <Notice>
-                Vaelo is out of reach right now. Messages may not go through
-                until it’s back.
+              <Notice action="Try again" onAction={() => warmCloud()}>
+                Vaelo is taking longer than usual to wake. Messages will wait
+                for it.
               </Notice>
             )}
             {(!online || session.offline) && (

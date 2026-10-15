@@ -28,9 +28,10 @@ const FORMAT =
   "A user message may end with a line like [Vaelo request: …] added by the interface; follow it for that reply and do not mention it.";
 
 export const LIMITS = {
-  messages: 60,
-  messageChars: 16000,
-  totalChars: 48000,
+  messages: 80,
+  messageChars: 32000,
+  replyChars: 24000,
+  totalChars: 120000,
   images: 4,
   imageChars: 1_600_000,
   body: 4_000_000,
@@ -56,10 +57,21 @@ function readMode(mode) {
 
 /* Text, or text plus inline images. Only data:image URLs are accepted, so
    the model is never pointed at an arbitrary address on the person's behalf. */
+/* A long earlier reply (a whole program, say) must not make the next
+   message invalid. Its opening and ending carry the context that matters. */
+export function clipReply(text, limit = LIMITS.replyChars) {
+  if (text.length <= limit) return text;
+  const gap = "\n\n[… the middle of this earlier reply is omitted to save space …]\n\n";
+  const head = Math.floor((limit - gap.length) * 0.55);
+  return text.slice(0, head) + gap + text.slice(-(limit - gap.length - head));
+}
+
 function readContent(content, role) {
   if (typeof content === "string") {
-    if (!content.trim() || content.length > LIMITS.messageChars)
-      throw new HttpError(400, "Invalid message.");
+    if (!content.trim()) throw new HttpError(400, "Invalid message.");
+    if (role === "assistant") content = clipReply(content);
+    else if (content.length > LIMITS.messageChars)
+      throw new HttpError(400, "That message is too long to send at once. Attach it as a file or split it up.");
     return { content, chars: content.length };
   }
   if (role !== "user" || !Array.isArray(content) || !content.length || content.length > LIMITS.images + 1)
@@ -137,7 +149,7 @@ export function event(res, name, data) {
   res.write(`event: ${name}\ndata: ${JSON.stringify(data)}\n\n`);
 }
 
-export async function streamChat(req, res, cfg, user, input, request = fetch) {
+export async function streamChat(req, res, cfg, user, input, request = fetch, { timeLimitMs = 288000 } = {}) {
   if (!cfg.backend.startsWith("https://") || !cfg.apiKey)
     throw new HttpError(503, "Cloud connection is not configured.");
   res.statusCode = 200;
@@ -145,9 +157,7 @@ export async function streamChat(req, res, cfg, user, input, request = fetch) {
   res.setHeader("Cache-Control", "no-store, no-transform");
   res.setHeader("X-Accel-Buffering", "no");
   res.flushHeaders?.();
-  event(res, "jarvis.status", {
-    message: "Connecting to Vaelo. An idle server may take a minute to wake.",
-  });
+  event(res, "jarvis.status", { message: "Connecting to Vaelo…" });
   /* Stopping in the browser must stop Hermes too, or the run keeps the
      cloud's only slot busy. Vercel reports the disconnect on the request
      (with supportsCancellation) and the response, depending on timing. */
@@ -156,10 +166,21 @@ export async function streamChat(req, res, cfg, user, input, request = fetch) {
   res.on("close", cancel);
   req.on?.("aborted", cancel);
   req.on?.("error", cancel);
-  const timer = setTimeout(cancel, 285000);
+  /* The function itself is stopped at 300 seconds. Ending a little before
+     that lets the reply say so, and keep what it has, instead of vanishing. */
+  let outOfTime = false;
+  const timer = setTimeout(() => {
+    outOfTime = true;
+    cancel();
+  }, timeLimitMs);
   const heartbeat = setInterval(() => res.write(": keepalive\n\n"), 15000);
   try {
-    await waitForBackend(cfg.backend, { signal: controller.signal, request });
+    await waitForBackend(cfg.backend, {
+      signal: controller.signal,
+      request,
+      onWaking: () =>
+        event(res, "jarvis.status", { message: "Waking Vaelo up. This can take a minute." }),
+    });
     const upstream = await request(
       `${cfg.backend.replace(/\/$/, "")}/v1/chat/completions`,
       {
@@ -214,12 +235,15 @@ export async function streamChat(req, res, cfg, user, input, request = fetch) {
         });
       }
     }
+    if (outOfTime) throw new Error("time limit");
     if (!controller.signal.aborted) event(res, "jarvis.complete", { ok: true });
   } catch (error) {
     if (!res.destroyed)
       event(res, "jarvis.error", {
-        message:
-          error instanceof HttpError
+        ...(outOfTime && { code: "time_limit" }),
+        message: outOfTime
+          ? "This reply ran past the five-minute limit for one stretch. What arrived is kept; choose Continue to pick up from there."
+          : error instanceof HttpError
             ? error.message
             : "The connection ended before Vaelo finished. Your prompt is still here; retry when ready.",
       });

@@ -4,7 +4,9 @@ Use Jarvis from my phone without leaving my PC running.
 
 This repository is for a separate cloud deployment of [Hermes Agent](https://github.com/NousResearch/hermes-agent), connected to the Jarvis web interface. Keeping it separate means the local setup remains available if cloud hosting stops working. Computer access, local Ollama models and heavier rendering stay on the PC.
 
-The service runs Hermes's native API gateway in Docker. The initial cloud profile uses OpenRouter's free pool, which runs out after 50 requests a day. Two optional fallbacks pick up after it, in this order: NVIDIA, then Google Gemini (`GEMINI_API_KEY`, model `gemini-2.5-flash` unless `GEMINI_MODEL` says otherwise). Gemini runs through Hermes's built-in Gemini provider, which adapts tool definitions for Google; its free tier is small (a few hundred requests a day), so it stretches a conversation rather than replacing the other two. Groq is left out on purpose: its free tier caps tokens per minute below the size of one agent request, and the 413 it returns makes Hermes wipe the conversation instead of falling back. Research uses Exa, Tavily and Firecrawl when their keys are configured. The larger local FreeLLMAPI pool has not been mirrored here.
+The service runs Hermes's native API gateway in Docker. The initial cloud profile uses OpenRouter's free pool, which runs out after 50 requests a day. Two optional fallbacks pick up after it, in this order: NVIDIA, then Google Gemini (`GEMINI_API_KEY`, model `gemini-2.5-flash` unless `GEMINI_MODEL` says otherwise). Gemini runs through Hermes's built-in Gemini provider, which adapts tool definitions for Google; its free tier is small (a few hundred requests a day), so it stretches a conversation rather than replacing the other two. Groq is left out on purpose: its free tier caps tokens per minute below the size of one agent request, and the 413 it returns makes Hermes wipe the conversation instead of falling back. Research uses Exa, Tavily and Firecrawl when their keys are configured.
+
+To give the cloud the same 30-plus provider pool local Jarvis uses, set `FREELLMAPI_URL` (an HTTPS address that reaches a FreeLLMAPI router, such as a tunnel to the one on the PC) and `FREELLMAPI_API_KEY` (its unified key). The router then leads with model `auto`, and OpenRouter, NVIDIA and Gemini become its fallbacks for whenever the router can't be reached.
 
 ## Run locally
 
@@ -23,9 +25,9 @@ Use Docker, branch `main`, the repository root and the Free instance. Set the he
 
 Without valid credentials, `/health` reports `setup_required` and chat stays disabled. Once configured, the gateway requires bearer authentication. A web frontend should keep that key server-side behind its own sign-in flow.
 
-Render's free instance sleeps when idle and has no persistent disk. Conversations, memory and learned skills are temporary in this deployment; external storage still needs to be connected. Automatic background skill reviews are disabled here until their results can be retained. The local installation is unaffected.
+Render's free instance sleeps after 15 idle minutes and takes minutes to wake, so the container pings its own public `/health` every 10 minutes to stay up. One always-on free service uses about 744 of a workspace's 750 free hours a month; if other free services share the workspace, set `KEEP_AWAKE=0` and the web app falls back to waking it on demand. The instance also has no persistent disk. Conversations, memory and learned skills are temporary in this deployment; external storage still needs to be connected. Automatic background skill reviews are disabled here until their results can be retained. The local installation is unaffected.
 
-Only one agent run is admitted at a time to limit memory use. Browser automation, voice, media generation and local Ollama aren't part of this initial cloud profile. The 512 MB hosting limit still needs to be checked under a real conversation workload.
+Only one agent run is admitted at a time to limit memory use. A run gets up to 60 agent steps, and slow free models get 150 seconds of silence before a stream counts as stalled. Each reply streams through a Vercel function that stops at five minutes; anything longer ends with what arrived and a Continue option. Browser automation, voice, media generation and local Ollama aren't part of this initial cloud profile. The 512 MB hosting limit still needs to be checked under a real conversation workload.
 
 ## Checks
 

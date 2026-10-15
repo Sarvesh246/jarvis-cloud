@@ -88,6 +88,60 @@ class BootstrapTests(unittest.TestCase):
     def test_missing_optional_keys_do_not_add_fallbacks(self):
         self.assertEqual(bootstrap.configuration({})["fallback_providers"], [])
 
+    def test_long_tasks_get_room_to_finish(self):
+        cfg = bootstrap.configuration({"NVIDIA_API_KEY": "x"})
+        self.assertGreaterEqual(cfg["agent"]["max_turns"], 40)
+        self.assertGreaterEqual(cfg["terminal"]["timeout"], 120)
+        for provider in cfg["providers"].values():
+            self.assertGreaterEqual(provider["stale_timeout_seconds"], 120)
+            self.assertGreaterEqual(provider["request_timeout_seconds"], 120)
+
+    def test_freellmapi_router_leads_and_openrouter_falls_back(self):
+        secret = "router-key-not-real"
+        cfg = bootstrap.configuration({
+            "FREELLMAPI_URL": "https://router.example/", "FREELLMAPI_API_KEY": secret,
+            "NVIDIA_API_KEY": "x", "GEMINI_API_KEY": "x",
+        })
+        self.assertEqual(cfg["model"]["provider"], "custom:cloud-freellmapi")
+        self.assertEqual(cfg["model"]["default"], "auto")
+        self.assertEqual(cfg["providers"]["cloud-freellmapi"]["api"], "https://router.example/v1")
+        self.assertNotIn(secret, json.dumps(cfg))
+        self.assertEqual([f["provider"] for f in cfg["fallback_providers"]],
+                         ["custom:cloud-openrouter", "custom:cloud-nvidia", "gemini"])
+
+    def test_freellmapi_needs_https_and_a_key(self):
+        for environ in ({"FREELLMAPI_URL": "http://router.example", "FREELLMAPI_API_KEY": "k"},
+                        {"FREELLMAPI_URL": "https://router.example"}):
+            cfg = bootstrap.configuration(environ)
+            self.assertNotIn("cloud-freellmapi", cfg["providers"])
+            self.assertEqual(cfg["model"]["default"], "openrouter/free")
+
+    def test_keep_awake_targets_render_health_unless_disabled(self):
+        url = "https://jarvis.example.onrender.com"
+        self.assertEqual(bootstrap.keep_awake_url({"RENDER_EXTERNAL_URL": url + "/"}), url + "/health")
+        self.assertEqual(bootstrap.keep_awake_url({"RENDER_EXTERNAL_URL": url, "KEEP_AWAKE": "0"}), "")
+        self.assertEqual(bootstrap.keep_awake_url({}), "")
+
+    def test_keep_awake_pings_before_the_idle_cutoff_and_survives_failures(self):
+        pings, pauses = [], []
+
+        class Done(Exception):
+            pass
+
+        def sleep(seconds):
+            pauses.append(seconds)
+            if len(pauses) > 2:
+                raise Done
+
+        def request(req, timeout):
+            pings.append(req.full_url)
+            raise OSError("edge hiccup")
+
+        with self.assertRaises(Done):
+            bootstrap.keep_awake("https://x.example/health", sleep=sleep, request=request)
+        self.assertEqual(pings, ["https://x.example/health"] * 2)
+        self.assertTrue(all(seconds < 15 * 60 for seconds in pauses))
+
 
 if __name__ == "__main__":
     unittest.main()

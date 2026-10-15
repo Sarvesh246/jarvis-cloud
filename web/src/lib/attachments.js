@@ -3,7 +3,9 @@
    describes with its vision tool when the model can't see. Nothing is
    uploaded anywhere else. */
 
-export const MESSAGE_LIMIT = 16000;
+export const MESSAGE_LIMIT = 32000;
+/* Matches the proxy's LIMITS.replyChars; it clips the same way. */
+const REPLY_LIMIT = 24000;
 const READ_LIMIT = 400_000;
 
 const TEXT_EXT =
@@ -63,8 +65,15 @@ export function composeContent(text = "", attachments = []) {
 /* One message as Hermes receives it. Images go along only with the message
    they were attached to; later turns carry a short note instead, since the
    reply already said what was in them. */
+export function clipReply(text, limit = REPLY_LIMIT) {
+  if (text.length <= limit) return text;
+  const gap = "\n\n[… the middle of this earlier reply is omitted to save space …]\n\n";
+  const head = Math.floor((limit - gap.length) * 0.55);
+  return text.slice(0, head) + gap + text.slice(-(limit - gap.length - head));
+}
+
 export function wireMessage(message, { latest = false, images = new Map() } = {}) {
-  if (message.role !== "user") return { role: message.role, content: message.content };
+  if (message.role !== "user") return { role: message.role, content: clipReply(message.content || "") };
   const attached = (message.attachments || []).filter((file) => file.kind === "image");
   const text = message.content || "";
   const mode = message.mode ? { mode: message.mode } : {};
@@ -97,7 +106,7 @@ function wireChars(message) {
 /* Long conversations keep working: the newest turns that fit the cloud's
    context are sent, starting from one of your messages, and the reply says
    how many earlier ones were left out. */
-export function fitHistory(list, { chars = 46000, count = 58 } = {}) {
+export function fitHistory(list, { chars = 110000, count = 78 } = {}) {
   const kept = [];
   let total = 0;
   for (let i = list.length - 1; i >= 0; i -= 1) {

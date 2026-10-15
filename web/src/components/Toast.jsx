@@ -97,9 +97,9 @@ export function Toast({ toast, onDismiss }) {
   );
 }
 
-export function Notice({ tone = "clay", children, action, onAction, disabled }) {
+export function Notice({ tone = "clay", role = "alert", children, action, onAction, disabled }) {
   return (
-    <div className="notice" data-tone={tone} role="alert">
+    <div className="notice" data-tone={tone} role={role}>
       <span>{children}</span>
       {action && (
         <button className="text-button" onClick={onAction} disabled={disabled}>
