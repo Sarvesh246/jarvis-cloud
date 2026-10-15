@@ -362,7 +362,7 @@ test("long conversations send the newest turns that fit, starting with your mess
     role: i % 2 ? "assistant" : "user",
     content: "x".repeat(10000),
   }));
-  const { messages, dropped } = fitHistory(turns);
+  const { messages, dropped } = fitHistory(turns, { chars: 110000 });
   assert.equal(messages[0].role, "user");
   assert.ok(messages.reduce((n, m) => n + m.content.length, 0) <= 110000);
   assert.ok(dropped > 0);

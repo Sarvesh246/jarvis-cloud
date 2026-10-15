@@ -9,6 +9,7 @@ ENV HERMES_HOME=/opt/data \
     API_SERVER_MODEL_NAME=jarvis
 
 COPY cloud /opt/jarvis
+COPY web/shared/context-policy.json /opt/jarvis/context-policy.json
 WORKDIR /opt/data
 EXPOSE 10000
 CMD ["python3", "/opt/jarvis/bootstrap.py"]

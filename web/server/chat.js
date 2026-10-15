@@ -1,6 +1,7 @@
 import { forgetHealthy, noteHealthy, waitForBackend } from "./backend-readiness.js";
 import { HttpError } from "./security.js";
 import { WORK_GUIDANCE } from "./work-context.js";
+import { CONTEXT_POLICY } from "../shared/context-policy.js";
 
 /* How a reply should be shaped is a typed choice, not free text from the
    browser. The proxy owns the wording, so a client can only pick from these.
@@ -72,13 +73,13 @@ const FORMAT =
   "A user message may end with a line like [Vaelo request: …] added by the interface; follow it for that reply and do not mention it.";
 
 export const LIMITS = {
-  messages: 80,
-  messageChars: 32000,
-  replyChars: 24000,
-  totalChars: 120000,
+  messages: CONTEXT_POLICY.historyMessages,
+  messageChars: CONTEXT_POLICY.messageChars,
+  replyChars: CONTEXT_POLICY.replyChars,
+  totalChars: CONTEXT_POLICY.historyChars,
   images: 4,
   imageChars: 1_600_000,
-  body: 4_000_000,
+  body: CONTEXT_POLICY.bodyBytes,
 };
 
 export function requestNote({ style = "balanced", research = false, role = "none" } = {}) {

@@ -10,6 +10,10 @@ import subprocess
 import sys
 import threading
 import time
+try:
+    from context_policy import CONTEXT_POLICY
+except ModuleNotFoundError:
+    from cloud.context_policy import CONTEXT_POLICY
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.request import Request, urlopen
 
@@ -37,6 +41,13 @@ def freellmapi_url(environ):
 
 def configuration(environ):
     cfg = json.loads((HERE / "profile.json").read_text(encoding="utf-8"))
+    window = CONTEXT_POLICY["windowTokens"]
+    cfg["model"]["context_length"] = CONTEXT_POLICY["openrouterWindowTokens"]
+    cfg["providers"]["cloud-openrouter"]["context_length"] = CONTEXT_POLICY["openrouterWindowTokens"]
+    cfg["compression"].update({
+        "threshold": CONTEXT_POLICY["compressionRatio"],
+        "threshold_tokens": CONTEXT_POLICY["compressionCapTokens"],
+    })
     cfg["providers"]["cloud-openrouter"]["api"] = DEFAULT_BASE_URL
     cfg["fallback_providers"] = []
     # A reachable FreeLLMAPI router (the same pool local Jarvis uses) leads when it is
@@ -48,9 +59,9 @@ def configuration(environ):
         cfg["providers"]["cloud-freellmapi"] = {
             "name": "FreeLLMAPI router", "api": router, "api_key": "${FREELLMAPI_API_KEY}",
             "transport": "chat_completions", "default_model": "auto", "models": ["auto"],
-            "context_length": 128000, "request_timeout_seconds": 180, "stale_timeout_seconds": STALE_SECONDS,
+            "context_length": window, "request_timeout_seconds": 180, "stale_timeout_seconds": STALE_SECONDS,
         }
-        cfg["model"] = {"provider": "custom:cloud-freellmapi", "default": "auto", "context_length": 128000}
+        cfg["model"] = {"provider": "custom:cloud-freellmapi", "default": "auto", "context_length": window}
         cfg["fallback_providers"].append({
             "provider": "custom:cloud-openrouter", "model": "openrouter/free",
             "base_url": DEFAULT_BASE_URL, "api_key": "${OPENROUTER_API_KEY}",
@@ -69,6 +80,7 @@ def configuration(environ):
                 "name": provider, "api": url, "api_key": "${" + variable + "}",
                 "transport": "chat_completions", "default_model": model,
                 "models": [model],
+                "context_length": window,
                 # A 550B model is slow to its first token on a long context.
                 "request_timeout_seconds": 180, "stale_timeout_seconds": SLOW_STALE_SECONDS,
             }

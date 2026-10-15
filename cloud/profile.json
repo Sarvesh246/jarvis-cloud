@@ -1,8 +1,7 @@
 {
   "model": {
     "provider": "custom:cloud-openrouter",
-    "default": "openrouter/free",
-    "context_length": 200000
+    "default": "openrouter/free"
   },
   "providers": {
     "cloud-openrouter": {
@@ -11,7 +10,6 @@
       "api_key": "${OPENROUTER_API_KEY}",
       "transport": "chat_completions",
       "default_model": "openrouter/free",
-      "context_length": 200000,
       "request_timeout_seconds": 180,
       "stale_timeout_seconds": 60,
       "models": ["openrouter/free"]
@@ -53,7 +51,7 @@
     "timeout": 120
   },
   "memory": { "memory_enabled": true, "user_profile_enabled": true },
-  "compression": { "enabled": true, "threshold_tokens": 64000 },
+  "compression": { "enabled": true },
   "auxiliary": {
     "background_review": { "enabled": false },
     "title_generation": { "model_upgrade_enabled": false }

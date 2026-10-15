@@ -18,6 +18,15 @@ OWNER = "web:owner"
 RUN = "123e4567-e89b-12d3-a456-426614174000"
 
 
+class ContextTests(unittest.TestCase):
+    def test_long_continuations_keep_the_same_reply_budget_as_the_web(self):
+        text = "beginning\n" + "x" * 80_000 + "\nend"
+        messages = [{"role": "user", "content": "Continue the program"}]
+        continued = relay_module.continuation(messages, text)
+        self.assertEqual(continued[-2]["content"], text)
+        self.assertEqual(relay_module.ANSWER_KEEP, relay_module.CONTEXT_POLICY["replyChars"])
+
+
 def chunk(text=None, finish=None, **extra):
     delta = {} if text is None else {"content": text}
     return "data: " + json.dumps(
@@ -454,6 +463,13 @@ class RelayTests(unittest.TestCase):
         _, _, port = self.boot([[chunk("direct", "stop"), "data: [DONE]"]])
         status, text = self.call(port, "GET", "/health")
         self.assertEqual((status, json.loads(text)["status"]), (200, "ok"))
+        connection = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+        connection.request("GET", "/health")
+        response = connection.getresponse()
+        self.assertEqual(response.getheader("X-Vaelo-Context-Window"), "128000")
+        self.assertEqual(response.getheader("X-Vaelo-Compression-Cap"), "108800")
+        response.read()
+        connection.close()
         status, text = self.call(
             port, "POST", "/v1/chat/completions", {"model": "jarvis", "messages": []}
         )

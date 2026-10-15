@@ -67,7 +67,7 @@ test('the context budget keeps short documents whole and shares the rest', () =>
   const cut = excerpt(text, 1000);
   assert.ok(cut.length <= 1000); assert.ok(cut.startsWith('Start')); assert.ok(cut.endsWith('End')); assert.match(cut, /left out to fit/);
   assert.equal(excerpt('short', 1000), 'short');
-  const plan = contextPlan({ brief: 'b'.repeat(1000), notes: 'n', documents: [{ chars: 200_000 }, { chars: 2_000 }] });
+  const plan = contextPlan({ brief: 'b'.repeat(1000), notes: 'n', documents: [{ chars: 200_000 }, { chars: 2_000 }] }, 160_000);
   assert.equal(plan.trimmed, true); assert.equal(plan.documents[1].trimmed, false); assert.ok(plan.documents[0].keep < 200_000);
   assert.equal(contextPlan({ documents: [{ chars: 1000 }] }).trimmed, false);
 });

@@ -16,4 +16,6 @@ CLAUDE.md
 .agents
 .claude
 .codex
-web
+web/**
+!web/shared/
+!web/shared/context-policy.json

@@ -1,0 +1,14 @@
+{
+  "windowTokens": 128000,
+  "openrouterWindowTokens": 200000,
+  "compressionRatio": 0.85,
+  "compressionCapTokens": 108800,
+  "messageChars": 160000,
+  "replyChars": 160000,
+  "historyChars": 300000,
+  "historyMessages": 240,
+  "requestChars": 360000,
+  "workspaceChars": 340000,
+  "workspaceFloorChars": 48000,
+  "bodyBytes": 4000000
+}

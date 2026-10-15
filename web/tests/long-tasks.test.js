@@ -8,7 +8,7 @@ import { clipReply, fitHistory, wireMessage } from "../src/lib/attachments.js";
 const conversationId = "123e4567-e89b-12d3-a456-426614174000";
 
 test("a very long earlier reply no longer makes the next message invalid", () => {
-  const program = "line of code\n".repeat(5000);
+  const program = "line of code\n".repeat(20000);
   const input = chatInput({
     conversationId,
     messages: [

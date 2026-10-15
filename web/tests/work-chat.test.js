@@ -38,7 +38,7 @@ test("custom workspaces send their own brief; missing or retired work is refused
 });
 
 test("long documents are shortened fairly to the context budget and say so", () => {
-  const long = "Opening line. " + "x".repeat(200_000) + " Closing line.";
+  const long = "Opening line. " + "x".repeat(400_000) + " Closing line.";
   const short = "A short cover letter.";
   const docs = [{id:"cv",slot:"cv",name:"cv.md",sha:"a".repeat(64),chars:long.length},{id:"letter",slot:"letter",name:"letter.md",sha:"c".repeat(64),chars:short.length}];
   const { text, trimmed } = buildWorkContext(record({ documents: docs }), { ["a".repeat(64)]: long, ["c".repeat(64)]: short });
@@ -60,9 +60,9 @@ test("a CV, a posting and a long contract arrive whole in a fresh chat", async (
 
 test("a long conversation leaves the workspace less room, never below the floor", async () => {
   assert.equal(contextBudget(0), WORK_LIMITS.contextChars);
-  assert.equal(contextBudget(100_000), WORK_LIMITS.requestChars - 100_000);
+  assert.equal(contextBudget(250_000), WORK_LIMITS.requestChars - 250_000);
   assert.equal(contextBudget(500_000), WORK_LIMITS.contextFloorChars);
-  const long = "Opening line. " + "x".repeat(150_000) + " Closing line.";
+  const long = "Opening line. " + "x".repeat(300_000) + " Closing line.";
   const docs = [{id:"cv",slot:"cv",name:"cv.md",sha:"a".repeat(64),chars:long.length}];
   const history = chatInput({conversationId:"123e4567-e89b-12d3-a456-426614174000",messages:[
     {role:"user",content:"h".repeat(30_000)},{role:"assistant",content:"r".repeat(20_000)},{role:"user",content:"q".repeat(30_000)},

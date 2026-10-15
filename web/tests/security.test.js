@@ -143,7 +143,7 @@ test("chat input rejects model/system overrides, oversized context and invalid c
     () =>
       chatInput({
         ...body,
-        messages: Array.from({ length: 8 }, () => ({
+        messages: Array.from({ length: 20 }, () => ({
           role: "user",
           content: "x".repeat(16000),
         })),

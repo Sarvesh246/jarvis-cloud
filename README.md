@@ -56,7 +56,11 @@ Reading pages runs up to four at a time with a 15-second network timeout. Exa an
 
 The research method itself (size the effort to the question, search wide in one step, answer from passages before opening pages, prefer primary and recent sources, cross-check what matters, lead with the answer and cite beside each claim) is part of the web app's system prompt, so it is sent once per request rather than on every research message in the history.
 
-History compression, which costs a model call of its own, starts at 64,000 tokens. The cloud profile keeps at most one cached agent, uses a 320 MB cache-pressure threshold, and limits allocator arenas. These bounds reduce memory pressure; a real Render workload is still needed to establish peak usage. A stream that ends without an answer and a completion marker is reported as interrupted.
+Context limits come from `web/shared/context-policy.json`, which the Docker image also copies into Hermes's bootstrap. The shared baseline is 128,000 tokens; OpenRouter retains its 200,000-token route window and native Gemini resolves its own model window. Compression starts at the lower of 85% of the active model's usable input window and 108,800 tokens, with Hermes reserving any configured output allowance. Fallback switches recalculate that threshold for the active model. This replaces the earlier 64,000-token cap.
+
+Vaelo keeps up to 300,000 characters and 240 messages of recent conversation, preserves earlier replies up to 160,000 characters, and shares a 360,000-character request budget with selected workspace documents. A fresh workspace can send its full 300,000 characters of saved files plus its brief and notes. Long chats leave less room for those files; omitted sections are marked. Character budgets are approximate, not exact token counts: model instructions, tool schemas, images and tool results also use context, and Hermes can compress sooner when the active provider needs it. Four images are resized to fit the API's 4 MB body limit with text. These limits affect what is sent to the model, not the full saved conversation or workspace.
+
+The cloud profile keeps at most one cached agent, uses a 320 MB cache-pressure threshold, and limits allocator arenas. These bounds reduce memory pressure; a real Render workload is still needed to establish peak usage. A stream that ends without an answer and a completion marker is reported as interrupted. The relay's `/health` response headers report the deployed baseline and compression cap.
 
 ## Checks
 

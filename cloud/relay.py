@@ -20,6 +20,10 @@ import os
 import re
 import threading
 import time
+try:
+    from context_policy import CONTEXT_POLICY
+except ModuleNotFoundError:
+    from cloud.context_policy import CONTEXT_POLICY
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 
@@ -71,7 +75,7 @@ CONTINUE_NOTE = (
     "interruption. Use more tool calls only if the rest truly depends on them.]"
 )
 # How much of a cut-off answer is sent back so the model can carry it on.
-ANSWER_KEEP = 24000
+ANSWER_KEEP = CONTEXT_POLICY["replyChars"]
 
 
 def continuation(messages, answer):
@@ -678,6 +682,9 @@ def make_handler(relay):
                 for key, value in response.getheaders():
                     if key.lower() not in HOP_HEADERS:
                         self.send_header(key, value)
+                if urlsplit(self.path).path == "/health":
+                    self.send_header("X-Vaelo-Context-Window", str(CONTEXT_POLICY["windowTokens"]))
+                    self.send_header("X-Vaelo-Compression-Cap", str(CONTEXT_POLICY["compressionCapTokens"]))
                 self.end_headers()
                 while True:
                     chunk = response.read1(64 * 1024)

@@ -3,6 +3,9 @@
    are the words for that request, and the stitching that makes the two
    halves read as one reply. */
 
+import { clipReply, fitHistory } from './attachments.js';
+import { CONTEXT_POLICY } from '../../shared/context-policy.js';
+
 export const CONTINUE_NOTE =
   "[Vaelo request: your reply above was cut off partway. Continue it from exactly where it stops: don't repeat anything already written, don't start over, and don't mention the interruption. Use more tool calls only if the rest truly depends on them.]";
 
@@ -57,15 +60,16 @@ export function continueRequest(request, answer, runId) {
   return {
     ...request,
     runId,
-    messages: [
+    messages: fitHistory([
       ...request.messages,
-      { role: "assistant", content: answer },
+      { role: "assistant", content: clipReply(answer, Math.min(CONTEXT_POLICY.replyChars,
+        CONTEXT_POLICY.historyChars - (typeof last?.content === 'string' ? last.content.length : CONTEXT_POLICY.messageChars) - 2_000)) },
       {
         role: "user",
         content: CONTINUE_NOTE,
         ...(last?.mode && { mode: last.mode }),
       },
-    ],
+    ]).messages,
   };
 }
 
@@ -78,9 +82,15 @@ export function retryRequest(request, done, runId) {
   const note = `[Vaelo request: your previous attempt at this message was interrupted before you wrote the answer.${used} Pick up from there and write the full answer; don't mention the interruption.]`;
   const messages = [...request.messages];
   const at = messages.findLastIndex((message) => message.role === "user");
+  let content = messages[at].content;
+  // Reserve room for the recovery instruction even when the original message
+  // was at its limit. Any shortened text keeps both ends and marks the gap.
+  const room = CONTEXT_POLICY.messageChars - note.length - 2;
+  if (typeof content === 'string') content = clipReply(content, room);
+  else content = content.map(part => part.type === 'text' ? { ...part, text: clipReply(part.text, room) } : part);
   messages[at] = {
     ...messages[at],
-    content: addNote(messages[at].content, note),
+    content: addNote(content, note),
   };
-  return { ...request, runId, messages };
+  return { ...request, runId, messages: fitHistory(messages).messages };
 }

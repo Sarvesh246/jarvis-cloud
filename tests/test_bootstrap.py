@@ -15,6 +15,23 @@ spec.loader.exec_module(bootstrap)
 
 
 class BootstrapTests(unittest.TestCase):
+    def test_context_policy_stays_consistent_across_cloud_routes_and_web(self):
+        policy = bootstrap.CONTEXT_POLICY
+        self.assertEqual(policy["windowTokens"], 128000)
+        self.assertGreater(policy["compressionCapTokens"], 64000)
+        self.assertLessEqual(policy["compressionCapTokens"], policy["windowTokens"] * policy["compressionRatio"])
+        for environ in ({}, {"NVIDIA_API_KEY": "x", "GEMINI_API_KEY": "x"},
+                        {"FREELLMAPI_URL": "https://router.example", "FREELLMAPI_API_KEY": "x", "NVIDIA_API_KEY": "x"}):
+            cfg = bootstrap.configuration(environ)
+            for provider in cfg["providers"].values():
+                self.assertGreaterEqual(provider["context_length"], policy["windowTokens"])
+            primary = cfg["model"]["provider"].removeprefix("custom:")
+            self.assertEqual(cfg["model"]["context_length"], cfg["providers"][primary]["context_length"])
+            self.assertEqual(cfg["compression"]["threshold"], policy["compressionRatio"])
+            self.assertEqual(cfg["compression"]["threshold_tokens"], policy["compressionCapTokens"])
+        dockerfile = (ROOT / "Dockerfile").read_text()
+        self.assertIn("COPY web/shared/context-policy.json /opt/jarvis/context-policy.json", dockerfile)
+
     def test_missing_credentials_never_enable_chat(self):
         self.assertTrue(bootstrap.missing_configuration({}))
         self.assertTrue(bootstrap.missing_configuration({"API_SERVER_KEY": "short", "OPENROUTER_API_KEY": "example"}))
@@ -123,7 +140,8 @@ class BootstrapTests(unittest.TestCase):
         self.assertLess(cache["memory_high_mb"], 512)
         self.assertEqual(cache["protect_recent"], 0)
         # Compression is a summarizing model call of its own; it waits for histories that need it.
-        self.assertEqual(cfg["compression"]["threshold_tokens"], 64000)
+        self.assertEqual(cfg["compression"]["threshold_tokens"], bootstrap.CONTEXT_POLICY["compressionCapTokens"])
+        self.assertEqual(cfg["compression"]["threshold"], 0.85)
         self.assertLessEqual(cfg["web"]["extract_char_limit"], 10000)
 
     def test_freellmapi_router_leads_and_openrouter_falls_back(self):

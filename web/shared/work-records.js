@@ -1,5 +1,6 @@
 import { WORKSPACES, CUSTOM_WORKSPACE, RETIRED_WORKSPACE, getWorkspace } from './workspaces.js';
 import { CHECKS, getCheck, checkForLegacy } from './checks.js';
+import { CONTEXT_POLICY } from './context-policy.js';
 
 // How much a saved workspace may hold, and how much of it a chat can read.
 export const WORK_LIMITS = Object.freeze({
@@ -10,16 +11,13 @@ export const WORK_LIMITS = Object.freeze({
   brief: 12_000,
   starters: 6,
   starterChars: 200,
-  // What one chat request carries for a selected workspace: brief, notes,
-  // documents and check result together. Roughly 40,000 tokens, so a CV, a
-  // job posting and a long contract all arrive whole.
-  contextChars: 160_000,
-  // Workspace plus conversation together. Hermes summarises history (a model
-  // call of its own) from 64,000 tokens, so long chats give the workspace
-  // less room instead of tipping every reply into compression.
-  requestChars: 230_000,
+  // Workspace text and conversation share one budget below Hermes's trigger.
+  // These are character limits, not tokenizer measurements; Hermes accounts
+  // for the actual model, system instructions, images and tool schemas.
+  contextChars: CONTEXT_POLICY.workspaceChars,
+  requestChars: CONTEXT_POLICY.requestChars,
   // A long chat never squeezes the workspace below this.
-  contextFloorChars: 48_000,
+  contextFloorChars: CONTEXT_POLICY.workspaceFloorChars,
 });
 
 /* The workspace budget left once the conversation so far is counted. */

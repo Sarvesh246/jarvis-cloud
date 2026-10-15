@@ -3,10 +3,12 @@
    describes with its vision tool when the model can't see. Nothing is
    uploaded anywhere else. */
 
-export const MESSAGE_LIMIT = 32000;
+import { CONTEXT_POLICY } from '../../shared/context-policy.js';
+
+export const MESSAGE_LIMIT = CONTEXT_POLICY.messageChars;
 /* Matches the proxy's LIMITS.replyChars; it clips the same way. */
-const REPLY_LIMIT = 24000;
-const READ_LIMIT = 400_000;
+const REPLY_LIMIT = CONTEXT_POLICY.replyChars;
+const READ_LIMIT = 600_000;
 
 const TEXT_EXT =
   /\.(txt|md|markdown|csv|tsv|json|jsonl|xml|ya?ml|toml|ini|log|html?|css|scss|js|jsx|mjs|cjs|ts|tsx|py|rb|go|rs|java|kt|swift|c|h|cpp|hpp|cs|php|sh|ps1|bat|sql|r|lua|svg|tex|env\.example)$/i;
@@ -28,7 +30,8 @@ export function extensionOf(name = "") {
 
 export const IMAGE_LIMIT = 4;
 const IMAGE_SIDE = 1600;
-const IMAGE_CHARS = 1_500_000;
+// Four images plus the text budget must fit the API's 4 MB request body.
+const IMAGE_CHARS = 650_000;
 
 export function isImage(file) {
   return (
@@ -106,7 +109,7 @@ function wireChars(message) {
 /* Long conversations keep working: the newest turns that fit the cloud's
    context are sent, starting from one of your messages, and the reply says
    how many earlier ones were left out. */
-export function fitHistory(list, { chars = 110000, count = 78 } = {}) {
+export function fitHistory(list, { chars = CONTEXT_POLICY.historyChars, count = CONTEXT_POLICY.historyMessages } = {}) {
   const kept = [];
   let total = 0;
   for (let i = list.length - 1; i >= 0; i -= 1) {
@@ -138,7 +141,9 @@ async function scaled(file, side, quality) {
 export async function readImage(file) {
   const base = { id: crypto.randomUUID(), name: file.name || "Pasted image", size: file.size, kind: "image" };
   try {
-    const data = await scaled(file, IMAGE_SIDE, 0.86);
+    let data = await scaled(file, IMAGE_SIDE, 0.86);
+    if (data.length > IMAGE_CHARS) data = await scaled(file, 1200, 0.75);
+    if (data.length > IMAGE_CHARS) data = await scaled(file, 1000, 0.65);
     if (data.length > IMAGE_CHARS)
       return { ...base, state: "too-large", note: "Too detailed to send, even resized." };
     const thumb = await scaled(file, 160, 0.7);
@@ -165,5 +170,7 @@ export async function readAttachment(file) {
   if (file.size > READ_LIMIT)
     return { ...base, state: "too-large", note: `Too large to read here (${formatSize(file.size)}).` };
   const body = (await file.text()).replace(/\r\n/g, "\n");
+  if (body.length > MESSAGE_LIMIT - 2_000)
+    return { ...base, state: "too-large", note: "Too much text for one message. Add it to a Workroom workspace or split it into smaller files." };
   return { ...base, state: "ready", body, chars: body.length };
 }
