@@ -9,6 +9,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 HERE = Path(__file__).resolve().parent
 DEFAULT_BASE_URL = "https://openrouter.ai/api/v1"
+GEMINI_NATIVE_URL = "https://generativelanguage.googleapis.com/v1beta"
+# The newest Flash that answered reliably in the free-capacity audit; the 3.x previews were
+# returning 503 under load. GEMINI_MODEL overrides it without a code change.
+DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
 
 
 def configuration(environ):
@@ -34,6 +38,16 @@ def configuration(environ):
                 "base_url": url, "api_key": "${" + variable + "}",
                 "api_mode": "chat_completions",
             })
+    # Gemini goes last and through Hermes's built-in provider, not a custom entry: the native
+    # v1beta route sanitizes tool schemas for Google, while the /openai compatibility path sends
+    # them raw. Google reports exhausted free quota (per minute, per day, tokens) as 429, which
+    # Hermes treats as a rate limit and falls through on, never as the 413 that compresses history.
+    if environ.get("GEMINI_API_KEY", "").strip():
+        cfg["fallback_providers"].append({
+            "provider": "gemini", "model": environ.get("GEMINI_MODEL", "").strip() or DEFAULT_GEMINI_MODEL,
+            "base_url": GEMINI_NATIVE_URL, "key_env": "GEMINI_API_KEY",
+            "api_mode": "chat_completions",
+        })
     cfg["web"] = {"search_backend": "jarvis-cloud-research", "extract_backend": "jarvis-cloud-research"}
     return cfg
 

@@ -42,7 +42,10 @@ class BootstrapTests(unittest.TestCase):
         secret = "test-key-not-a-real-provider-credential"
         with tempfile.TemporaryDirectory() as directory:
             home = Path(directory)
-            bootstrap.prepare_profile(home, {"OPENROUTER_API_KEY": secret, "GROQ_API_KEY": secret, "NVIDIA_API_KEY": secret})
+            bootstrap.prepare_profile(home, {
+                "OPENROUTER_API_KEY": secret, "GROQ_API_KEY": secret,
+                "NVIDIA_API_KEY": secret, "GEMINI_API_KEY": secret,
+            })
             text = (home / "config.yaml").read_text()
             self.assertNotIn(secret, text)
             cfg = json.loads(text)
@@ -53,7 +56,7 @@ class BootstrapTests(unittest.TestCase):
             for provider in cfg["providers"].values():
                 if "context_length" in provider:
                     self.assertGreaterEqual(provider["context_length"], 64000)
-            self.assertEqual([f["provider"] for f in cfg["fallback_providers"]], ["custom:cloud-nvidia"])
+            self.assertEqual([f["provider"] for f in cfg["fallback_providers"]], ["custom:cloud-nvidia", "gemini"])
             self.assertNotIn("ollama", text)
             self.assertTrue((home / "plugins/jarvis-cloud-research/plugin.yaml").exists())
             self.assertTrue((home / "SOUL.md").exists())
@@ -64,6 +67,23 @@ class BootstrapTests(unittest.TestCase):
         cfg = bootstrap.configuration({"GROQ_API_KEY": "x", "NVIDIA_API_KEY": "x"})
         self.assertNotIn("cloud-groq", cfg["providers"])
         self.assertNotIn("groq", json.dumps(cfg["fallback_providers"]))
+
+    def test_gemini_uses_the_native_provider_after_nvidia(self):
+        cfg = bootstrap.configuration({"NVIDIA_API_KEY": "x", "GEMINI_API_KEY": "x"})
+        gemini = cfg["fallback_providers"][-1]
+        self.assertEqual(gemini["provider"], "gemini")
+        self.assertEqual(gemini["model"], "gemini-2.5-flash")
+        # The native v1beta surface, not /openai: only the native client sanitizes tool schemas.
+        self.assertEqual(gemini["base_url"], "https://generativelanguage.googleapis.com/v1beta")
+        self.assertEqual(gemini["key_env"], "GEMINI_API_KEY")
+        self.assertNotIn("api_key", gemini)
+        # A named providers block would shadow Hermes's built-in Gemini profile.
+        self.assertNotIn("gemini", cfg["providers"])
+
+    def test_gemini_model_can_be_overridden_and_stands_alone(self):
+        cfg = bootstrap.configuration({"GEMINI_API_KEY": "x", "GEMINI_MODEL": " gemini-3.5-flash "})
+        self.assertEqual([(f["provider"], f["model"]) for f in cfg["fallback_providers"]], [("gemini", "gemini-3.5-flash")])
+        self.assertEqual(bootstrap.configuration({"GEMINI_API_KEY": "  ", "GEMINI_MODEL": "x"})["fallback_providers"], [])
 
     def test_missing_optional_keys_do_not_add_fallbacks(self):
         self.assertEqual(bootstrap.configuration({})["fallback_providers"], [])
