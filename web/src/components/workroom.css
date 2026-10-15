@@ -33,12 +33,6 @@
 .work-tool-group>h4 { margin:0 0 var(--s-3); font-size:var(--t-sm); font-weight:var(--w-ui); color:var(--muted); }
 .work-tool-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%,19rem),1fr)); gap:var(--s-3); }
 .workroom .work-tool-card { justify-content:space-between; align-items:flex-start; gap:var(--s-4); padding:var(--s-4) var(--s-5); border-color:var(--hairline); text-align:left; min-height:0; background:var(--surface); }
-/* Sits over the bottom of the list (negative margin keeps it from adding height) until the end is reached. */
-.work-more-cue { position:sticky; bottom:0; z-index:2; height:6rem; margin-top:-6rem; display:flex; align-items:flex-end; justify-content:center; padding-bottom:var(--s-4); pointer-events:none; background:linear-gradient(to bottom,transparent,var(--canvas) 70%); animation:work-cue-in var(--dur-2,240ms) var(--ease) both; }
-.workroom .work-more-cue>button { pointer-events:auto; border-radius:var(--r-pill); background:var(--surface); border-color:var(--hairline-strong); color:var(--ink); font-size:var(--t-xs); box-shadow:var(--lift-1); }
-.work-more-cue svg { animation:work-cue-nudge 1.6s var(--ease) 3; }
-@keyframes work-cue-in { from { opacity:0; } }
-@keyframes work-cue-nudge { 0%,60%,100% { transform:none; } 30% { transform:translateY(3px); } }
 .work-tool-card>span { display:flex; flex-direction:column; gap:var(--s-2); min-width:0; }
 .work-tool-card strong,.work-saved-card strong { font-weight:var(--w-ui); font-size:var(--t-base); line-height:1.35; }
 .work-tool-card>span>span { color:var(--muted); font-size:var(--t-xs); line-height:1.55; }
@@ -146,6 +140,5 @@ form>.work-action-bar { position:sticky; bottom:0; z-index:1; background:var(--c
   .work-action-bar { gap:var(--s-2); }
   .work-error,.work-imports,.workroom-notices { padding-inline:var(--s-4); }
 }
-@media(prefers-reduced-motion:reduce) { .workroom button { transition:none; } .work-more-cue,.work-more-cue svg { animation:none; } }
+@media(prefers-reduced-motion:reduce) { .workroom button { transition:none; } }
 :root[data-motion=reduce] .workroom button { transition:none; }
-:root[data-motion=reduce] :is(.work-more-cue,.work-more-cue svg) { animation:none; }

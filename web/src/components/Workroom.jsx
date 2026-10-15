@@ -1,5 +1,5 @@
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { X, Plus, Trash, DownloadSimple, UploadSimple, ArrowClockwise, ArrowLeft, ArrowRight, ArrowDown, Play, ChatCircle, ListChecks, FolderOpen } from '@phosphor-icons/react';
+import { X, Plus, Trash, DownloadSimple, UploadSimple, ArrowClockwise, ArrowLeft, ArrowRight, Play, ChatCircle, ListChecks, FolderOpen } from '@phosphor-icons/react';
 import { CAPABILITIES } from '../../shared/capabilities.js';
 import { schemaValue, inferredSchema, fieldTitle, validateInput, readWorkCache, writeWorkCache, requestWork, importWork, draftMatches, prepareInput, valueForType } from '../lib/workroom.js';
 import './workroom.css';
@@ -115,15 +115,6 @@ export function Workroom({ open, onClose, session, onDiscuss, initialProposal = 
     return [...groups];
   }, [query, group]);
   const overview = saved?.output ? resultOverview(saved.output) : null;
-  const [moreBelow, setMoreBelow] = useState(false);
-  /* The tool list runs well past the fold, so say so rather than relying on a thin scrollbar. */
-  function updateMoreBelow() { const el=scrollArea.current; setMoreBelow(Boolean(el && el.scrollHeight-el.scrollTop-el.clientHeight>48)); }
-  useEffect(() => {
-    const el=scrollArea.current; if(!open||!el) return;
-    updateMoreBelow();
-    const observer=new ResizeObserver(updateMoreBelow); observer.observe(el); for(const child of el.children) observer.observe(child);
-    return ()=>observer.disconnect();
-  }, [open, draft?.id, view, group, query, records.length, imports.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!open) return;
@@ -239,7 +230,7 @@ export function Workroom({ open, onClose, session, onDiscuss, initialProposal = 
       <button onClick={()=>setPending(null)}>Keep editing</button><button onClick={()=>{const go=pending;setPending(null);go();}}>Discard changes</button>
     </div></div>}
     <input ref={file} type="file" accept="application/json,.json" hidden onChange={importFile} />
-    <div ref={scrollArea} className="workroom-scroll" key={draft ? `task-${draft.id}` : 'browse'} onScroll={updateMoreBelow}>
+    <div ref={scrollArea} className="workroom-scroll" key={draft ? `task-${draft.id}` : 'browse'}>
       {!draft ? <>
         <div className="work-home-nav">
           <div className="work-tabs" role="group" aria-label="Choose a view">
@@ -306,8 +297,6 @@ export function Workroom({ open, onClose, session, onDiscuss, initialProposal = 
           {confirmDelete&&<div className="work-delete"><p>Delete this task and its saved result? This cannot be undone here.</p><button disabled={mutationBusy||offline} onClick={()=>mutate('delete')}>Yes, delete task</button><button onClick={()=>setConfirmDelete(false)}>Keep task</button></div>}
         </details>}
       </section>}
-      {!draft&&moreBelow&&<div className="work-more-cue"><button type="button" onClick={()=>{const el=scrollArea.current;el?.scrollBy({top:el.clientHeight*.75,behavior:'smooth'});}}>
-        {view==='tools'?'More tools below':'More below'}<ArrowDown size={15} aria-hidden="true" /></button></div>}
     </div>
   </dialog>;
 }
