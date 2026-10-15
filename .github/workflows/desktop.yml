@@ -147,7 +147,7 @@ jobs:
       contents: write
 
   publish:
-    if: ${{ !cancelled() && startsWith(github.ref, 'refs/tags/desktop-v') }}
+    if: ${{ !cancelled() && startsWith(github.ref, 'refs/tags/desktop-v') && needs.build.result == 'success' && needs.store.result == 'success' && needs.release.result == 'success' }}
     needs: [build, store, release]
     runs-on: ubuntu-24.04
     permissions:
