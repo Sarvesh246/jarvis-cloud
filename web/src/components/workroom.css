@@ -12,7 +12,7 @@
 .workroom-scroll { overflow-y:auto; min-height:0; flex:1; overscroll-behavior:contain; scrollbar-width:thin; scrollbar-color:var(--hairline-strong) transparent; }
 .work-home-nav { display:flex; align-items:center; justify-content:space-between; gap:var(--s-4); padding:var(--s-5) var(--s-6) 0; }
 .work-tabs { display:flex; align-items:center; gap:var(--s-4); }
-.work-tabs button { border:0; border-radius:0; border-bottom:2px solid transparent; padding:var(--s-2) 0; color:var(--muted); }
+.work-tabs button { border:0; border-radius:0; border-bottom:2px solid transparent; padding:var(--s-2) 0; color:var(--muted); transition:color var(--dur-1) var(--ease),border-color var(--dur-1) var(--ease); }
 .work-tabs button[aria-pressed=true] { color:var(--ink); border-bottom-color:var(--gilt); }
 .work-tabs span { color:var(--muted); font-size:var(--t-xs); font-variant-numeric:tabular-nums; }
 .work-file-menu { position:relative; font-size:var(--t-xs); color:var(--muted); }
@@ -31,8 +31,14 @@
 .work-categories button[aria-pressed=true] { border-color:var(--gilt); background:var(--gilt-wash); color:var(--gilt-ink); }
 .work-tool-group { margin-top:var(--s-6); }
 .work-tool-group>h4 { margin:0 0 var(--s-3); font-size:var(--t-sm); font-weight:var(--w-ui); color:var(--muted); }
-.work-tool-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:var(--s-3); }
-.workroom .work-tool-card { justify-content:space-between; align-items:flex-start; gap:var(--s-4); padding:var(--s-4) var(--s-5); border-color:var(--hairline); text-align:left; min-height:8rem; background:var(--surface); }
+.work-tool-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%,19rem),1fr)); gap:var(--s-3); }
+.workroom .work-tool-card { justify-content:space-between; align-items:flex-start; gap:var(--s-4); padding:var(--s-4) var(--s-5); border-color:var(--hairline); text-align:left; min-height:0; background:var(--surface); }
+/* Sits over the bottom of the list (negative margin keeps it from adding height) until the end is reached. */
+.work-more-cue { position:sticky; bottom:0; z-index:2; height:6rem; margin-top:-6rem; display:flex; align-items:flex-end; justify-content:center; padding-bottom:var(--s-4); pointer-events:none; background:linear-gradient(to bottom,transparent,var(--canvas) 70%); animation:work-cue-in var(--dur-2,240ms) var(--ease) both; }
+.workroom .work-more-cue>button { pointer-events:auto; border-radius:var(--r-pill); background:var(--surface); border-color:var(--hairline-strong); color:var(--ink); font-size:var(--t-xs); box-shadow:var(--lift-1); }
+.work-more-cue svg { animation:work-cue-nudge 1.6s var(--ease) 3; }
+@keyframes work-cue-in { from { opacity:0; } }
+@keyframes work-cue-nudge { 0%,60%,100% { transform:none; } 30% { transform:translateY(3px); } }
 .work-tool-card>span { display:flex; flex-direction:column; gap:var(--s-2); min-width:0; }
 .work-tool-card strong,.work-saved-card strong { font-weight:var(--w-ui); font-size:var(--t-base); line-height:1.35; }
 .work-tool-card>span>span { color:var(--muted); font-size:var(--t-xs); line-height:1.55; }
@@ -109,6 +115,10 @@ form>.work-action-bar { position:sticky; bottom:0; z-index:1; background:var(--c
   .workroom button:hover:not(:disabled) { background:var(--gilt-wash); }
   .workroom .work-primary:hover:not(:disabled) { background:var(--gilt-ink); color:var(--on-gilt); }
   .workroom .work-tool-card:hover { border-color:var(--gilt); }
+  /* Underline-style controls have no padding to hold a wash, so they hover by colour instead. */
+  .workroom :is(.work-tabs,.work-panel-tabs) button:hover:not(:disabled) { background:transparent; color:var(--ink); border-bottom-color:var(--hairline-strong); }
+  .workroom :is(.work-tabs,.work-panel-tabs) button[aria-pressed=true]:hover { border-bottom-color:var(--gilt); }
+  .workroom :is(.work-back,.work-text-button):hover:not(:disabled) { background:transparent; color:var(--ink); }
 }
 @media(max-width:700px) {
   .workroom { width:100%; height:100dvh; max-height:100dvh; border:0; border-radius:0; }
@@ -136,5 +146,6 @@ form>.work-action-bar { position:sticky; bottom:0; z-index:1; background:var(--c
   .work-action-bar { gap:var(--s-2); }
   .work-error,.work-imports,.workroom-notices { padding-inline:var(--s-4); }
 }
-@media(prefers-reduced-motion:reduce) { .workroom button { transition:none; } }
+@media(prefers-reduced-motion:reduce) { .workroom button { transition:none; } .work-more-cue,.work-more-cue svg { animation:none; } }
 :root[data-motion=reduce] .workroom button { transition:none; }
+:root[data-motion=reduce] :is(.work-more-cue,.work-more-cue svg) { animation:none; }
