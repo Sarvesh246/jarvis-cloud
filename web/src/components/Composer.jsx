@@ -180,9 +180,21 @@ function useVoice(listening) {
   return { bars, heard, time };
 }
 
+/* "No role" heads the list wherever roles are chosen one by one */
+const ROLE_CHOICES = [
+  { id: "none", label: "Just Vaelo", Icon: User, note: "Answers you directly, as usual." },
+  ...ROLES,
+];
+
+/* On a larger screen the tools open beside the button. The roles have a
+   page of their own, reached from the main list, so the main list stays
+   short and the roles keep their full descriptions. */
 function ToolsMenu({ options, onOptions, onClose, anchor }) {
   const menu = useRef(null);
   const [glide, setGlide] = useState(null);
+  const [page, setPage] = useState("main");
+  const role = ROLES.find((r) => r.id === options.role);
+  const RoleIcon = role?.Icon || User;
 
   /* The highlight follows the pointer, and returns to the focused row
      when the pointer leaves */
@@ -198,7 +210,6 @@ function ToolsMenu({ options, onOptions, onClose, anchor }) {
   const close = useRef(onClose);
   close.current = onClose;
   useEffect(() => {
-    menu.current?.querySelector("[role^=menuitem]")?.focus();
     function away(event) {
       if (!menu.current?.contains(event.target) && !anchor.current?.contains(event.target))
         close.current();
@@ -207,12 +218,37 @@ function ToolsMenu({ options, onOptions, onClose, anchor }) {
     return () => removeEventListener("pointerdown", away);
   }, [anchor]);
 
+  /* Each page opens on the row that matters: the chosen role, or the way
+     back to it from the main list */
+  const returning = useRef(false);
+  useLayoutEffect(() => {
+    setGlide(null);
+    const items = menu.current?.querySelectorAll("[role^=menuitem]");
+    const start =
+      page === "role"
+        ? menu.current?.querySelector("[aria-checked=true]")
+        : returning.current && menu.current?.querySelector("[data-opens=role]");
+    returning.current = false;
+    (start || items?.[0])?.focus();
+  }, [page]);
+
+  const [returned, setReturned] = useState(false);
+  function back() {
+    returning.current = true;
+    setReturned(true);
+    setPage("main");
+  }
+
   function keys(event) {
     const items = [...menu.current.querySelectorAll("[role^=menuitem]")];
     const at = items.indexOf(document.activeElement);
     if (event.key === "ArrowDown") items[(at + 1) % items.length]?.focus();
     else if (event.key === "ArrowUp") items[(at - 1 + items.length) % items.length]?.focus();
-    else if (event.key === "Escape" || event.key === "Tab") {
+    else if (event.key === "ArrowRight" && document.activeElement?.dataset.opens) setPage("role");
+    else if ((event.key === "ArrowLeft" || event.key === "Escape") && page === "role") {
+      event.stopPropagation();
+      back();
+    } else if (event.key === "Escape" || event.key === "Tab") {
       if (event.key === "Escape") event.stopPropagation();
       onClose(true);
       return;
@@ -241,58 +277,83 @@ function ToolsMenu({ options, onOptions, onClose, anchor }) {
         data-moved={glide?.moved || undefined}
         style={glide ? { "--glide-y": `${glide.y}px`, "--glide-h": `${glide.h}px` } : undefined}
       />
-      <button
-        role="menuitemcheckbox"
-        aria-checked={options.research}
-        className="tools-item"
-        onClick={() => onOptions({ research: !options.research })}
-      >
-        <Globe size={18} />
-        <span className="tools-text">
-          <span>Research with sources</span>
-          <span className="tools-note">Searches the web and cites what it finds.</span>
-        </span>
-        {options.research && <Check size={16} className="tools-check" />}
-      </button>
-      <p className="label tools-group">Act as</p>
-      {ROLES.map(({ id, label, Icon, note }) => (
-        <button
-          key={id}
-          role="menuitemradio"
-          aria-checked={options.role === id}
-          className="tools-item"
-          onClick={() => {
-            onOptions({ role: options.role === id ? "none" : id });
-            onClose(true);
-          }}
-        >
-          <Icon size={18} />
-          <span className="tools-text">
-            <span>{label}</span>
-            <span className="tools-note">{note}</span>
-          </span>
-          {options.role === id && <Check size={16} className="tools-check" />}
-        </button>
-      ))}
-      <p className="label tools-group">Response style</p>
-      {STYLES.map((style) => (
-        <button
-          key={style.id}
-          role="menuitemradio"
-          aria-checked={options.style === style.id}
-          className="tools-item"
-          onClick={() => {
-            onOptions({ style: style.id });
-            onClose(true);
-          }}
-        >
-          <span className="tools-radio" aria-hidden="true" />
-          <span className="tools-text">
-            <span>{style.label}</span>
-            <span className="tools-note">{style.note}</span>
-          </span>
-        </button>
-      ))}
+      {page === "role" ? (
+        <div className="tools-menu-page" key="role" data-from="right">
+          <button role="menuitem" className="tools-back" onClick={back}>
+            <CaretLeft size={16} /> Act as
+          </button>
+          {ROLE_CHOICES.map(({ id, label, Icon, note }) => (
+            <button
+              key={id}
+              role="menuitemradio"
+              aria-checked={(options.role || "none") === id}
+              className="tools-item"
+              onClick={() => {
+                onOptions({ role: id });
+                onClose(true);
+              }}
+            >
+              <Icon size={18} />
+              <span className="tools-text">
+                <span>{label}</span>
+                <span className="tools-note">{note}</span>
+              </span>
+              {(options.role || "none") === id && <Check size={16} className="tools-check" />}
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div className="tools-menu-page" key="main" data-from={returned ? "left" : undefined}>
+          <button
+            role="menuitemcheckbox"
+            aria-checked={options.research}
+            className="tools-item"
+            onClick={() => onOptions({ research: !options.research })}
+          >
+            <Globe size={18} />
+            <span className="tools-text">
+              <span>Research with sources</span>
+              <span className="tools-note">Searches the web and cites what it finds.</span>
+            </span>
+            {options.research && <Check size={16} className="tools-check" />}
+          </button>
+          <button
+            role="menuitem"
+            aria-haspopup="menu"
+            className="tools-item"
+            data-opens="role"
+            onClick={() => setPage("role")}
+          >
+            <RoleIcon size={18} />
+            <span className="tools-text">
+              <span>Act as</span>
+              <span className="tools-note">
+                {role ? `${role.label}. ${role.note}` : "Vaelo as usual. Pick a tutor, skeptic and more."}
+              </span>
+            </span>
+            <CaretRight size={16} className="tools-more" />
+          </button>
+          <p className="label tools-group">Response style</p>
+          {STYLES.map((style) => (
+            <button
+              key={style.id}
+              role="menuitemradio"
+              aria-checked={options.style === style.id}
+              className="tools-item"
+              onClick={() => {
+                onOptions({ style: style.id });
+                onClose(true);
+              }}
+            >
+              <span className="tools-radio" aria-hidden="true" />
+              <span className="tools-text">
+                <span>{style.label}</span>
+                <span className="tools-note">{style.note}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -421,10 +482,7 @@ function ToolsSheet({ options, onOptions, onClose }) {
               <CaretLeft size={16} /> Act as
             </button>
             <div role="radiogroup" aria-label="Act as">
-              {[
-                { id: "none", label: "Just Vaelo", Icon: User, note: "Answers you directly, as usual." },
-                ...ROLES,
-              ].map(({ id, label, Icon, note }) => (
+              {ROLE_CHOICES.map(({ id, label, Icon, note }) => (
                 <button
                   key={id}
                   role="radio"

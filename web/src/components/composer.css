@@ -402,6 +402,47 @@
   position: relative;
 }
 
+/* The menu shows one page at a time; the roles slide in from the side
+   they're reached by, and the main list returns from the other */
+.tools-menu-page {
+  display: flex;
+  flex-direction: column;
+}
+
+.tools-menu-page[data-from="right"] {
+  animation: page-in var(--dur-2) var(--ease) both;
+}
+
+.tools-menu-page[data-from="left"] {
+  animation: page-back var(--dur-2) var(--ease) both;
+}
+
+.tools-menu .tools-back {
+  align-self: flex-start;
+  min-height: 2.25rem;
+  margin-bottom: var(--s-1);
+  border-radius: var(--r-md);
+}
+
+.tools-menu .tools-back:hover,
+.tools-menu .tools-back:focus-visible {
+  color: var(--ink);
+}
+
+@keyframes page-in {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+}
+
+@keyframes page-back {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+}
+
 .tools-menu .tools-item:hover,
 .tools-menu .tools-item:focus-visible {
   background: transparent;
