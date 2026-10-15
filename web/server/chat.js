@@ -14,8 +14,26 @@ const STYLES = {
   thorough: "thorough style: explain the reasoning, cover edge cases and trade-offs, use headings for several parts",
 };
 
+/* The research method lives in the system prompt, which is sent once per
+   request and never changes within a conversation. Each research message
+   only carries a short note pointing at it, so a long history of research
+   turns doesn't repeat the whole method on every message. */
 const RESEARCH =
-  "research with sources: search the web before answering and rely on what you find. Run one to three focused searches together in a single step; answer from the result snippets when they cover it, and read whole pages (at most three, in one extract call) only for detail the snippets lack. Cite each substantive claim inline as a Markdown link to the exact page. If a page or search fails, use the evidence you have and note the gap instead of retrying";
+  "research with sources: search the web and answer from what you find, following the research method in your instructions, and cite each substantive claim inline";
+
+/* Modelled on how the strongest assistants research: size the effort to the
+   question, fan the searches out in one step, answer from the passages the
+   search returns, read pages only for what they lack, trust primary and
+   recent sources, cross-check what matters, stop once it is supported, then
+   write the answer first with a citation beside every claim. */
+const RESEARCH_METHOD =
+  "Research method. Use it whenever you search the web, and always for a message marked research with sources. " +
+  "Size the effort to the question: a single fact or quick check needs one search; a comparison, a decision, a how-to with trade-offs, or anything with several parts needs one search per part. " +
+  "Search wide in one step: issue every search you need together as parallel tool calls, as short distinct queries (two to six words) aimed at different parts or angles and phrased the way the answer would be written. Name the year, version or place when it matters. Never repeat a near-identical query; if results miss, change the angle. " +
+  "Read the results before opening pages: each result carries the passages that matched and often a publish date, and they are usually enough. Open pages (up to three, in one extract call) only for specifics the passages lack, such as full figures, steps, exact wording or tables. " +
+  "Weigh sources: prefer primary sources (official sites and documentation, filings, statistics agencies, papers, the original report) over aggregators, forums and SEO roundups. For anything that changes (prices, versions, rankings, schedules, who holds a role, news) prefer the most recent dated source and say how current it is. Confirm key numbers and surprising claims in a second independent source when you can; when good sources disagree, say so and which you trust more and why. " +
+  "Stop once the answer is well supported: one round of searching and at most one round of reading is usually enough. If something can't be found or a tool fails, answer with what you have and say what is missing instead of retrying. " +
+  "Write the answer, not the process: open with the direct answer in one or two sentences, then the supporting detail, grouped under short headings when there are several parts. Put each citation right after the claim it supports, as a Markdown link to the exact page labelled with the source or page name, like [Python 3.14 release notes](https://…), rather than collecting sources in a list at the end. Give dates for time-sensitive facts. Only cite pages you actually saw, and never invent figures, quotes or links. Close with one short line on what remains uncertain only when something does.";
 
 /* How long a free reasoning model thinks is the largest part of the wait
    for an everyday reply. Quick and balanced replies think briefly; research
@@ -51,7 +69,7 @@ export function requestNote({ style = "balanced", research = false } = {}) {
 }
 
 export function guidance() {
-  return FORMAT;
+  return `${FORMAT}\n\n${RESEARCH_METHOD}`;
 }
 
 function readMode(mode) {

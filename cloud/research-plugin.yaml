@@ -1,6 +1,6 @@
 name: jarvis-cloud-research
-version: 1.2.0
-description: Research over size-limited HTTP requests with parallel extraction and provider fallback.
+version: 2.0.0
+description: Fused Exa and Tavily search with dated, question-focused passages; parallel, focused page reading with provider and direct fallback.
 kind: backend
 provides_web_providers:
   - jarvis-cloud-research

@@ -1,26 +1,78 @@
-"""Cloud research over bounded HTTP requests, without loading provider SDKs."""
+"""Cloud research over bounded HTTP requests, without loading provider SDKs.
+
+Search asks every configured index at once and fuses the answers, the way a person would
+check two search engines: pages both rank highly come first, no single site crowds out the
+rest, and each hit carries a dated, question-focused passage so most answers need no page
+reads at all. Reading a page returns the passages that matter to the search that found it
+rather than whatever happens to sit in the first ten thousand characters.
+"""
+
 import asyncio
+from collections import OrderedDict
+from concurrent.futures import ThreadPoolExecutor, wait
+from email.utils import parsedate_to_datetime
+from html.parser import HTMLParser
+import ipaddress
 import json
+import math
 import os
-from urllib.request import Request, urlopen
+import re
+import socket
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+from urllib.request import HTTPRedirectHandler, Request, build_opener, urlopen
 
 from agent.web_search_provider import WebSearchProvider
 
 REQUEST_TIMEOUT = 15
+SEARCH_TIMEOUT = 12
 RESPONSE_BYTES = 512 * 1024
+PAGE_BYTES = 1024 * 1024
 PAGE_CHARS = 10000
+HEAD_CHARS = 1500
+SNIPPET_CHARS = 1500
 MAX_URLS = 4
-SEARCH_LIMIT = 5
-KEYS = {"exa": "EXA_API_KEY", "tavily": "TAVILY_API_KEY", "firecrawl": "FIRECRAWL_API_KEY"}
-BASES = {"exa": "https://api.exa.ai", "tavily": "https://api.tavily.com", "firecrawl": "https://api.firecrawl.dev/v2"}
+SEARCH_LIMIT = 8
+PER_SITE = 2
+KEYS = {
+    "exa": "EXA_API_KEY",
+    "tavily": "TAVILY_API_KEY",
+    "firecrawl": "FIRECRAWL_API_KEY",
+}
+BASES = {
+    "exa": "https://api.exa.ai",
+    "tavily": "https://api.tavily.com",
+    "firecrawl": "https://api.firecrawl.dev/v2",
+}
+# Indexes searched side by side. Firecrawl's search costs more and is kept as the fallback.
+INDEXES = ("exa", "tavily")
+# Words that say the person wants what happened recently, not what is generally true.
+NEWS = re.compile(
+    r"\b(news|headlines?|breaking|today|tonight|yesterday|this (week|morning|evening)|latest (news|updates?))\b",
+    re.I,
+)
+TRACKING = re.compile(r"^(utm_|fbclid$|gclid$|mc_|ref$|ref_src$)")
+STOP = frozenset(
+    "the and for are but not you all any can had her was one our out has his how its may new now "
+    "see two who did get got him let put say she too use what when where which while with will "
+    "that this than then them they there these those from have into more most much must only "
+    "over some such very your about after again also been being does doing each just like make "
+    "many other should their under until upon were would could what's best vs versus between".split()
+)
 
 
-def post(provider, path, payload):
+def post(provider, path, payload, timeout=REQUEST_TIMEOUT):
     key = os.environ.get(KEYS[provider], "").strip()
     headers = {"Content-Type": "application/json", "Accept": "application/json"}
-    headers["x-api-key" if provider == "exa" else "Authorization"] = key if provider == "exa" else "Bearer " + key
-    req = Request(BASES[provider] + path, data=json.dumps(payload).encode(), headers=headers, method="POST")
-    with urlopen(req, timeout=REQUEST_TIMEOUT) as response:
+    headers["x-api-key" if provider == "exa" else "Authorization"] = (
+        key if provider == "exa" else "Bearer " + key
+    )
+    req = Request(
+        BASES[provider] + path,
+        data=json.dumps(payload).encode(),
+        headers=headers,
+        method="POST",
+    )
+    with urlopen(req, timeout=timeout) as response:
         # Bound the download before decoding or allocating the parsed JSON tree.
         data = response.read(RESPONSE_BYTES + 1)
     if len(data) > RESPONSE_BYTES:
@@ -28,20 +80,354 @@ def post(provider, path, payload):
     return json.loads(data)
 
 
-def snippet(row):
-    highlights = row.get("highlights")
-    if isinstance(highlights, list) and highlights:
-        return " … ".join(str(part).strip() for part in highlights if part)
-    return str(row.get("description") or row.get("content") or row.get("text") or "")
-
-
 def configured(name):
     return bool(os.environ.get(KEYS[name], "").strip())
 
 
+def snippet(row):
+    highlights = row.get("highlights")
+    if isinstance(highlights, list) and highlights:
+        return " … ".join(" ".join(str(part).split()) for part in highlights if part)
+    return " ".join(
+        str(
+            row.get("description") or row.get("content") or row.get("text") or ""
+        ).split()
+    )
+
+
+def day(value):
+    """'2026-10-14T09:00:00.000Z' or 'Tue, 14 Oct 2026 09:00:00 GMT' -> '2026-10-14';
+    anything unreadable is dropped."""
+    text = str(value or "").strip()
+    match = re.match(r"\d{4}-\d{2}-\d{2}", text)
+    if match:
+        return match.group(0)
+    try:
+        return parsedate_to_datetime(text).date().isoformat()
+    except (TypeError, ValueError, IndexError):
+        return ""
+
+
+def page_key(url):
+    """One page, however it was linked: no scheme, www, fragment, trailing slash or tracking."""
+    try:
+        parts = urlsplit(url.strip())
+    except ValueError:
+        return url
+    host = (parts.hostname or "").lower().removeprefix("www.")
+    query = urlencode(
+        [(k, v) for k, v in parse_qsl(parts.query) if not TRACKING.match(k.lower())]
+    )
+    return host + (parts.path.rstrip("/") or "") + ("?" + query if query else "")
+
+
+def site(url):
+    return (urlsplit(url).hostname or "").lower().removeprefix("www.")
+
+
+def terms(text):
+    return {
+        word
+        for word in re.findall(r"[a-z0-9][a-z0-9.+#-]{1,}", str(text).lower())
+        if word not in STOP and (len(word) > 2 or word.isdigit())
+    }
+
+
+def search_index(name, query, limit):
+    """One index's hits as plain rows; raises on any failure so the caller can move on."""
+    if name == "exa":
+        # Highlights are the passages of each page that answer the query: three short
+        # excerpts per hit, enough to answer from without opening the page.
+        data = post(
+            name,
+            "/search",
+            {
+                "query": query,
+                "numResults": limit,
+                "contents": {"highlights": {"numSentences": 3, "highlightsPerUrl": 3}},
+            },
+            timeout=SEARCH_TIMEOUT,
+        )
+        rows = data.get("results", [])
+    elif name == "tavily":
+        payload = {"query": query, "max_results": limit, "include_raw_content": False}
+        if NEWS.search(query):
+            payload.update(topic="news", time_range="week")
+        rows = post(name, "/search", payload, timeout=SEARCH_TIMEOUT).get("results", [])
+    else:
+        data = post(
+            name, "/search", {"query": query, "limit": limit}, timeout=SEARCH_TIMEOUT
+        ).get("data", {})
+        rows = data.get("web", []) if isinstance(data, dict) else data
+    hits = []
+    for row in rows[:limit]:
+        if not isinstance(row, dict) or not str(row.get("url", "")).startswith(
+            ("http://", "https://")
+        ):
+            continue
+        hit = {
+            "url": row["url"],
+            "title": " ".join(str(row.get("title") or "").split())[:300],
+            "description": snippet(row)[:SNIPPET_CHARS],
+        }
+        published = day(
+            row.get("publishedDate") or row.get("published_date") or row.get("date")
+        )
+        if published:
+            hit["published"] = published
+        hits.append(hit)
+    if not hits:
+        raise LookupError("no results")
+    return hits
+
+
+def fuse(rankings, limit):
+    """Reciprocal-rank fusion: a page ranked well by both indexes beats one ranked first by
+    one of them. The richest passage and any date are kept, and each site is held to two
+    hits until the list would otherwise come up short."""
+    merged = OrderedDict()
+    for hits in rankings:
+        for rank, hit in enumerate(hits):
+            key = page_key(hit["url"])
+            entry = merged.setdefault(key, {"hit": dict(hit), "score": 0.0})
+            entry["score"] += 1.0 / (60 + rank)
+            best = entry["hit"]
+            if len(hit.get("description", "")) > len(best.get("description", "")):
+                best["description"] = hit["description"]
+            if not best.get("title") and hit.get("title"):
+                best["title"] = hit["title"]
+            if not best.get("published") and hit.get("published"):
+                best["published"] = hit["published"]
+    ranked = [
+        entry["hit"]
+        for entry in sorted(merged.values(), key=lambda entry: -entry["score"])
+    ]
+    picked, spare, per_site = [], [], {}
+    for hit in ranked:
+        host = site(hit["url"])
+        if per_site.get(host, 0) < PER_SITE:
+            per_site[host] = per_site.get(host, 0) + 1
+            picked.append(hit)
+        else:
+            spare.append(hit)
+    results = (picked + spare)[:limit]
+    for position, hit in enumerate(results, 1):
+        hit["position"] = position
+    return results
+
+
+def focus(text, query, limit=PAGE_CHARS):
+    """Fit a long page into ``limit`` characters around what was asked.
+
+    The opening stays (it names the page and usually defines the subject); the rest of the
+    room goes to the paragraphs that share the most words with the query, kept in page order
+    with a marker wherever text was skipped. Without a query it keeps the opening and the end,
+    where conclusions and dates tend to sit."""
+    if len(text) <= limit:
+        return text
+    blocks = []
+    for part in re.split(r"\n\s*\n", text):
+        part = part.strip()
+        while len(part) > 1200:  # very long paragraphs become several candidates
+            cut = part.rfind(". ", 0, 1200) + 1  # end of a sentence, else of a word
+            cut = cut if cut > 400 else (part.rfind(" ", 400, 1200) if part.rfind(" ", 400, 1200) > 0 else 1200)
+            blocks.append(part[:cut].strip())
+            part = part[cut:].strip()
+        if part:
+            blocks.append(part)
+    wanted = terms(query)
+    head, used = [], 0
+    while len(head) < len(blocks) and used + len(blocks[len(head)]) <= HEAD_CHARS:
+        used += len(blocks[len(head)]) + 2
+        head.append(len(head))
+    if not head:
+        head, used = [0], len(blocks[0][:HEAD_CHARS]) + 2
+        blocks[0] = blocks[0][:HEAD_CHARS]
+    budget = limit - used - 200
+
+    def score(index):
+        block = blocks[index].lower()
+        found = [term for term in wanted if term in block]
+        if not found:
+            return 0.0
+        hits = sum(min(block.count(term), 4) for term in found)
+        number = 0.5 if re.search(r"\d", block) else 0.0
+        return (len(found) * 3 + hits + number) / math.sqrt(max(len(block), 200) / 200)
+
+    rest = [index for index in range(len(blocks)) if index not in head]
+    scored = sorted(((score(index), index) for index in rest), reverse=True)
+    if wanted and scored and scored[0][0] > 0:
+        chosen = []
+        for value, index in scored:
+            if value <= 0:
+                break
+            if len(blocks[index]) + 2 <= budget:
+                chosen.append(index)
+                budget -= len(blocks[index]) + 2
+        keep = sorted(head + chosen)
+        note = "[Long page: showing its opening and the passages most relevant to the search.]"
+    else:
+        keep = list(head)
+        for index in reversed(rest):
+            if len(blocks[index]) + 2 > budget:
+                break
+            keep.append(index)
+            budget -= len(blocks[index]) + 2
+        keep.sort()
+        note = "[Long page: showing its opening and its end.]"
+    out, previous = [note], -1
+    for index in keep:
+        if index != previous + 1:
+            out.append("[…]")
+        out.append(blocks[index])
+        previous = index
+    if previous != len(blocks) - 1:
+        out.append("[…]")
+    return "\n\n".join(out)[:limit]
+
+
+def public_host(url):
+    """True only when every address the host resolves to is on the public internet."""
+    try:
+        parts = urlsplit(url)
+        if parts.scheme not in ("http", "https") or not parts.hostname:
+            return False
+        infos = socket.getaddrinfo(
+            parts.hostname, parts.port or (443 if parts.scheme == "https" else 80)
+        )
+        return bool(infos) and all(
+            ipaddress.ip_address(info[4][0].split("%")[0]).is_global for info in infos
+        )
+    except (OSError, ValueError):
+        return False
+
+
+class PublicRedirects(HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        if not public_host(newurl):
+            raise ValueError("Redirect left the public internet")
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+class PageText(HTMLParser):
+    """Readable text from HTML: headings, paragraphs and list items, without scripts,
+    navigation, footers or other page furniture."""
+
+    SKIP = {
+        "script",
+        "style",
+        "noscript",
+        "svg",
+        "nav",
+        "footer",
+        "header",
+        "aside",
+        "form",
+        "button",
+        "iframe",
+        "template",
+    }
+    BLOCK = {
+        "p",
+        "div",
+        "section",
+        "article",
+        "main",
+        "li",
+        "br",
+        "tr",
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "h5",
+        "h6",
+        "blockquote",
+        "pre",
+        "table",
+        "ul",
+        "ol",
+        "dd",
+        "dt",
+    }
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.parts, self.title, self.skipping, self.in_title = [], "", 0, False
+
+    def handle_starttag(self, tag, attrs):
+        if tag in self.SKIP:
+            self.skipping += 1
+        elif tag == "title":
+            self.in_title = True
+        elif tag in self.BLOCK:
+            self.parts.append(
+                "\n\n"
+                + (
+                    "#" * int(tag[1]) + " "
+                    if tag in ("h1", "h2", "h3")
+                    else "- "
+                    if tag == "li"
+                    else ""
+                )
+            )
+
+    def handle_endtag(self, tag):
+        if tag in self.SKIP and self.skipping:
+            self.skipping -= 1
+        elif tag == "title":
+            self.in_title = False
+        elif tag in self.BLOCK:
+            self.parts.append("\n\n")
+
+    def handle_data(self, data):
+        if self.in_title:
+            self.title += data
+        elif not self.skipping:
+            self.parts.append(data)
+
+    def text(self):
+        joined = re.sub(r"[ \t\r\f\v]+", " ", "".join(self.parts))
+        return re.sub(
+            r"\n\s*\n(\s*\n)+", "\n\n", re.sub(r" *\n *", "\n", joined)
+        ).strip()
+
+
+def fetch_page(url):
+    """The last resort when every provider fails: read the page directly, public hosts only."""
+    if not public_host(url):
+        raise ValueError("Not a public address")
+    opener = build_opener(PublicRedirects())
+    req = Request(
+        url,
+        headers={
+            "User-Agent": "Mozilla/5.0 (compatible; VaeloResearch/2.0)",
+            "Accept": "text/html,application/xhtml+xml,text/plain;q=0.8",
+        },
+    )
+    with opener.open(req, timeout=REQUEST_TIMEOUT) as response:
+        kind = response.headers.get_content_type()
+        charset = response.headers.get_content_charset() or "utf-8"
+        raw = response.read(PAGE_BYTES)
+    if kind not in ("text/html", "application/xhtml+xml", "text/plain"):
+        raise ValueError("Not a readable page")
+    body = raw.decode(charset, errors="replace")
+    if kind == "text/plain":
+        return {"title": "", "content": body}
+    parser = PageText()
+    parser.feed(body)
+    parser.close()
+    return {"title": " ".join(parser.title.split()), "content": parser.text()}
+
+
 class Research(WebSearchProvider):
     name = "jarvis-cloud-research"
-    display_name = "Exa / Tavily / Firecrawl"
+    display_name = "Exa + Tavily (fused) / Firecrawl"
+
+    def __init__(self):
+        super().__init__()
+        # Which search found each page, so reading it later can focus on what was asked.
+        self.found_by = OrderedDict()
 
     def is_available(self):
         return any(configured(name) for name in KEYS)
@@ -49,65 +435,135 @@ class Research(WebSearchProvider):
     def supports_extract(self):
         return True
 
+    def remember(self, query, hits):
+        for hit in hits:
+            self.found_by[page_key(hit["url"])] = query
+            self.found_by.move_to_end(page_key(hit["url"]))
+        while len(self.found_by) > 400:
+            self.found_by.popitem(last=False)
+
     def search(self, query, limit=5):
         limit = max(1, min(int(limit), SEARCH_LIMIT))
-        for name in KEYS:
-            if not configured(name):
-                continue
+        names = [name for name in INDEXES if configured(name)]
+        rankings, answered = [], []
+        if names:
+            pool = ThreadPoolExecutor(max_workers=len(names))
+            # Each index is asked for a full page of hits whatever the caller wants, so fusion and
+            # the per-site cap have spares to choose from; neither index charges more for them.
+            jobs = {
+                pool.submit(search_index, name, query, SEARCH_LIMIT): name for name in names
+            }
+            done, _ = wait(jobs, timeout=SEARCH_TIMEOUT + 3)
+            pool.shutdown(wait=False, cancel_futures=True)
+            for name in names:  # keep a stable order, so ties favour Exa's ranking
+                job = next(job for job, owner in jobs.items() if owner == name)
+                if job in done and not job.exception():
+                    rankings.append(job.result())
+                    answered.append(name)
+        if not rankings and configured("firecrawl"):
             try:
-                if name == "exa":
-                    # Without contents Exa returns bare titles, which leaves the model nothing to
-                    # answer from and sends it off to read whole pages. Highlights are the
-                    # relevant passages, the same thing Hermes's own Exa backend asks for.
-                    data = post(name, "/search", {"query": query, "numResults": limit, "contents": {"highlights": True}})
-                    rows = data.get("results", [])
-                elif name == "tavily":
-                    data = post(name, "/search", {"query": query, "max_results": limit, "include_raw_content": False})
-                    rows = data.get("results", [])
-                else:
-                    data = post(name, "/search", {"query": query, "limit": limit})
-                    rows = data.get("data", {})
-                    rows = rows.get("web", []) if isinstance(rows, dict) else rows
-                results = [{"url": row["url"], "title": str(row.get("title", ""))[:500],
-                            "description": snippet(row)[:1500]}
-                           for row in rows[:limit] if isinstance(row, dict) and row.get("url")]
-                if results:
-                    return {"success": True, "data": {"web": results}, "provider": name}
+                rankings.append(search_index("firecrawl", query, SEARCH_LIMIT))
+                answered.append("firecrawl")
             except Exception:
-                continue
-        return {"success": False, "error": "No configured research provider returned results"}
+                pass
+        if not rankings:
+            return {
+                "success": False,
+                "error": "No configured research provider returned results",
+            }
+        results = fuse(rankings, limit)
+        self.remember(query, results)
+        return {
+            "success": True,
+            "data": {"web": results},
+            "provider": "+".join(answered),
+        }
+
+    def read(self, name, url):
+        if name == "exa":
+            # A live crawl only when Exa has no cached copy, so fresh pages still come back.
+            data = post(
+                name,
+                "/contents",
+                {
+                    "urls": [url],
+                    "text": {"maxCharacters": PAGE_CHARS * 3},
+                    "livecrawl": "fallback",
+                },
+            )
+            rows = data.get("results", [])
+        elif name == "tavily":
+            rows = post(
+                name,
+                "/extract",
+                {"urls": [url], "extract_depth": "basic", "format": "text"},
+            ).get("results", [])
+        elif name == "firecrawl":
+            data = post(
+                name,
+                "/scrape",
+                {
+                    "url": url,
+                    "formats": ["markdown"],
+                    "onlyMainContent": True,
+                    "timeout": 15000,
+                },
+            )
+            rows = [data.get("data", {})] if data.get("success") else []
+        else:
+            rows = [fetch_page(url)]
+        for item in rows:
+            content = (
+                item.get("text")
+                or item.get("raw_content")
+                or item.get("content")
+                or item.get("markdown")
+            )
+            if isinstance(content, str) and content.strip():
+                title = item.get("title") or (item.get("metadata") or {}).get(
+                    "title", ""
+                )
+                published = day(
+                    item.get("publishedDate")
+                    or (item.get("metadata") or {}).get("publishedTime")
+                )
+                return str(title), content, published
+        raise LookupError("empty page")
 
     def extract_one(self, url):
-        for name in ("exa", "tavily", "firecrawl"):
-            if not configured(name):
-                continue
+        query = self.found_by.get(page_key(url), "")
+        for name in [name for name in KEYS if configured(name)] + ["direct"]:
             try:
-                if name == "exa":
-                    data = post(name, "/contents", {"urls": [url], "text": {"maxCharacters": PAGE_CHARS}})
-                    rows = data.get("results", [])
-                elif name == "tavily":
-                    data = post(name, "/extract", {"urls": [url], "extract_depth": "basic", "format": "text"})
-                    rows = data.get("results", [])
-                else:
-                    data = post(name, "/scrape", {"url": url, "formats": ["markdown"], "onlyMainContent": True, "timeout": 15000})
-                    rows = [data.get("data", {})] if data.get("success") else []
-                for item in rows:
-                    content = item.get("text") or item.get("raw_content") or item.get("content") or item.get("markdown")
-                    if isinstance(content, str) and content.strip():
-                        title = item.get("title") or item.get("metadata", {}).get("title", "")
-                        return {"url": url, "title": str(title)[:500], "content": content[:PAGE_CHARS], "provider": name}
+                title, content, published = self.read(name, url)
             except Exception:
                 continue
-        return {"url": url, "error": "Page extraction failed; use another source or the available search results", "content": ""}
+            page = {
+                "url": url,
+                "title": title[:500],
+                "content": focus(content.strip(), query),
+                "provider": name,
+            }
+            if published:
+                page["published"] = published
+            return page
+        return {
+            "url": url,
+            "error": "Page extraction failed; use another source or the available search results",
+            "content": "",
+        }
 
     async def extract(self, urls, **kwargs):
-        # Pages are read side by side: each download is capped at RESPONSE_BYTES and each page
-        # at PAGE_CHARS before it is kept, so four at once stays a few megabytes, and the wait
-        # is the slowest page instead of the sum of all of them.
+        # Pages are read side by side: each download is capped before it is decoded and each
+        # page is cut to PAGE_CHARS before it is kept, so four at once stays a few megabytes,
+        # and the wait is the slowest page instead of the sum of all of them.
         unique = list(dict.fromkeys(urls))
-        pages = await asyncio.gather(*(asyncio.to_thread(self.extract_one, url) for url in unique[:MAX_URLS]))
-        return list(pages) + [{"url": url, "error": "Extract up to four pages per call", "content": ""}
-                              for url in unique[MAX_URLS:]]
+        pages = await asyncio.gather(
+            *(asyncio.to_thread(self.extract_one, url) for url in unique[:MAX_URLS])
+        )
+        return list(pages) + [
+            {"url": url, "error": "Extract up to four pages per call", "content": ""}
+            for url in unique[MAX_URLS:]
+        ]
 
 
 def register(ctx):
