@@ -13,7 +13,9 @@ export const LONG_QUIET_MS = 45000;
 /* 9s, then 1m 39s: past a minute, bare seconds stop being readable. */
 export function clock(totalSeconds) {
   const s = Math.max(0, Math.round(totalSeconds));
-  return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, "0")}s`;
+  return s < 60
+    ? `${s}s`
+    : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, "0")}s`;
 }
 
 /* What the model is doing between tools, named by what it just did:
@@ -34,14 +36,14 @@ export function afterStep(step) {
 
 /* "Reading a page" -> "Still reading a page". A tool with no verb of its own
    ("Web search") is said as working on it. */
-export function stillLine(running, quietMs) {
+export function stillLine(running) {
   const info = toolInfo(running.tool ?? running.name);
   const detail = toolDetail(running);
   const base =
     info.kind === "tool"
       ? `Still working on ${info.now.toLowerCase()}`
       : `Still ${info.now[0].toLowerCase()}${info.now.slice(1)}`;
-  return quietMs >= QUIET_MS ? `${base}${detail ? ` · ${detail}` : ""}` : "";
+  return `${base}${detail ? ` · ${detail}` : ""}`;
 }
 
 /* The newest thought, as one plain line: the tail of the last paragraph the
