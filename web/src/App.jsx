@@ -34,6 +34,9 @@ import { mergePlan, readPlan } from "./lib/plan.js";
 import { classifyError } from "./lib/errors.js";
 import { JOIN_WINDOW, continueRequest, joinOnto, retryRequest } from "./lib/continuation.js";
 import { PHONE } from "./lib/use-phone.js";
+import { DESKTOP, desktopSignIn, desktopSignOut, desktopNotification } from "./lib/desktop.js";
+import { readDesktopHandoff } from "./lib/desktop-handoff.js";
+import { DesktopHandoff } from "./components/DesktopHandoff.jsx";
 import {
   IMAGE_LIMIT,
   MESSAGE_LIMIT,
@@ -316,6 +319,10 @@ const quoted = (text) =>
 /* Work that finishes while you're elsewhere says so where you'll see it:
    the tab title always, the app badge and a notification if you asked. */
 async function tellReady(title, content) {
+  if (DESKTOP) {
+    await desktopNotification(`Vaelo replied · ${title}`, content.replace(/\s+/g, " ").slice(0, 140)).catch(() => {});
+    return;
+  }
   try {
     await navigator.setAppBadge?.(1);
   } catch {
@@ -338,6 +345,7 @@ const reducedMotion = () =>
   matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 export function App() {
+  const [desktopHandoff, setDesktopHandoff] = useState(() => DESKTOP ? null : readDesktopHandoff());
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -617,7 +625,7 @@ export function App() {
      visible placeholder, and if it never does (a content blocker, a hung
      script) the page says so and offers a retry instead of showing nothing. */
   useEffect(() => {
-    if (session?.user || !session?.configured || !googleButton.current || preferRedirect) return;
+    if (DESKTOP || session?.user || !session?.configured || !googleButton.current || preferRedirect) return;
     let mounted = true;
     const box = googleButton.current;
     setGsi("loading");
@@ -1819,7 +1827,8 @@ export function App() {
 
   async function logout() {
     try {
-      await request("/api/logout", {});
+      if (DESKTOP) await desktopSignOut();
+      else await request("/api/logout", {});
       try {
         localStorage.removeItem(LAST_USER_KEY);
       } catch {
@@ -1843,14 +1852,21 @@ export function App() {
         configured={session?.configured}
         error={error}
         buttonRef={googleButton}
-        googleState={preferRedirect ? "redirect" : gsi}
-        onGoogleRedirect={() => googleRedirect(session)}
+        googleState={DESKTOP || preferRedirect ? "redirect" : gsi}
+        onGoogleRedirect={async () => {
+          if (!DESKTOP) return googleRedirect(session);
+          setError("");
+          try { await desktopSignIn(); await loadSession(); }
+          catch (err) { setError(String(err.message || err)); }
+        }}
         onRetryGoogle={() => {
           googleScript = null;
           setGsiAttempt((n) => n + 1);
         }}
       />
     );
+
+  if (desktopHandoff) return <DesktopHandoff pending={desktopHandoff} session={session} onCancel={() => setDesktopHandoff(null)} />;
 
   return (
     <IconContext.Provider value={{ weight: "light", size: 20 }}>

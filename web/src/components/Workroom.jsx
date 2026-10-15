@@ -9,16 +9,20 @@ import { readWorkCache, writeWorkCache, requestWork, importWork, draftMatches, b
 import { readAttachment } from '../lib/attachments.js';
 import { AUDIENCE_NAMES, matchWorkspaces, resultOverview } from '../lib/workroom-view.js';
 import './workroom.css';
+import { DESKTOP, saveDesktopFile } from '../lib/desktop.js';
 
 const SCOPES = [['personal', 'Personal'], ['work', 'Work'], ['client', 'A client']];
 const SCOPE_NAME = Object.fromEntries(SCOPES);
 const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 const lookups = { getWorkspace, getCheck };
 
-function download(data, title = 'vaelo-backup') {
+async function download(data, title = 'vaelo-backup') {
+  const name = `${title.replace(/[^a-z0-9_-]/gi,'-').slice(0,70)}.json`;
+  if (DESKTOP) return saveDesktopFile(name, JSON.stringify(data, null, 2));
   const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
   const anchor = document.createElement('a'); anchor.href = url; anchor.download = `${title.replace(/[^a-z0-9_-]/gi,'-').slice(0,70)}.json`; anchor.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return true;
 }
 
 /* One question of a check, answered in everyday words. Money and dates say
@@ -194,7 +198,7 @@ export function Workroom({ open, onClose, session, onStart, initialDraft = null,
       setBusy('export');
       for (const record of list) await loadTexts(record).catch(() => {});
       const data = exportWork(list, texts.current);
-      download(data, name);
+      if (!await download(data, name)) return;
       const gaps = data.records.reduce((n, r) => n + r.documents.filter(d => d.missing).length, 0);
       setStatus(gaps ? `Backup saved. ${plural(gaps, 'file')} couldn’t be added while you’re offline.` : 'Backup saved to your downloads.');
     } finally { setBusy(''); }

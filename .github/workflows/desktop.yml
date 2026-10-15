@@ -1,0 +1,140 @@
+name: Desktop
+
+on:
+  push:
+    branches: [main, 'codex/vaelo-desktop']
+    tags: ['desktop-v*']
+  pull_request:
+    paths: ['web/**', '.github/workflows/desktop.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - name: Require release tag to match the application version
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: node -e "const c=JSON.parse(require('fs').readFileSync('src-tauri/tauri.conf.json'));if(process.env.RELEASE_TAG!=='desktop-v'+c.version)process.exit(1)"
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/desktop-v')
+    needs: validate
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    outputs:
+      id: ${{ steps.release.outputs.id }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" --draft --title "Vaelo ${RELEASE_TAG#desktop-v}" --notes-file web/desktop/RELEASE.md
+          fi
+          echo "id=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG" --jq .id)" >> "$GITHUB_OUTPUT"
+
+  build:
+    if: always() && needs.validate.result == 'success' && (needs.release.result == 'success' || needs.release.result == 'skipped')
+    needs: [validate, release]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-2022
+            target: x86_64-pc-windows-msvc
+            bundles: nsis,msi
+          - os: windows-2022
+            target: aarch64-pc-windows-msvc
+            bundles: nsis
+          - os: macos-15
+            target: aarch64-apple-darwin
+            bundles: app,dmg
+          - os: macos-15-intel
+            target: x86_64-apple-darwin
+            bundles: app,dmg
+          - os: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+            bundles: deb,rpm,appimage
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            bundles: deb,rpm,appimage
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: web/src-tauri
+          key: ${{ matrix.target }}
+      - name: Linux build and media dependencies
+        if: startsWith(matrix.os, 'ubuntu')
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev librsvg2-dev libayatana-appindicator3-dev libdbus-1-dev libsecret-1-dev patchelf gstreamer1.0-plugins-good gstreamer1.0-pulseaudio
+      - run: npm ci
+        working-directory: web
+      - run: npm run build
+        working-directory: web
+      - name: Test native callback and authentication state
+        run: cargo test --locked --manifest-path web/src-tauri/Cargo.toml --target ${{ matrix.target }} --lib
+        if: matrix.target != 'aarch64-pc-windows-msvc'
+      - name: Build installers
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ startsWith(github.ref, 'refs/tags/') && secrets.TAURI_SIGNING_PRIVATE_KEY || '' }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY || '-' }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        with:
+          projectPath: web
+          releaseId: ${{ needs.release.outputs.id }}
+          args: --target ${{ matrix.target }} --bundles ${{ matrix.bundles }} ${{ startsWith(github.ref, 'refs/tags/') && '--config src-tauri/tauri.release.conf.json' || '' }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Vaelo-${{ matrix.target }}
+          path: |
+            web/src-tauri/target/${{ matrix.target }}/release/bundle/**/*.exe
+            web/src-tauri/target/${{ matrix.target }}/release/bundle/**/*.msi
+            web/src-tauri/target/${{ matrix.target }}/release/bundle/**/*.dmg
+            web/src-tauri/target/${{ matrix.target }}/release/bundle/**/*.app.tar.gz
+            web/src-tauri/target/${{ matrix.target }}/release/bundle/**/*.deb
+            web/src-tauri/target/${{ matrix.target }}/release/bundle/**/*.rpm
+            web/src-tauri/target/${{ matrix.target }}/release/bundle/**/*.AppImage
+            web/src-tauri/target/${{ matrix.target }}/release/bundle/**/*.sig
+          if-no-files-found: error

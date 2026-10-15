@@ -1,0 +1,13 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "desktop",
+  "description": "Local Vaelo window with access to its cloud API and user-selected files.",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    { "identifier": "http:default", "allow": [{ "url": "https://vaelochat.vercel.app/api/*" }] },
+    { "identifier": "opener:allow-open-url", "allow": [{ "url": "https://*" }, { "url": "http://*" }, { "url": "mailto:*" }] },
+    "dialog:allow-save", "fs:allow-write-file", "clipboard-manager:allow-write-text",
+    "notification:default", "updater:default", "process:allow-restart"
+  ]
+}

@@ -1,5 +1,10 @@
 # Jarvis Cloud
 
+Vaelo also has a Tauri desktop client for Windows, macOS, and Linux. See the
+[desktop setup and release guide](web/desktop/README.md). Published installers
+are listed on the [download page](https://vaelochat.vercel.app/download) and
+[GitHub Releases](https://github.com/Sarvesh246/jarvis-cloud/releases).
+
 Use Jarvis from my phone without leaving my PC running.
 
 This repository is for a separate cloud deployment of [Hermes Agent](https://github.com/NousResearch/hermes-agent), connected to the Jarvis web interface. Keeping it separate means the local setup remains available if cloud hosting stops working. Computer access, local Ollama models and heavier rendering stay on the PC.

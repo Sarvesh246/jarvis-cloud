@@ -26,6 +26,10 @@ __pycache__/
 node_modules/
 dist/
 build/
+target/
+web/src-tauri/gen/
+web/src-tauri/icons/android/
+web/src-tauri/icons/ios/
 .pytest_cache/
 .ruff_cache/
 .vercel/

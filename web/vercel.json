@@ -3,6 +3,7 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "functions": {
+    "api/transcribe.js": { "maxDuration": 90 },
     "api/work.js": {
       "maxDuration": 60
     },

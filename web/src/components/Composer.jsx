@@ -22,6 +22,8 @@ import { AttachmentList } from "./Message.jsx";
 import { MESSAGE_LIMIT } from "../lib/attachments.js";
 import { usePhone } from "../lib/use-phone.js";
 import "./composer.css";
+import { DESKTOP } from "../lib/desktop.js";
+import { DesktopRecognition } from "../lib/dictation.js";
 
 export const STYLES = [
   { id: "balanced", label: "Balanced", note: "Vaelo’s usual voice." },
@@ -64,7 +66,7 @@ export const ROLES = [
 ];
 
 const Recognition =
-  typeof window !== "undefined" && (window.SpeechRecognition || window.webkitSpeechRecognition);
+  DESKTOP ? DesktopRecognition : typeof window !== "undefined" && (window.SpeechRecognition || window.webkitSpeechRecognition);
 
 /* Dictation through the browser's own speech service. Words arrive in the
    field as you speak, so you can correct them before sending.
@@ -78,6 +80,7 @@ const FINISH_WAIT = 1500;
 
 function useDictation(draft, onChange) {
   const [listening, setListening] = useState(false);
+  const [processing, setProcessing] = useState(false);
   const [problem, setProblem] = useState("");
   const live = useRef(null);
   const finishing = useRef(null);
@@ -103,21 +106,25 @@ function useDictation(draft, onChange) {
     /* A finishing take may still deliver its last words, but never once a
        newer take is listening */
     const current = () => live.current === r || (finishing.current === r && !live.current);
+    r.onprocessing = () => { setListening(false); setProcessing(true); };
     r.onresult = (event) => {
       if (!current()) return;
       let text = "";
       for (const result of event.results) text += result[0].transcript;
-      latest.current = base + text.trimStart();
+      const prefix = DESKTOP ? (latest.current ? `${latest.current.replace(/\s+$/, "")} ` : "") : base;
+      latest.current = prefix + text.trimStart();
       onChange(latest.current);
     };
     r.onerror = (event) => {
       if (!current()) return;
       if (event.error === "not-allowed" || event.error === "service-not-allowed")
-        setProblem("Microphone access is off for this site.");
+        setProblem(DESKTOP ? "Allow microphone access for Vaelo in your system settings." : "Microphone access is off for this site.");
+      else if (event.message) setProblem(event.message);
       else if (event.error !== "aborted" && event.error !== "no-speech")
         setProblem("Dictation stopped. Try again.");
     };
     r.onend = () => {
+      if (DESKTOP) setProcessing(false);
       if (finishing.current === r) {
         finishing.current = null;
         if (queued.current) startQueued();
@@ -144,12 +151,14 @@ function useDictation(draft, onChange) {
   }
 
   function toggle() {
+    if (processing) return;
     if (listening) {
       clearTimeout(queued.current);
       queued.current = 0;
       if (live.current) {
         finishing.current = live.current;
         live.current = null;
+        if (DESKTOP) setProcessing(true);
         finishing.current.stop();
       }
       setListening(false);
@@ -170,7 +179,7 @@ function useDictation(draft, onChange) {
     }, FINISH_WAIT);
   }
 
-  return { supported: !!Recognition, listening, problem, toggle };
+  return { supported: !!Recognition, listening, processing, problem, toggle };
 }
 
 /* While dictating, five gilt hairlines follow your voice and a clock counts
@@ -635,6 +644,8 @@ export const Composer = forwardRef(function Composer(
      line so the instrument row never grows or shifts. */
   const note = dictation.problem
     ? { tone: "problem", text: dictation.problem }
+    : dictation.processing
+      ? { text: "Transcribing your recording…" }
     : over
       ? {
           tone: "problem",
@@ -652,6 +663,8 @@ export const Composer = forwardRef(function Composer(
   useEffect(() => onDictating?.(dictation.listening), [dictation.listening, onDictating]);
 
   function send() {
+    if (dictation.processing) return;
+    if (DESKTOP && dictation.listening) { dictation.toggle(); return; }
     if (dictation.listening) dictation.toggle();
     if (!over && !reading && !offline) onSend();
   }
@@ -821,6 +834,7 @@ export const Composer = forwardRef(function Composer(
               className="icon-button composer-tool composer-mic"
               aria-label={dictation.listening ? "Stop dictation" : "Dictate"}
               aria-pressed={dictation.listening}
+              disabled={dictation.processing}
               data-tip={dictation.listening ? "Stop dictation" : "Dictate"}
               onClick={dictation.toggle}
             >

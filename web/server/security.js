@@ -5,6 +5,7 @@ const googleKeys = createRemoteJWKSet(
   new URL("https://www.googleapis.com/oauth2/v3/certs"),
 );
 const duration = 7 * 24 * 60 * 60;
+const desktopAuth = Symbol("verified desktop session");
 export class HttpError extends Error {
   constructor(status, message) {
     super(message);
@@ -56,6 +57,12 @@ export function csrfToken(req, res, cfg) {
 }
 
 export function sameOrigin(req, cfg) {
+  // Only sessionUser can set this marker after verifying a desktop bearer.
+  if (req[desktopAuth]) {
+    if (!req.headers["content-type"]?.startsWith("application/json"))
+      throw new HttpError(415, "Expected a JSON request.");
+    return;
+  }
   if (req.headers.origin !== cfg.origin)
     throw new HttpError(403, "Request origin is not allowed.");
   const token = cookies(req)[cookieNames(cfg).csrf];
@@ -80,27 +87,31 @@ function sessionKey(cfg) {
   return new TextEncoder().encode(cfg.secret);
 }
 
-export async function signSession(user, cfg) {
+export async function signSession(user, cfg, audience = "jarvis-web") {
   return new SignJWT({ email: user.email, name: user.name })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(user.sub)
     .setIssuer(cfg.origin)
-    .setAudience("jarvis-web")
+    .setAudience(audience)
     .setIssuedAt()
     .setExpirationTime(`${duration}s`)
     .sign(sessionKey(cfg));
 }
 
 export async function sessionUser(req, cfg) {
-  const token = cookies(req)[cookieNames(cfg).session];
+  delete req[desktopAuth];
+  const bearer = req.headers.authorization;
+  const desktop = typeof bearer === "string" && bearer.startsWith("Bearer ");
+  const token = desktop ? bearer.slice(7) : cookies(req)[cookieNames(cfg).session];
   if (!token) return null;
   try {
     const { payload } = await jwtVerify(token, sessionKey(cfg), {
       issuer: cfg.origin,
-      audience: "jarvis-web",
+      audience: desktop ? "vaelo-desktop" : "jarvis-web",
       algorithms: ["HS256"],
     });
     if (!payload.sub || !cfg.email || payload.email !== cfg.email) return null;
+    if (desktop) req[desktopAuth] = true;
     return {
       sub: payload.sub,
       email: payload.email,

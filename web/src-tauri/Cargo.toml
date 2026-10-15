@@ -1,0 +1,40 @@
+[package]
+name = "vaelo-desktop"
+version = "0.1.0"
+description = "Vaelo desktop"
+authors = ["Sarvesh"]
+edition = "2021"
+rust-version = "1.85"
+
+[lib]
+name = "vaelo_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-single-instance = "2"
+tauri-plugin-http = "2"
+tauri-plugin-opener = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-fs = "2"
+tauri-plugin-clipboard-manager = "2"
+tauri-plugin-notification = "2"
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
+keyring = { version = "3.6", features = ["apple-native", "windows-native", "sync-secret-service", "crypto-rust"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+tokio = { version = "1", features = ["net", "io-util", "time", "sync"] }
+rand = "0.8"
+sha2 = "0.10"
+base64 = "0.22"
+url = "2"
+
+[profile.release]
+codegen-units = 1
+lto = true
+strip = true
