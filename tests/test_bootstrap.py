@@ -96,6 +96,15 @@ class BootstrapTests(unittest.TestCase):
             self.assertGreaterEqual(provider["stale_timeout_seconds"], 120)
             self.assertGreaterEqual(provider["request_timeout_seconds"], 120)
 
+    def test_free_instance_has_explicit_memory_bounds(self):
+        cfg = bootstrap.configuration({})
+        cache = cfg["agent"]["agent_cache"]
+        self.assertEqual(cache["max_size"], 1)
+        self.assertLess(cache["memory_high_mb"], 512)
+        self.assertEqual(cache["protect_recent"], 0)
+        self.assertEqual(cfg["compression"]["threshold_tokens"], 24000)
+        self.assertLessEqual(cfg["web"]["extract_char_limit"], 10000)
+
     def test_freellmapi_router_leads_and_openrouter_falls_back(self):
         secret = "router-key-not-real"
         cfg = bootstrap.configuration({

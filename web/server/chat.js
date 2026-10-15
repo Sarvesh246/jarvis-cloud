@@ -15,7 +15,7 @@ const STYLES = {
 };
 
 const RESEARCH =
-  "research with sources: use web search and extraction before answering, rely on what you find, and cite each substantive claim inline as a Markdown link to the exact page";
+  "research with sources: use web search and extraction before answering, rely on what you find, and cite each substantive claim inline as a Markdown link to the exact page. Read a small set of relevant sources, then write the answer once you have enough evidence. If a page or search fails, use the available evidence and explain any gap instead of repeatedly retrying";
 
 /* The model says what shape information has; the interface decides how it
    looks. Two shapes beyond Markdown are offered, each in plain lines so a
@@ -168,13 +168,17 @@ function recoveryNote(tools) {
 function relayFrames(res) {
   const decoder = new TextDecoder();
   let buffer = "";
-  const seen = { content: "", approval: false, held: null, tools: [] };
+  const seen = { content: "", approval: false, held: null, tools: [], finished: false, failed: false };
   function inspect(frame) {
     let name = "message";
     const data = [];
     for (const line of frame.split("\n")) {
       if (line.startsWith("event:")) name = line.slice(6).trim();
       if (line.startsWith("data:")) data.push(line.slice(5).trimStart());
+    }
+    if (data.join("\n") === "[DONE]") {
+      seen.finished = true;
+      return true;
     }
     let payload;
     try {
@@ -188,7 +192,11 @@ function relayFrames(res) {
       if (label && !seen.tools.includes(label) && seen.tools.length < 12) seen.tools.push(label);
     }
     const choice = payload?.choices?.[0];
-    if (typeof choice?.delta?.content === "string") seen.content += choice.delta.content;
+    // Only a short prefix is needed to detect an empty reply. Do not retain
+    // another full copy of a long answer in the streaming proxy.
+    if (typeof choice?.delta?.content === "string") seen.content = (seen.content + choice.delta.content).trimStart().slice(0, 64);
+    if (["stop", "length"].includes(choice?.finish_reason)) seen.finished = true;
+    if (choice?.finish_reason === "error" || (payload?.error && choice?.finish_reason !== "length")) seen.failed = true;
     if ((choice?.finish_reason === "error" || payload?.error) && !answered(seen)) {
       seen.held = frame;
       return false;
@@ -342,6 +350,8 @@ export async function streamChat(req, res, cfg, user, input, request = fetch, { 
       return;
     }
     if (seen.dropped) throw seen.dropped;
+    if (!seen.approval && (!seen.finished || seen.failed))
+      throw new HttpError(502, "Vaelo’s server stopped before the answer finished. What arrived is kept; please retry or continue.");
     event(res, "jarvis.complete", { ok: true });
   } catch (error) {
     if (!res.destroyed)

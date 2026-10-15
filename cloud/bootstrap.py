@@ -79,7 +79,10 @@ def configuration(environ):
             "base_url": GEMINI_NATIVE_URL, "key_env": "GEMINI_API_KEY",
             "api_mode": "chat_completions",
         })
-    cfg["web"] = {"search_backend": "jarvis-cloud-research", "extract_backend": "jarvis-cloud-research"}
+    cfg["web"] = {
+        "search_backend": "jarvis-cloud-research", "extract_backend": "jarvis-cloud-research",
+        "extract_char_limit": 10000,
+    }
     return cfg
 
 

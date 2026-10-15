@@ -191,3 +191,13 @@ test("a reply that waits on approval is never retried", async () => {
   assert.equal(calls, 1);
   assert.equal(events().at(-1).name, "jarvis.complete");
 });
+
+test("a backend restart after some answer text is never reported as success", async () => {
+  const { req, res, events } = fakeExchange();
+  await streamChat(req, res, cfg, user, input, async (url) =>
+    url.endsWith("/health") ? Response.json({ status: "ok" }) :
+      new Response('data: {"choices":[{"delta":{"content":"Partial answer"}}]}\n\n'));
+  assert.match(res.chunks.join(""), /Partial answer/);
+  assert.equal(events().at(-1).name, "jarvis.error");
+  assert.ok(!events().some((item) => item.name === "jarvis.complete"));
+});

@@ -29,6 +29,8 @@ Render's free instance sleeps after 15 idle minutes and takes minutes to wake, s
 
 Only one agent run is admitted at a time to limit memory use. A run gets up to 60 agent steps, and slow free models get 150 seconds of silence before a stream counts as stalled. Each reply streams through a Vercel function that stops at five minutes; anything longer ends with what arrived and a Continue option. Browser automation, voice, media generation and local Ollama aren't part of this initial cloud profile. The 512 MB hosting limit still needs to be checked under a real conversation workload.
 
+Research calls Exa, Tavily and Firecrawl directly over HTTP rather than importing their SDKs at runtime. Downloads are capped at 512 KiB before JSON parsing; page content is capped at 10,000 characters. Extraction reads one page at a time, up to four per tool call, with a 20-second network timeout and fallback for failed pages. History compression starts at 24,000 tokens. The cloud profile keeps at most one cached agent, uses a 320 MB cache-pressure threshold, and limits allocator arenas. These bounds reduce memory pressure; a real Render workload is still needed to establish peak usage. A stream that ends without an answer and a completion marker is reported as interrupted.
+
 ## Checks
 
 ```sh

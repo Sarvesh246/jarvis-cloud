@@ -13,16 +13,17 @@
       "models": ["openrouter/free"]
     }
   },
-  "agent": {"max_turns": 60},
+  "agent": {"max_turns": 60, "agent_cache": {"max_size": 1, "idle_ttl_secs": 60, "memory_high_mb": 320, "protect_recent": 0}},
   "gateway": {
     "max_concurrent_runs": 1,
-    "api_server": {"enabled": true, "max_concurrent_runs": 1, "history_tool_output_max_chars": 12000}
+    "api_server": {"enabled": true, "max_concurrent_runs": 1, "history_tool_output_max_chars": 6000}
   },
   "platform_toolsets": {
     "api_server": ["file", "terminal", "web", "memory", "session_search", "skills", "todo"]
   },
   "terminal": {"backend": "local", "cwd": "/opt/data/workspace", "timeout": 180},
   "memory": {"memory_enabled": true, "user_profile_enabled": true},
+  "compression": {"enabled": true, "threshold_tokens": 24000},
   "skills": {"creation_nudge_interval": 15},
   "auxiliary": {"background_review": {"enabled": false}},
   "plugins": {"enabled": ["jarvis-cloud-research"], "disabled": []},
