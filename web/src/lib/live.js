@@ -49,7 +49,7 @@ export function stillLine(running) {
 /* The newest thought, as one plain line: the tail of the last paragraph the
    model is writing to itself, without its Markdown. It changes as it
    streams, which is the point: the reader can see the work moving. */
-export function thinkingPreview(reasoning = "", limit = 160) {
+export function thinkingPreview(reasoning = "", limit = 280) {
   const paragraphs = String(reasoning)
     .split(/\n\s*\n/)
     .map((part) =>

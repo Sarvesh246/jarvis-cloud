@@ -1,4 +1,6 @@
-export async function readEvents(body, onEvent) {
+/* `onBytes` hears every arrival, keepalive comments included, so the page
+   can tell a quiet model from a connection that has gone dead. */
+export async function readEvents(body, onEvent, onBytes) {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
@@ -28,6 +30,7 @@ export async function readEvents(body, onEvent) {
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
+      onBytes?.();
       buffer += decoder.decode(value, { stream: true });
       // The upstream emits LF; preserve CR split across transport chunks too.
       buffer = buffer.replace(/\r\n/g, "\n");

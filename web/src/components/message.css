@@ -751,6 +751,22 @@
   overflow-wrap: anywhere;
   font-size: var(--t-sm);
   color: var(--muted);
+  animation: fade var(--dur-2) var(--ease) both;
+}
+
+/* The model's newest thought, streaming in under the live line the way
+   Claude and ChatGPT show theirs: a two-line window held to its foot, so the
+   latest words are always the ones in view and older ones fade off the top. */
+.process-sub[data-thought] {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  max-height: calc(2 * 1.45em);
+  overflow: hidden;
+  font-style: italic;
+  line-height: 1.45;
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 0.9em);
+  mask-image: linear-gradient(to bottom, transparent, #000 0.9em);
 }
 
 .process-notes {

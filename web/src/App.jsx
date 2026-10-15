@@ -61,6 +61,11 @@ const OPEN_CHAT_KEY = "vaelo-open-chat";
 const WAKE_PATIENCE_MS = 5 * 60 * 1000;
 const STALE_READY_MS = 12 * 60 * 1000;
 
+/* The proxy sends a keepalive every 15 seconds while a reply runs, so a
+   minute of total silence means the connection itself has died (a phone
+   switching networks, say), not that Vaelo is thinking. */
+const SILENT_MS = 60 * 1000;
+
 /* Hermes writes "(empty)" when its model gave nothing; that is not an answer. */
 function hasAnswer(text) {
   const trimmed = text.trim();
@@ -1021,6 +1026,7 @@ export function App() {
     let frame = 0;
     let runId = "";
     let pendingApproval = false;
+    let silent = false;
     const startedAt = Date.now();
     const updateMessage = (patch) => updateChatMessage(chatId, id, patch);
     /* Words are committed once per frame, not once per network fragment. */
@@ -1177,7 +1183,27 @@ export function App() {
           }
           if (!response.body)
             throw new Error("Streaming is not available in this browser.");
-          await readEvents(response.body, onEvent);
+          /* Time spent in the background doesn't count: a phone pauses the
+             page, and what arrived meanwhile is read the moment it returns. */
+          let heardAt = Date.now();
+          const back = () => {
+            if (document.visibilityState === "visible") heardAt = Date.now();
+          };
+          addEventListener("visibilitychange", back);
+          const watchdog = setInterval(() => {
+            if (document.visibilityState === "visible" && Date.now() - heardAt > SILENT_MS) {
+              silent = true;
+              controller.abort();
+            }
+          }, 5000);
+          try {
+            await readEvents(response.body, onEvent, () => {
+              heardAt = Date.now();
+            });
+          } finally {
+            clearInterval(watchdog);
+            removeEventListener("visibilitychange", back);
+          }
           break;
         } catch (err) {
           const busyNow =
@@ -1210,7 +1236,18 @@ export function App() {
       cancelAnimationFrame(frame);
       frame = 0;
       if (received || reasoning) flush();
-      if (err.name === "AbortError") {
+      if (silent) {
+        const text = hasAnswer(received)
+          ? "The connection went silent partway through. What arrived is kept."
+          : "The connection to Vaelo went silent. Your prompt is still here; try again.";
+        updateMessage(
+          hasAnswer(received)
+            ? { interrupted: true, note: text }
+            : { failed: true, note: text, errorKind: "offline" },
+        );
+        setError(text);
+        announce(text);
+      } else if (err.name === "AbortError") {
         /* Stopping is a choice, not a failure: keep what was written. */
         updateMessage({ stopped: true });
         announce("Stopped.");

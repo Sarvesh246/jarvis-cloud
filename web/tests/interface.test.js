@@ -439,3 +439,19 @@ test("pages in the steps are named by their site, so a phone never shows a whole
   );
   assert.equal(toolDetail({ tool: "web_search", label: "optimal workout frequency" }), "optimal workout frequency");
 });
+
+test("a busy reply keeps saying something new: still-lines, the next step, the newest thought", async () => {
+  const { afterStep, clock, stillLine, thinkingPreview } = await import("../src/lib/live.js");
+  assert.equal(clock(9), "9s");
+  assert.equal(clock(99), "1m 39s");
+  assert.equal(
+    stillLine({ tool: "web_extract", label: "https://www.builtwithscience.com/fitness-tips/split/" }),
+    "Still reading a page · builtwithscience.com",
+  );
+  assert.equal(stillLine({ tool: "lookup_thing" }), "Still working on lookup thing");
+  assert.equal(afterStep({ tool: "web_search", done: true }), "Going through the results");
+  assert.equal(afterStep(undefined), "Thinking");
+  assert.equal(thinkingPreview("First idea.\n\n**Now** compare the *two* splits"), "Now compare the two splits");
+  const long = thinkingPreview("word ".repeat(100), 40);
+  assert.ok(long.startsWith("…") && long.length <= 41);
+});

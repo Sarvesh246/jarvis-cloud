@@ -29,20 +29,28 @@ import { Mark } from "./Mark.jsx";
 import { Rolling } from "./Rolling.jsx";
 import { Rendered, SourceStrip, imageTiles, useCopy, useSources } from "./blocks/Blocks.jsx";
 import { summarizeSteps, toolDetail, toolInfo } from "../lib/tools.js";
+import { LONG_QUIET_MS, QUIET_MS, afterStep, clock, stillLine, thinkingPreview } from "../lib/live.js";
 import { formatSize } from "../lib/attachments.js";
 import { orderPlan, planSummary } from "../lib/plan.js";
 import "./message.css";
 import { HoldButton } from "./HoldButton.jsx";
 
 /* Seconds since `from`, ticking once a second while `live`. */
-function useElapsed(from, live) {
+function useNow(live) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
     if (!live) return;
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, [live]);
-  return from ? Math.max(0, Math.round((now - from) / 1000)) : 0;
+  return now;
+}
+
+/* How long nothing on screen has changed, given what is on screen. */
+function useQuiet(signature, now) {
+  const [changedAt, setChangedAt] = useState(Date.now());
+  useEffect(() => setChangedAt(Date.now()), [signature]);
+  return Math.max(0, now - changedAt);
 }
 
 /* Making a picture, as opposed to looking at one */
@@ -73,7 +81,7 @@ const STEP_ICONS = {
 
 /* What Vaelo did, step by step: what kind of thing, what it was about, and
    how long it took. Status is said in words and shape, never colour alone. */
-function Steps({ items }) {
+function Steps({ items, now }) {
   return (
     <ol className="steps">
       {items.map((item) => {
@@ -92,6 +100,13 @@ function Steps({ items }) {
             <span className="sr-only">{item.done ? ", done" : ", in progress"}</span>
             {item.done && item.endedAt && item.startedAt && (
               <span className="steps-time">{seconds(item.endedAt - item.startedAt)}</span>
+            )}
+            {/* The running step keeps its own clock, so a slow page visibly
+                ticks instead of sitting still. */}
+            {!item.done && now && item.startedAt && now - item.startedAt >= 3000 && (
+              <span className="steps-time" aria-hidden="true">
+                {clock((now - item.startedAt) / 1000)}
+              </span>
             )}
           </li>
         );
@@ -169,18 +184,21 @@ function Reasoning({ text }) {
 /* The one plain sentence for what Vaelo is doing right now. Shared by the
    reply's live line and the "jump to latest" pill, so status reads the same
    wherever you are looking. */
-export function liveLine(message, phase) {
-  const running = message?.activity?.findLast?.((item) => !item.done);
+export function liveLine(message, phase, quietMs = 0) {
+  const steps = message?.activity || [];
+  const running = steps.findLast?.((item) => !item.done);
+  const quiet = quietMs >= QUIET_MS;
   if (message?.approval?.state === "pending") return "Waiting for your answer";
   if (phase === "waking") return "Waking up. This can take a minute";
   if (message?.content && phase === "speaking") return "Writing";
   if (running) {
+    if (quiet) return stillLine(running);
     const detail = toolDetail(running);
     return `${toolInfo(running.tool ?? running.name).now}${detail ? ` · ${detail}` : ""}`;
   }
   if (message?.live) return message.live;
-  if (message?.reasoning) return "Thinking it through";
-  return "Thinking";
+  const line = steps.length ? afterStep(steps.at(-1)) : message?.reasoning ? "Thinking it through" : "Thinking";
+  return quiet ? `Still ${line[0].toLowerCase()}${line.slice(1)}` : line;
 }
 
 /* The live line changes in place: the new words rise in as the old ones
@@ -232,20 +250,44 @@ function LiveLine({ text }) {
    ("Worked for 12s · Searched the web 3×") that opens to the steps. */
 function Process({ message, live, phase }) {
   const [open, setOpen] = useState(false);
-  const elapsed = useElapsed(message.startedAt, live);
+  const now = useNow(live);
+  const elapsed = message.startedAt ? Math.max(0, Math.round((now - message.startedAt) / 1000)) : 0;
   const steps = message.activity || [];
   const running = steps.findLast?.((item) => !item.done);
+  /* Anything new on screen (a step, a thought, a word, a note) resets the
+     quiet clock; only a real lull turns the line into "Still …". */
+  const signature = [
+    liveLine(message, phase),
+    steps.length,
+    steps.filter((item) => item.done).length,
+    message.reasoning?.length || 0,
+    message.content?.length || 0,
+    message.notes?.length || 0,
+  ].join("|");
+  const quietMs = useQuiet(signature, now);
 
   if (live) {
-    const line = liveLine(message, phase);
+    const line = liveLine(message, phase, quietMs);
+    const thought = !running && !message.content ? thinkingPreview(message.reasoning) : "";
+    const sub =
+      running && message.live
+        ? message.live
+        : thought ||
+          (quietMs >= LONG_QUIET_MS && phase !== "waking" && message.approval?.state !== "pending"
+            ? "Some steps take a minute or two on the free models. Vaelo is still connected and working."
+            : "");
     return (
       <div className="process" data-live="true">
         <span className="process-head">
           <LiveLine text={line} />
-          {elapsed >= 3 && <span className="process-time">{elapsed}s</span>}
+          {elapsed >= 3 && <span className="process-time">{clock(elapsed)}</span>}
         </span>
-        {running && message.live && <span className="process-sub">{message.live}</span>}
-        {steps.length > 1 && <Steps items={steps} />}
+        {sub && (
+          <span className="process-sub" data-thought={thought ? "true" : undefined} key={thought ? "thought" : sub}>
+            {thought ? <span>{sub}</span> : sub}
+          </span>
+        )}
+        {steps.length > 1 && <Steps items={steps} now={now} />}
       </div>
     );
   }
