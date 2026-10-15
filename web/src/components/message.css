@@ -246,10 +246,22 @@
   }
 }
 
+/* The live line and its timer share one row at any width: on a phone the
+   words give way with an ellipsis, the seconds never drop to a new line. */
+.process-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2);
+  flex: 1 1 100%;
+  min-width: 0;
+}
+
 /* The live line swaps in place: old words lift away, new ones rise in,
    and the line's width eases so what sits beside it never jumps. */
 .live-line {
   display: inline-grid;
+  flex: 0 1 auto;
+  min-width: 0;
   max-width: 100%;
   transition: width var(--dur-2) var(--ease);
 }
@@ -288,6 +300,7 @@
 }
 
 .process-time {
+  flex: none;
   font-size: var(--t-sm);
   font-variant-numeric: tabular-nums;
   opacity: 0.8;
@@ -297,7 +310,10 @@
   display: inline-flex;
   align-items: center;
   gap: var(--s-1);
+  max-width: 100%;
+  min-width: 0;
   min-height: 2rem;
+  text-align: left;
   font-size: var(--t-sm);
   color: var(--muted);
   transition: color var(--dur-1) var(--ease);
@@ -311,7 +327,17 @@
   cursor: default;
 }
 
+/* One line, like ChatGPT's and Claude's "Thought for 12s": what doesn't fit
+   is cut with an ellipsis, and the caret stays beside the words. */
+.process-receipt-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .process-receipt svg {
+  flex: none;
   transition: transform var(--dur-2) var(--ease);
 }
 
@@ -322,6 +348,10 @@
 /* Steps hang from a fine gilt thread, like marginal notes */
 .steps {
   flex-basis: 100%;
+  /* A flex item is otherwise as wide as its longest unbroken line, which
+     pushes long queries and addresses off a phone screen. */
+  min-width: 0;
+  max-width: 100%;
   display: flex;
   flex-direction: column;
   gap: var(--s-1);
@@ -417,6 +447,8 @@
 
 .process-detail {
   flex-basis: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
   display: flex;
   flex-direction: column;
   gap: var(--s-3);
@@ -715,6 +747,8 @@
 
 .process-sub {
   flex-basis: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
   font-size: var(--t-sm);
   color: var(--muted);
 }

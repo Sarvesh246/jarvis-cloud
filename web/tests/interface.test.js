@@ -427,3 +427,15 @@ test("finished tasks sink beneath open ones in the order they were finished", ()
     "Searched the web",
   ]);
 });
+
+test("pages in the steps are named by their site, so a phone never shows a whole address", () => {
+  assert.equal(
+    toolDetail({ tool: "web_extract", label: "web_extract: https://www.builtwithscience.com/fitness-tips/best-workout-split/" }),
+    "builtwithscience.com",
+  );
+  assert.equal(
+    toolDetail({ tool: "web_extract", label: "https://pubmed.ncbi.nlm.nih.gov/27102172/, https://example.org/a" }),
+    "pubmed.ncbi.nlm.nih.gov, example.org",
+  );
+  assert.equal(toolDetail({ tool: "web_search", label: "optimal workout frequency" }), "optimal workout frequency");
+});

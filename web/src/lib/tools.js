@@ -29,15 +29,28 @@ export function toolInfo(name = "") {
   return { kind: "tool", now: label, past: label, unit: ["step", "steps"] };
 }
 
+/* A page is named by its site, the way people say it aloud
+   ("builtwithscience.com"), not by its whole address. */
+export function siteName(text = "") {
+  return String(text).replace(/https?:\/\/[^\s,'"<>()[\]]+/gi, (url) => {
+    try {
+      return new URL(url).hostname.replace(/^www\./, "");
+    } catch {
+      return url;
+    }
+  });
+}
+
 /* Hermes' preview is often "tool_name: detail" or just the tool name. Keep
-   only the detail a person would care about: the query, the URL, the file. */
+   only the detail a person would care about: the query, the site, the file. */
 export function toolDetail(step) {
   const tool = String(step?.tool ?? step?.name ?? "");
   const label = String(step?.label || "").trim();
   if (!label || label === tool) return "";
-  return (label.toLowerCase().startsWith(tool.toLowerCase())
-    ? label.slice(tool.length).replace(/^\s*[:\-–]\s*/, "")
-    : label
+  return siteName(
+    label.toLowerCase().startsWith(tool.toLowerCase())
+      ? label.slice(tool.length).replace(/^\s*[:\-–]\s*/, "")
+      : label,
   ).slice(0, 140);
 }
 

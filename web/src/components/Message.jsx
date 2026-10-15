@@ -82,7 +82,7 @@ function Steps({ items }) {
         const Icon = STEP_ICONS[info.kind] || Wrench;
         const detail = toolDetail(item);
         return (
-          <li key={item.id} data-state={item.done ? "done" : "running"} title={tool}>
+          <li key={item.id} data-state={item.done ? "done" : "running"} title={item.label || tool}>
             <span className="steps-mark" aria-hidden="true" />
             <Icon size={15} aria-hidden="true" className="steps-icon" />
             <span className="steps-text">
@@ -240,8 +240,10 @@ function Process({ message, live, phase }) {
     const line = liveLine(message, phase);
     return (
       <div className="process" data-live="true">
-        <LiveLine text={line} />
-        {elapsed >= 3 && <span className="process-time">{elapsed}s</span>}
+        <span className="process-head">
+          <LiveLine text={line} />
+          {elapsed >= 3 && <span className="process-time">{elapsed}s</span>}
+        </span>
         {running && message.live && <span className="process-sub">{message.live}</span>}
         {steps.length > 1 && <Steps items={steps} />}
       </div>
@@ -264,7 +266,7 @@ function Process({ message, live, phase }) {
         disabled={!expandable}
         onClick={() => setOpen((value) => !value)}
       >
-        {parts.join(" · ")}
+        <span className="process-receipt-text">{parts.join(" · ")}</span>
         {expandable && <CaretDown size={13} />}
       </button>
       {open && (

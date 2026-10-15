@@ -61,6 +61,12 @@ const OPEN_CHAT_KEY = "vaelo-open-chat";
 const WAKE_PATIENCE_MS = 5 * 60 * 1000;
 const STALE_READY_MS = 12 * 60 * 1000;
 
+/* Hermes writes "(empty)" when its model gave nothing; that is not an answer. */
+function hasAnswer(text) {
+  const trimmed = text.trim();
+  return Boolean(trimmed) && trimmed !== "(empty)";
+}
+
 function readOpenChat() {
   try {
     return sessionStorage.getItem(OPEN_CHAT_KEY);
@@ -1055,6 +1061,15 @@ export function App() {
           status: data.status,
         });
       if (name === "jarvis.complete") completed = true;
+      /* The run ended without an answer and the proxy is asking again;
+         anything that stood in for an answer so far is set aside. */
+      if (name === "jarvis.retry") {
+        received = "";
+        updateMessage({ content: "", truncated: false, live: String(data.message || "").slice(0, 160) });
+        setLivePhase("thinking");
+        announce("Vaelo is writing up what it found.");
+        return;
+      }
       if (name === "jarvis.status") {
         const waking = /wake|idle/i.test(data.message || "");
         setLivePhase(waking ? "waking" : "thinking");
@@ -1187,7 +1202,7 @@ export function App() {
           updateMessage({ live: "" });
         }
       }
-      if (!completed || !received.trim())
+      if (!completed || !hasAnswer(received))
         throw new Error("The response ended before Vaelo delivered an answer.");
       succeeded = true;
     } catch (err) {
@@ -1204,7 +1219,7 @@ export function App() {
           name: err.name,
           message: err.message,
           status: err.status,
-          partial: !!received.trim(),
+          partial: hasAnswer(received),
         });
         if (problem.kind === "interrupted")
           updateMessage({ interrupted: true, note: problem.text });

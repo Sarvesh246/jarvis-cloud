@@ -118,3 +118,76 @@ test("waking is only announced when the server is actually asleep", async () => 
   assert.ok(!(await run(true)).some((message) => /wak/i.test(message)));
   assert.ok((await run(false)).some((message) => /Waking/.test(message)));
 });
+
+function sse(frames) {
+  return new Response(frames.map((frame) => `${frame}\n\n`).join(""));
+}
+
+test("a run that ends without an answer is asked once more for the write-up", async () => {
+  const { req, res, events } = fakeExchange();
+  const bodies = [];
+  const request = async (url, options) => {
+    if (url.endsWith("/health")) return Response.json({ status: "ok" });
+    bodies.push(JSON.parse(options.body));
+    if (bodies.length === 1)
+      return sse([
+        'event: hermes.tool.progress\ndata: {"tool":"web_search","label":"workout split research"}',
+        'data: {"choices":[{"delta":{},"finish_reason":"cancelled"}]}',
+        "data: [DONE]",
+      ]);
+    return sse(['data: {"choices":[{"delta":{"content":"Train each muscle twice a week."},"finish_reason":"stop"}]}']);
+  };
+  await streamChat(req, res, cfg, user, input, request);
+  assert.equal(bodies.length, 2);
+  const retried = bodies[1].messages.at(-1).content;
+  assert.match(retried, /^hi/);
+  assert.match(retried, /workout split research/);
+  const names = events().map((e) => e.name);
+  assert.ok(names.includes("jarvis.retry"));
+  assert.equal(names.at(-1), "jarvis.complete");
+  assert.match(res.chunks.join(""), /twice a week/);
+});
+
+test("a late provider failure with no answer is held back while the recovery runs", async () => {
+  const { req, res, events } = fakeExchange();
+  let calls = 0;
+  const request = async (url) => {
+    if (url.endsWith("/health")) return Response.json({ status: "ok" });
+    calls += 1;
+    if (calls === 1)
+      return sse(['data: {"choices":[{"delta":{},"finish_reason":"error"}],"error":{"message":"provider failed"}}']);
+    if (calls === 2) return new Response("", { status: 429 });
+    return sse(['data: {"choices":[{"delta":{"content":"Here it is."},"finish_reason":"stop"}]}']);
+  };
+  await streamChat(req, res, cfg, user, input, request);
+  assert.doesNotMatch(res.chunks.join(""), /provider failed/);
+  assert.equal(events().at(-1).name, "jarvis.complete");
+});
+
+test("when the recovery also comes back empty, the page is told plainly", async () => {
+  const { req, res, events } = fakeExchange();
+  let calls = 0;
+  const request = async (url) => {
+    if (url.endsWith("/health")) return Response.json({ status: "ok" });
+    calls += 1;
+    return sse(['data: {"choices":[{"delta":{"content":"(empty)"},"finish_reason":"stop"}]}']);
+  };
+  await streamChat(req, res, cfg, user, input, request);
+  assert.equal(calls, 2);
+  const last = events().at(-1);
+  assert.equal(last.name, "jarvis.error");
+  assert.equal(last.data.code, "no_answer");
+});
+
+test("a reply that waits on approval is never retried", async () => {
+  const { req, res, events } = fakeExchange();
+  let calls = 0;
+  const request = async (url) => {
+    if (url.endsWith("/health")) return Response.json({ status: "ok" });
+    calls += 1;
+    return sse(['event: approval.request\ndata: {"command":"npm run deploy"}']);
+  };
+  await streamChat(req, res, cfg, user, input, request);
+  assert.equal(calls, 1);
+  assert.equal(events().at(-1).name, "jarvis.complete");
+});
