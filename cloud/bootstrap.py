@@ -17,6 +17,12 @@ GEMINI_NATIVE_URL = "https://generativelanguage.googleapis.com/v1beta"
 # The newest Flash that answered reliably in the free-capacity audit; the 3.x previews were
 # returning 503 under load. GEMINI_MODEL overrides it without a code change.
 DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
+# Seconds a model stream may stay completely silent before Hermes gives up on it and moves to
+# the next provider. A reply has one five-minute Vercel window, so a hung free model must not
+# eat half of it. Hermes otherwise defaults to 180s and raises it further for reasoning models.
+STALE_SECONDS = 60
+# NVIDIA's 550B model is slow to its first token on a long context; it gets a little more room.
+SLOW_STALE_SECONDS = 90
 
 
 def freellmapi_url(environ):
@@ -40,7 +46,7 @@ def configuration(environ):
         cfg["providers"]["cloud-freellmapi"] = {
             "name": "FreeLLMAPI router", "api": router, "api_key": "${FREELLMAPI_API_KEY}",
             "transport": "chat_completions", "default_model": "auto", "models": ["auto"],
-            "context_length": 128000, "request_timeout_seconds": 180, "stale_timeout_seconds": 150,
+            "context_length": 128000, "request_timeout_seconds": 180, "stale_timeout_seconds": STALE_SECONDS,
         }
         cfg["model"] = {"provider": "custom:cloud-freellmapi", "default": "auto", "context_length": 128000}
         cfg["fallback_providers"].append({
@@ -62,7 +68,7 @@ def configuration(environ):
                 "transport": "chat_completions", "default_model": model,
                 "models": [model],
                 # A 550B model is slow to its first token on a long context.
-                "request_timeout_seconds": 180, "stale_timeout_seconds": 150,
+                "request_timeout_seconds": 180, "stale_timeout_seconds": SLOW_STALE_SECONDS,
             }
             cfg["fallback_providers"].append({
                 "provider": "custom:" + provider, "model": model,
@@ -183,6 +189,9 @@ def main():
         "API_SERVER_PORT": str(port), "API_SERVER_MODEL_NAME": "jarvis",
         "HERMES_GATEWAY_NO_SUPERVISE": "1", "HERMES_HOME": str(home),
     })
+    # Built-in providers (Gemini) have no providers block to carry a stale timeout; an explicit
+    # environment value is used as-is instead of Hermes's 180s default and reasoning floors.
+    os.environ.setdefault("HERMES_STREAM_STALE_TIMEOUT", str(SLOW_STALE_SECONDS))
     executable = shutil.which("hermes")
     if not executable:
         raise SystemExit("The Hermes executable is missing from the container")

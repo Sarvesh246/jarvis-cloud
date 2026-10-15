@@ -93,8 +93,27 @@ class BootstrapTests(unittest.TestCase):
         self.assertGreaterEqual(cfg["agent"]["max_turns"], 40)
         self.assertGreaterEqual(cfg["terminal"]["timeout"], 120)
         for provider in cfg["providers"].values():
-            self.assertGreaterEqual(provider["stale_timeout_seconds"], 120)
             self.assertGreaterEqual(provider["request_timeout_seconds"], 120)
+
+    def test_a_hung_provider_hands_over_well_inside_one_reply_window(self):
+        # One reply streams through a five-minute Vercel function. A silent model has to give
+        # way to the next provider early, after one attempt, so a fallback still has time.
+        cfg = bootstrap.configuration({"NVIDIA_API_KEY": "x", "FREELLMAPI_URL": "https://r.example", "FREELLMAPI_API_KEY": "k"})
+        for provider in cfg["providers"].values():
+            self.assertLessEqual(provider["stale_timeout_seconds"], 90)
+            self.assertGreaterEqual(provider["stale_timeout_seconds"], 45)
+        self.assertEqual(cfg["agent"]["api_max_retries"], 1)
+        self.assertLessEqual(cfg["agent"]["auto_recovery_cycles"], 1)
+        # The model is told to write up what it has before the window closes.
+        self.assertLess(cfg["agent"]["run_budget_seconds"], 240)
+
+    def test_no_hidden_model_calls_or_skill_detours(self):
+        cfg = bootstrap.configuration({})
+        # Hermes's skills prompt makes the model load a skill before most replies: one more
+        # full model round trip per message, for guides written for the desktop.
+        self.assertNotIn("skills", cfg["platform_toolsets"]["api_server"])
+        self.assertIs(cfg["auxiliary"]["title_generation"]["model_upgrade_enabled"], False)
+        self.assertIs(cfg["auxiliary"]["background_review"]["enabled"], False)
 
     def test_free_instance_has_explicit_memory_bounds(self):
         cfg = bootstrap.configuration({})
@@ -102,7 +121,8 @@ class BootstrapTests(unittest.TestCase):
         self.assertEqual(cache["max_size"], 1)
         self.assertLess(cache["memory_high_mb"], 512)
         self.assertEqual(cache["protect_recent"], 0)
-        self.assertEqual(cfg["compression"]["threshold_tokens"], 24000)
+        # Compression is a summarizing model call of its own; it waits for histories that need it.
+        self.assertEqual(cfg["compression"]["threshold_tokens"], 64000)
         self.assertLessEqual(cfg["web"]["extract_char_limit"], 10000)
 
     def test_freellmapi_router_leads_and_openrouter_falls_back(self):

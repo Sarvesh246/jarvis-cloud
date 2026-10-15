@@ -33,6 +33,28 @@ export async function wakeBackend(backend, { signal, request = fetch, timeoutMs 
   }
 }
 
+/* A warm function remembers that the backend answered moments ago, so the
+   next message goes straight to it instead of paying for another health
+   round trip first. A free instance can't fall asleep within this window
+   (Render waits 15 idle minutes). Kept per transport, so a test's fake
+   fetch never borrows the real one's answer. */
+const TRUST_HEALTHY_MS = 45000;
+const healthy = new WeakMap();
+
+export function noteHealthy(backend, request = fetch) {
+  if (!healthy.has(request)) healthy.set(request, new Map());
+  healthy.get(request).set(backend.replace(/\/$/, ""), Date.now());
+}
+
+export function forgetHealthy(backend, request = fetch) {
+  healthy.get(request)?.delete(backend.replace(/\/$/, ""));
+}
+
+function recentlyHealthy(backend, request) {
+  const at = healthy.get(request)?.get(backend.replace(/\/$/, ""));
+  return at !== undefined && Date.now() - at < TRUST_HEALTHY_MS;
+}
+
 // Render's free instance can return an edge 502 while asleep or starting.
 // Wake it with a public GET, then wait for Hermes; never retry a chat POST.
 export async function waitForBackend(backend, {
@@ -43,6 +65,8 @@ export async function waitForBackend(backend, {
   onWaking = () => {},
 } = {}) {
   const base = backend.replace(/\/$/, "");
+  signal?.throwIfAborted();
+  if (recentlyHealthy(base, request)) return;
   const deadline = Date.now() + maxWaitMs;
   let woke = false;
   while (Date.now() < deadline) {
@@ -53,7 +77,10 @@ export async function waitForBackend(backend, {
     ]);
     try {
       const response = await request(`${base}/health`, { signal: probeSignal() });
-      if (response.ok && (await response.json()).status === "ok") return;
+      if (response.ok && (await response.json()).status === "ok") {
+        noteHealthy(base, request);
+        return;
+      }
     } catch {
       signal?.throwIfAborted();
     }

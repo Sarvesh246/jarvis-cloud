@@ -30,9 +30,30 @@ class ResearchTests(unittest.TestCase):
         self.assertEqual(post.call_args.args[2]["max_results"], 5)
         self.assertNotIn("private", json.dumps(result))
 
-    def test_pages_are_serial_bounded_and_not_duplicated(self):
+    def test_exa_search_asks_for_passages_the_model_can_answer_from(self):
         mod = self.module
-        urls = [f"https://example.com/{i}" for i in range(6)]
+        rows = {"results": [{"url": "https://example.com", "title": "T", "highlights": ["First fact.", "Second fact."]}]}
+        with patch.dict(mod.os.environ, {"EXA_API_KEY": "fake"}, clear=True), patch.object(mod, "post", return_value=rows) as post:
+            result = mod.Research().search("question")
+        self.assertEqual(post.call_args.args[2]["contents"], {"highlights": True})
+        self.assertIn("First fact.", result["data"]["web"][0]["description"])
+        self.assertIn("Second fact.", result["data"]["web"][0]["description"])
+
+    def test_pages_are_read_at_the_same_time(self):
+        mod = self.module
+        import threading
+        arrived = threading.Barrier(3, timeout=5)
+        def response(name, path, payload):
+            arrived.wait()  # all three pages must be in flight together, or this times out
+            return {"results": [{"text": "page " + payload["urls"][0]}]}
+        urls = [f"https://example.com/{i}" for i in range(3)]
+        with patch.dict(mod.os.environ, {"EXA_API_KEY": "fake"}, clear=True), patch.object(mod, "post", side_effect=response):
+            results = asyncio.run(mod.Research().extract(urls))
+        self.assertEqual([r["content"] for r in results], ["page " + url for url in urls])
+
+    def test_pages_are_bounded_and_not_duplicated(self):
+        mod = self.module
+        urls = [f"https://example.com/{i}" for i in range(6)] + ["https://example.com/0"]
         def response(name, path, payload):
             self.assertEqual(len(payload["urls"]), 1)
             return {"results": [{"url": payload["urls"][0], "text": "x" * 100000}]}

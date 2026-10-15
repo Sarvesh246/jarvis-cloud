@@ -6,7 +6,7 @@ from urllib.request import Request, urlopen
 
 from agent.web_search_provider import WebSearchProvider
 
-REQUEST_TIMEOUT = 20
+REQUEST_TIMEOUT = 15
 RESPONSE_BYTES = 512 * 1024
 PAGE_CHARS = 10000
 MAX_URLS = 4
@@ -26,6 +26,13 @@ def post(provider, path, payload):
     if len(data) > RESPONSE_BYTES:
         raise ValueError("Research response exceeded its size limit")
     return json.loads(data)
+
+
+def snippet(row):
+    highlights = row.get("highlights")
+    if isinstance(highlights, list) and highlights:
+        return " … ".join(str(part).strip() for part in highlights if part)
+    return str(row.get("description") or row.get("content") or row.get("text") or "")
 
 
 def configured(name):
@@ -49,7 +56,10 @@ class Research(WebSearchProvider):
                 continue
             try:
                 if name == "exa":
-                    data = post(name, "/search", {"query": query, "numResults": limit})
+                    # Without contents Exa returns bare titles, which leaves the model nothing to
+                    # answer from and sends it off to read whole pages. Highlights are the
+                    # relevant passages, the same thing Hermes's own Exa backend asks for.
+                    data = post(name, "/search", {"query": query, "numResults": limit, "contents": {"highlights": True}})
                     rows = data.get("results", [])
                 elif name == "tavily":
                     data = post(name, "/search", {"query": query, "max_results": limit, "include_raw_content": False})
@@ -59,7 +69,7 @@ class Research(WebSearchProvider):
                     rows = data.get("data", {})
                     rows = rows.get("web", []) if isinstance(rows, dict) else rows
                 results = [{"url": row["url"], "title": str(row.get("title", ""))[:500],
-                            "description": str(row.get("description") or row.get("content") or "")[:1500]}
+                            "description": snippet(row)[:1500]}
                            for row in rows[:limit] if isinstance(row, dict) and row.get("url")]
                 if results:
                     return {"success": True, "data": {"web": results}, "provider": name}
@@ -91,15 +101,13 @@ class Research(WebSearchProvider):
         return {"url": url, "error": "Page extraction failed; use another source or the available search results", "content": ""}
 
     async def extract(self, urls, **kwargs):
-        # One page at a time: parallel SDK calls and full-page response copies
-        # can exceed the free instance's RAM before Hermes truncates tool output.
-        results = []
-        for index, url in enumerate(dict.fromkeys(urls)):
-            if index >= MAX_URLS:
-                results.append({"url": url, "error": "Extract up to four pages per call", "content": ""})
-            else:
-                results.append(await asyncio.to_thread(self.extract_one, url))
-        return results
+        # Pages are read side by side: each download is capped at RESPONSE_BYTES and each page
+        # at PAGE_CHARS before it is kept, so four at once stays a few megabytes, and the wait
+        # is the slowest page instead of the sum of all of them.
+        unique = list(dict.fromkeys(urls))
+        pages = await asyncio.gather(*(asyncio.to_thread(self.extract_one, url) for url in unique[:MAX_URLS]))
+        return list(pages) + [{"url": url, "error": "Extract up to four pages per call", "content": ""}
+                              for url in unique[MAX_URLS:]]
 
 
 def register(ctx):

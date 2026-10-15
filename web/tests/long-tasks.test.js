@@ -201,3 +201,57 @@ test("a backend restart after some answer text is never reported as success", as
   assert.equal(events().at(-1).name, "jarvis.error");
   assert.ok(!events().some((item) => item.name === "jarvis.complete"));
 });
+
+test("everyday replies ask for brief thinking; research and thorough keep full depth", async () => {
+  const sent = async (mode) => {
+    const { req, res } = fakeExchange();
+    let body;
+    await streamChat(req, res, cfg, user, { ...input, ...mode }, async (url, options) => {
+      if (url.endsWith("/health")) return Response.json({ status: "ok" });
+      body = JSON.parse(options.body);
+      return sse(['data: {"choices":[{"delta":{"content":"Hi"},"finish_reason":"stop"}]}']);
+    });
+    return body.model_options;
+  };
+  assert.deepEqual(await sent({ style: "balanced", research: false }), { reasoning_effort: "low" });
+  assert.deepEqual(await sent({ style: "concise", research: false }), { reasoning_effort: "low" });
+  assert.equal(await sent({ style: "thorough", research: false }), undefined);
+  assert.equal(await sent({ style: "balanced", research: true }), undefined);
+});
+
+test("a backend that just answered is not health-checked again before the next message", async () => {
+  let probes = 0;
+  const request = async (url) => {
+    if (url.endsWith("/health")) {
+      probes += 1;
+      return Response.json({ status: "ok" });
+    }
+    return sse(['data: {"choices":[{"delta":{"content":"Hi"},"finish_reason":"stop"}]}']);
+  };
+  for (let i = 0; i < 3; i += 1) {
+    const { req, res, events } = fakeExchange();
+    await streamChat(req, res, cfg, user, input, request);
+    assert.equal(events().at(-1).name, "jarvis.complete");
+  }
+  assert.equal(probes, 1);
+});
+
+test("after a failed reply the backend is checked again", async () => {
+  let probes = 0;
+  let replies = 0;
+  const request = async (url) => {
+    if (url.endsWith("/health")) {
+      probes += 1;
+      return Response.json({ status: "ok" });
+    }
+    replies += 1;
+    return replies === 1 ? new Response("", { status: 503 }) : sse(['data: {"choices":[{"delta":{"content":"Hi"},"finish_reason":"stop"}]}']);
+  };
+  const first = fakeExchange();
+  await streamChat(first.req, first.res, cfg, user, input, request);
+  assert.equal(first.events().at(-1).name, "jarvis.error");
+  const second = fakeExchange();
+  await streamChat(second.req, second.res, cfg, user, input, request);
+  assert.equal(second.events().at(-1).name, "jarvis.complete");
+  assert.equal(probes, 2);
+});

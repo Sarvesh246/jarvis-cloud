@@ -1,6 +1,6 @@
 name: jarvis-cloud-research
-version: 1.1.0
-description: Research over size-limited HTTP requests with sequential extraction and provider fallback.
+version: 1.2.0
+description: Research over size-limited HTTP requests with parallel extraction and provider fallback.
 kind: backend
 provides_web_providers:
   - jarvis-cloud-research
