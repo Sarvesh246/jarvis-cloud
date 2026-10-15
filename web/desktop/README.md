@@ -63,8 +63,9 @@ need their distribution's GStreamer good plugins and PulseAudio plugin.
 
 The Desktop workflow builds Windows x64/ARM64, macOS Intel/Apple silicon, and Linux
 x64/ARM64. Branch builds are available as Actions artifacts. A `desktop-vX.Y.Z` tag
-matching `src-tauri/tauri.conf.json` builds a **draft GitHub release** with installers
-and signed updater artifacts. Publish the draft only after checking the packages.
+matching `src-tauri/tauri.conf.json` builds a draft GitHub release with installers
+and signed updater artifacts. It publishes only after every desktop and Store
+package job succeeds.
 The download page at `/download` lists published desktop releases.
 
 The updater verification public key is checked in. Its private key belongs in the

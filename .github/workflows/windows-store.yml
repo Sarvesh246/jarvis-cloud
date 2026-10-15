@@ -2,8 +2,7 @@ name: Microsoft Store
 
 on:
   workflow_dispatch:
-  push:
-    tags: ['desktop-v*']
+  workflow_call:
   pull_request:
     paths: ['web/desktop/**', '.github/workflows/windows-store.yml']
 
@@ -12,6 +11,8 @@ permissions:
 
 jobs:
   package:
+    permissions:
+      contents: write
     runs-on: windows-2022
     strategy:
       fail-fast: false
@@ -45,3 +46,14 @@ jobs:
           name: Vaelo-Store-${{ matrix.architecture }}
           path: web/src-tauri/target/msix/*.msix
           if-no-files-found: error
+      - name: Attach Store packages to the desktop release
+        if: startsWith(github.ref, 'refs/tags/desktop-v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          Get-ChildItem -LiteralPath web/src-tauri/target/msix -Filter '*.msix' | ForEach-Object {
+            gh release upload $env:RELEASE_TAG $_.FullName --clobber
+            if ($LASTEXITCODE -ne 0) { throw 'Could not attach the Store package.' }
+          }
