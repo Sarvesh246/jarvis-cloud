@@ -6,11 +6,16 @@ import {
   CaretRight,
   CaretUp,
   Check,
+  Footprints,
   Globe,
+  GraduationCap,
+  MagnifyingGlass,
   Microphone,
   Paperclip,
+  Scales,
   SlidersHorizontal,
   Stop,
+  User,
   X,
 } from "@phosphor-icons/react";
 import { AttachmentList } from "./Message.jsx";
@@ -22,6 +27,40 @@ export const STYLES = [
   { id: "balanced", label: "Balanced", note: "Vaelo’s usual voice." },
   { id: "concise", label: "Concise", note: "The answer first, briefly." },
   { id: "thorough", label: "Thorough", note: "Reasoning, trade-offs, detail." },
+];
+
+/* Who Vaelo acts as. Each note is the whole explanation, shown under the
+   name wherever a role is chosen, so nothing has to be hovered to be
+   understood. Choosing the current role again sets it aside. */
+export const ROLES = [
+  {
+    id: "tutor",
+    label: "Tutor",
+    Icon: GraduationCap,
+    note: "Helps you work it out yourself, then tests you.",
+    placeholder: "What do you want to learn?",
+  },
+  {
+    id: "skeptic",
+    label: "Skeptic",
+    Icon: MagnifyingGlass,
+    note: "Marks what’s backed up and what isn’t.",
+    placeholder: "What should Vaelo check?",
+  },
+  {
+    id: "advocate",
+    label: "Advocate",
+    Icon: Scales,
+    note: "On your side when buying or complaining.",
+    placeholder: "What are you buying or disputing?",
+  },
+  {
+    id: "guide",
+    label: "Guide",
+    Icon: Footprints,
+    note: "One step at a time, waiting for you.",
+    placeholder: "What are you working through?",
+  },
 ];
 
 const Recognition =
@@ -215,6 +254,26 @@ function ToolsMenu({ options, onOptions, onClose, anchor }) {
         </span>
         {options.research && <Check size={16} className="tools-check" />}
       </button>
+      <p className="label tools-group">Act as</p>
+      {ROLES.map(({ id, label, Icon, note }) => (
+        <button
+          key={id}
+          role="menuitemradio"
+          aria-checked={options.role === id}
+          className="tools-item"
+          onClick={() => {
+            onOptions({ role: options.role === id ? "none" : id });
+            onClose(true);
+          }}
+        >
+          <Icon size={18} />
+          <span className="tools-text">
+            <span>{label}</span>
+            <span className="tools-note">{note}</span>
+          </span>
+          {options.role === id && <Check size={16} className="tools-check" />}
+        </button>
+      ))}
       <p className="label tools-group">Response style</p>
       {STYLES.map((style) => (
         <button
@@ -250,11 +309,13 @@ function ToolsSheet({ options, onOptions, onClose }) {
   const [pull, setPull] = useState(0);
   const [dragging, setDragging] = useState(false);
   const [leaving, setLeaving] = useState(false);
-  const pages = { main: useRef(null), style: useRef(null) };
+  const pages = { main: useRef(null), role: useRef(null), style: useRef(null) };
   const drag = useRef(null);
   const close = useRef(onClose);
   close.current = onClose;
   const style = STYLES.find((s) => s.id === options.style);
+  const role = ROLES.find((r) => r.id === options.role);
+  const RoleIcon = role?.Icon || User;
 
   const dismiss = useCallback((refocus) => {
     setLeaving(true);
@@ -270,7 +331,7 @@ function ToolsSheet({ options, onOptions, onClose }) {
     function keys(event) {
       if (event.key !== "Escape") return;
       event.stopPropagation();
-      if (page === "style") setPage("main");
+      if (page !== "main") setPage("main");
       else dismiss(true);
     }
     addEventListener("keydown", keys, true);
@@ -331,6 +392,16 @@ function ToolsSheet({ options, onOptions, onClose }) {
               </span>
               {options.research && <Check size={18} className="tools-check" />}
             </button>
+            <button className="tools-item" onClick={() => setPage("role")}>
+              <RoleIcon size={20} />
+              <span className="tools-text">
+                <span>Act as</span>
+                <span className="tools-note">
+                  {role ? `${role.label}. ${role.note}` : "Vaelo as usual. Pick a tutor, skeptic and more."}
+                </span>
+              </span>
+              <CaretRight size={16} className="tools-more" />
+            </button>
             <button className="tools-item" onClick={() => setPage("style")}>
               <SlidersHorizontal size={20} />
               <span className="tools-text">
@@ -340,7 +411,46 @@ function ToolsSheet({ options, onOptions, onClose }) {
               <CaretRight size={16} className="tools-more" />
             </button>
           </div>
-          <div className="tools-page" ref={pages.style} inert={page !== "style"}>
+          <div
+            className="tools-page"
+            ref={pages.role}
+            inert={page !== "role"}
+            data-current={page === "role" || undefined}
+          >
+            <button className="tools-back" onClick={() => setPage("main")}>
+              <CaretLeft size={16} /> Act as
+            </button>
+            <div role="radiogroup" aria-label="Act as">
+              {[
+                { id: "none", label: "Just Vaelo", Icon: User, note: "Answers you directly, as usual." },
+                ...ROLES,
+              ].map(({ id, label, Icon, note }) => (
+                <button
+                  key={id}
+                  role="radio"
+                  aria-checked={(options.role || "none") === id}
+                  className="tools-item"
+                  onClick={() => {
+                    onOptions({ role: id });
+                    dismiss(true);
+                  }}
+                >
+                  <Icon size={20} />
+                  <span className="tools-text">
+                    <span>{label}</span>
+                    <span className="tools-note">{note}</span>
+                  </span>
+                  {(options.role || "none") === id && <Check size={18} className="tools-check" />}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div
+            className="tools-page"
+            ref={pages.style}
+            inert={page !== "style"}
+            data-current={page === "style" || undefined}
+          >
             <button className="tools-back" onClick={() => setPage("main")}>
               <CaretLeft size={16} /> Response style
             </button>
@@ -400,6 +510,7 @@ export const Composer = forwardRef(function Composer(
   const reading = attachments.some((file) => file.state === "reading");
   const ready = draft.trim() || attachments.some((file) => file.state === "ready");
   const style = STYLES.find((s) => s.id === options.style);
+  const role = ROLES.find((r) => r.id === options.role);
   /* Status that belongs to the message, not the buttons: said on its own
      line so the instrument row never grows or shifts. */
   const note = dictation.problem
@@ -447,7 +558,12 @@ export const Composer = forwardRef(function Composer(
             onFiles(files);
           }
         }}
-        placeholder={dictation.listening ? "Listening…" : options.research ? "What should Vaelo look into?" : "Write to Vaelo"}
+        placeholder={
+          dictation.listening
+            ? "Listening…"
+            : role?.placeholder ||
+              (options.research ? "What should Vaelo look into?" : "Write to Vaelo")
+        }
         aria-label="Message Vaelo"
         aria-describedby="composer-status"
         rows={1}
@@ -495,8 +611,8 @@ export const Composer = forwardRef(function Composer(
             <button
               type="button"
               className="mode-button"
-              aria-label={`Response style: ${style?.label}. Tools`}
-              data-tip="Response style and tools"
+              aria-label={`Response style: ${style?.label}. Tools and roles`}
+              data-tip="Response style, roles and research"
               aria-haspopup="menu"
               aria-expanded={menu}
               onClick={() => setMenu((value) => !value)}
@@ -527,6 +643,22 @@ export const Composer = forwardRef(function Composer(
               />
             )}
           </span>
+          {/* The note rides along as a tip, so a role chosen a while ago
+              still says what it does without opening the menu. */}
+          {role && (
+            <span className="mode-chip" data-tip={role.note}>
+              <role.Icon size={14} aria-hidden="true" />
+              <span className="mode-chip-text">{role.label}</span>
+              <button
+                type="button"
+                aria-label={`Stop acting as ${role.label.toLowerCase()}`}
+                data-tip={`Stop acting as ${role.label.toLowerCase()}`}
+                onClick={() => onOptions({ role: "none" })}
+              >
+                <X size={12} />
+              </button>
+            </span>
+          )}
           {options.research && (
             <span className="mode-chip">
               <Globe size={14} aria-hidden="true" />

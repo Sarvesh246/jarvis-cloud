@@ -328,6 +328,11 @@
     display: inline;
     animation: hint-in var(--dur-3) var(--ease) both;
   }
+
+  /* A chosen role or research needs the room more than the reminder does */
+  .composer:has(.mode-chip) .composer-hint {
+    display: none;
+  }
 }
 
 @keyframes hint-in {
@@ -547,12 +552,12 @@
   opacity: 0;
 }
 
-.tools-pages[data-page="style"] .tools-page:first-child {
+.tools-pages:not([data-page="main"]) .tools-page:first-child {
   transform: translateX(-30%);
   opacity: 0;
 }
 
-.tools-pages[data-page="style"] .tools-page + .tools-page {
+.tools-pages .tools-page[data-current] {
   transform: none;
   opacity: 1;
 }

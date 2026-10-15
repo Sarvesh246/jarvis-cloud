@@ -35,12 +35,29 @@ const RESEARCH_METHOD =
   "Stop once the answer is well supported: one round of searching and at most one round of reading is usually enough. If something can't be found or a tool fails, answer with what you have and say what is missing instead of retrying. " +
   "Write the answer, not the process: open with the direct answer in one or two sentences, then the supporting detail, grouped under short headings when there are several parts. Put each citation right after the claim it supports, as a Markdown link to the exact page labelled with the source or page name, like [Python 3.14 release notes](https://…), rather than collecting sources in a list at the end. Give dates for time-sensitive facts. Only cite pages you actually saw, and never invent figures, quotes or links. Close with one short line on what remains uncertain only when something does.";
 
+/* A role changes how Vaelo treats the person, independent of style and
+   research: a tutor holds the answer back, a skeptic grades its claims. */
+const ROLES = {
+  none: "",
+  tutor:
+    "act as a tutor: help the person learn to do this themselves rather than handing over the finished answer. Find out what they already know, show one worked example when it helps, then let them try the next step and respond to their attempt, giving less help as they improve. When they can do it, set a fresh problem for them to solve unaided and check their answer. If they explicitly ask for the answer, give it and explain it",
+  skeptic:
+    "act as a skeptic: separate what is established from what isn't. Mark each substantive claim as supported, disputed, out of date or unchecked, and say what it rests on. Don't invent confidence percentages. Where plausible answers disagree, name the specific factual difference behind them and suggest the cheapest check that would settle it",
+  advocate:
+    "act as the person's advocate, working only in their interest. For a purchase, start from their requirements and budget, compare total cost of ownership, state any requirement an option fails, and consider repairing, buying used or not buying at all; say when a price or specification couldn't be verified. For a complaint, refund or dispute, list the evidence they need, note any deadlines and draft the next message for them to send; never call a case resolved until they confirm it",
+  guide:
+    "act as a step-by-step guide: first ask about anything in their exact situation that changes the steps, then give one step at a time and wait for them to confirm it worked before the next. Say plainly when a step needs a professional or isn't safe to attempt. If the goal's constraints can't all be met, name the ones that conflict and offer the smallest changes that would make it work",
+};
+
 /* How long a free reasoning model thinks is the largest part of the wait
-   for an everyday reply. Quick and balanced replies think briefly; research
-   and thorough replies keep the provider's default depth. Hermes passes this
-   only to models that support it and clamps it per model. */
-export function reasoningEffort({ style = "balanced", research = false } = {}) {
-  return research || style === "thorough" ? null : "low";
+   for an everyday reply. Quick and balanced replies think briefly; research,
+   thorough replies and the roles that weigh evidence keep the provider's
+   default depth. Hermes passes this only to models that support it and
+   clamps it per model. */
+const DEEP_ROLES = new Set(["skeptic", "advocate"]);
+
+export function reasoningEffort({ style = "balanced", research = false, role = "none" } = {}) {
+  return research || style === "thorough" || DEEP_ROLES.has(role) ? null : "low";
 }
 
 /* The model says what shape information has; the interface decides how it
@@ -63,8 +80,8 @@ export const LIMITS = {
   body: 4_000_000,
 };
 
-export function requestNote({ style = "balanced", research = false } = {}) {
-  const parts = [research && RESEARCH, STYLES[style]].filter(Boolean);
+export function requestNote({ style = "balanced", research = false, role = "none" } = {}) {
+  const parts = [ROLES[role], research && RESEARCH, STYLES[style]].filter(Boolean);
   return parts.length ? `[Vaelo request: ${parts.join("; ")}]` : "";
 }
 
@@ -73,12 +90,14 @@ export function guidance() {
 }
 
 function readMode(mode) {
-  if (mode === undefined || mode === null) return { style: "balanced", research: false };
+  if (mode === undefined || mode === null) return { style: "balanced", research: false, role: "none" };
   const style = mode.style ?? "balanced";
   if (!Object.hasOwn(STYLES, style)) throw new HttpError(400, "Unknown response style.");
   if (mode.research !== undefined && typeof mode.research !== "boolean")
     throw new HttpError(400, "Invalid research setting.");
-  return { style, research: mode.research === true };
+  const role = mode.role ?? "none";
+  if (!Object.hasOwn(ROLES, role)) throw new HttpError(400, "Unknown role.");
+  return { style, research: mode.research === true, role };
 }
 
 /* Text, or text plus inline images. Only data:image URLs are accepted, so

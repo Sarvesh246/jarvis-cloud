@@ -338,7 +338,7 @@ export function App() {
   const [activeId, setActiveId] = useState(null);
   const [draft, setDraft] = useState("");
   const [attachments, setAttachments] = useState([]);
-  const [options, setOptions] = useState({ research: false, style: "balanced" });
+  const [options, setOptions] = useState({ research: false, style: "balanced", role: "none" });
   const [busy, setBusy] = useState(false);
   const [livePhase, setLivePhase] = useState("idle");
   const [settling, setSettling] = useState(false);
@@ -988,7 +988,7 @@ export function App() {
     if (busy || !active || !online || session?.offline) return;
     const chatId = active.id;
     const id = crypto.randomUUID();
-    const mode = { research: options.research, style: options.style };
+    const mode = { research: options.research, style: options.style, role: options.role };
     let messages;
     let versions;
     if (edit) {
@@ -1062,6 +1062,7 @@ export function App() {
       files: (lastUser.attachments || []).map((file) => file.name),
       research: mode.research,
       style: mode.style,
+      role: mode.role,
     };
     fresh.current.add(lastUser.id);
     fresh.current.add(id);

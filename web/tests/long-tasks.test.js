@@ -207,6 +207,11 @@ test("everyday replies ask for brief thinking; research and thorough keep full d
   assert.deepEqual(await sent({ style: "concise", research: false }), { reasoning_effort: "low" });
   assert.equal(await sent({ style: "thorough", research: false }), undefined);
   assert.equal(await sent({ style: "balanced", research: true }), undefined);
+  // roles that weigh evidence think fully; teaching and step-by-step stay quick
+  assert.equal(await sent({ style: "balanced", research: false, role: "skeptic" }), undefined);
+  assert.equal(await sent({ style: "balanced", research: false, role: "advocate" }), undefined);
+  assert.deepEqual(await sent({ style: "balanced", research: false, role: "tutor" }), { reasoning_effort: "low" });
+  assert.deepEqual(await sent({ style: "balanced", research: false, role: "guide" }), { reasoning_effort: "low" });
 });
 
 test("a backend that just answered is not health-checked again before the next message", async () => {

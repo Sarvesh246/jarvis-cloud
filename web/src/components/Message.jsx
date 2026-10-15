@@ -123,7 +123,11 @@ function Context({ context, usage }) {
     parts.push(`this conversation (${context.turns} earlier ${context.turns === 1 ? "message" : "messages"})`);
   else parts.push("your message");
   if (context.files?.length) parts.push(context.files.join(", "));
-  const mode = [context.research && "research", context.style && context.style !== "balanced" && `${context.style} style`]
+  const mode = [
+    context.role && context.role !== "none" && `as ${context.role}`,
+    context.research && "research",
+    context.style && context.style !== "balanced" && `${context.style} style`,
+  ]
     .filter(Boolean)
     .join(", ");
   const tokens =

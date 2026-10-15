@@ -296,6 +296,31 @@ test("each message carries its own mode, so the system prompt (and Hermes sessio
   assert.throws(() => chatInput({ ...base, messages: [{ role: "user", content: "x", mode: { research: "yes" } }] }), /research/);
 });
 
+test("a role travels with its message and combines with style and research", () => {
+  const base = {
+    conversationId: "c5ec5f03-1fd1-4f38-83df-b664bf78f998",
+    messages: [
+      { role: "user", content: "Teach me VLOOKUP", mode: { style: "concise", research: false, role: "tutor" } },
+      { role: "assistant", content: "Try this first." },
+      { role: "user", content: "Is this true?", mode: { style: "balanced", research: true, role: "skeptic" } },
+    ],
+  };
+  const input = chatInput(base);
+  assert.match(input.messages[0].content, /\[Vaelo request: act as a tutor.*; concise style/);
+  assert.match(input.messages[2].content, /\[Vaelo request: act as a skeptic.*; research with sources/);
+  assert.doesNotMatch(input.messages[2].content, /tutor/);
+  assert.equal(input.role, "skeptic");
+  // older messages and clients without a role get Vaelo as usual
+  const plain = chatInput({ ...base, messages: [{ role: "user", content: "Hi" }] });
+  assert.equal(plain.role, "none");
+  assert.equal(plain.messages[0].content, "Hi");
+  for (const role of ["tutor", "skeptic", "advocate", "guide"])
+    assert.match(requestNote({ role }), new RegExp(`^\\[Vaelo request: act as [^:]*${role}`));
+  // the wording is the proxy's own; a client can only pick a name from the list
+  assert.throws(() => chatInput({ ...base, messages: [{ role: "user", content: "x", mode: { role: "pirate" } }] }), /role/);
+  assert.throws(() => chatInput({ ...base, messages: [{ role: "user", content: "x", mode: { role: "toString" } }] }), /role/);
+});
+
 test("images travel as inline data URLs only, and only on your messages", () => {
   const conversationId = "c5ec5f03-1fd1-4f38-83df-b664bf78f998";
   const image = { type: "image_url", image_url: { url: "data:image/jpeg;base64,/9j/4AAQ" } };
