@@ -5403,6 +5403,7 @@ dependencies = [
  "tauri-plugin-updater",
  "tokio",
  "url",
+ "windows",
 ]
 
 [[package]]

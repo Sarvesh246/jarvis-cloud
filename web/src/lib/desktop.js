@@ -8,6 +8,7 @@ import { isPermissionGranted, requestPermission, sendNotification } from "@tauri
 import { createDesktopFetch } from "./desktop-transport.js";
 
 export const DESKTOP = isTauri();
+export const STORE_BUILD = import.meta.env?.VITE_VAELO_STORE === "1";
 let token = null;
 const browserFetch = globalThis.fetch.bind(globalThis);
 
@@ -45,6 +46,8 @@ export async function desktopSignOut() {
   token = null;
 }
 
+export const cancelDesktopSignIn = () => invoke("cancel_sign_in");
+
 export async function saveDesktopFile(name, text) {
   const path = await save({ defaultPath: name });
   if (!path) return false;
@@ -63,5 +66,6 @@ export async function allowNotifications() {
 }
 
 export async function desktopNotification(title, body) {
+  if (STORE_BUILD) return invoke("store_notification", { title, body });
   if (await isPermissionGranted()) sendNotification({ title, body });
 }

@@ -82,6 +82,30 @@ authenticity; they do not replace operating-system publisher certificates.
 
 ## Release verification
 
+## Microsoft Store
+
+The reserved product is [Vaelo Chat, 9PDKBBJC8MVN](https://apps.microsoft.com/detail/9PDKBBJC8MVN).
+`desktop/Package.appxmanifest` uses the assigned package identity and publisher.
+The Microsoft Store workflow creates x64 and ARM64 MSIX packages for Partner
+Center submission. These packages are intentionally unsigned: Microsoft signs
+accepted Store submissions at no charge. They cannot be installed directly
+without a trusted test signature or Store distribution.
+
+From a Windows developer shell, run `npm run desktop:msix` or pass
+`-Architecture arm64` to `desktop/package-msix.ps1`. Store builds disable the
+GitHub updater and use Windows' current package identity for notifications.
+The package declares microphone access and full-trust execution because Vaelo
+uses a native Rust host. Explain these uses in the submission's certification
+notes. Reserve listing text, screenshots, privacy policy, and age/content ratings
+in Partner Center before submitting. The MSA application ID is unrelated to
+Vaelo's Google login and is not used as a Google OAuth client ID.
+
+The MSIX uses the installed Evergreen WebView2 Runtime, which is included with
+Windows 11 and broadly deployed on Windows 10. Test on a clean Windows machine
+and review the WebView2 prerequisite before Store submission.
+
+## Release verification
+
 On each OS, install and launch the actual package, finish Google sign-in in the
 system browser, restart to check saved sign-in, and then sign out. Check chat and
 research streaming, Stop and reconnect, approval answers, history synchronization,

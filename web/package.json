@@ -4,6 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "tauri": "tauri",
+    "desktop:msix": "pwsh -NoProfile -File desktop/package-msix.ps1",
     "desktop:dev": "tauri dev",
     "desktop:build": "tauri build",
     "desktop:icons": "tauri icon public/icons/vaelo-512-v5.png",

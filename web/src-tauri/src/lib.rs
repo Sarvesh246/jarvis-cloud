@@ -10,6 +10,7 @@ const CREDENTIAL_SERVICE: &str = "app.vaelo.desktop";
 struct Session {
     token: Mutex<Option<String>>,
     signing_in: AtomicBool,
+    cancel_sign_in: tokio::sync::Notify,
 }
 
 fn credential() -> Result<keyring::Entry, String> {
@@ -40,6 +41,45 @@ fn clear_session(state: tauri::State<'_, Session>) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+fn cancel_sign_in(state: tauri::State<'_, Session>) {
+    state.cancel_sign_in.notify_waiters();
+}
+
+#[tauri::command]
+fn store_notification(title: String, body: String) -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        use windows::{
+            core::HSTRING,
+            Data::Xml::Dom::XmlDocument,
+            UI::Notifications::{ToastNotification, ToastNotificationManager},
+        };
+        let escape = |text: String| {
+            text.chars()
+                .take(500)
+                .collect::<String>()
+                .replace('&', "&amp;")
+                .replace('<', "&lt;")
+                .replace('>', "&gt;")
+        };
+        let xml = format!("<toast><visual><binding template=\"ToastGeneric\"><text>{}</text><text>{}</text></binding></visual></toast>", escape(title), escape(body));
+        let show = || -> windows::core::Result<()> {
+            let document = XmlDocument::new()?;
+            document.LoadXml(&HSTRING::from(xml))?;
+            // With MSIX identity, Windows uses the current package's AUMID.
+            let notifier = ToastNotificationManager::CreateToastNotifier()?;
+            notifier.Show(&ToastNotification::CreateToastNotification(&document)?)
+        };
+        show().map_err(|_| "Vaelo could not show the notification.".into())
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (title, body);
+        Err("Store notifications are available on Windows.".into())
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -62,6 +102,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             session_token,
             clear_session,
+            cancel_sign_in,
+            store_notification,
             sign_in::begin_sign_in
         ])
         .run(tauri::generate_context!())

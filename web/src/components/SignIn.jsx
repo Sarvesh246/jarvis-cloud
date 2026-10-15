@@ -34,6 +34,8 @@ export function SignIn({
   googleState = "loading",
   onRetryGoogle,
   onGoogleRedirect,
+  signingIn = false,
+  onCancelSignIn,
 }) {
   const own = googleState === "failed" || googleState === "hidden" || googleState === "redirect";
   return (
@@ -57,11 +59,12 @@ export function SignIn({
               </span>
             )}
             {own && (
-              <button className="google-own" onClick={onGoogleRedirect}>
+              <button className="google-own" disabled={signingIn} onClick={onGoogleRedirect}>
                 <GoogleG />
-                Continue with Google
+                {signingIn ? "Finish signing in in your browser…" : "Continue with Google"}
               </button>
             )}
+            {signingIn && <button className="text-button google-alt" onClick={onCancelSignIn}>Cancel sign-in</button>}
             {own && googleState !== "redirect" && (
               <p className="google-why">
                 Google’s own button was blocked on this browser, so this signs you in on

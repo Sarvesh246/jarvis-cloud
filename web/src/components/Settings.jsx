@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { X } from "@phosphor-icons/react";
 import { notifySupport } from "../lib/preferences.js";
-import { allowNotifications, DESKTOP } from "../lib/desktop.js";
+import { allowNotifications, DESKTOP, STORE_BUILD } from "../lib/desktop.js";
 import { DesktopUpdates } from "./DesktopUpdates.jsx";
 import "./settings.css";
 
@@ -141,7 +141,7 @@ export function Settings({ open, prefs, onChange, onClose }) {
           )}
         </fieldset>
 
-        {DESKTOP && <DesktopUpdates />}
+        {DESKTOP && (STORE_BUILD ? <p className="settings-note">Updates are delivered by Microsoft Store.</p> : <DesktopUpdates />)}
         <p className="settings-foot">Kept on this device only.</p>
       </div>
     </dialog>

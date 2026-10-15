@@ -150,7 +150,11 @@ pub async fn begin_sign_in(app: tauri::AppHandle) -> Result<(), String> {
                 .into(),
         );
     }
-    let result = sign_in(&app).await;
+    let session = app.state::<Session>();
+    let result = tokio::select! {
+        result = sign_in(&app) => result,
+        _ = session.cancel_sign_in.notified() => Err("Sign-in was cancelled.".into()),
+    };
     app.state::<Session>()
         .signing_in
         .store(false, Ordering::SeqCst);

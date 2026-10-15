@@ -122,6 +122,14 @@ test("browser handoff survives Google redirect but refuses expired and arbitrary
   assert.equal(readDesktopHandoff(memory, url), null);
 });
 
+test("native transport failures retain offline recovery and standard abort semantics", async () => {
+  const transport = createDesktopFetch({ loadToken: async () => "session", clearToken: async () => {},
+    nativeFetch: async () => { throw "network unavailable"; }, browserFetch: fetch });
+  await assert.rejects(transport("/api/session"), TypeError);
+  const controller = new AbortController(); controller.abort();
+  await assert.rejects(transport("/api/chat", { signal: controller.signal }), { name: "AbortError" });
+});
+
 test("desktop audio encodes bounded mono PCM and speech providers receive audio only server-side", async () => {
   const wav = pcmWav([new Float32Array(48000).fill(0.25)], 48000);
   const bytes = decodeAudio(Buffer.from(wav).toString("base64"));

@@ -34,7 +34,7 @@ import { mergePlan, readPlan } from "./lib/plan.js";
 import { classifyError } from "./lib/errors.js";
 import { JOIN_WINDOW, continueRequest, joinOnto, retryRequest } from "./lib/continuation.js";
 import { PHONE } from "./lib/use-phone.js";
-import { DESKTOP, desktopSignIn, desktopSignOut, desktopNotification } from "./lib/desktop.js";
+import { DESKTOP, desktopSignIn, desktopSignOut, desktopNotification, cancelDesktopSignIn } from "./lib/desktop.js";
 import { readDesktopHandoff } from "./lib/desktop-handoff.js";
 import { DesktopHandoff } from "./components/DesktopHandoff.jsx";
 import {
@@ -346,6 +346,7 @@ const reducedMotion = () =>
 
 export function App() {
   const [desktopHandoff, setDesktopHandoff] = useState(() => DESKTOP ? null : readDesktopHandoff());
+  const [desktopSigningIn, setDesktopSigningIn] = useState(false);
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -1853,11 +1854,15 @@ export function App() {
         error={error}
         buttonRef={googleButton}
         googleState={DESKTOP || preferRedirect ? "redirect" : gsi}
+        signingIn={desktopSigningIn}
+        onCancelSignIn={cancelDesktopSignIn}
         onGoogleRedirect={async () => {
           if (!DESKTOP) return googleRedirect(session);
           setError("");
+          setDesktopSigningIn(true);
           try { await desktopSignIn(); await loadSession(); }
           catch (err) { setError(String(err.message || err)); }
+          finally { setDesktopSigningIn(false); }
         }}
         onRetryGoogle={() => {
           googleScript = null;
