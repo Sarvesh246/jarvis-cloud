@@ -252,7 +252,7 @@ export function DocumentWork({ message, work, onWorkChange, onOpen, onReveal, ca
             <button
               className="icon-button small"
               aria-label="Earlier version"
-              title="Earlier version"
+              data-tip="Earlier version"
               disabled={editing || at === 0}
               onClick={() => onWorkChange({ ...work, current: at - 1 })}
             >
@@ -264,7 +264,7 @@ export function DocumentWork({ message, work, onWorkChange, onOpen, onReveal, ca
             <button
               className="icon-button small"
               aria-label="Later version"
-              title="Later version"
+              data-tip="Later version"
               disabled={editing || at === versions.length - 1}
               onClick={() => onWorkChange({ ...work, current: at + 1 })}
             >
@@ -277,7 +277,7 @@ export function DocumentWork({ message, work, onWorkChange, onOpen, onReveal, ca
         )}
         <span className="doc-tools">
           {!editing && message && onReveal && (
-            <button className="block-tool" onClick={onReveal} title="Show this reply in its conversation">
+            <button className="block-tool" onClick={onReveal} data-tip="Show this reply in its conversation">
               <ArrowBendUpLeft size={15} /> <span>In conversation</span>
             </button>
           )}

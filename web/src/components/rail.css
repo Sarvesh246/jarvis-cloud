@@ -90,6 +90,62 @@
   position: relative;
   display: flex;
   align-items: center;
+  touch-action: pan-y;
+}
+
+/* The row itself, which slides aside on touch to show its actions */
+.rail-face {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex: 1;
+  align-items: center;
+  min-width: 0;
+  background: var(--rail);
+  transform: translateX(var(--swipe, 0));
+  transition: transform var(--dur-2) var(--ease);
+}
+
+.rail-face[data-dragging] {
+  transition: none;
+}
+
+.rail-swipe {
+  position: absolute;
+  inset: 0 0 0 auto;
+  display: flex;
+  align-items: stretch;
+  width: 6.5rem;
+  visibility: hidden;
+}
+
+.rail-row[data-swiped] .rail-swipe,
+.rail-row:has(.rail-face[data-dragging]) .rail-swipe {
+  visibility: visible;
+}
+
+.rail-swipe-act {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: var(--hit);
+  border-left: 1px solid var(--hairline);
+  font-size: var(--t-xs);
+  font-weight: var(--w-ui);
+  color: var(--ink-soft);
+}
+
+.rail-swipe-act svg {
+  color: var(--gilt);
+}
+
+/* Removal in earth tone, never alarm red; Undo follows */
+.rail-swipe-remove,
+.rail-swipe-remove svg {
+  color: var(--clay);
 }
 
 /* The active entry is marked the way an index marks a place: a gilt dot and
@@ -383,6 +439,16 @@
 
   .rail-act:not([data-on]):not(.rail-delete) {
     display: none;
+  }
+
+  /* Rows slide aside for their actions here, so the inline remove stays
+     only for screen readers and keyboards */
+  .rail-delete:not(:focus-visible) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
   }
 }
 

@@ -23,6 +23,7 @@ import { PresentationContext } from "./components/blocks/Blocks.jsx";
 import { applyPrefs, readPrefs, savePrefs } from "./lib/preferences.js";
 import { requestRevision } from "./lib/revise.js";
 import { Toast, Notice } from "./components/Toast.jsx";
+import { Tips } from "./components/Tips.jsx";
 import { Opening, SignIn } from "./components/SignIn.jsx";
 import { toolInfo } from "./lib/tools.js";
 import { mergePlan, readPlan } from "./lib/plan.js";
@@ -269,7 +270,6 @@ export function App() {
   const fresh = useRef(new Set());
   /* Full-size images stay in memory only; conversations keep thumbnails. */
   const imageData = useRef(new Map());
-  const toastTimer = useRef(0);
   const settleTimer = useRef(0);
   const active = chats.find((chat) => chat.id === activeId);
   const messages = active?.messages || [];
@@ -310,9 +310,8 @@ export function App() {
   };
 
   function showToast(next) {
-    clearTimeout(toastTimer.current);
+    /* The toast keeps its own time, pausing while it is being read */
     setToast({ id: crypto.randomUUID(), ...next });
-    toastTimer.current = setTimeout(() => setToast(null), 6500);
   }
 
   /* A fresh launch opens on a new conversation, reusing an empty one rather
@@ -409,7 +408,6 @@ export function App() {
       removeEventListener("online", goOnline);
       removeEventListener("offline", goOffline);
       abort.current?.abort();
-      clearTimeout(toastTimer.current);
       clearTimeout(settleTimer.current);
       removeEventListener("visibilitychange", ready);
     };
@@ -1360,6 +1358,11 @@ export function App() {
             onMouseUp={checkSelection}
             onKeyUp={(event) => event.shiftKey && checkSelection()}
           >
+            <div className="edge-blur" data-edge="top" aria-hidden="true">
+              <span />
+              <span />
+              <span />
+            </div>
             {!messages.length ? (
               <Welcome
                 name={session.user.name}
@@ -1393,6 +1396,11 @@ export function App() {
                 })}
               </div>
             )}
+            <div className="edge-blur" data-edge="bottom" aria-hidden="true">
+              <span />
+              <span />
+              <span />
+            </div>
           </div>
 
           {quote && (
@@ -1498,6 +1506,7 @@ export function App() {
           {announcement.id % 2 ? "​" : ""}
         </p>
         <Toast toast={toast} onDismiss={() => setToast(null)} />
+        <Tips />
         <Settings
           open={settingsOpen}
           prefs={prefs}

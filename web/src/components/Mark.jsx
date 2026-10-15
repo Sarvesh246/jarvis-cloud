@@ -46,21 +46,25 @@ function geometry(size) {
   };
 }
 
-export function Mark({ state = "idle", size = 64, className = "" }) {
+/* With `inked`, the mark is set down the way a pen would: its outline is
+   drawn first, then the ink floods in. Used once, where Vaelo first greets
+   you; everywhere else the mark simply is. */
+export function Mark({ state = "idle", size = 64, className = "", inked = false }) {
   const g = geometry(size);
   return (
     <span
       className={`mark ${className}`}
       data-state={state}
+      data-inked={inked || undefined}
       style={{ "--mark-size": `${size}px` }}
       aria-hidden="true"
     >
       <span className="mark-glow" />
       <svg viewBox="0 0 64 64" className="mark-v">
-        <path className="mark-heavy" d={g.heavyPath} />
-        <path className="mark-hair" d={g.hairPath} />
+        <path className="mark-heavy" d={g.heavyPath} pathLength="1" />
+        <path className="mark-hair" d={g.hairPath} pathLength="1" />
         {g.serifs.map(([x, y, w, h], i) => (
-          <rect key={i} className="mark-serif" x={x} y={y} width={w} height={h} />
+          <rect key={i} className="mark-serif" x={x} y={y} width={w} height={h} pathLength="1" />
         ))}
         <line
           className="mark-trace"

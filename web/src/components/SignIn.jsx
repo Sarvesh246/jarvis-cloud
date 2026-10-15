@@ -39,7 +39,7 @@ export function SignIn({
   return (
     <main className="entry">
       <div className="entry-body">
-        <Mark size={84} />
+        <Mark size={84} inked />
         <Wordmark size={44} />
         <h1>
           Good to see <em>you.</em>

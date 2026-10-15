@@ -19,7 +19,60 @@
   font-size: var(--t-sm);
   box-shadow: var(--lift-2);
   pointer-events: auto;
-  animation: arrive var(--dur-2) var(--ease) both;
+  position: relative;
+  overflow: hidden;
+  touch-action: none;
+  transform: translateY(var(--pull, 0));
+  opacity: var(--fade, 1);
+  /* backwards only, so the drag and the leave can move it afterwards */
+  animation: arrive var(--dur-2) var(--ease) backwards;
+  transition:
+    transform var(--dur-2) var(--ease),
+    opacity var(--dur-2) var(--ease);
+}
+
+.toast[data-dragging] {
+  transition: none;
+}
+
+.toast[data-leaving] {
+  transform: translateY(calc(var(--pull, 0px) + 2.5rem));
+  opacity: 0;
+}
+
+/* The time left, as a gilt line that shortens toward the centre */
+.toast-fuse {
+  position: absolute;
+  left: var(--s-6);
+  right: var(--s-6);
+  bottom: 5px;
+  height: 1px;
+  background: var(--gilt);
+  opacity: 0.7;
+  transform-origin: 50% 50%;
+  animation: fuse var(--life) linear both;
+}
+
+.toast[data-paused] .toast-fuse,
+.toast[data-leaving] .toast-fuse {
+  animation-play-state: paused;
+}
+
+@keyframes fuse {
+  to {
+    transform: scaleX(0);
+  }
+}
+
+/* Without motion the line would only flicker out; say nothing instead */
+@media (prefers-reduced-motion: reduce) {
+  .toast-fuse {
+    display: none;
+  }
+}
+
+:root[data-motion="reduce"] .toast-fuse {
+  display: none;
 }
 
 .toast .text-button {

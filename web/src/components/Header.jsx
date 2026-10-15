@@ -59,7 +59,7 @@ export function Header({ title, canRename, onRename, onOpenRail, onToggleRail })
           <button
             className="header-title"
             disabled={!canRename}
-            title={canRename ? "Rename conversation" : undefined}
+            data-tip={canRename ? "Rename conversation" : undefined}
             onClick={() => setEditing(true)}
           >
             {title}

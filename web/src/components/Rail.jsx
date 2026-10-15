@@ -67,36 +67,135 @@ function Library({ items, query, activeId, onOpen }) {
   );
 }
 
-function Row({ chat, active, busy, excerpt, onSelect, onDelete, onPin }) {
+/* On a touch screen a row slides left to show its actions, the way a
+   letter is slid aside to read the one beneath. Only one row is open at a
+   time; tapping the row again, or opening another, closes it. Removing
+   still offers Undo. The inline buttons stay for keyboards and screen
+   readers. */
+const ACTIONS = 104;
+
+function useSwipe(id, openId, setOpenId) {
+  const [x, setX] = useState(null);
+  const gesture = useRef(null);
+  const open = openId === id;
+  const rest = open ? -ACTIONS : 0;
+
+  const handlers = {
+    onTouchStart(event) {
+      if (matchMedia("(hover: hover)").matches || event.touches.length > 1) return;
+      const t = event.touches[0];
+      gesture.current = { x: t.clientX, y: t.clientY, from: rest, at: performance.now(), lock: null };
+    },
+    onTouchMove(event) {
+      const g = gesture.current;
+      if (!g) return;
+      const t = event.touches[0];
+      const dx = t.clientX - g.x;
+      const dy = t.clientY - g.y;
+      if (!g.lock) {
+        if (Math.abs(dy) > 8 && Math.abs(dy) > Math.abs(dx)) {
+          gesture.current = null;
+          return;
+        }
+        if (Math.abs(dx) > 8) g.lock = "x";
+        else return;
+      }
+      /* Claimed: the drawer itself must not read this as a swipe to close */
+      event.stopPropagation();
+      let next = g.from + dx;
+      if (next > 0) next = 0;
+      if (next < -ACTIONS) next = -ACTIONS - (-ACTIONS - next) * 0.25;
+      g.last = { x: next, at: performance.now(), dx };
+      setX(next);
+    },
+    onTouchEnd(event) {
+      const g = gesture.current;
+      gesture.current = null;
+      if (!g?.lock) return;
+      event.stopPropagation();
+      const travelled = g.last?.x ?? g.from;
+      const speed = (g.last?.dx ?? 0) / Math.max(1, (g.last?.at ?? g.at) - g.at);
+      const opening = speed < -0.4 || (speed < 0.4 && travelled < -ACTIONS / 2);
+      setOpenId(opening ? id : open ? null : openId);
+      setX(null);
+    },
+  };
+  return { open, x: x ?? rest, dragging: x !== null, handlers };
+}
+
+function Row({ chat, active, busy, excerpt, openId, setOpenId, onSelect, onDelete, onPin }) {
+  const swipe = useSwipe(chat.id, openId, setOpenId);
+  const settle = () => setOpenId(null);
   return (
-    <div className="rail-row" data-active={active} data-excerpt={excerpt ? true : undefined}>
-      <button
-        className="rail-link"
-        disabled={busy}
-        aria-current={active ? "page" : undefined}
-        onClick={() => onSelect(chat.id)}
+    <div
+      className="rail-row"
+      data-active={active}
+      data-excerpt={excerpt ? true : undefined}
+      data-swiped={swipe.open || undefined}
+      {...swipe.handlers}
+    >
+      <div className="rail-swipe" aria-hidden={!swipe.open} inert={!swipe.open}>
+        <button
+          className="rail-swipe-act"
+          onClick={() => {
+            onPin(chat.id);
+            settle();
+          }}
+        >
+          {chat.pinned ? <PushPinSlash size={18} /> : <PushPin size={18} />}
+          <span>{chat.pinned ? "Unpin" : "Pin"}</span>
+        </button>
+        <button
+          className="rail-swipe-act rail-swipe-remove"
+          disabled={busy}
+          onClick={() => {
+            settle();
+            onDelete(chat.id);
+          }}
+        >
+          <Trash size={18} />
+          <span>Remove</span>
+        </button>
+      </div>
+      <div
+        className="rail-face"
+        data-dragging={swipe.dragging || undefined}
+        style={{ "--swipe": `${swipe.x}px` }}
+        onClickCapture={(event) => {
+          if (!swipe.open) return;
+          event.preventDefault();
+          event.stopPropagation();
+          settle();
+        }}
       >
-        <span className="rail-title">{chat.title}</span>
-        {excerpt && <span className="rail-excerpt">{excerpt}</span>}
-      </button>
-      <button
-        className="rail-act"
-        aria-label={chat.pinned ? `Unpin ${chat.title}` : `Pin ${chat.title}`}
-        title={chat.pinned ? "Unpin" : "Pin"}
-        data-on={chat.pinned || undefined}
-        onClick={() => onPin(chat.id)}
-      >
-        {chat.pinned ? <PushPinSlash size={16} /> : <PushPin size={16} />}
-      </button>
-      <button
-        className="rail-act rail-delete"
-        aria-label={`Remove ${chat.title}`}
-        title="Remove"
-        disabled={busy}
-        onClick={() => onDelete(chat.id)}
-      >
-        <Trash size={16} />
-      </button>
+        <button
+          className="rail-link"
+          disabled={busy}
+          aria-current={active ? "page" : undefined}
+          onClick={() => onSelect(chat.id)}
+        >
+          <span className="rail-title">{chat.title}</span>
+          {excerpt && <span className="rail-excerpt">{excerpt}</span>}
+        </button>
+        <button
+          className="rail-act"
+          aria-label={chat.pinned ? `Unpin ${chat.title}` : `Pin ${chat.title}`}
+          data-tip={chat.pinned ? "Unpin" : "Pin"}
+          data-on={chat.pinned || undefined}
+          onClick={() => onPin(chat.id)}
+        >
+          {chat.pinned ? <PushPinSlash size={16} /> : <PushPin size={16} />}
+        </button>
+        <button
+          className="rail-act rail-delete"
+          aria-label={`Remove ${chat.title}`}
+          data-tip="Remove"
+          disabled={busy}
+          onClick={() => onDelete(chat.id)}
+        >
+          <Trash size={16} />
+        </button>
+      </div>
     </div>
   );
 }
@@ -119,6 +218,7 @@ export function Rail({
 }) {
   const [query, setQuery] = useState("");
   const [view, setView] = useState("chats");
+  const [openRow, setOpenRow] = useState(null);
   const field = useRef(null);
   const work = useMemo(() => collectWork(chats), [chats]);
   const results = searchChats(
@@ -232,6 +332,8 @@ export function Rail({
                   setQuery("");
                   onSelect(id);
                 }}
+                openId={openRow}
+                setOpenId={setOpenRow}
                 onDelete={onDelete}
                 onPin={onPin}
               />
@@ -248,6 +350,8 @@ export function Rail({
                   active={chat.id === activeId}
                   busy={busy}
                   onSelect={onSelect}
+                  openId={openRow}
+                  setOpenId={setOpenRow}
                   onDelete={onDelete}
                   onPin={onPin}
                 />
@@ -267,7 +371,7 @@ export function Rail({
           <button
             className="icon-button"
             aria-label="Settings"
-            title="Settings"
+            data-tip="Settings"
             aria-haspopup="dialog"
             onClick={onSettings}
           >
@@ -276,7 +380,7 @@ export function Rail({
           <button
             className="icon-button"
             aria-label="Sign out"
-            title="Sign out"
+            data-tip="Sign out"
             disabled={busy}
             onClick={onSignOut}
           >

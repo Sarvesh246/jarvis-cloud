@@ -32,6 +32,7 @@ import { summarizeSteps, toolDetail, toolInfo } from "../lib/tools.js";
 import { formatSize } from "../lib/attachments.js";
 import { orderPlan, planSummary } from "../lib/plan.js";
 import "./message.css";
+import { HoldButton } from "./HoldButton.jsx";
 
 /* Seconds since `from`, ticking once a second while `live`. */
 function useElapsed(from, live) {
@@ -424,7 +425,7 @@ export function AttachmentList({ items, onRemove }) {
               type="button"
               className="attachment-remove"
               aria-label={`Remove ${file.name}`}
-              title="Remove"
+              data-tip="Remove"
               onClick={() => onRemove(file.id)}
             >
               ×
@@ -470,7 +471,20 @@ function Approval({ approval, canAct, onAnswer, onAlternative }) {
       )}
       {pending && approval.runId && (
         <div className="approval-actions">
-          {(approval.choices?.length ? approval.choices : ["once", "deny"]).map((choice) => (
+          {(approval.choices?.length ? approval.choices : ["once", "deny"]).map((choice) =>
+            /* Allowing for the whole conversation reaches further than one
+               action, so it asks for a held press rather than a click */
+            choice === "session" ? (
+              <HoldButton
+                key={choice}
+                className="approval-allow"
+                disabled={state === "sending"}
+                holding="Keep holding to allow…"
+                onConfirm={() => onAnswer(choice)}
+              >
+                {state === "sending" && approval.choice === choice ? "Sending…" : APPROVAL_LABELS[choice]}
+              </HoldButton>
+            ) : (
             <button
               key={choice}
               className={choice === "deny" ? "approval-deny" : "approval-allow"}
@@ -479,7 +493,8 @@ function Approval({ approval, canAct, onAnswer, onAlternative }) {
             >
               {state === "sending" && approval.choice === choice ? "Sending…" : APPROVAL_LABELS[choice]}
             </button>
-          ))}
+            ),
+          )}
         </div>
       )}
       {approval.note && <p className="approval-note" role="alert">{approval.note}</p>}
@@ -665,7 +680,7 @@ function MessageView({ message, fresh, busy, live, streaming, phase, isLast, edi
                 <button
                   className="icon-button small"
                   aria-label="Previous version"
-                  title="Previous version"
+                  data-tip="Previous version"
                   disabled={busy || message.version === 0}
                   onClick={() => act("version", message.version - 1)}
                 >
@@ -677,7 +692,7 @@ function MessageView({ message, fresh, busy, live, streaming, phase, isLast, edi
                 <button
                   className="icon-button small"
                   aria-label="Next version"
-                  title="Next version"
+                  data-tip="Next version"
                   disabled={busy || message.version === versions.length - 1}
                   onClick={() => act("version", message.version + 1)}
                 >
@@ -701,7 +716,7 @@ function MessageView({ message, fresh, busy, live, streaming, phase, isLast, edi
               <button
                 className="text-button"
                 onClick={() => open({ kind: "document" })}
-                title={edited ? "Open the edited document" : "Open as a document you can edit"}
+                data-tip={edited ? "Open the edited document" : "Open as a document you can edit"}
               >
                 <ArrowsOut size={15} />
                 {edited ? "Open · edited" : "Open"}
@@ -711,7 +726,7 @@ function MessageView({ message, fresh, busy, live, streaming, phase, isLast, edi
               <button
                 className="text-button"
                 onClick={() => act("branch")}
-                title="Start a new conversation from this point"
+                data-tip="Start a new conversation from this point"
               >
                 <GitBranch size={15} />
                 Branch

@@ -49,6 +49,8 @@
   --dur-1: 180ms;
   --dur-2: 340ms;
   --dur-3: 700ms;
+  /* How long a hold-to-confirm takes: long enough to be deliberate */
+  --dur-hold: 1100ms;
 
   /* Layout. The text column grows with the window up to a long but still
      comfortable line; margin labels hang on both sides so the column, and

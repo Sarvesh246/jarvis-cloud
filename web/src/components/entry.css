@@ -44,6 +44,11 @@
   margin-bottom: var(--s-4);
 }
 
+/* The inked mark arrives by being drawn, so it doesn't also rise */
+.entry-body > .mark[data-inked] {
+  animation: none;
+}
+
 .entry-body h1 {
   margin: var(--s-6) 0 var(--s-2);
   font-size: var(--t-xl);

@@ -159,7 +159,7 @@ function CodeFigure({ language, src, children }) {
           </button>
           <button
             className="block-tool icon-only"
-            title="Download"
+            data-tip="Download"
             aria-label="Download code"
             onClick={() => download(`vaelo-snippet.${EXT[language] || "txt"}`, source)}
           >
@@ -167,7 +167,7 @@ function CodeFigure({ language, src, children }) {
           </button>
           <button
             className="block-tool icon-only"
-            title="Open in workspace"
+            data-tip="Open in workspace"
             aria-label="Open code in workspace"
             onClick={() => open({ ...item, tab: "code" })}
           >
@@ -583,7 +583,7 @@ function TableBlock({ node, "data-src": src }) {
           </button>
           <button
             className="block-tool icon-only"
-            title="Open in workspace"
+            data-tip="Open in workspace"
             aria-label="Open table in workspace, to filter and sort"
             onClick={() =>
               open({
@@ -618,7 +618,7 @@ function TableBlock({ node, "data-src": src }) {
                         : undefined
                     }
                   >
-                    <button onClick={() => toggle(i)} title="Sort by this column">
+                    <button onClick={() => toggle(i)} data-tip="Sort by this column">
                       {inline(head, i)}
                       {sort.column === i && (
                         <span className="sort-mark" aria-hidden="true">

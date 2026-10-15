@@ -72,8 +72,90 @@ function useDictation(draft, onChange) {
   return { supported: !!Recognition, listening, problem, toggle };
 }
 
+/* While dictating, five gilt hairlines follow your voice and a clock counts
+   the take, so an open microphone is never in doubt and you can see it
+   hears you. The levels come from a quiet listen to the same microphone;
+   where that isn't possible (iPhone and iPad keep the microphone to the
+   speech service) the lines simply breathe. */
+const IOS = typeof navigator !== "undefined" && /iP(hone|ad|od)/.test(navigator.userAgent);
+const BAR_WEIGHTS = [0.55, 0.85, 1, 0.8, 0.6];
+
+function useVoice(listening) {
+  const bars = useRef(null);
+  const [heard, setHeard] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    if (!listening) return;
+    const started = Date.now();
+    setElapsed(0);
+    const clock = setInterval(() => setElapsed(Math.floor((Date.now() - started) / 1000)), 1000);
+    return () => clearInterval(clock);
+  }, [listening]);
+
+  useEffect(() => {
+    if (!listening || IOS || !navigator.mediaDevices?.getUserMedia) return;
+    const still =
+      document.documentElement.dataset.motion === "reduce" ||
+      matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (still) return;
+    let stream;
+    let context;
+    let frame = 0;
+    let stopped = false;
+    navigator.mediaDevices
+      .getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } })
+      .then((media) => {
+        if (stopped) return media.getTracks().forEach((track) => track.stop());
+        stream = media;
+        context = new AudioContext();
+        const analyser = context.createAnalyser();
+        analyser.fftSize = 256;
+        analyser.smoothingTimeConstant = 0.75;
+        context.createMediaStreamSource(stream).connect(analyser);
+        const data = new Uint8Array(analyser.frequencyBinCount);
+        setHeard(true);
+        const draw = () => {
+          analyser.getByteFrequencyData(data);
+          let sum = 0;
+          for (let i = 2; i < 48; i++) sum += data[i];
+          const level = Math.min(1, sum / (46 * 150));
+          bars.current?.childNodes.forEach((bar, i) => {
+            bar.style.setProperty("--level", (0.18 + level * BAR_WEIGHTS[i] * 0.82).toFixed(3));
+          });
+          frame = requestAnimationFrame(draw);
+        };
+        draw();
+      })
+      .catch(() => {});
+    return () => {
+      stopped = true;
+      cancelAnimationFrame(frame);
+      stream?.getTracks().forEach((track) => track.stop());
+      context?.close().catch(() => {});
+      setHeard(false);
+    };
+  }, [listening]);
+
+  const time = `${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, "0")}`;
+  return { bars, heard, time };
+}
+
 function ToolsMenu({ options, onOptions, onClose, anchor }) {
   const menu = useRef(null);
+  const [glide, setGlide] = useState(null);
+
+  /* The highlight follows the pointer, and returns to the focused row
+     when the pointer leaves */
+  function track(node) {
+    const item = node?.closest?.(".tools-item");
+    if (!item || !menu.current?.contains(item)) return;
+    setGlide((current) => ({
+      y: item.offsetTop,
+      h: item.offsetHeight,
+      moved: !!current,
+    }));
+  }
   const close = useRef(onClose);
   close.current = onClose;
   useEffect(() => {
@@ -100,7 +182,26 @@ function ToolsMenu({ options, onOptions, onClose, anchor }) {
   }
 
   return (
-    <div className="tools-menu" role="menu" aria-label="Tools" ref={menu} onKeyDown={keys}>
+    <div
+      className="tools-menu"
+      role="menu"
+      aria-label="Tools"
+      ref={menu}
+      onKeyDown={keys}
+      onPointerOver={(event) => track(event.target)}
+      onFocus={(event) => track(event.target)}
+      onPointerLeave={() => {
+        if (menu.current?.contains(document.activeElement)) track(document.activeElement);
+        else setGlide(null);
+      }}
+    >
+      <span
+        className="tools-glide"
+        aria-hidden="true"
+        data-on={glide ? true : undefined}
+        data-moved={glide?.moved || undefined}
+        style={glide ? { "--glide-y": `${glide.y}px`, "--glide-h": `${glide.h}px` } : undefined}
+      />
       <button
         role="menuitemcheckbox"
         aria-checked={options.research}
@@ -294,6 +395,7 @@ export const Composer = forwardRef(function Composer(
   const picker = useRef(null);
   const toolsButton = useRef(null);
   const dictation = useDictation(draft, onChange);
+  const voice = useVoice(dictation.listening);
   const over = length > MESSAGE_LIMIT;
   const reading = attachments.some((file) => file.state === "reading");
   const ready = draft.trim() || attachments.some((file) => file.state === "ready");
@@ -382,7 +484,7 @@ export const Composer = forwardRef(function Composer(
             type="button"
             className="icon-button composer-tool"
             aria-label="Attach images or files"
-            title="Attach images or files (or drop or paste them)"
+            data-tip="Attach images or files (or drop or paste them)"
             onClick={() => picker.current?.click()}
           >
             <Paperclip size={20} />
@@ -394,7 +496,7 @@ export const Composer = forwardRef(function Composer(
               type="button"
               className="mode-button"
               aria-label={`Response style: ${style?.label}. Tools`}
-              title="Response style and tools"
+              data-tip="Response style and tools"
               aria-haspopup="menu"
               aria-expanded={menu}
               onClick={() => setMenu((value) => !value)}
@@ -441,8 +543,20 @@ export const Composer = forwardRef(function Composer(
         </div>
         {dictation.listening && (
           <span className="composer-live" role="status">
-            <span className="composer-dot" aria-hidden="true" />
+            <span
+              className="voice-bars"
+              ref={voice.bars}
+              data-heard={voice.heard || undefined}
+              aria-hidden="true"
+            >
+              {BAR_WEIGHTS.map((_, i) => (
+                <span key={i} />
+              ))}
+            </span>
             <span className="composer-live-text">Listening</span>
+            <span className="voice-time" aria-hidden="true">
+              {voice.time}
+            </span>
           </span>
         )}
         <div className="composer-end">
@@ -455,7 +569,7 @@ export const Composer = forwardRef(function Composer(
               className="icon-button composer-tool composer-mic"
               aria-label={dictation.listening ? "Stop dictation" : "Dictate"}
               aria-pressed={dictation.listening}
-              title={dictation.listening ? "Stop dictation" : "Dictate"}
+              data-tip={dictation.listening ? "Stop dictation" : "Dictate"}
               onClick={dictation.toggle}
             >
               <Microphone size={20} weight={dictation.listening ? "fill" : undefined} />
@@ -466,7 +580,7 @@ export const Composer = forwardRef(function Composer(
             className="send"
             data-mode={busy ? "stop" : "send"}
             aria-label={busy ? "Stop" : "Send"}
-            title={busy ? "Stop (Esc)" : "Send"}
+            data-tip={busy ? "Stop (Esc)" : "Send"}
             disabled={!busy && (!ready || over || reading || offline)}
             onClick={busy ? onStop : undefined}
           >

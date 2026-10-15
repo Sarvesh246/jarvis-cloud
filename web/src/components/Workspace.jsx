@@ -210,7 +210,7 @@ function TableView({ item }) {
                     sort.column === i ? (sort.direction === "asc" ? "ascending" : "descending") : undefined
                   }
                 >
-                  <button onClick={() => toggle(i)} title="Sort by this column">
+                  <button onClick={() => toggle(i)} data-tip="Sort by this column">
                     {column}
                     {sort.column === i && (
                       <span className="sort-mark" aria-hidden="true">
@@ -380,7 +380,7 @@ export function Workspace({
               </button>
               <button
                 className="block-tool icon-only"
-                title={item.kind === "table" ? "Download as CSV" : "Download"}
+                data-tip={item.kind === "table" ? "Download as CSV" : "Download"}
                 aria-label={item.kind === "table" ? "Download as CSV" : "Download"}
                 onClick={save}
               >
@@ -391,7 +391,7 @@ export function Workspace({
           {item.kind === "document" && (
             <button
               className="block-tool icon-only"
-              title="Print or save as PDF"
+              data-tip="Print or save as PDF"
               aria-label="Print or save as PDF"
               onClick={() => {
                 document.documentElement.dataset.print = "workspace";
@@ -402,7 +402,7 @@ export function Workspace({
               <Printer size={16} />
             </button>
           )}
-          <button className="icon-button" aria-label="Close workspace" title="Close (Esc)" onClick={onClose}>
+          <button className="icon-button" aria-label="Close workspace" data-tip="Close (Esc)" onClick={onClose}>
             <X size={19} />
           </button>
         </div>

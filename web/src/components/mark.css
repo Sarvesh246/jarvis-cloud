@@ -152,6 +152,45 @@
   --mark-glow-o: 0.2;
 }
 
+/* inked: the outline is drawn, then the ink floods in. Reduced motion lands
+   on the finished mark, since the animations end where they settle. */
+.mark[data-inked] :is(.mark-heavy, .mark-hair, .mark-serif) {
+  stroke: currentColor;
+  stroke-width: 0.6;
+  stroke-linejoin: round;
+  stroke-dasharray: 1;
+  animation:
+    mark-draw var(--dur-3) var(--ease) both,
+    mark-flood var(--dur-2) var(--ease) 460ms both;
+}
+
+.mark[data-inked] .mark-hair {
+  animation-delay: 120ms, 540ms;
+}
+
+.mark[data-inked] .mark-serif {
+  animation-delay: 240ms, 600ms;
+}
+
+@keyframes mark-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes mark-flood {
+  from {
+    fill-opacity: 0;
+  }
+  to {
+    fill-opacity: 1;
+    stroke-width: 0;
+  }
+}
+
 .wordmark {
   font-family: var(--font-voice);
   font-size: var(--wordmark-size, 22px);

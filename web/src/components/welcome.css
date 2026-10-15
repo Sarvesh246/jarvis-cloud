@@ -29,6 +29,48 @@
   }
 }
 
+/* The greeting and its question open like a folded letter: each line
+   hinges down from its top edge and lies flat, the crease shading lifting
+   as it does. */
+.welcome h1,
+.welcome-line {
+  position: relative;
+  transform-origin: 50% 0;
+  animation-name: unfold;
+  animation-duration: var(--dur-3);
+}
+
+.welcome h1::after,
+.welcome-line::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--ink) 9%, transparent),
+    transparent 70%
+  );
+  pointer-events: none;
+  animation: crease var(--dur-3) var(--ease) both;
+  animation-delay: inherit;
+}
+
+@keyframes unfold {
+  from {
+    opacity: 0;
+    transform: perspective(40rem) rotateX(-68deg);
+  }
+  45% {
+    opacity: 1;
+  }
+}
+
+@keyframes crease {
+  to {
+    opacity: 0;
+  }
+}
+
 .welcome .mark {
   margin-bottom: var(--s-5);
 }
