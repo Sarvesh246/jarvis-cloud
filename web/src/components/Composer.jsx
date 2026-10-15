@@ -67,45 +67,107 @@ const Recognition =
   typeof window !== "undefined" && (window.SpeechRecognition || window.webkitSpeechRecognition);
 
 /* Dictation through the browser's own speech service. Words arrive in the
-   field as you speak, so you can correct them before sending. */
+   field as you speak, so you can correct them before sending.
+
+   Stopping is not instant: the speech service still sends the last words it
+   heard, then ends a moment later, and it won't start a new take until the
+   old one has ended. So the microphone turns off the moment you ask, a take
+   asked for while the last one is finishing starts as soon as it can, and
+   each take only ever writes its own words after the text it began with. */
+const FINISH_WAIT = 1500;
+
 function useDictation(draft, onChange) {
   const [listening, setListening] = useState(false);
   const [problem, setProblem] = useState("");
-  const recognizer = useRef(null);
-  const base = useRef("");
+  const live = useRef(null);
+  const finishing = useRef(null);
+  const queued = useRef(0);
+  const latest = useRef(draft);
+  latest.current = draft;
 
-  useEffect(() => () => recognizer.current?.abort(), []);
+  useEffect(
+    () => () => {
+      clearTimeout(queued.current);
+      live.current?.abort();
+      finishing.current?.abort();
+    },
+    [],
+  );
 
-  function toggle() {
-    if (listening) {
-      recognizer.current?.stop();
-      return;
-    }
-    setProblem("");
+  function begin() {
     const r = new Recognition();
     r.continuous = true;
     r.interimResults = true;
     r.lang = navigator.language || "en-US";
-    base.current = draft ? `${draft.replace(/\s+$/, "")} ` : "";
+    const base = latest.current ? `${latest.current.replace(/\s+$/, "")} ` : "";
+    /* A finishing take may still deliver its last words, but never once a
+       newer take is listening */
+    const current = () => live.current === r || (finishing.current === r && !live.current);
     r.onresult = (event) => {
+      if (!current()) return;
       let text = "";
       for (const result of event.results) text += result[0].transcript;
-      onChange(base.current + text.trimStart());
+      latest.current = base + text.trimStart();
+      onChange(latest.current);
     };
     r.onerror = (event) => {
+      if (!current()) return;
       if (event.error === "not-allowed" || event.error === "service-not-allowed")
         setProblem("Microphone access is off for this site.");
       else if (event.error !== "aborted" && event.error !== "no-speech")
         setProblem("Dictation stopped. Try again.");
     };
-    r.onend = () => setListening(false);
-    recognizer.current = r;
+    r.onend = () => {
+      if (finishing.current === r) {
+        finishing.current = null;
+        if (queued.current) startQueued();
+      }
+      if (live.current === r) {
+        live.current = null;
+        setListening(false);
+      }
+    };
+    live.current = r;
     try {
       r.start();
-      setListening(true);
     } catch {
+      live.current = null;
+      setListening(false);
       setProblem("Dictation isn’t available right now.");
     }
+  }
+
+  function startQueued() {
+    clearTimeout(queued.current);
+    queued.current = 0;
+    begin();
+  }
+
+  function toggle() {
+    if (listening) {
+      clearTimeout(queued.current);
+      queued.current = 0;
+      if (live.current) {
+        finishing.current = live.current;
+        live.current = null;
+        finishing.current.stop();
+      }
+      setListening(false);
+      return;
+    }
+    setProblem("");
+    setListening(true);
+    if (!finishing.current) {
+      begin();
+      return;
+    }
+    /* If the last take never says it has ended, let it go and start anyway */
+    queued.current = setTimeout(() => {
+      const stale = finishing.current;
+      finishing.current = null;
+      stale?.abort();
+      startQueued();
+    }, FINISH_WAIT);
   }
 
   return { supported: !!Recognition, listening, problem, toggle };
