@@ -101,6 +101,8 @@ body.resizing iframe {
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--hairline-strong) transparent;
+  /* Lets a document set its contents beside it when there is room */
+  container: workspace / inline-size;
 }
 
 .ws-tabs {

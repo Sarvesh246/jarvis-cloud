@@ -9,6 +9,8 @@ import {
   X,
 } from "@phosphor-icons/react";
 import { Rendered, useSources } from "./blocks/Blocks.jsx";
+import { Contents } from "./Contents.jsx";
+import { Rolling } from "./Rolling.jsx";
 import { PASSAGE_LIMIT, addVersion, currentContent, spliceSource } from "../lib/library.js";
 import { revisionProblem } from "../lib/revise.js";
 
@@ -257,7 +259,7 @@ export function DocumentWork({ message, work, onWorkChange, onOpen, onReveal, ca
               <CaretLeft size={14} />
             </button>
             <span className="doc-version-count">
-              {at + 1} / {versions.length}
+              <Rolling value={at + 1} /> / {versions.length}
             </span>
             <button
               className="icon-button small"
@@ -331,9 +333,12 @@ export function DocumentWork({ message, work, onWorkChange, onOpen, onReveal, ca
           </div>
         </form>
       ) : (
-        <article className="ws-document prose" ref={article}>
-          <Rendered content={content} sources={sources} onOpen={onOpen} mapped />
-        </article>
+        <div className="doc-page">
+          <article className="ws-document prose" ref={article}>
+            <Rendered content={content} sources={sources} onOpen={onOpen} mapped />
+          </article>
+          <Contents article={article} content={content} />
+        </div>
       )}
 
       {!editing && range && (

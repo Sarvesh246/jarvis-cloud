@@ -10,6 +10,7 @@ import {
 } from "@phosphor-icons/react";
 import { Rendered, download, looksLikeSvg, useCopy, useSources } from "./blocks/Blocks.jsx";
 import { SourceIcon } from "./blocks/SourceIcon.jsx";
+import { Highlighted } from "./blocks/Highlighted.jsx";
 import { SOURCE_KINDS, kindLabel } from "../lib/sources.js";
 import { isNumericColumn, sortRows, toCSV, toTSV } from "../lib/table.js";
 import { currentContent, docTitle } from "../lib/library.js";
@@ -77,7 +78,7 @@ function CodeView({ item }) {
         </div>
       ) : (
         <pre className="ws-code" tabIndex={0}>
-          <code>{item.source}</code>
+          <Highlighted source={item.source} language={item.language} />
         </pre>
       )}
     </>

@@ -89,6 +89,16 @@
   --scrim: rgb(36 29 27 / 34%);
   --grain: 0.3;
 
+  /* Code: one accent (gilt) at different strengths, set on --sunken.
+     Each holds at least 4.8:1 there. */
+  --code-plain: var(--ink-soft);
+  --code-comment: var(--muted);
+  --code-punctuation: var(--muted);
+  --code-keyword: var(--gilt-ink);
+  --code-name: #7d5119;
+  --code-string: #56603c;
+  --code-number: var(--clay);
+
   --lift-1: 0 1px 1px rgb(80 55 30 / 4%), 0 10px 30px rgb(80 55 30 / 6%);
   --lift-2: 0 2px 6px rgb(80 55 30 / 7%), 0 24px 56px rgb(80 55 30 / 12%);
 }
@@ -130,6 +140,8 @@
   --sage: #9bb08f;
   --scrim: rgb(0 0 0 / 58%);
   --grain: 0.5;
+  --code-name: #d9a865;
+  --code-string: #bcc192;
 
   --lift-1: 0 1px 1px rgb(0 0 0 / 30%), 0 10px 30px rgb(0 0 0 / 28%);
   --lift-2: 0 2px 6px rgb(0 0 0 / 40%), 0 24px 56px rgb(0 0 0 / 45%);
@@ -162,6 +174,8 @@
     --sage: #9bb08f;
     --scrim: rgb(0 0 0 / 58%);
     --grain: 0.5;
+    --code-name: #d9a865;
+    --code-string: #bcc192;
 
     --lift-1: 0 1px 1px rgb(0 0 0 / 30%), 0 10px 30px rgb(0 0 0 / 28%);
     --lift-2: 0 2px 6px rgb(0 0 0 / 40%), 0 24px 56px rgb(0 0 0 / 45%);

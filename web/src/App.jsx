@@ -26,6 +26,7 @@ import { Toast, Notice } from "./components/Toast.jsx";
 import { Opening, SignIn } from "./components/SignIn.jsx";
 import { toolInfo } from "./lib/tools.js";
 import { classifyError } from "./lib/errors.js";
+import { PHONE } from "./lib/use-phone.js";
 import {
   IMAGE_LIMIT,
   MESSAGE_LIMIT,
@@ -45,8 +46,6 @@ const freshChat = () => ({
 });
 
 const RAIL_KEY = "vaelo-rail-collapsed";
-/* A phone, upright or on its side: the layout that uses the drawer */
-const PHONE = "(max-width: 47.9375rem), (pointer: coarse) and (max-height: 31.25rem)";
 /* Who was signed in last, so the installed app can open your conversations
    to read while offline. Only the account id and display name are kept. */
 const LAST_USER_KEY = "vaelo-last-user";

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useMemo, useState } from "react";
-import Markdown from "react-markdown";
+import Markdown, { defaultUrlTransform } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
   ArrowSquareOut,
@@ -13,8 +13,17 @@ import {
 } from "@phosphor-icons/react";
 import { collectSources, domainOf, kindLabel, parseUrl, sourceKey } from "../../lib/sources.js";
 import { cellText, chartable, isNumericColumn, sortRows, toCSV, toNumber, toTSV } from "../../lib/table.js";
-import { STRUCTURED, metricsText, parseMetrics, parseTimeline, timelineText } from "../../lib/structured.js";
+import {
+  STRUCTURED,
+  fenceClosed,
+  metricsText,
+  parseMetrics,
+  parseTimeline,
+  timelineText,
+} from "../../lib/structured.js";
 import { SourceIcon } from "./SourceIcon.jsx";
+import { Highlighted } from "./Highlighted.jsx";
+import { Rolling } from "../Rolling.jsx";
 import "./blocks.css";
 
 /* A reply is rendered as typed blocks: prose, code, tables, sources. Each
@@ -92,12 +101,17 @@ function languageOf(children) {
 /* A fenced block is either code, or one of the shapes Vaelo can answer in.
    In a mapped document each block carries where it sits in the Markdown
    (data-src), so a selection can be traced back to the words behind it. */
-function CodeBlock({ children, "data-src": src }) {
+function CodeBlock({ children, node, "data-src": src }) {
+  const { content } = useContext(BlockContext);
   const language = languageOf(children);
   if (STRUCTURED.has(language)) {
     const source = textOf(children);
     return language === "metrics" ? (
-      <Metrics source={source} src={src} />
+      <Metrics
+        source={source}
+        src={src}
+        settled={fenceClosed(content, node?.position?.start?.offset, node?.position?.end?.offset)}
+      />
     ) : (
       <Timeline source={source} src={src} />
     );
@@ -162,7 +176,7 @@ function CodeFigure({ language, src, children }) {
         </span>
       </figcaption>
       <pre tabIndex={0} aria-label={`${language || "Code"}, ${lines} lines`}>
-        {children}
+        <Highlighted source={source} language={language} />
       </pre>
       {folds && (
         <button className="code-fold" onClick={() => setExpanded((value) => !value)}>
@@ -190,10 +204,13 @@ function Delta({ item }) {
   );
 }
 
-function Metrics({ source, src }) {
+function Metrics({ source, src, settled }) {
   const { presentation } = useContext(BlockContext);
   const data = useMemo(() => parseMetrics(source), [source]);
   const [done, copy] = useCopy();
+  /* A figure set down while you watch turns into place once its block is
+     complete; one already on the page when it opens simply stands there. */
+  const [arriving] = useState(!settled);
   if (!data.items.length)
     return (
       <p className="block-pending" data-src={src}>
@@ -225,7 +242,9 @@ function Metrics({ source, src }) {
       </figcaption>
       <div className="metrics-lead">
         <span className="metrics-lead-label">{lead.label}</span>
-        <span className="metrics-lead-value">{lead.value}</span>
+        <span className="metrics-lead-value">
+          {settled ? <Rolling value={lead.value} enter={arriving} /> : lead.value}
+        </span>
         <Delta item={lead} />
       </div>
       {rest.length > 0 && (
@@ -374,11 +393,17 @@ function SourceLink({ href, children }) {
   );
 }
 
-export function SourceStrip({ sources, onOpen }) {
+/* While a reply is written, each source joins the strip as it is cited. */
+export function SourceStrip({ sources, onOpen, arriving = false }) {
   if (!sources.length) return null;
   const shown = sources.slice(0, 4);
   return (
-    <button className="source-strip" onClick={onOpen} aria-label={`Show ${sources.length} sources`}>
+    <button
+      className="source-strip"
+      data-arriving={arriving || undefined}
+      onClick={onOpen}
+      aria-label={`Show ${sources.length} sources`}
+    >
       <span className="label">Sources</span>
       <span className="source-stack" aria-hidden="true">
         {shown.map((source) => (
@@ -389,7 +414,9 @@ export function SourceStrip({ sources, onOpen }) {
         ))}
       </span>
       {sources.length > shown.length && (
-        <span className="source-more">+{sources.length - shown.length}</span>
+        <span className="source-more">
+          +<Rolling value={sources.length - shown.length} />
+        </span>
       )}
     </button>
   );
@@ -626,11 +653,43 @@ function TableBlock({ node, "data-src": src }) {
 /* Images Hermes makes or returns arrive as data: URLs and are shown in
    place. Images on other sites are linked, not loaded, so reading a reply
    never pings a third party. */
+/* The tiles the image placeholder is made of; shared with the reveal so the
+   picture appears from the same grid that stood in for it. */
+export const IMAGE_COLUMNS = 8;
+export const IMAGE_ROWS = 6;
+
+export function imageTiles(className) {
+  return Array.from({ length: IMAGE_COLUMNS * IMAGE_ROWS }, (_, i) => (
+    <span
+      key={i}
+      className={className}
+      style={{ "--i": (i % IMAGE_COLUMNS) + Math.floor(i / IMAGE_COLUMNS) }}
+    />
+  ));
+}
+
 function ImageRef({ alt, src }) {
+  const { live } = useContext(BlockContext);
+  /* An image that arrives while you watch is uncovered tile by tile; one
+     already in the conversation is simply there. */
+  const [reveal] = useState(live);
+  const [loaded, setLoaded] = useState(false);
   if (/^data:image\/(png|jpeg|webp|gif);base64,/.test(src || ""))
     return (
       <span className="image-inline">
-        <img src={src} alt={alt || "Image from Vaelo"} loading="lazy" />
+        <span className="image-frame" data-reveal={reveal || undefined} data-loaded={loaded || undefined}>
+          <img
+            src={src}
+            alt={alt || "Image from Vaelo"}
+            loading="lazy"
+            onLoad={() => setLoaded(true)}
+          />
+          {reveal && (
+            <span className="image-tiles" aria-hidden="true">
+              {imageTiles("image-tile")}
+            </span>
+          )}
+        </span>
         {alt && <span className="image-caption">{alt}</span>}
       </span>
     );
@@ -655,6 +714,15 @@ const components = {
 };
 
 const remarkPlugins = [remarkGfm];
+
+/* Markdown's own filter drops every data: URL, which would leave the images
+   Hermes makes with nothing to show. Raster images inline are let through
+   (they can't run anything); every other URL gets the usual filter. */
+function urlTransform(url, key, node) {
+  if (key === "src" && node.tagName === "img" && /^data:image\/(png|jpeg|webp|gif);base64,/.test(url))
+    return url;
+  return defaultUrlTransform(url);
+}
 
 /* Marks each block with where it sits in the Markdown ("start:end"), so a
    selection in the rendered document maps back to its source words. */
@@ -702,7 +770,7 @@ export function useSources(content) {
   return useMemo(() => collectSources(content || ""), [content]);
 }
 
-export function Rendered({ content, sources, onOpen, mapped = false }) {
+export function Rendered({ content, sources, onOpen, mapped = false, live = false }) {
   const presentation = useContext(PresentationContext);
   const value = useMemo(
     () => ({
@@ -710,8 +778,10 @@ export function Rendered({ content, sources, onOpen, mapped = false }) {
       byKey: new Map(sources.map((source) => [source.id, source])),
       open: onOpen,
       presentation,
+      content,
+      live,
     }),
-    [sources, onOpen, presentation],
+    [sources, onOpen, presentation, content, live],
   );
   return (
     <BlockContext.Provider value={value}>
@@ -720,6 +790,7 @@ export function Rendered({ content, sources, onOpen, mapped = false }) {
           remarkPlugins={remarkPlugins}
           rehypePlugins={mapped ? mappedPlugins : undefined}
           components={components}
+          urlTransform={urlTransform}
         >
           {content}
         </Markdown>

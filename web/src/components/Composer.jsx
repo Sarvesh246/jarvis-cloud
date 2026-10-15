@@ -1,6 +1,9 @@
-import React, { forwardRef, useEffect, useRef, useState } from "react";
+import React, { forwardRef, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   ArrowUp,
+  CaretLeft,
+  CaretRight,
   CaretUp,
   Check,
   Globe,
@@ -12,6 +15,7 @@ import {
 } from "@phosphor-icons/react";
 import { AttachmentList } from "./Message.jsx";
 import { MESSAGE_LIMIT } from "../lib/attachments.js";
+import { usePhone } from "../lib/use-phone.js";
 import "./composer.css";
 
 export const STYLES = [
@@ -133,6 +137,140 @@ function ToolsMenu({ options, onOptions, onClose, anchor }) {
   );
 }
 
+/* On a phone the tools rise as a sheet from the bottom edge, in reach of a
+   thumb. It has two pages: what's on (research, the current style) and the
+   styles themselves; the sheet's height eases between them as one page
+   slides in for the other. Drag it down or tap outside to put it away. */
+const CLOSE_AFTER = 80;
+
+function ToolsSheet({ options, onOptions, onClose }) {
+  const [page, setPage] = useState("main");
+  const [height, setHeight] = useState();
+  const [pull, setPull] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const pages = { main: useRef(null), style: useRef(null) };
+  const drag = useRef(null);
+  const close = useRef(onClose);
+  close.current = onClose;
+  const style = STYLES.find((s) => s.id === options.style);
+
+  const dismiss = useCallback((refocus) => {
+    setLeaving(true);
+    setTimeout(() => close.current(refocus), 340);
+  }, []);
+
+  useLayoutEffect(() => {
+    setHeight(pages[page].current?.offsetHeight);
+    pages[page].current?.querySelector("button")?.focus({ preventScroll: true });
+  }, [page]);
+
+  useEffect(() => {
+    function keys(event) {
+      if (event.key !== "Escape") return;
+      event.stopPropagation();
+      if (page === "style") setPage("main");
+      else dismiss(true);
+    }
+    addEventListener("keydown", keys, true);
+    return () => removeEventListener("keydown", keys, true);
+  }, [page, dismiss]);
+
+  const grip = {
+    onPointerDown(event) {
+      drag.current = { y: event.clientY, at: performance.now() };
+      setDragging(true);
+      event.currentTarget.setPointerCapture(event.pointerId);
+    },
+    onPointerMove(event) {
+      if (drag.current) setPull(Math.max(0, event.clientY - drag.current.y));
+    },
+    onPointerUp(event) {
+      if (!drag.current) return;
+      const distance = Math.max(0, event.clientY - drag.current.y);
+      const speed = distance / Math.max(1, performance.now() - drag.current.at);
+      drag.current = null;
+      setDragging(false);
+      if (distance > CLOSE_AFTER || speed > 0.6) dismiss(true);
+      else setPull(0);
+    },
+    onPointerCancel() {
+      drag.current = null;
+      setDragging(false);
+      setPull(0);
+    },
+  };
+
+  return createPortal(
+    <div className="tools-sheet-layer" data-leaving={leaving || undefined}>
+      <div className="tools-scrim" onClick={() => dismiss(true)} />
+      <div
+        className="tools-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Tools"
+        data-dragging={dragging || undefined}
+        style={{ "--pull": `${pull}px` }}
+      >
+        <div className="tools-grip" {...grip}>
+          <span aria-hidden="true" />
+        </div>
+        <div className="tools-pages" style={{ height }} data-page={page}>
+          <div className="tools-page" ref={pages.main} inert={page !== "main"}>
+            <button
+              role="switch"
+              aria-checked={options.research}
+              className="tools-item"
+              onClick={() => onOptions({ research: !options.research })}
+            >
+              <Globe size={20} />
+              <span className="tools-text">
+                <span>Research with sources</span>
+                <span className="tools-note">Searches the web and cites what it finds.</span>
+              </span>
+              {options.research && <Check size={18} className="tools-check" />}
+            </button>
+            <button className="tools-item" onClick={() => setPage("style")}>
+              <SlidersHorizontal size={20} />
+              <span className="tools-text">
+                <span>Response style</span>
+                <span className="tools-note">{style?.label}. {style?.note}</span>
+              </span>
+              <CaretRight size={16} className="tools-more" />
+            </button>
+          </div>
+          <div className="tools-page" ref={pages.style} inert={page !== "style"}>
+            <button className="tools-back" onClick={() => setPage("main")}>
+              <CaretLeft size={16} /> Response style
+            </button>
+            <div role="radiogroup" aria-label="Response style">
+              {STYLES.map((option) => (
+                <button
+                  key={option.id}
+                  role="radio"
+                  aria-checked={options.style === option.id}
+                  className="tools-item"
+                  onClick={() => {
+                    onOptions({ style: option.id });
+                    dismiss(true);
+                  }}
+                >
+                  <span className="tools-radio" aria-hidden="true" />
+                  <span className="tools-text">
+                    <span>{option.label}</span>
+                    <span className="tools-note">{option.note}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
 export const Composer = forwardRef(function Composer(
   {
     draft,
@@ -152,6 +290,7 @@ export const Composer = forwardRef(function Composer(
   textarea,
 ) {
   const [menu, setMenu] = useState(false);
+  const phone = usePhone();
   const picker = useRef(null);
   const toolsButton = useRef(null);
   const dictation = useDictation(draft, onChange);
@@ -264,7 +403,17 @@ export const Composer = forwardRef(function Composer(
               <span>{style?.label}</span>
               <CaretUp size={12} aria-hidden="true" className="mode-caret" />
             </button>
-            {menu && (
+            {menu && phone && (
+              <ToolsSheet
+                options={options}
+                onOptions={onOptions}
+                onClose={(refocus) => {
+                  setMenu(false);
+                  if (refocus) toolsButton.current?.querySelector("button")?.focus();
+                }}
+              />
+            )}
+            {menu && !phone && (
               <ToolsMenu
                 options={options}
                 onOptions={onOptions}

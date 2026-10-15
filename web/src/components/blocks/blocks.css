@@ -670,6 +670,23 @@
   color: var(--gilt);
 }
 
+/* Sources cited while you watch join the strip one at a time */
+.source-strip[data-arriving] {
+  animation: fade var(--dur-2) var(--ease) both;
+}
+
+.source-strip[data-arriving] .source-pip {
+  animation: pip-in var(--dur-2) var(--ease) both;
+}
+
+@keyframes pip-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+    filter: blur(2px);
+  }
+}
+
 .source-more {
   font-size: var(--t-xs);
   color: var(--muted);
@@ -768,4 +785,79 @@
 .image-caption {
   font-size: var(--t-sm);
   color: var(--muted);
+}
+
+/* ---------- Images in the making ---------- */
+
+/* While Vaelo makes an image, a grid of paper tiles stands in for it, a
+   slow light crossing it corner to corner. */
+.image-pending {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  grid-template-rows: repeat(6, 1fr);
+  gap: 2px;
+  width: min(100%, 24rem);
+  aspect-ratio: 4 / 3;
+  margin: 0 0 var(--s-4);
+  padding: 2px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  overflow: hidden;
+}
+
+.image-pending-tile {
+  border-radius: 2px;
+  background: var(--sunken);
+  animation: tile-wave 2.6s var(--ease) calc(var(--i) * 90ms) infinite;
+}
+
+@keyframes tile-wave {
+  50% {
+    background: var(--hairline);
+  }
+}
+
+.image-pending-caption {
+  margin: calc(var(--s-2) * -1) 0 var(--s-4);
+  font-size: var(--t-sm);
+  font-style: italic;
+  color: var(--muted);
+}
+
+/* When the picture arrives, the same tiles lift away corner to corner */
+.image-frame {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  line-height: 0;
+}
+
+.image-frame img {
+  display: block;
+}
+
+.image-tiles {
+  position: absolute;
+  inset: 1px;
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  grid-template-rows: repeat(6, 1fr);
+  border-radius: var(--r-md);
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.image-tile {
+  background: var(--sunken);
+}
+
+.image-frame[data-loaded] .image-tile {
+  animation: tile-out var(--dur-2) var(--ease) calc(var(--i) * 45ms) both;
+}
+
+@keyframes tile-out {
+  to {
+    opacity: 0;
+    transform: scale(0.85);
+  }
 }

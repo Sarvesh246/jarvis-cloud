@@ -1,0 +1,32 @@
+/* Odometer figures. Each wheel sits on the line like an ordinary digit: a
+   hidden copy holds its width and baseline, and the wheel turns behind a
+   clip the height of one line. Tabular figures keep every wheel the same
+   width, so a figure never shifts as it turns. */
+.rolling {
+  font-variant-numeric: lining-nums tabular-nums;
+  white-space: nowrap;
+}
+
+.rolling-digit {
+  position: relative;
+  display: inline-block;
+  clip-path: inset(0 -0.1em);
+}
+
+.rolling-hold {
+  visibility: hidden;
+}
+
+.rolling-wheel {
+  position: absolute;
+  inset: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  text-align: center;
+  transform: translateY(calc(var(--at, 0) * -1lh));
+  transition: transform var(--dur-3) var(--ease) calc(var(--order, 0) * 40ms);
+}
+
+.rolling-wheel > span {
+  height: 1lh;
+}

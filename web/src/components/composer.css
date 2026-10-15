@@ -369,6 +369,138 @@
   background: radial-gradient(circle, var(--gilt) 0 40%, transparent 45%);
 }
 
+/* On a phone the tools are a sheet from the bottom edge, with two pages
+   that slide past each other while the sheet eases to the new height. */
+.tools-sheet-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+}
+
+.tools-scrim {
+  position: absolute;
+  inset: 0;
+  background: var(--scrim);
+  animation: fade var(--dur-2) var(--ease) backwards;
+}
+
+.tools-sheet {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 0 var(--s-2) calc(var(--s-4) + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--hairline-strong);
+  border-radius: var(--r-lg) var(--r-lg) 0 0;
+  background: var(--surface);
+  box-shadow: var(--lift-2);
+  transform: translateY(var(--pull, 0));
+  transition: transform var(--dur-2) var(--ease);
+  animation: sheet-in var(--dur-2) var(--ease) backwards;
+}
+
+.tools-sheet[data-dragging] {
+  transition: none;
+}
+
+.tools-sheet-layer[data-leaving] .tools-sheet {
+  transform: translateY(100%);
+}
+
+.tools-sheet-layer[data-leaving] .tools-scrim {
+  opacity: 0;
+  transition: opacity var(--dur-2) var(--ease);
+}
+
+@keyframes sheet-in {
+  from {
+    transform: translateY(100%);
+  }
+}
+
+.tools-grip {
+  display: grid;
+  place-items: center;
+  height: var(--s-6);
+  cursor: grab;
+  touch-action: none;
+}
+
+.tools-grip span {
+  width: 2.25rem;
+  height: 4px;
+  border-radius: var(--r-pill);
+  background: var(--hairline-strong);
+}
+
+.tools-pages {
+  position: relative;
+  overflow: hidden;
+  transition: height var(--dur-2) var(--ease);
+}
+
+.tools-page {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  transition:
+    transform var(--dur-2) var(--ease),
+    opacity var(--dur-2) var(--ease);
+}
+
+.tools-page + .tools-page {
+  transform: translateX(100%);
+  opacity: 0;
+}
+
+.tools-pages[data-page="style"] .tools-page:first-child {
+  transform: translateX(-30%);
+  opacity: 0;
+}
+
+.tools-pages[data-page="style"] .tools-page + .tools-page {
+  transform: none;
+  opacity: 1;
+}
+
+.tools-page [role="radiogroup"] {
+  display: flex;
+  flex-direction: column;
+}
+
+.tools-sheet .tools-item {
+  min-height: var(--hit);
+  padding: var(--s-3);
+}
+
+.tools-sheet .tools-text {
+  font-size: var(--t-md);
+}
+
+.tools-sheet .tools-note {
+  font-size: var(--t-sm);
+}
+
+.tools-more {
+  flex: none;
+  align-self: center;
+  color: var(--muted);
+}
+
+.tools-back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-height: var(--hit);
+  padding: 0 var(--s-3);
+  font-size: var(--t-sm);
+  font-weight: var(--w-ui);
+  color: var(--muted);
+}
+
 /* Send is the only solid gilt on the screen. At rest it is an empty ring,
    and it fills the moment there is something to send. */
 .send {

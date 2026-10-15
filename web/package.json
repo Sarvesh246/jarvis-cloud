@@ -14,6 +14,8 @@
     "@phosphor-icons/react": "2.1.10",
     "@vercel/blob": "^2.8.2",
     "jose": "6.2.12",
+    "prism-react-renderer": "^2.4.1",
+    "prismjs": "^1.30.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "react-markdown": "10.1.0",

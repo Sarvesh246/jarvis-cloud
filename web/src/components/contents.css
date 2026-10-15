@@ -1,0 +1,134 @@
+/* A document's contents in the margin: a dotted rule, inked in behind a
+   paper plane as you read. Only where the workspace is wide enough to give
+   it a column of its own. */
+.doc-page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.doc-contents {
+  display: none;
+}
+
+@container workspace (min-width: 40rem) {
+  .doc-page:has(.doc-contents) {
+    grid-template-columns: minmax(0, 1fr) 11.5rem;
+  }
+
+  .doc-contents {
+    display: block;
+    grid-column: 2;
+    grid-row: 1;
+    position: sticky;
+    top: 0;
+    align-self: start;
+    max-height: 80dvh;
+    overflow-y: auto;
+    padding: var(--s-6) var(--s-5) var(--s-5) 0;
+    scrollbar-width: none;
+  }
+}
+
+.doc-contents-title {
+  margin: 0 0 var(--s-3);
+}
+
+.doc-contents-list {
+  position: relative;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.doc-contents-list button {
+  display: block;
+  width: 100%;
+  padding-block: 0.3rem;
+  padding-right: var(--s-2);
+  text-align: left;
+  font-size: var(--t-xs);
+  font-weight: var(--w-ui);
+  line-height: 1.35;
+  color: var(--muted);
+  border-radius: var(--r-sm);
+  transition: color var(--dur-1) var(--ease);
+}
+
+.doc-contents-list button:hover {
+  color: var(--ink-soft);
+}
+
+.doc-contents-list button[aria-current] {
+  color: var(--ink);
+}
+
+.doc-contents-rail {
+  position: absolute;
+  top: 0;
+  left: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.doc-contents-track,
+.doc-contents-ink {
+  fill: none;
+  stroke-width: 1.25;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.doc-contents-track {
+  stroke: var(--hairline-strong);
+  stroke-dasharray: 2 5;
+}
+
+.doc-contents-ink {
+  stroke: var(--ink-soft);
+}
+
+.doc-contents-node {
+  fill: var(--surface);
+  stroke: var(--hairline-strong);
+  stroke-width: 1.25;
+  transition:
+    fill var(--dur-1) var(--ease),
+    stroke var(--dur-1) var(--ease);
+}
+
+.doc-contents-node[data-covered] {
+  fill: var(--ink-soft);
+  stroke: var(--ink-soft);
+}
+
+/* Paper under the plane, so the rule and dots stop short of it */
+.doc-contents-hole {
+  fill: var(--surface);
+}
+
+.doc-contents-plane {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1rem;
+  height: 1rem;
+  margin: -0.5rem 0 0 -0.5rem;
+  pointer-events: none;
+  color: var(--ink-soft);
+}
+
+.doc-contents-plane svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  transform: rotate(180deg);
+  transition: transform var(--dur-2) var(--ease);
+}
+
+.doc-contents-plane path {
+  fill: currentColor;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+}

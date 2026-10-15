@@ -1,4 +1,4 @@
-import React, { memo, useCallback, useEffect, useRef, useState } from "react";
+import React, { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   ArrowClockwise,
   ArrowRight,
@@ -26,7 +26,8 @@ import {
   Wrench,
 } from "@phosphor-icons/react";
 import { Mark } from "./Mark.jsx";
-import { Rendered, SourceStrip, useCopy, useSources } from "./blocks/Blocks.jsx";
+import { Rolling } from "./Rolling.jsx";
+import { Rendered, SourceStrip, imageTiles, useCopy, useSources } from "./blocks/Blocks.jsx";
 import { summarizeSteps, toolDetail, toolInfo } from "../lib/tools.js";
 import { formatSize } from "../lib/attachments.js";
 import "./message.css";
@@ -40,6 +41,13 @@ function useElapsed(from, live) {
     return () => clearInterval(timer);
   }, [live]);
   return from ? Math.max(0, Math.round((now - from) / 1000)) : 0;
+}
+
+/* Making a picture, as opposed to looking at one */
+const IMAGE_MAKERS = /image_gen|generate_image|create_image|imagine|text_to_image/i;
+
+function makingImage(message) {
+  return !!message.activity?.some((step) => !step.done && IMAGE_MAKERS.test(step.tool ?? step.name ?? ""));
 }
 
 function seconds(ms) {
@@ -173,6 +181,50 @@ export function liveLine(message, phase) {
   return "Thinking";
 }
 
+/* The live line changes in place: the new words rise in as the old ones
+   leave, and the line's width eases to fit, so the timer beside it glides
+   rather than jumps. */
+function LiveLine({ text }) {
+  const [lines, setLines] = useState([{ text, key: 0 }]);
+  const [width, setWidth] = useState();
+  const current = useRef(null);
+
+  useEffect(() => {
+    setLines((list) => {
+      const top = list[list.length - 1];
+      if (top.text === text) return list;
+      return [{ ...top, leaving: true }, { text, key: top.key + 1 }];
+    });
+  }, [text]);
+
+  useEffect(() => {
+    if (lines.length < 2) return;
+    const timer = setTimeout(() => setLines((list) => list.filter((line) => !line.leaving)), 340);
+    return () => clearTimeout(timer);
+  }, [lines]);
+
+  useLayoutEffect(() => {
+    /* scrollWidth rounds down; a pixel of slack keeps the last letter whole */
+    if (current.current) setWidth(current.current.scrollWidth + 1);
+  }, [lines]);
+
+  return (
+    <span className="live-line" style={{ width }} title={text}>
+      {lines.map((line) => (
+        <span
+          key={line.key}
+          ref={line.leaving ? undefined : current}
+          className="process-line shimmer"
+          data-leaving={line.leaving || undefined}
+          aria-hidden={line.leaving || undefined}
+        >
+          {line.text}
+        </span>
+      ))}
+    </span>
+  );
+}
+
 /* What Vaelo is doing, said once, in the place it is happening. While it
    works this is a live line; afterwards it folds into a quiet receipt
    ("Worked for 12s · Searched the web 3×") that opens to the steps. */
@@ -186,7 +238,7 @@ function Process({ message, live, phase }) {
     const line = liveLine(message, phase);
     return (
       <div className="process" data-live="true">
-        <span className="process-line shimmer">{line}</span>
+        <LiveLine text={line} />
         {elapsed >= 3 && <span className="process-time">{elapsed}s</span>}
         {running && message.live && <span className="process-sub">{message.live}</span>}
         {steps.length > 1 && <Steps items={steps} />}
@@ -428,6 +480,16 @@ function MessageView({ message, fresh, busy, live, streaming, phase, isLast, edi
       </div>
       <div className="message-body">
         {!mine && <Process message={message} live={live && !streaming} phase={phase} />}
+        {!mine && live && makingImage(message) && (
+          <>
+            <div className="image-pending" role="img" aria-label="Making the image">
+              {imageTiles("image-pending-tile")}
+            </div>
+            <p className="image-pending-caption" aria-hidden="true">
+              Making the image
+            </p>
+          </>
+        )}
 
         {message.approval && (
           <Approval
@@ -455,7 +517,7 @@ function MessageView({ message, fresh, busy, live, streaming, phase, isLast, edi
                 {mine ? (
                   shown
                 ) : (
-                  <Rendered content={message.content} sources={sources} onOpen={open} />
+                  <Rendered content={message.content} sources={sources} onOpen={open} live={live} />
                 )}
                 {streaming && <span className="caret" aria-hidden="true" />}
               </div>
@@ -465,8 +527,12 @@ function MessageView({ message, fresh, busy, live, streaming, phase, isLast, edi
           {mine && <AttachmentList items={message.attachments} />}
         </Slip>
 
-        {!mine && !live && sources.length > 0 && (
-          <SourceStrip sources={sources} onOpen={() => open({ kind: "sources" })} />
+        {!mine && sources.length > 0 && (
+          <SourceStrip
+            sources={sources}
+            arriving={live || fresh}
+            onOpen={() => open({ kind: "sources" })}
+          />
         )}
 
         {message.stopped && (
@@ -532,7 +598,7 @@ function MessageView({ message, fresh, busy, live, streaming, phase, isLast, edi
                   <CaretLeft size={14} />
                 </button>
                 <span>
-                  {message.version + 1} / {versions.length}
+                  <Rolling value={message.version + 1} /> / {versions.length}
                 </span>
                 <button
                   className="icon-button small"

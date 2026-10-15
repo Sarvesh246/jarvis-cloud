@@ -246,6 +246,47 @@
   }
 }
 
+/* The live line swaps in place: old words lift away, new ones rise in,
+   and the line's width eases so what sits beside it never jumps. */
+.live-line {
+  display: inline-grid;
+  max-width: 100%;
+  transition: width var(--dur-2) var(--ease);
+}
+
+.live-line .process-line {
+  grid-area: 1 / 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  animation:
+    line-in var(--dur-2) var(--ease) both,
+    shimmer 2.8s linear infinite;
+}
+
+.live-line .process-line[data-leaving] {
+  animation:
+    line-out var(--dur-2) var(--ease) both,
+    shimmer 2.8s linear infinite;
+}
+
+@keyframes line-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.45em);
+    filter: blur(3px);
+  }
+}
+
+@keyframes line-out {
+  to {
+    opacity: 0;
+    transform: translateY(-0.45em);
+    filter: blur(3px);
+  }
+}
+
 .process-time {
   font-size: var(--t-sm);
   font-variant-numeric: tabular-nums;

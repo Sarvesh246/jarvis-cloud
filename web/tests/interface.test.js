@@ -6,7 +6,7 @@ import { chartable, sortRows, toCSV, toNumber } from "../src/lib/table.js";
 import { classifyError } from "../src/lib/errors.js";
 import { composeContent, fitHistory, readAttachment, wireMessage } from "../src/lib/attachments.js";
 import { groupChats, searchChats } from "../src/lib/format.js";
-import { metricsText, parseMetrics, parseTimeline } from "../src/lib/structured.js";
+import { fenceClosed, metricsText, parseMetrics, parseTimeline } from "../src/lib/structured.js";
 import { DEFAULTS, cleanPrefs } from "../src/lib/preferences.js";
 import {
   MAX_VERSIONS,
@@ -112,6 +112,19 @@ test("figure blocks read plain lines, keep direction in words, and survive half-
   // while streaming, a line cut off mid-way is simply not shown yet
   assert.deepEqual(parseMetrics("# Title\nPrice: $1").items, [{ label: "Price", value: "$1" }]);
   assert.deepEqual(parseMetrics("# Title\nPri").items, []);
+});
+
+test("a figure block counts as finished only once its closing fence arrives", () => {
+  const open = "Intro\n\n```metrics\nRevenue: $4.2M\n";
+  const start = open.indexOf("```");
+  assert.equal(fenceClosed(open, start, open.length), false);
+  // a half-written closing fence is still open
+  assert.equal(fenceClosed(`${open}\``, start, open.length + 1), false);
+  const closed = `${open}\`\`\`\n\nMore words`;
+  assert.equal(fenceClosed(closed, start, closed.indexOf("\n\nMore")), true);
+  assert.equal(fenceClosed("~~~metrics\nA: 1\n~~~", 0, 20), true);
+  // no position to go on: treat it as finished rather than hold it back
+  assert.equal(fenceClosed(closed, undefined, undefined), true);
 });
 
 test("timelines keep their order and split out detail after a dash", () => {

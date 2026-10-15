@@ -87,3 +87,14 @@ export function timelineText({ title, events }) {
 }
 
 export const STRUCTURED = new Set(["metrics", "timeline"]);
+
+/* Whether the fenced block between `start` and `end` in the Markdown has its
+   closing fence yet, so a shape can tell a half-streamed block from a
+   finished one. Without positions, a block counts as finished. */
+export function fenceClosed(markdown, start, end) {
+  if (start == null || end == null || !markdown) return true;
+  const lines = markdown.slice(start, end).trimEnd().split("\n");
+  const fence = lines[0].match(/^\s*(`{3,}|~{3,})/)?.[1];
+  if (!fence) return true;
+  return lines.length > 1 && lines[lines.length - 1].trim().startsWith(fence);
+}
