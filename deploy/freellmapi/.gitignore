@@ -1,0 +1,7 @@
+vendor/
+public/
+.vercel/
+.env*
+
+.vercel
+.env*

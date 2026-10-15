@@ -1,0 +1,4 @@
+vendor/
+bootstrap.test.mjs
+README.md
+.env*

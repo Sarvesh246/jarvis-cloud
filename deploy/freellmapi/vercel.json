@@ -1,0 +1,12 @@
+{
+  "framework": null,
+  "buildCommand": "npm run build",
+  "outputDirectory": "public",
+  "functions": {
+    "api/index.mjs": {
+      "maxDuration": 300,
+      "includeFiles": "vendor/{server/dist/**,node_modules/**,server/node_modules/**,shared/**,desktop/package.json,server/package.json,package.json,LICENSE}"
+    }
+  },
+  "rewrites": [{ "source": "/(.*)", "destination": "/api/index" }]
+}

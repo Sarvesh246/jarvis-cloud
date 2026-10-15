@@ -29,4 +29,5 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - run: npm ci
       - run: npm test
+      - run: node --test ../deploy/freellmapi/bootstrap.test.mjs
       - run: npm run build
