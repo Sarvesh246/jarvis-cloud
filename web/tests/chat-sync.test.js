@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { BlobPreconditionFailedError } from "@vercel/blob";
 import { ChatStore, accountPath } from "../server/chat-store.js";
-import { ChatSync, readSyncCache } from "../src/lib/chat-sync.js";
+import { ChatSync, liveReply, mergeChats, readSyncCache } from "../src/lib/chat-sync.js";
 import handler from "../api/chats.js";
 import { settings, signSession, cookieNames } from "../server/security.js";
 
@@ -188,4 +188,53 @@ test("a streaming local reply is not replaced by a remote edit", async () => {
   assert.equal(b.conflicts, 0);
   b.sync.busy = () => false; await b.sync.tick();
   assert.equal(b.conflicts, 1); assert.equal(b.chats.length, 2);
+});
+
+const reply = (extra = {}) => ({ id: "reply-one", role: "assistant", content: "", run: "reply-one",
+  running: true, startedAt: Date.now(), ...extra });
+
+test("a reply being written is saved when it starts and ends, not on every word", async () => {
+  const { device, store } = setup();
+  const a = device([chat()]); await a.sync.tick();
+  const writes = async () => (await store.manifest()).data.entries["chat-one"].version;
+  const started = { ...chat(), messages: [...chat().messages, reply()] };
+  a.sync.observe([started]); a.sync.push("chat-one"); await a.sync.tick();
+  const atStart = await writes();
+  const phone = device(); await phone.sync.tick();
+  assert.equal(phone.chats[0].messages.at(-1).running, true);
+  // Streaming words stay on this device; the phone follows them from the relay.
+  a.sync.observe([{ ...started, messages: [...chat().messages, reply({ content: "Half" })] }]);
+  await a.sync.tick();
+  assert.equal(await writes(), atStart);
+  a.sync.observe([{ ...started, messages: [...chat().messages, reply({ content: "Done", running: undefined })] }]);
+  await a.sync.tick(); await phone.sync.tick();
+  assert.notEqual(await writes(), atStart);
+  assert.equal(phone.chats[0].messages.at(-1).content, "Done");
+});
+
+test("a device that followed a reply takes the sender's finished copy without a device copy", async () => {
+  const { device } = setup();
+  const started = { ...chat(), messages: [...chat().messages, reply()] };
+  const a = device([started]); a.sync.push("chat-one"); await a.sync.tick();
+  const phone = device(); await phone.sync.tick();
+  // The phone fills in the reply as it follows it, still marked as running.
+  phone.sync.observe([{ ...started, messages: [...chat().messages, reply({ content: "Followed" })] }]);
+  a.sync.observe([{ ...started, messages: [...chat().messages, reply({ content: "Final", running: undefined })] }]);
+  await a.sync.tick(); await phone.sync.tick();
+  assert.equal(phone.conflicts, 0);
+  assert.equal(phone.chats.length, 1);
+  assert.equal(phone.chats[0].messages.at(-1).content, "Final");
+  assert.equal(phone.sync.dirty("chat-one"), false);
+});
+
+test("a message sent on one device while the other finished a reply is merged, not copied", async () => {
+  const done = { ...chat(), messages: [...chat().messages, reply({ content: "Answer", running: undefined })] };
+  assert.deepEqual(mergeChats(
+    { ...chat(), messages: [...done.messages, { id: "next", role: "user", text: "More" }] },
+    done,
+  ).messages.map((message) => message.id), ["message-one", "reply-one", "next"]);
+  assert.equal(mergeChats(
+    { ...chat(), messages: [{ id: "other", role: "user", text: "Different" }] }, chat(),
+  ), null);
+  assert.equal(liveReply({ messages: [reply({ startedAt: Date.now() - 2 * 60 * 60 * 1000 })] }), null);
 });

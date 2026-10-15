@@ -1,4 +1,5 @@
 import { ChatStore } from "../server/chat-store.js";
+import { notifyFeed } from "../server/chat.js";
 import { settings, authorize, sameOrigin, readJson, json, fail, HttpError } from "../server/security.js";
 
 export default async function handler(req, res) {
@@ -24,7 +25,9 @@ export default async function handler(req, res) {
         await store.stage(body);
         json(res, 200, { ok: true });
       } else if (body?.action === "commit") {
-        json(res, 200, { entry: await store.commit(body) });
+        const entry = await store.commit(body);
+        await notifyFeed(cfg, user);
+        json(res, 200, { entry });
       } else throw new HttpError(400, "Invalid sync request.");
     } else throw new HttpError(405, "Method not allowed.");
   } catch (error) { fail(res, error); }

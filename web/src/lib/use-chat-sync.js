@@ -1,5 +1,14 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ChatSync, readSyncCache, syncKey } from "./chat-sync.js";
+import { readEvents } from "../stream.js";
+
+/* Storage is checked this often while the live feed is down, and only this
+   rarely while it is up: then the feed says the moment anything changes. */
+const POLL_MS = 5000;
+const SAFETY_MS = 60000;
+/* A page nobody has touched for this long stops listening, so an open tab
+   doesn't keep the free cloud awake all day. Any touch resumes it. */
+const IDLE_MS = 10 * 60 * 1000;
 
 export function useChatSync({ session, chats, setChats, busyId, onConflict }) {
   const [issue, setIssue] = useState("");
@@ -40,19 +49,74 @@ export function useChatSync({ session, chats, setChats, busyId, onConflict }) {
       },
     });
     engine.current = sync;
-    const run = () => { if (!document.hidden && navigator.onLine !== false) void sync.tick(); };
-    run();
-    const timer = setInterval(run, 5000);
-    addEventListener("visibilitychange", run);
-    addEventListener("focus", run);
-    addEventListener("online", run);
+    let live = false;
+    let checked = 0;
+    let touched = Date.now();
+    let listening = false;
+    const usable = () => !document.hidden && navigator.onLine !== false;
+    const check = () => { checked = Date.now(); void sync.tick(); };
+    const poll = () => {
+      if (usable() && Date.now() - checked >= (live ? SAFETY_MS : POLL_MS) - 250) check();
+    };
+    const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+    /* One open request at a time, while the page is in view and in use. */
+    async function listen() {
+      if (listening) return;
+      listening = true;
+      let seq = -1;
+      let failures = 0;
+      try {
+        while (!controller.signal.aborted && usable() && Date.now() - touched < IDLE_MS) {
+          const attempt = new AbortController();
+          const end = () => attempt.abort();
+          controller.signal.addEventListener("abort", end, { once: true });
+          const hide = () => document.hidden && attempt.abort();
+          addEventListener("visibilitychange", hide);
+          try {
+            const response = await fetch(`/api/feed?after=${seq}`, {
+              signal: attempt.signal, cache: "no-store",
+            });
+            if (!response.ok || !response.body) throw new Error("feed unavailable");
+            await readEvents(response.body, (name, data) => {
+              if (name !== "feed" || !Number.isInteger(data?.seq)) return;
+              live = true;
+              failures = 0;
+              if (data.seq !== seq) {
+                seq = data.seq;
+                check();
+              }
+            });
+          } catch {
+            live = false;
+            if (controller.signal.aborted) return;
+            failures += 1;
+            await pause(Math.min(5000 * 2 ** (failures - 1), 60000));
+          } finally {
+            controller.signal.removeEventListener("abort", end);
+            removeEventListener("visibilitychange", hide);
+          }
+        }
+      } finally {
+        live = false;
+        listening = false;
+      }
+    }
+    const wake = () => {
+      touched = Date.now();
+      poll();
+      if (usable()) void listen();
+    };
+    wake();
+    const timer = setInterval(poll, 1000);
+    const events = ["visibilitychange", "focus", "online", "pointerdown", "keydown"];
+    for (const name of events) addEventListener(name, wake, { passive: true });
     return () => {
       sync.stop(); controller.abort(); clearInterval(timer);
-      removeEventListener("visibilitychange", run);
-      removeEventListener("focus", run);
-      removeEventListener("online", run);
+      for (const name of events) removeEventListener(name, wake);
       engine.current = null;
     };
   }, [session?.user?.sub, session?.offline, session?.csrf, setChats]);
-  return issue;
+  const push = useCallback((id) => engine.current?.push(id), []);
+  return { issue, push };
 }

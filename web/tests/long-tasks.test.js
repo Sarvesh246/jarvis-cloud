@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
-import { LIMITS, chatInput, clipReply as serverClip, resumeInput, streamChat } from "../server/chat.js";
+import { LIMITS, chatInput, clipReply as serverClip, feedInput, followFeed, notifyFeed, resumeInput, streamChat } from "../server/chat.js";
 import { probeBackend } from "../server/backend-readiness.js";
 import { clipReply, fitHistory, wireMessage } from "../src/lib/attachments.js";
 
@@ -245,4 +245,31 @@ test("a reply is named by the page's own id, or given one by older pages", () =>
   assert.equal(chatInput({ ...base, runId }).runId, runId);
   assert.match(chatInput(base).runId, /^[a-f0-9-]{36}$/);
   assert.notEqual(chatInput({ ...base, runId: "not-a-uuid" }).runId, "not-a-uuid");
+});
+
+test("devices listen for account changes through the relay, as the signed-in person", async () => {
+  const calls = [];
+  const request = async (url, options = {}) => {
+    calls.push({ url, method: options.method || "GET", headers: options.headers });
+    if (options.method === "POST") return Response.json({ ok: true });
+    return new Response('event: feed\ndata: {"seq": 4}\n\n: end\n\n', {
+      headers: { "Content-Type": "text/event-stream" },
+    });
+  };
+  const { req, res } = fakeExchange();
+  await followFeed(req, res, cfg, user, feedInput({ after: "3" }), request);
+  assert.equal(calls[0].url, "https://backend.example/vaelo/feed?after=3");
+  assert.equal(calls[0].headers["X-Hermes-Session-Key"], "web:owner");
+  assert.match(res.chunks.join(""), /"seq": 4/);
+  assert.equal(res.ended, true);
+  await notifyFeed(cfg, user, request);
+  assert.equal(calls[1].method, "POST");
+  // A sleeping cloud never fails a save.
+  await notifyFeed(cfg, user, async () => { throw new TypeError("fetch failed"); });
+  // Nor does it hold a listening device: it is told to check storage instead.
+  await assert.rejects(
+    followFeed(fakeExchange().req, fakeExchange().res, cfg, user, -1, async () => new Response("", { status: 502 })),
+    { status: 503 },
+  );
+  assert.throws(() => feedInput({ after: "soon" }), { status: 400 });
 });

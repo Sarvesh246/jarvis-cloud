@@ -351,6 +351,87 @@ export async function streamChat(req, res, cfg, user, input, request = fetch, { 
   }
 }
 
+/* Every signed-in device listens here to hear, the moment it happens, that a
+   conversation was saved or a reply started or ended. The relay keeps one
+   counter per account and sends only that number, never content, so a
+   device fetches what changed itself and nothing is generated twice. */
+const FEED_MS = 280000;
+
+export async function followFeed(req, res, cfg, user, after, request = fetch, { followMs = FEED_MS } = {}) {
+  if (!cfg.backend.startsWith("https://") || !cfg.apiKey)
+    throw new HttpError(503, "Cloud connection is not configured.");
+  const upstream = new AbortController();
+  const leave = () => upstream.abort();
+  res.on("close", leave);
+  req.on?.("aborted", leave);
+  // A sleeping cloud isn't waited for: the page checks storage meanwhile.
+  const connecting = setTimeout(leave, 10000);
+  const deadline = setTimeout(leave, followMs);
+  try {
+    let response;
+    try {
+      response = await request(`${base(cfg)}/vaelo/feed?after=${after}`, {
+        signal: upstream.signal,
+        headers: relayHeaders(cfg, user),
+      });
+    } catch {
+      throw new HttpError(503, "Live updates are unavailable right now.");
+    } finally {
+      clearTimeout(connecting);
+    }
+    if (!response.ok || !response.body) {
+      await response.body?.cancel();
+      throw new HttpError(503, "Live updates are unavailable right now.");
+    }
+    res.statusCode = 200;
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-store, no-transform");
+    res.setHeader("X-Accel-Buffering", "no");
+    res.flushHeaders?.();
+    try {
+      for await (const chunk of response.body) {
+        if (!res.write(chunk))
+          await new Promise((resolve) => {
+            res.once("drain", resolve);
+            res.once("close", resolve);
+          });
+      }
+    } catch {
+      /* out of time or the device left; it reconnects with the last number */
+    }
+    res.end();
+  } finally {
+    clearTimeout(connecting);
+    clearTimeout(deadline);
+    res.off("close", leave);
+    req.off?.("aborted", leave);
+  }
+}
+
+export function feedInput(query) {
+  const after = Number.parseInt(String(query?.after ?? "-1"), 10);
+  if (!Number.isInteger(after) || after < -1 || after > 1e12)
+    throw new HttpError(400, "Invalid live update request.");
+  return after;
+}
+
+/* A conversation was saved: wake every listening device. Best effort and
+   brief; a device that misses it still finds the change on its next check. */
+export async function notifyFeed(cfg, user, request = fetch) {
+  if (!cfg.backend.startsWith("https://") || !cfg.apiKey) return;
+  try {
+    const response = await request(`${base(cfg)}/vaelo/feed`, {
+      method: "POST",
+      signal: AbortSignal.timeout(1500),
+      headers: relayHeaders(cfg, user),
+      body: "{}",
+    });
+    await response.body?.cancel();
+  } catch {
+    /* the cloud is asleep or restarting; nobody is listening then */
+  }
+}
+
 /* Stopping is a decision, so it is its own request: the relay closes the
    Hermes stream, which cancels the run and frees the cloud's only slot. */
 export async function stopRun(cfg, user, runId, request = fetch) {

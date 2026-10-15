@@ -20,8 +20,43 @@ export function readSyncCache(sub, storage = localStorage) {
   } catch { return null; }
 }
 
+/* A reply older than this is no longer running anywhere (the relay forgets
+   runs after an hour), whatever the saved conversation still says. */
+export const LIVE_MS = 55 * 60 * 1000;
+
+/* The reply still being written at the end of a conversation, if any. Its
+   words come to every device straight from the relay, so the conversation
+   isn't uploaded again and again while it streams: it is saved when the
+   reply starts and when it ends. */
+export function liveReply(chat, now = Date.now()) {
+  const last = chat?.messages?.at(-1);
+  return last?.role === "assistant" && last.running && last.run &&
+    now - (last.startedAt || 0) < LIVE_MS ? last : null;
+}
+
+/* Two devices changed the same conversation. When one history extends the
+   other, the two are merged message by message, preferring a finished reply
+   to one still running and otherwise the saved copy. Histories that truly
+   diverged, or other edits on both sides (a rename, a pin), return null and
+   are kept as a copy. */
+const outside = ({ messages, updated, ...rest }) => JSON.stringify(rest);
+export function mergeChats(local, remote) {
+  if (!local || !remote || outside(local) !== outside(remote)) return null;
+  const mine = local.messages, theirs = remote.messages;
+  for (let i = 0; i < Math.min(mine.length, theirs.length); i++)
+    if (mine[i].id !== theirs[i].id) return null;
+  const longer = mine.length > theirs.length ? mine : theirs;
+  const messages = longer.map((message, i) => {
+    const a = mine[i], b = theirs[i];
+    if (!a || !b) return message;
+    return a.running && !b.running ? b : b.running && !a.running ? a : b;
+  });
+  return { ...remote, messages, updated: Math.max(local.updated || 0, remote.updated || 0) };
+}
+
 // The acknowledged baseline and local edits survive offline restarts together.
-// The server uses conditional writes; a conflicting local edit becomes a copy.
+// The server uses conditional writes; a conflicting local edit is merged, or
+// kept as a copy when the two histories diverged.
 export class ChatSync {
   constructor({ sub, chats, base = {}, request, onChange, onStatus, onConflict,
     storage = localStorage, uuid = () => crypto.randomUUID(), busy = () => null }) {
@@ -30,10 +65,21 @@ export class ChatSync {
     this.base = { ...base };
     this.stopped = false;
     this.running = false;
+    this.again = false;
+    this.forced = new Set();
   }
   observe(chats) {
     this.current = new Map(chats.map((chat) => [chat.id, chat]));
     this.persist();
+    if (this.forced.size) void this.tick();
+  }
+  /* Save this conversation now, even mid-reply: a reply starting, or moving
+     to a new run, is what other devices need to see to follow along. */
+  push(id) {
+    this.forced.add(id);
+    // The change is usually still on its way through observe(), which saves
+    // it; this only covers a push that changes nothing on screen.
+    setTimeout(() => { if (this.forced.size) void this.tick(); }, 1000);
   }
   persist() {
     try {
@@ -56,7 +102,9 @@ export class ChatSync {
     return JSON.parse(chunks.join(""));
   }
   async tick() {
-    if (this.running || this.stopped) return;
+    if (this.stopped) return;
+    // Asked again mid-pass (a live update, a push): one more pass follows.
+    if (this.running) { this.again = true; return; }
     this.running = true;
     try {
       const remote = (await this.request("/api/chats")).entries;
@@ -64,17 +112,31 @@ export class ChatSync {
       for (const [id, entry] of Object.entries(remote)) {
         if (entry.version === this.base[id]?.version) continue;
         if (this.busy() && this.dirty(id)) { blocked.add(id); continue; }
-        const chat = entry.deleted ? null : await this.download(id, entry);
+        let chat;
+        try {
+          chat = entry.deleted ? null : await this.download(id, entry);
+        } catch (error) {
+          // Replaced while this pass read it; the next pass reads the new one.
+          if (error.status !== 404) throw error;
+          blocked.add(id);
+          this.again = true;
+          continue;
+        }
         if (this.stopped) return;
         const local = this.current.get(id);
+        let next = chat;
         if (this.dirty(id) && fingerprint(local) !== fingerprint(chat)) {
-          if (local) {
-            const copy = { ...local, id: this.uuid(), title: `${local.title} (device copy)` };
-            this.current.set(copy.id, copy);
+          const merged = mergeChats(local, chat);
+          if (merged) next = merged;
+          else {
+            if (local) {
+              const copy = { ...local, id: this.uuid(), title: `${local.title} (device copy)` };
+              this.current.set(copy.id, copy);
+            }
+            this.onConflict();
           }
-          this.onConflict();
         }
-        if (chat) this.current.set(id, chat);
+        if (next) this.current.set(id, next);
         else this.current.delete(id);
         this.base[id] = { version: entry.version, fingerprint: fingerprint(chat) };
         this.emit();
@@ -83,6 +145,8 @@ export class ChatSync {
       for (const id of ids) {
         if (this.stopped) return;
         if (blocked.has(id) || !this.dirty(id)) continue;
+        if (liveReply(this.current.get(id)) && !this.forced.has(id)) continue;
+        this.forced.delete(id);
         const chat = this.current.get(id);
         const mark = fingerprint(chat);
         const version = this.uuid();
@@ -105,7 +169,14 @@ export class ChatSync {
     } catch (error) {
       if (!this.stopped) this.onStatus(error.status === 409 ? "" :
         "Conversations aren’t syncing yet. Your changes are saved on this device; retrying automatically.");
-    } finally { this.running = false; }
+      if (error.status === 409) this.again = true;
+    } finally {
+      this.running = false;
+      if (this.again && !this.stopped) {
+        this.again = false;
+        setTimeout(() => void this.tick(), 300);
+      }
+    }
   }
   stop() { this.stopped = true; }
 }

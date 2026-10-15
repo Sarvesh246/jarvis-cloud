@@ -34,6 +34,8 @@ UPSTREAM_SILENCE_SECONDS = 90
 RUN_BYTES = 6 * 1024 * 1024
 TOTAL_BYTES = 32 * 1024 * 1024
 KEEPALIVE_SECONDS = 10
+# A device listening for changes is let go after this long and simply asks again.
+FEED_SECONDS = 270
 BODY_LIMIT = 8 * 1024 * 1024
 # A run that ended without an answer, or was cut off mid-answer, is tried again (up to three
 # attempts in all) while this much time is left.
@@ -154,6 +156,28 @@ class Run:
                 pass
 
 
+class Feed:
+    """One account's change counter. Every signed-in device waits on it to hear, the moment it
+    happens, that a conversation was saved or a reply started or ended, instead of asking
+    storage over and over. It carries no content: devices fetch what changed themselves."""
+
+    def __init__(self):
+        self.seq = 0
+        self.cond = threading.Condition()
+
+    def bump(self):
+        with self.cond:
+            self.seq += 1
+            self.cond.notify_all()
+
+    def wait(self, after, timeout):
+        """The counter once it differs from ``after`` (a restart resets it, which also counts
+        as a change), or as it stands after ``timeout``."""
+        with self.cond:
+            self.cond.wait_for(lambda: self.seq != after, timeout)
+            return self.seq
+
+
 class Relay:
     def __init__(
         self,
@@ -165,6 +189,7 @@ class Relay:
     ):
         self.host, self.port, self.key = upstream_host, upstream_port, api_key
         self.runs, self.lock = {}, threading.Lock()
+        self.feeds = {}
         self.clock, self.sleep = clock, sleep
 
     # ---- run bookkeeping -------------------------------------------------------------------
@@ -197,6 +222,7 @@ class Relay:
             if existing is not None and not existing.done:
                 return existing
             run = self.runs[run_id] = Run(run_id, owner)
+        self.feed(owner).bump()
         threading.Thread(
             target=self.execute,
             args=(run, body),
@@ -204,6 +230,10 @@ class Relay:
             name=f"vaelo-run-{run_id[:8]}",
         ).start()
         return run
+
+    def feed(self, owner):
+        with self.lock:
+            return self.feeds.setdefault(owner, Feed())
 
     def find(self, run_id, owner):
         with self.lock:
@@ -434,6 +464,7 @@ class Relay:
             run.finish("error")
         finally:
             timer.cancel()
+            self.feed(run.owner).bump()
 
     def time_out(self, run):
         if not run.done:
@@ -505,6 +536,12 @@ def make_handler(relay):
                 return self.send_json(400, {"error": "missing session key"})
             parts = path.strip("/").split("/")
             try:
+                if parts == ["vaelo", "feed"]:
+                    if method == "GET":
+                        return self.listen(relay.feed(owner))
+                    if method == "POST":
+                        relay.feed(owner).bump()
+                        return self.send_json(200, {"ok": True})
                 if method == "POST" and parts == ["vaelo", "runs"]:
                     return self.start(owner)
                 if len(parts) >= 3 and parts[1] == "runs" and RUN_ID.match(parts[2]):
@@ -583,6 +620,36 @@ def make_handler(relay):
                         return
             except OSError:
                 return  # the reader left; the run carries on without it
+
+        def listen(self, feed):
+            """Tell this device each time the account's counter moves, until it has listened
+            for FEED_SECONDS; then it reconnects with the last number it heard."""
+            query = parse_qs(urlsplit(self.path).query)
+            try:
+                after = int(query.get("after", ["-1"])[0])
+            except ValueError:
+                after = -1
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Cache-Control", "no-store, no-transform")
+            self.send_header("X-Accel-Buffering", "no")
+            self.end_headers()
+            until = relay.clock() + FEED_SECONDS
+            try:
+                self.wfile.write(b": open\n\n")
+                self.wfile.flush()
+                while relay.clock() < until:
+                    seq = feed.wait(after, KEEPALIVE_SECONDS)
+                    if seq != after:
+                        after = seq
+                        self.wfile.write(f"event: feed\ndata: {json.dumps({'seq': seq})}\n\n".encode())
+                    else:
+                        self.wfile.write(b": keepalive\n\n")
+                    self.wfile.flush()
+                self.wfile.write(b": end\n\n")
+                self.wfile.flush()
+            except OSError:
+                return  # the device left
 
         def forward(self, method):
             """Everything else goes to Hermes untouched, streamed back as it arrives."""

@@ -9,7 +9,7 @@ import React, {
 import { ArrowDown, FileArrowUp, IconContext, Quotes } from "@phosphor-icons/react";
 import { readEvents } from "./stream.js";
 import { normalizeReplySpacing, normalizeSavedReplySpacing } from "./lib/reply-spacing.js";
-import { readSyncCache } from "./lib/chat-sync.js";
+import { liveReply, readSyncCache } from "./lib/chat-sync.js";
 import { useChatSync } from "./lib/use-chat-sync.js";
 import { Rail } from "./components/Rail.jsx";
 import { Header } from "./components/Header.jsx";
@@ -71,6 +71,9 @@ const SILENT_MS = 60 * 1000;
    pick them up. The relay keeps a finished reply for an hour. */
 const LIVE_KEY = "vaelo-live-replies";
 const LIVE_REPLY_MS = 55 * 60 * 1000;
+/* How long a device that followed a reply waits for the sender's own copy
+   before saving the finished reply itself. */
+const MIRROR_GRACE_MS = 15000;
 
 function readLiveReplies() {
   try {
@@ -370,6 +373,10 @@ export function App() {
   const replyId = useRef(null);
   const stopping = useRef(false);
   const resuming = useRef(new Set());
+  /* Replies this device has followed from another device, by message and run. */
+  const mirrored = useRef(new Set());
+  const mirrorChat = useRef(null);
+  const replyRun = useRef(null);
   const textarea = useRef(null);
   const conversation = useRef(null);
   const pinned = useRef(true);
@@ -540,7 +547,7 @@ export function App() {
     if (online && session?.offline) loadSession();
   }, [online, session?.offline]);
 
-  const syncIssue = useChatSync({
+  const { issue: syncIssue, push: pushChat } = useChatSync({
     session, chats, setChats, busyId: busy ? activeId : null,
     onConflict: () => showToast({ text: "Both devices edited this conversation. Your changes were kept in a device copy." }),
   });
@@ -1077,12 +1084,18 @@ export function App() {
                 : (messages[0].text || messages[0].attachments?.[0]?.name || messages[0].content).slice(0, 48),
               updated: Date.now(),
               messages: [
-                ...messages,
+                ...messages.map((message) =>
+                  message.running ? { ...message, running: undefined } : message,
+                ),
                 {
                   id,
                   role: "assistant",
                   content: "",
                   startedAt: Date.now(),
+                  /* Saved with the conversation so every other device can
+                     follow this reply live from the relay, at no model cost. */
+                  run: id,
+                  running: true,
                   context,
                   ...(versions && { versions, version: versions.length }),
                 },
@@ -1091,6 +1104,7 @@ export function App() {
           : chat,
       ),
     );
+    pushChat(chatId);
     clearTimeout(settleTimer.current);
     setSettling(false);
     if (!retry && !edit && text === undefined) {
@@ -1139,8 +1153,11 @@ export function App() {
      in front of Hermes and carries on without this page, so a dropped
      connection, a locked phone or a closed app only means picking it back
      up after the last event the page saw. `start` begins a new reply;
-     `resumeFrom` picks one up that was running when the app last closed. */
-  async function followReply({ chatId, id, title, start = null, resumeFrom = null, run = id }) {
+     `resumeFrom` picks one up that was running when the app last closed.
+     `mirror` follows a reply another device started: the same events replayed
+     from the relay, so it looks the same here and costs no model tokens. A
+     mirror never starts or restarts a run; the device that sent it does. */
+  async function followReply({ chatId, id, title, start = null, resumeFrom = null, run = id, mirror = false }) {
     setBusy(true);
     setError("");
     setLivePhase("thinking");
@@ -1149,7 +1166,11 @@ export function App() {
     abort.current = controller;
     replyId.current = id;
     stopping.current = false;
-    rememberLiveReply(id, chatId, run);
+    replyRun.current = run;
+    if (mirror) mirrorChat.current = chatId;
+    else rememberLiveReply(id, chatId, run);
+    const mirrorKey = `${id}:${run}`;
+    let quiet = false;
     let completed = false;
     /* A continuation's opening is held back until it can be joined onto
        the words already shown without repeating any of them. */
@@ -1433,7 +1454,7 @@ export function App() {
                with it. Nothing is lost on the page: the work carries on in a
                new run, which continues the answer from where it stopped, or
                picks the research back up if no answer was written yet. */
-            if (err.code === "run_missing" && recoveries < 3) {
+            if (err.code === "run_missing" && recoveries < 3 && !mirror) {
               const original = body || requestFor(chatId, id);
               if (original) {
                 recoveries += 1;
@@ -1453,6 +1474,9 @@ export function App() {
                     body = retryRequest(original, done, run);
                   }
                   rememberLiveReply(id, chatId, run);
+                  replyRun.current = run;
+                  updateMessage({ run });
+                  pushChat(chatId);
                   seq = -1;
                   fromScratch = false;
                 } else body = original;
@@ -1509,7 +1533,10 @@ export function App() {
       cancelAnimationFrame(frame);
       frame = 0;
       if (received || reasoning) flush();
-      if (err.name === "AbortError" && !stopping.current) {
+      if (mirror && (err.code === "run_missing" || err.dropped)) {
+        /* The device that sent this reply carries it on and reports it. */
+        quiet = true;
+      } else if (err.name === "AbortError" && !stopping.current) {
         /* The page is going away (closing, signing out): the reply carries
            on at Vaelo and is picked back up the next time the app opens. */
         detached = true;
@@ -1542,8 +1569,12 @@ export function App() {
         cancelAnimationFrame(frame);
         flush();
       }
+      /* A reply that carries on without this page stays marked as running.
+         A mirror leaves the final word to the device that sent it. */
+      const carriesOn = detached || lost || quiet || (mirror && !stopping.current);
       updateMessage((message) => {
         const patch = { live: "" };
+        if (!carriesOn) patch.running = undefined;
         if (message.activity)
           patch.activity = message.activity.map((item) => ({
             ...item,
@@ -1564,7 +1595,14 @@ export function App() {
       });
       setBusy(false);
       setLivePhase("idle");
-      if (!detached && !lost) forgetLiveReply(id);
+      if (!mirror && !detached && !lost) forgetLiveReply(id);
+      if (mirror) {
+        mirrorChat.current = null;
+        // Leaving the conversation: coming back to it follows the reply again.
+        if (detached) mirrored.current.delete(mirrorKey);
+        else if (!quiet && carriesOn) adoptLater(chatId, id, run);
+      }
+      if (!carriesOn) pushChat(chatId);
       if (abort.current === controller) {
         abort.current = null;
         replyId.current = null;
@@ -1583,12 +1621,26 @@ export function App() {
     }
   }
 
+  /* A followed reply that ended here while the device that sent it is
+     asleep: after a short wait for that device's own copy, this one is saved
+     so every device sees the finished reply. */
+  function adoptLater(chatId, id, run) {
+    setTimeout(() => {
+      const message = chatsRef.current
+        .find((chat) => chat.id === chatId)
+        ?.messages.find((item) => item.id === id);
+      if (!message?.running || message.run !== run) return;
+      updateChatMessage(chatId, id, { running: undefined });
+      pushChat(chatId);
+    }, MIRROR_GRACE_MS);
+  }
+
   /* Stop is a decision about the reply, so it is told to Vaelo, which ends
      the run; merely leaving the page never does. */
   function stopReply() {
     if (!abort.current) return;
     stopping.current = true;
-    const id = replyId.current;
+    const id = replyRun.current || replyId.current;
     if (id && session?.csrf)
       fetch("/api/stop", {
         method: "POST",
@@ -1629,6 +1681,50 @@ export function App() {
       return;
     }
   }, [session?.user?.sub, session?.offline, busy, chats.length > 0]);
+
+  /* A reply another device is writing shows here as it happens, the way
+     ChatGPT and Claude do it: the conversation arrives through sync marked
+     as running, and opening it replays that run's events from the relay and
+     follows it live. Starting on a blank conversation, a reply just begun
+     elsewhere is opened at once. Nothing is generated again. */
+  const autoOpened = useRef(new Set());
+  useEffect(() => {
+    if (!session?.user || session.offline) return;
+    if (busy) {
+      // Following a reply in a conversation that was left: stop following.
+      if (mirrorChat.current && mirrorChat.current !== activeId) abort.current?.abort();
+      return;
+    }
+    const own = readLiveReplies();
+    const active = chats.find((chat) => chat.id === activeId);
+    if (!active?.messages.length) {
+      const started = chats.find((chat) => {
+        const reply = liveReply(chat);
+        return reply && !own[reply.id] && !autoOpened.current.has(reply.id) &&
+          Date.now() - reply.startedAt < 2 * 60 * 1000;
+      });
+      if (started) {
+        autoOpened.current.add(liveReply(started).id);
+        setActiveId(started.id);
+        return;
+      }
+    }
+    const reply = liveReply(active);
+    if (!reply || own[reply.id] || mirrored.current.has(`${reply.id}:${reply.run}`)) return;
+    mirrored.current.add(`${reply.id}:${reply.run}`);
+    followReply({
+      chatId: active.id,
+      id: reply.id,
+      run: reply.run,
+      title: active.title,
+      mirror: true,
+      resumeFrom: {
+        content: reply.content || "",
+        reasoning: reply.reasoning || "",
+        startedAt: reply.startedAt,
+      },
+    });
+  }, [session?.user?.sub, session?.offline, busy, activeId, chats]);
 
   /* Messages get one stable handler so a streaming reply never re-renders
      the rest of the transcript. It always reaches the latest state. */

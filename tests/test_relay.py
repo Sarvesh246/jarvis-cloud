@@ -5,6 +5,7 @@ from pathlib import Path
 import threading
 import time
 import unittest
+from unittest import mock
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -171,6 +172,27 @@ class RelayTests(unittest.TestCase):
                 return run
             time.sleep(0.02)
         self.fail("the run never finished")
+
+    def test_devices_hear_at_once_when_a_conversation_or_reply_changes(self):
+        with mock.patch.object(relay_module, "FEED_SECONDS", 1), \
+                mock.patch.object(relay_module, "KEEPALIVE_SECONDS", 0.2):
+            _, relay, port = self.boot([[chunk("Hi.", "stop"), "data: [DONE]"]])
+            status, text = self.call(port, "GET", "/vaelo/feed?after=-1")
+            self.assertEqual(status, 200)
+            self.assertIn('event: feed\ndata: {"seq": 0}', text)
+            self.assertTrue(text.endswith(": end\n\n"))
+            # A saved conversation, then a reply starting and ending, each move the counter.
+            self.assertEqual(self.call(port, "POST", "/vaelo/feed", {})[0], 200)
+            self.start(port)
+            self.finished(relay)
+            deadline = time.time() + 5
+            while relay.feed(OWNER).seq < 3 and time.time() < deadline:
+                time.sleep(0.02)
+            _, text = self.call(port, "GET", "/vaelo/feed?after=0")
+            self.assertIn('data: {"seq": 3}', text)
+            # Another account hears nothing of it.
+            _, text = self.call(port, "GET", "/vaelo/feed?after=0", owner="web:someone-else")
+            self.assertNotIn("event: feed", text)
 
     def test_a_reply_completes_and_is_kept_for_readers_who_come_later(self):
         hermes, relay, port = self.boot(

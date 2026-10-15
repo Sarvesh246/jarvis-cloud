@@ -10,6 +10,10 @@
       "maxDuration": 300,
       "supportsCancellation": true
     },
+    "api/feed.js": {
+      "maxDuration": 300,
+      "supportsCancellation": true
+    },
     "api/approval.js": {
       "maxDuration": 30
     },
