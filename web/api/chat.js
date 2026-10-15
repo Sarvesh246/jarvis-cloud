@@ -6,15 +6,23 @@ import {
   fail,
   HttpError,
 } from "../server/security.js";
-import { LIMITS, chatInput, streamChat } from "../server/chat.js";
+import { LIMITS, chatInput, resumeInput, streamChat } from "../server/chat.js";
 
+/* POST starts a reply and follows it; GET picks a reply back up after the
+   last event the page saw. Either way the reply itself runs on the relay. */
 export default async function handler(req, res) {
   try {
-    if (req.method !== "POST") throw new HttpError(405, "Method not allowed.");
+    if (req.method !== "POST" && req.method !== "GET") throw new HttpError(405, "Method not allowed.");
     const cfg = settings();
     const user = await authorize(req, cfg);
-    sameOrigin(req, cfg);
-    const input = chatInput(await readJson(req, LIMITS.body));
+    let input;
+    if (req.method === "GET") {
+      const query = Object.fromEntries(new URL(req.url, "http://local").searchParams);
+      input = resumeInput(query);
+    } else {
+      sameOrigin(req, cfg);
+      input = chatInput(await readJson(req, LIMITS.body));
+    }
     await streamChat(req, res, cfg, user, input);
   } catch (error) {
     if (!res.headersSent) fail(res, error);

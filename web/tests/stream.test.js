@@ -27,7 +27,7 @@ test("proxy fixes the model, scopes memory and never places the backend key in t
     setHeader() {},
     flushHeaders() {},
     write(chunk) {
-      output.push(chunk.toString());
+      output.push(typeof chunk === "string" ? chunk : Buffer.from(chunk).toString());
       return true;
     },
     end() {},
@@ -40,19 +40,23 @@ test("proxy fixes the model, scopes memory and never places the backend key in t
     { sub: "owner", name: "Maya", email: "owner@gmail.com" },
     {
       conversationId: "c5ec5f03-1fd1-4f38-83df-b664bf78f998",
+      runId: "0d9e8f7a-6b5c-4d3e-8f1a-2b3c4d5e6f70",
       messages: [{ role: "user", content: "Hello" }],
     },
     async (url, options) => {
       if (url.endsWith("/health")) return Response.json({ status: "ok" });
-      sent = { url, options };
+      if (url.endsWith("/vaelo/runs")) {
+        sent = { url, options };
+        return new Response("{}", { status: 202 });
+      }
       return new Response(
-        'data: {"choices":[{"delta":{"content":"Hi"}}]}\n\ndata: [DONE]\n\n',
+        'id: 0\ndata: {"choices":[{"delta":{"content":"Hi"}}]}\n\nid: 1\nevent: jarvis.complete\ndata: {"ok":true}\n\n: end\n\n',
       );
     },
   );
   assert.equal(sent.options.headers.Authorization, "Bearer private-test-key");
   assert.equal(sent.options.headers["X-Hermes-Session-Key"], "web:owner");
-  assert.equal(JSON.parse(sent.options.body).model, "jarvis");
+  assert.equal(JSON.parse(sent.options.body).id, "0d9e8f7a-6b5c-4d3e-8f1a-2b3c4d5e6f70");
   const context = JSON.parse(sent.options.body).messages[0].content;
   assert.match(context, /"display_name":"Maya"/);
   assert.doesNotMatch(context, /owner@gmail\.com/);
@@ -67,7 +71,7 @@ test("upstream failures produce a visible error without provider bodies or secre
     setHeader() {},
     flushHeaders() {},
     write(chunk) {
-      output.push(chunk.toString());
+      output.push(typeof chunk === "string" ? chunk : Buffer.from(chunk).toString());
       return true;
     },
     end() {},

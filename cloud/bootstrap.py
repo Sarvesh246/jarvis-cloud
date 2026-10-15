@@ -5,8 +5,10 @@ import json
 import os
 from pathlib import Path
 import shutil
+import signal
 import subprocess
 import sys
+import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.request import Request, urlopen
@@ -166,11 +168,40 @@ def start_keep_awake(environ):
     url = keep_awake_url(environ)
     if not url:
         return None
-    # A separate process, because the gateway replaces this one through exec.
-    return subprocess.Popen(
-        [sys.executable, str(Path(__file__).resolve()), "--keep-awake", url],
-        stdin=subprocess.DEVNULL, start_new_session=True,
-    )
+    thread = threading.Thread(target=keep_awake, args=(url,), daemon=True, name="keep-awake")
+    thread.start()
+    return thread
+
+
+def internal_port(port):
+    """Hermes listens privately; the relay owns the public port in front of it."""
+    value = int(os.environ.get("HERMES_INTERNAL_PORT") or (port + 1 if port < 65535 else port - 1))
+    if value == port or not 1 <= value <= 65535:
+        raise SystemExit("HERMES_INTERNAL_PORT must be a free port other than PORT")
+    return value
+
+
+def supervise(hermes, server):
+    """The container lives as long as Hermes does. If it exits, so does the relay, and Render
+    restarts the service; a stop signal from Render reaches Hermes before the relay closes."""
+    def stop(signum, frame):
+        hermes.terminate()
+        try:
+            hermes.wait(timeout=25)
+        except subprocess.TimeoutExpired:
+            hermes.kill()
+        os._exit(0)
+
+    signal.signal(signal.SIGTERM, stop)
+    signal.signal(signal.SIGINT, stop)
+
+    def watch():
+        code = hermes.wait()
+        print(f"Hermes exited ({code}); stopping so the service restarts", flush=True)
+        server.shutdown()
+        os._exit(code or 1)
+
+    threading.Thread(target=watch, daemon=True, name="hermes-watch").start()
 
 
 def main():
@@ -184,9 +215,10 @@ def main():
         return
     home = Path(os.environ.get("HERMES_HOME", "/opt/data"))
     prepare_profile(home, os.environ)
+    private = internal_port(port)
     os.environ.update({
-        "API_SERVER_ENABLED": "true", "API_SERVER_HOST": "0.0.0.0",
-        "API_SERVER_PORT": str(port), "API_SERVER_MODEL_NAME": "jarvis",
+        "API_SERVER_ENABLED": "true", "API_SERVER_HOST": "127.0.0.1",
+        "API_SERVER_PORT": str(private), "API_SERVER_MODEL_NAME": "jarvis",
         "HERMES_GATEWAY_NO_SUPERVISE": "1", "HERMES_HOME": str(home),
     })
     # Built-in providers (Gemini) have no providers block to carry a stale timeout; an explicit
@@ -195,14 +227,17 @@ def main():
     executable = shutil.which("hermes")
     if not executable:
         raise SystemExit("The Hermes executable is missing from the container")
+    print("Starting the private Jarvis API gateway", flush=True)
+    hermes = subprocess.Popen([executable, "gateway", "run"], stdin=subprocess.DEVNULL)
+    sys.path.insert(0, str(HERE))
+    from relay import serve
+    _, server = serve(port, private, os.environ["API_SERVER_KEY"])
+    supervise(hermes, server)
     if start_keep_awake(os.environ):
         print("Keeping the service awake between conversations", flush=True)
-    print("Starting the private Jarvis API gateway", flush=True)
-    os.execv(executable, [executable, "gateway", "run"])
+    print(f"Vaelo relay listening on {port}; Hermes on 127.0.0.1:{private}", flush=True)
+    server.serve_forever()
 
 
 if __name__ == "__main__":
-    if len(sys.argv) == 3 and sys.argv[1] == "--keep-awake":
-        keep_awake(sys.argv[2])
-    else:
-        main()
+    main()

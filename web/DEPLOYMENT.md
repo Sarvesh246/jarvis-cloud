@@ -6,9 +6,16 @@ The Vercel project's production feedback toolbar is disabled
 feedback scripts do not conflict with the strict Content Security Policy.
 
 Chat requests wait up to two minutes for the Render backend's health endpoint
-before submitting the prompt. Readiness checks use GET requests only, wake the
-public root once if necessary, and stop when the browser cancels. A chat POST
-is never retried automatically.
+before starting a reply. Readiness checks use GET requests only, wake the
+public root once if necessary, and stop when the browser cancels.
+
+Replies run on the relay in the Render container, not in a Vercel function.
+`POST /api/chat` starts a reply under the reply's own id and follows it;
+`GET /api/chat?run=<id>&after=<n>` picks a reply back up after event `n`;
+`POST /api/stop` ends one. Each function follows a reply for under five
+minutes and then tells the page to ask again, so a reply can run longer than
+any one function. Starting a reply twice with the same id follows the first
+run rather than starting another.
 
 Conversations use the project's **private** `vaelo-chats` Vercel Blob store.
 `BLOB_READ_WRITE_TOKEN` is server-only and must be connected to each deployment

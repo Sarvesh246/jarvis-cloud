@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
-import { LIMITS, chatInput, clipReply as serverClip, streamChat } from "../server/chat.js";
+import { LIMITS, chatInput, clipReply as serverClip, resumeInput, streamChat } from "../server/chat.js";
 import { probeBackend } from "../server/backend-readiness.js";
 import { clipReply, fitHistory, wireMessage } from "../src/lib/attachments.js";
 
@@ -61,7 +61,7 @@ function fakeExchange() {
   res.chunks = [];
   res.destroyed = false;
   res.setHeader = () => {};
-  res.write = (chunk) => (res.chunks.push(String(chunk)), true);
+  res.write = (chunk) => (res.chunks.push(typeof chunk === "string" ? chunk : Buffer.from(chunk).toString()), true);
   res.end = () => {
     res.ended = true;
   };
@@ -70,35 +70,53 @@ function fakeExchange() {
     res.chunks
       .join("")
       .split("\n\n")
-      .filter((frame) => frame.startsWith("event:"))
-      .map((frame) => {
-        const [head, data] = frame.split("\n");
-        return { name: head.slice(7), data: JSON.parse(data.slice(6)) };
-      });
+      .map((frame) => frame.split("\n").filter((line) => !line.startsWith("id:")))
+      .filter((lines) => lines[0]?.startsWith("event:"))
+      .map(([head, data]) => ({ name: head.slice(7), data: JSON.parse(data.slice(6)) }));
   return { req, res, events };
 }
 
 const cfg = { backend: "https://backend.example", apiKey: "k".repeat(40) };
 const user = { sub: "owner", name: "Owner" };
-const input = { conversationId, messages: [{ role: "user", content: "hi" }] };
+const runId = "9f1c2d3e-4b5a-4c6d-8e7f-0a1b2c3d4e5f";
+const input = { conversationId, runId, messages: [{ role: "user", content: "hi" }] };
 
-test("a reply that outlasts the function says so and keeps what arrived", async () => {
-  const { req, res, events } = fakeExchange();
-  const request = async (url, options) => {
-    if (url.endsWith("/health")) return Response.json({ status: "ok" });
-    const body = new ReadableStream({
-      start(controller) {
-        controller.enqueue(new TextEncoder().encode('data: {"choices":[{"delta":{"content":"Part one"}}]}\n\n'));
-        options.signal.addEventListener("abort", () => controller.error(options.signal.reason));
-      },
-    });
-    return new Response(body, { status: 200 });
+/* A stand-in for the relay in front of Hermes: it accepts runs and serves
+   their numbered frames, ending with ": end" once the run is over. */
+function fakeRelay({ frames = ['id: 0\nevent: jarvis.complete\ndata: {"ok":true}'], end = true, health = () => true, start = 202, events } = {}) {
+  const calls = [];
+  const request = async (url, options = {}) => {
+    calls.push({ url, method: options.method || "GET", options });
+    if (url.endsWith("/health")) return health() ? Response.json({ status: "ok" }) : new Response("", { status: 502 });
+    if (url.endsWith("/")) return new Response("waking");
+    if (url.endsWith("/vaelo/runs")) return new Response(JSON.stringify({ run_id: runId }), { status: start });
+    if (url.includes("/events")) {
+      if (events) return events(url, options);
+      return new Response(frames.map((frame) => `${frame}\n\n`).join("") + (end ? ": end\n\n" : ""));
+    }
+    return new Response("", { status: 404 });
   };
-  await streamChat(req, res, cfg, user, input, request, { timeLimitMs: 30 });
+  return { request, calls };
+}
+
+test("a reply that outlasts the function tells the page to pick it back up", async () => {
+  const { req, res, events } = fakeExchange();
+  const { request } = fakeRelay({
+    events: (url, options) =>
+      new Response(
+        new ReadableStream({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode('id: 0\ndata: {"choices":[{"delta":{"content":"Part one"}}]}\n\n'));
+            options.signal.addEventListener("abort", () => controller.error(options.signal.reason));
+          },
+        }),
+      ),
+  });
+  await streamChat(req, res, cfg, user, input, request, { followMs: 50 });
   assert.match(res.chunks.join(""), /Part one/);
-  const error = events().find((e) => e.name === "jarvis.error");
-  assert.equal(error.data.code, "time_limit");
-  assert.match(error.data.message, /Continue/);
+  const names = events().map((e) => e.name);
+  assert.equal(names.at(-1), "jarvis.resume");
+  assert.ok(!names.includes("jarvis.error"));
   assert.ok(res.ended);
 });
 
@@ -106,12 +124,7 @@ test("waking is only announced when the server is actually asleep", async () => 
   const run = async (healthy) => {
     const { req, res, events } = fakeExchange();
     let probes = 0;
-    const request = async (url) => {
-      if (url.endsWith("/health"))
-        return probes++ || healthy ? Response.json({ status: "ok" }) : new Response("", { status: 502 });
-      if (url.endsWith("/")) return new Response("waking");
-      return new Response('data: {"choices":[{"delta":{"content":"Hi"},"finish_reason":"stop"}]}\n\n');
-    };
+    const { request } = fakeRelay({ health: () => probes++ || healthy });
     await streamChat(req, res, cfg, user, input, request);
     return events().filter((e) => e.name === "jarvis.status").map((e) => e.data.message);
   };
@@ -119,99 +132,76 @@ test("waking is only announced when the server is actually asleep", async () => 
   assert.ok((await run(false)).some((message) => /Waking/.test(message)));
 });
 
-function sse(frames) {
-  return new Response(frames.map((frame) => `${frame}\n\n`).join(""));
-}
-
-test("a run that ends without an answer is asked once more for the write-up", async () => {
+test("a reply is started on the relay under its own id, then followed from the start", async () => {
   const { req, res, events } = fakeExchange();
-  const bodies = [];
-  const request = async (url, options) => {
-    if (url.endsWith("/health")) return Response.json({ status: "ok" });
-    bodies.push(JSON.parse(options.body));
-    if (bodies.length === 1)
-      return sse([
-        'event: hermes.tool.progress\ndata: {"tool":"web_search","label":"workout split research"}',
-        'data: {"choices":[{"delta":{},"finish_reason":"cancelled"}]}',
-        "data: [DONE]",
-      ]);
-    return sse(['data: {"choices":[{"delta":{"content":"Train each muscle twice a week."},"finish_reason":"stop"}]}']);
-  };
+  const { request, calls } = fakeRelay({
+    frames: ['id: 0\ndata: {"choices":[{"delta":{"content":"Hello"}}]}', 'id: 1\nevent: jarvis.complete\ndata: {"ok":true}'],
+  });
   await streamChat(req, res, cfg, user, input, request);
-  assert.equal(bodies.length, 2);
-  const retried = bodies[1].messages.at(-1).content;
-  assert.match(retried, /^hi/);
-  assert.match(retried, /workout split research/);
-  const names = events().map((e) => e.name);
-  assert.ok(names.includes("jarvis.retry"));
-  assert.equal(names.at(-1), "jarvis.complete");
-  assert.match(res.chunks.join(""), /twice a week/);
-});
-
-test("a late provider failure with no answer is held back while the recovery runs", async () => {
-  const { req, res, events } = fakeExchange();
-  let calls = 0;
-  const request = async (url) => {
-    if (url.endsWith("/health")) return Response.json({ status: "ok" });
-    calls += 1;
-    if (calls === 1)
-      return sse(['data: {"choices":[{"delta":{},"finish_reason":"error"}],"error":{"message":"provider failed"}}']);
-    if (calls === 2) return new Response("", { status: 429 });
-    return sse(['data: {"choices":[{"delta":{"content":"Here it is."},"finish_reason":"stop"}]}']);
-  };
-  await streamChat(req, res, cfg, user, input, request);
-  assert.doesNotMatch(res.chunks.join(""), /provider failed/);
+  const start = calls.find((call) => call.url.endsWith("/vaelo/runs"));
+  assert.equal(JSON.parse(start.options.body).id, runId);
+  assert.ok(calls.some((call) => call.url.endsWith(`/vaelo/runs/${runId}/events?after=-1`)));
+  assert.match(res.chunks.join(""), /id: 0\n/);
   assert.equal(events().at(-1).name, "jarvis.complete");
 });
 
-test("when the recovery also comes back empty, the page is told plainly", async () => {
-  const { req, res, events } = fakeExchange();
-  let calls = 0;
-  const request = async (url) => {
-    if (url.endsWith("/health")) return Response.json({ status: "ok" });
-    calls += 1;
-    return sse(['data: {"choices":[{"delta":{"content":"(empty)"},"finish_reason":"stop"}]}']);
-  };
-  await streamChat(req, res, cfg, user, input, request);
-  assert.equal(calls, 2);
-  const last = events().at(-1);
-  assert.equal(last.name, "jarvis.error");
-  assert.equal(last.data.code, "no_answer");
+test("picking a reply back up never starts a new run", async () => {
+  const { req, res } = fakeExchange();
+  const { request, calls } = fakeRelay();
+  await streamChat(req, res, cfg, user, { runId, after: 41 }, request);
+  assert.ok(!calls.some((call) => call.url.endsWith("/vaelo/runs")));
+  assert.ok(!calls.some((call) => call.url.endsWith("/health")));
+  assert.ok(calls.some((call) => call.url.endsWith("/events?after=41")));
 });
 
-test("a reply that waits on approval is never retried", async () => {
-  const { req, res, events } = fakeExchange();
-  let calls = 0;
-  const request = async (url) => {
-    if (url.endsWith("/health")) return Response.json({ status: "ok" });
-    calls += 1;
-    return sse(['event: approval.request\ndata: {"command":"npm run deploy"}']);
-  };
-  await streamChat(req, res, cfg, user, input, request);
-  assert.equal(calls, 1);
-  assert.equal(events().at(-1).name, "jarvis.complete");
+test("the page leaving never stops the reply", async () => {
+  const { req, res } = fakeExchange();
+  const { request, calls } = fakeRelay({
+    events: (url, options) =>
+      new Response(
+        new ReadableStream({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode(": open\n\n"));
+            options.signal.addEventListener("abort", () => controller.error(options.signal.reason));
+          },
+        }),
+      ),
+  });
+  const done = streamChat(req, res, cfg, user, input, request);
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  res.emit("close");
+  await done;
+  assert.ok(!calls.some((call) => call.url.includes("/stop")));
 });
 
-test("a backend restart after some answer text is never reported as success", async () => {
+test("a reply the relay no longer has is reported, not waited on", async () => {
   const { req, res, events } = fakeExchange();
-  await streamChat(req, res, cfg, user, input, async (url) =>
-    url.endsWith("/health") ? Response.json({ status: "ok" }) :
-      new Response('data: {"choices":[{"delta":{"content":"Partial answer"}}]}\n\n'));
-  assert.match(res.chunks.join(""), /Partial answer/);
-  assert.equal(events().at(-1).name, "jarvis.error");
-  assert.ok(!events().some((item) => item.name === "jarvis.complete"));
+  const { request } = fakeRelay({ events: () => new Response("", { status: 404 }) });
+  await streamChat(req, res, cfg, user, { runId, after: 3 }, request);
+  assert.equal(events().at(-1).data.code, "run_missing");
+});
+
+test("a relay connection that breaks mid-reply sends the page back for the rest", async () => {
+  const { req, res, events } = fakeExchange();
+  const { request } = fakeRelay({ frames: ['id: 0\ndata: {"choices":[{"delta":{"content":"Partial"}}]}'], end: false });
+  await streamChat(req, res, cfg, user, input, request);
+  assert.match(res.chunks.join(""), /Partial/);
+  assert.equal(events().at(-1).name, "jarvis.resume");
+});
+
+test("resuming takes a run id and a position, nothing else", () => {
+  assert.deepEqual(resumeInput({ run: runId, after: "12" }), { runId, after: 12 });
+  assert.deepEqual(resumeInput({ run: runId }), { runId, after: -1 });
+  assert.throws(() => resumeInput({ run: "../../etc", after: "1" }), /resumed/);
+  assert.throws(() => resumeInput({ run: runId, after: "-5" }), /resumed/);
 });
 
 test("everyday replies ask for brief thinking; research and thorough keep full depth", async () => {
   const sent = async (mode) => {
     const { req, res } = fakeExchange();
-    let body;
-    await streamChat(req, res, cfg, user, { ...input, ...mode }, async (url, options) => {
-      if (url.endsWith("/health")) return Response.json({ status: "ok" });
-      body = JSON.parse(options.body);
-      return sse(['data: {"choices":[{"delta":{"content":"Hi"},"finish_reason":"stop"}]}']);
-    });
-    return body.model_options;
+    const { request, calls } = fakeRelay();
+    await streamChat(req, res, cfg, user, { ...input, ...mode }, request);
+    return JSON.parse(calls.find((call) => call.url.endsWith("/vaelo/runs")).options.body).model_options;
   };
   assert.deepEqual(await sent({ style: "balanced", research: false }), { reasoning_effort: "low" });
   assert.deepEqual(await sent({ style: "concise", research: false }), { reasoning_effort: "low" });
@@ -220,32 +210,21 @@ test("everyday replies ask for brief thinking; research and thorough keep full d
 });
 
 test("a backend that just answered is not health-checked again before the next message", async () => {
-  let probes = 0;
-  const request = async (url) => {
-    if (url.endsWith("/health")) {
-      probes += 1;
-      return Response.json({ status: "ok" });
-    }
-    return sse(['data: {"choices":[{"delta":{"content":"Hi"},"finish_reason":"stop"}]}']);
-  };
+  const { request, calls } = fakeRelay();
   for (let i = 0; i < 3; i += 1) {
     const { req, res, events } = fakeExchange();
     await streamChat(req, res, cfg, user, input, request);
     assert.equal(events().at(-1).name, "jarvis.complete");
   }
-  assert.equal(probes, 1);
+  assert.equal(calls.filter((call) => call.url.endsWith("/health")).length, 1);
 });
 
-test("after a failed reply the backend is checked again", async () => {
-  let probes = 0;
-  let replies = 0;
-  const request = async (url) => {
-    if (url.endsWith("/health")) {
-      probes += 1;
-      return Response.json({ status: "ok" });
-    }
-    replies += 1;
-    return replies === 1 ? new Response("", { status: 503 }) : sse(['data: {"choices":[{"delta":{"content":"Hi"},"finish_reason":"stop"}]}']);
+test("after a failed start the backend is checked again", async () => {
+  let starts = 0;
+  const relay = fakeRelay();
+  const request = async (url, options) => {
+    if (url.endsWith("/vaelo/runs") && starts++ === 0) return new Response("", { status: 503 });
+    return relay.request(url, options);
   };
   const first = fakeExchange();
   await streamChat(first.req, first.res, cfg, user, input, request);
@@ -253,5 +232,12 @@ test("after a failed reply the backend is checked again", async () => {
   const second = fakeExchange();
   await streamChat(second.req, second.res, cfg, user, input, request);
   assert.equal(second.events().at(-1).name, "jarvis.complete");
-  assert.equal(probes, 2);
+  assert.equal(relay.calls.filter((call) => call.url.endsWith("/health")).length, 2);
+});
+
+test("a reply is named by the page's own id, or given one by older pages", () => {
+  const base = { conversationId, messages: [{ role: "user", content: "hi" }] };
+  assert.equal(chatInput({ ...base, runId }).runId, runId);
+  assert.match(chatInput(base).runId, /^[a-f0-9-]{36}$/);
+  assert.notEqual(chatInput({ ...base, runId: "not-a-uuid" }).runId, "not-a-uuid");
 });

@@ -66,6 +66,79 @@ const STALE_READY_MS = 12 * 60 * 1000;
    switching networks, say), not that Vaelo is thinking. */
 const SILENT_MS = 60 * 1000;
 
+/* Replies still running when the app closed, by id, so opening it again can
+   pick them up. The relay keeps a finished reply for an hour. */
+const LIVE_KEY = "vaelo-live-replies";
+const LIVE_REPLY_MS = 55 * 60 * 1000;
+
+function readLiveReplies() {
+  try {
+    const value = JSON.parse(localStorage.getItem(LIVE_KEY) || "{}");
+    return value && typeof value === "object" ? value : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeLiveReplies(value) {
+  try {
+    localStorage.setItem(LIVE_KEY, JSON.stringify(value));
+  } catch {
+    /* without storage a reply is only followed while the page stays open */
+  }
+}
+
+function rememberLiveReply(id, chatId) {
+  writeLiveReplies({ ...readLiveReplies(), [id]: { chatId, at: Date.now() } });
+}
+
+function forgetLiveReply(id) {
+  const live = readLiveReplies();
+  if (!(id in live)) return;
+  delete live[id];
+  writeLiveReplies(live);
+}
+
+function stopped() {
+  return Object.assign(new Error("Stopped"), { name: "AbortError" });
+}
+
+function pause(ms, signal) {
+  return new Promise((resolve, reject) => {
+    if (signal.aborted) return reject(stopped());
+    const timer = setTimeout(done, ms);
+    function done() {
+      signal.removeEventListener("abort", quit);
+      resolve();
+    }
+    function quit() {
+      clearTimeout(timer);
+      reject(stopped());
+    }
+    signal.addEventListener("abort", quit, { once: true });
+  });
+}
+
+/* Nothing is gained reading while a phone has the page asleep. */
+function untilVisible(signal) {
+  return new Promise((resolve, reject) => {
+    if (signal.aborted) return reject(stopped());
+    if (document.visibilityState === "visible") return resolve();
+    function seen() {
+      if (document.visibilityState !== "visible") return;
+      removeEventListener("visibilitychange", seen);
+      signal.removeEventListener("abort", quit);
+      resolve();
+    }
+    function quit() {
+      removeEventListener("visibilitychange", seen);
+      reject(stopped());
+    }
+    addEventListener("visibilitychange", seen);
+    signal.addEventListener("abort", quit, { once: true });
+  });
+}
+
 /* Hermes writes "(empty)" when its model gave nothing; that is not an answer. */
 function hasAnswer(text) {
   const trimmed = text.trim();
@@ -282,6 +355,11 @@ export function App() {
   const [gsi, setGsi] = useState("loading");
   const [gsiAttempt, setGsiAttempt] = useState(0);
   const abort = useRef(null);
+  /* The reply being followed, whether Stop was chosen, and replies already
+     being picked back up after the app opened. */
+  const replyId = useRef(null);
+  const stopping = useRef(false);
+  const resuming = useRef(new Set());
   const textarea = useRef(null);
   const conversation = useRef(null);
   const pinned = useRef(true);
@@ -610,7 +688,7 @@ export function App() {
         event.preventDefault();
         if (!busy) newChat();
       } else if (event.key === "Escape" && busy) {
-        abort.current?.abort();
+        stopReply();
       } else if (event.key === "Escape" && workspace) {
         setWorkspace(null);
       } else if (event.key === "/" && !typing && session?.user) {
@@ -1012,23 +1090,54 @@ export function App() {
       setDraft("");
       setAttachments([]);
     }
+    announce(mode.research ? "Vaelo is researching." : "Vaelo is thinking.");
+    await followReply({
+      chatId,
+      id,
+      title: active.messages.length
+        ? active.title
+        : String(messages[0].text || messages[0].content).slice(0, 48),
+      start: { conversationId: chatId, runId: id, messages: input },
+    });
+  }
+
+  /* One reply, followed until it ends. The reply itself runs on the relay
+     in front of Hermes and carries on without this page, so a dropped
+     connection, a locked phone or a closed app only means picking it back
+     up after the last event the page saw. `start` begins a new reply;
+     `resumeFrom` picks one up that was running when the app last closed. */
+  async function followReply({ chatId, id, title, start = null, resumeFrom = null }) {
     setBusy(true);
     setError("");
     setLivePhase("thinking");
     setQuote(null);
-    announce(mode.research ? "Vaelo is researching." : "Vaelo is thinking.");
     const controller = new AbortController();
     abort.current = controller;
+    replyId.current = id;
+    stopping.current = false;
+    rememberLiveReply(id, chatId);
     let completed = false;
-    let received = "";
-    let reasoning = "";
+    let received = resumeFrom?.content || "";
+    let reasoning = resumeFrom?.reasoning || "";
     let succeeded = false;
+    let detached = false;
+    let lost = false;
     let frame = 0;
     let runId = "";
     let pendingApproval = false;
-    let silent = false;
-    const startedAt = Date.now();
+    let seq = -1;
+    let fromScratch = Boolean(resumeFrom);
+    const startedAt = resumeFrom?.startedAt || Date.now();
     const updateMessage = (patch) => updateChatMessage(chatId, id, patch);
+    if (resumeFrom)
+      updateMessage({
+        interrupted: false,
+        failed: false,
+        stopped: false,
+        note: undefined,
+        errorKind: undefined,
+        live: "Picking up where Vaelo left off",
+      });
     /* Words are committed once per frame, not once per network fragment. */
     const flush = () => {
       frame = 0;
@@ -1065,6 +1174,8 @@ export function App() {
       if (name === "jarvis.error")
         throw Object.assign(new Error(data.message || "Vaelo could not finish."), {
           status: data.status,
+          code: data.code,
+          fromServer: true,
         });
       if (name === "jarvis.complete") completed = true;
       /* The run ended without an answer and the proxy is asking again;
@@ -1142,14 +1253,15 @@ export function App() {
         return;
       }
       if (choice?.finish_reason === "error" || data.error)
-        throw new Error(
-          data.error?.message || data.hermes?.error || "Vaelo stopped before finishing.",
+        throw Object.assign(
+          new Error(data.error?.message || data.hermes?.error || "Vaelo stopped before finishing."),
+          { fromServer: true },
         );
     }
     try {
       /* Waiting for a sleeping cloud happens here, in the page, so the
          reply gets the request's whole time limit once it starts. */
-      if (Date.now() - lastReady.current > STALE_READY_MS) {
+      if (start && Date.now() - lastReady.current > STALE_READY_MS) {
         setLivePhase("waking");
         updateMessage({ live: "Waking Vaelo up. This can take a minute" });
         await new Promise((resolve, reject) => {
@@ -1162,73 +1274,140 @@ export function App() {
         updateMessage({ live: "" });
         setLivePhase("thinking");
       }
-      /* A busy cloud (it runs one reply at a time) is waited out quietly a
-         couple of times before it is reported. */
-      for (let attempt = 0; ; attempt += 1) {
+      /* Ask, read, and when the connection drops, ask again from the last
+         event that arrived. Only the reply's own end, or Stop, ends this. */
+      let started = !start;
+      let busyTries = 0;
+      let restarted = false;
+      let drops = 0;
+      while (true) {
+        const attempt = new AbortController();
+        const endAttempt = () => attempt.abort();
+        controller.signal.addEventListener("abort", endAttempt, { once: true });
+        let heardAt = Date.now();
+        let progressed = false;
+        let resumeAsked = false;
+        /* A phone that slept usually took the connection with it. Coming
+           back, a stream that has gone quiet is dropped at once and picked
+           up again rather than waited out. Time in the background doesn't
+           count towards silence. */
+        const back = () => {
+          if (document.visibilityState !== "visible") return;
+          if (Date.now() - heardAt > 4000) attempt.abort();
+        };
+        addEventListener("visibilitychange", back);
+        addEventListener("online", back);
+        const watchdog = setInterval(() => {
+          if (document.visibilityState === "visible" && Date.now() - heardAt > SILENT_MS)
+            attempt.abort();
+        }, 5000);
         try {
-          const response = await fetch("/api/chat", {
-            method: "POST",
-            signal: controller.signal,
-            headers: {
-              "Content-Type": "application/json",
-              "X-CSRF-Token": session.csrf,
-            },
-            body: JSON.stringify({ conversationId: chatId, messages: input }),
-          });
+          const response = started
+            ? await fetch(`/api/chat?run=${encodeURIComponent(id)}&after=${seq}`, {
+                signal: attempt.signal,
+                cache: "no-store",
+              })
+            : await fetch("/api/chat", {
+                method: "POST",
+                signal: attempt.signal,
+                headers: {
+                  "Content-Type": "application/json",
+                  "X-CSRF-Token": session.csrf,
+                },
+                body: JSON.stringify(start),
+              });
           if (!response.ok) {
             const result = await response.json().catch(() => ({}));
             throw Object.assign(new Error(result.error || "Vaelo could not respond."), {
               status: response.status,
+              fromServer: true,
             });
           }
           if (!response.body)
-            throw new Error("Streaming is not available in this browser.");
-          /* Time spent in the background doesn't count: a phone pauses the
-             page, and what arrived meanwhile is read the moment it returns. */
-          let heardAt = Date.now();
-          const back = () => {
-            if (document.visibilityState === "visible") heardAt = Date.now();
-          };
-          addEventListener("visibilitychange", back);
-          const watchdog = setInterval(() => {
-            if (document.visibilityState === "visible" && Date.now() - heardAt > SILENT_MS) {
-              silent = true;
-              controller.abort();
-            }
-          }, 5000);
-          try {
-            await readEvents(response.body, onEvent, () => {
-              heardAt = Date.now();
+            throw Object.assign(new Error("Streaming is not available in this browser."), {
+              fromServer: true,
             });
-          } finally {
-            clearInterval(watchdog);
-            removeEventListener("visibilitychange", back);
-          }
-          break;
+          started = true;
+          await readEvents(
+            response.body,
+            (name, data, eventId) => {
+              if (eventId !== undefined) {
+                const n = Number(eventId);
+                if (!Number.isInteger(n) || n <= seq) return; // already shown
+                seq = n;
+                progressed = true;
+                /* Picking up after the app closed replays the reply from its
+                   start, so what was saved is replaced, not added to. */
+                if (fromScratch) {
+                  fromScratch = false;
+                  received = "";
+                  reasoning = "";
+                  updateMessage({
+                    content: "",
+                    reasoning: undefined,
+                    activity: undefined,
+                    notes: undefined,
+                    plan: undefined,
+                    approval: undefined,
+                    truncated: false,
+                  });
+                }
+              }
+              if (name === "jarvis.resume") {
+                resumeAsked = true;
+                return;
+              }
+              if (data !== null) onEvent(name, data);
+            },
+            () => {
+              heardAt = Date.now();
+            },
+          );
         } catch (err) {
-          const busyNow =
-            err.name !== "AbortError" &&
-            !received &&
-            !pendingApproval &&
-            attempt < 2 &&
-            classifyError({ name: err.name, message: err.message, status: err.status }).kind === "busy";
-          if (!busyNow) throw err;
-          updateMessage({ live: "Vaelo is finishing something else. Trying again in a moment" });
-          await new Promise((resolve, reject) => {
-            const timer = setTimeout(resolve, attempt ? 8000 : 4000);
-            controller.signal.addEventListener(
-              "abort",
-              () => {
-                clearTimeout(timer);
-                reject(Object.assign(new Error("Stopped"), { name: "AbortError" }));
-              },
-              { once: true },
-            );
-          });
-          updateMessage({ live: "" });
+          if (controller.signal.aborted) throw err;
+          if (err.fromServer) {
+            /* The run hadn't reached Vaelo before the first connection
+               dropped: starting it again is safe, it has the same id. */
+            if (err.code === "run_missing" && start && seq < 0 && !restarted) {
+              restarted = true;
+              started = false;
+              continue;
+            }
+            /* A busy cloud (it runs one reply at a time) is waited out
+               quietly a couple of times before it is reported. */
+            const busyNow =
+              start &&
+              !received &&
+              !pendingApproval &&
+              busyTries < 2 &&
+              classifyError({ name: err.name, message: err.message, status: err.status }).kind === "busy";
+            if (!busyNow) throw err;
+            busyTries += 1;
+            started = false;
+            updateMessage({ live: "Vaelo is finishing something else. Trying again in a moment" });
+            await pause(busyTries > 1 ? 8000 : 4000, controller.signal);
+            updateMessage({ live: "" });
+            continue;
+          }
+          /* Anything else is the connection, not the reply. */
+        } finally {
+          clearInterval(watchdog);
+          removeEventListener("visibilitychange", back);
+          removeEventListener("online", back);
+          controller.signal.removeEventListener("abort", endAttempt);
         }
+        if (completed) break;
+        drops = progressed || resumeAsked ? 0 : drops + 1;
+        if (drops > 20) {
+          lost = true;
+          throw Object.assign(new Error("The connection to Vaelo keeps dropping."), { dropped: true });
+        }
+        if (drops > 1) updateMessage({ live: "Reconnecting to Vaelo" });
+        await untilVisible(controller.signal);
+        if (drops) await pause(Math.min(500 * 2 ** (drops - 1), 5000), controller.signal);
+        if (drops > 1) updateMessage({ live: "" });
       }
-      if (!completed || !hasAnswer(received))
+      if (!hasAnswer(received))
         throw new Error("The response ended before Vaelo delivered an answer.");
       succeeded = true;
     } catch (err) {
@@ -1236,15 +1415,15 @@ export function App() {
       cancelAnimationFrame(frame);
       frame = 0;
       if (received || reasoning) flush();
-      if (silent) {
+      if (err.name === "AbortError" && !stopping.current) {
+        /* The page is going away (closing, signing out): the reply carries
+           on at Vaelo and is picked back up the next time the app opens. */
+        detached = true;
+      } else if (err.dropped) {
         const text = hasAnswer(received)
-          ? "The connection went silent partway through. What arrived is kept."
-          : "The connection to Vaelo went silent. Your prompt is still here; try again.";
-        updateMessage(
-          hasAnswer(received)
-            ? { interrupted: true, note: text }
-            : { failed: true, note: text, errorKind: "offline" },
-        );
+          ? "The connection to Vaelo keeps dropping. What arrived is kept; the rest appears when you reopen Vaelo."
+          : "The connection to Vaelo keeps dropping. The reply carries on there and appears when you reopen Vaelo.";
+        updateMessage({ interrupted: true, note: text });
         setError(text);
         announce(text);
       } else if (err.name === "AbortError") {
@@ -1291,23 +1470,70 @@ export function App() {
       });
       setBusy(false);
       setLivePhase("idle");
-      abort.current = null;
+      if (!detached && !lost) forgetLiveReply(id);
+      if (abort.current === controller) {
+        abort.current = null;
+        replyId.current = null;
+      }
       if (succeeded) {
         announce("Vaelo replied.");
         if (document.hidden) {
           document.title = "Reply ready · Vaelo";
-          if (prefsRef.current.notify)
-            tellReady(
-              active.messages.length ? active.title : String(messages[0].text || messages[0].content).slice(0, 48),
-              received,
-            );
+          if (prefsRef.current.notify) tellReady(title, received);
         }
         setSettling(true);
         settleTimer.current = setTimeout(() => setSettling(false), 1500);
       }
-      textarea.current?.focus({ preventScroll: true });
+      // A reply picked up on opening the app must not raise the keyboard.
+      if (start) textarea.current?.focus({ preventScroll: true });
     }
   }
+
+  /* Stop is a decision about the reply, so it is told to Vaelo, which ends
+     the run; merely leaving the page never does. */
+  function stopReply() {
+    if (!abort.current) return;
+    stopping.current = true;
+    const id = replyId.current;
+    if (id && session?.csrf)
+      fetch("/api/stop", {
+        method: "POST",
+        keepalive: true,
+        headers: { "Content-Type": "application/json", "X-CSRF-Token": session.csrf },
+        body: JSON.stringify({ runId: id }),
+      }).catch(() => {});
+    abort.current.abort();
+  }
+
+  /* A reply that was still running when the app closed, reloaded or lost
+     its connection for good carries on at Vaelo; opening the app picks the
+     newest one back up and shows it from the start. */
+  useEffect(() => {
+    if (!session?.user || session.offline || busy || !chats.length) return;
+    const live = Object.entries(readLiveReplies()).sort((a, b) => b[1].at - a[1].at);
+    for (const [id, entry] of live) {
+      const chat = chats.find((item) => item.id === entry.chatId);
+      const message = chat?.messages.find((item) => item.id === id);
+      if (!message || message.role !== "assistant" || Date.now() - entry.at > LIVE_REPLY_MS) {
+        forgetLiveReply(id);
+        continue;
+      }
+      if (resuming.current.has(id)) return;
+      resuming.current.add(id);
+      setActiveId(chat.id);
+      followReply({
+        chatId: chat.id,
+        id,
+        title: chat.title,
+        resumeFrom: {
+          content: message.content || "",
+          reasoning: message.reasoning || "",
+          startedAt: message.startedAt,
+        },
+      }).finally(() => resuming.current.delete(id));
+      return;
+    }
+  }, [session?.user?.sub, session?.offline, busy, chats.length > 0]);
 
   /* Messages get one stable handler so a streaming reply never re-renders
      the rest of the transcript. It always reaches the latest state. */
@@ -1574,7 +1800,7 @@ export function App() {
               length={length}
               onChange={setDraft}
               onSend={() => send()}
-              onStop={() => abort.current?.abort()}
+              onStop={stopReply}
               onFiles={addFiles}
               onRemoveFile={(id) =>
                 setAttachments((current) => current.filter((file) => file.id !== id))

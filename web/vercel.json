@@ -12,6 +12,9 @@
     },
     "api/approval.js": {
       "maxDuration": 30
+    },
+    "api/stop.js": {
+      "maxDuration": 30
     }
   },
   "cleanUrls": true,

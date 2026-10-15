@@ -4,6 +4,7 @@ from pathlib import Path
 import tempfile
 import threading
 import unittest
+import unittest.mock
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
@@ -144,6 +145,14 @@ class BootstrapTests(unittest.TestCase):
             cfg = bootstrap.configuration(environ)
             self.assertNotIn("cloud-freellmapi", cfg["providers"])
             self.assertEqual(cfg["model"]["default"], "openrouter/free")
+
+    def test_hermes_listens_privately_beside_the_relay(self):
+        with unittest.mock.patch.dict(bootstrap.os.environ, {}, clear=True):
+            self.assertEqual(bootstrap.internal_port(10000), 10001)
+            self.assertEqual(bootstrap.internal_port(65535), 65534)
+        with unittest.mock.patch.dict(bootstrap.os.environ, {"HERMES_INTERNAL_PORT": "10000"}, clear=True):
+            with self.assertRaises(SystemExit):
+                bootstrap.internal_port(10000)
 
     def test_keep_awake_targets_render_health_unless_disabled(self):
         url = "https://jarvis.example.onrender.com"
