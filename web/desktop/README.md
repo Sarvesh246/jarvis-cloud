@@ -80,8 +80,6 @@ ad-hoc signing for macOS previews. Windows installers are unsigned until an
 Authenticode signing service is configured. Updater signatures verify update
 authenticity; they do not replace operating-system publisher certificates.
 
-## Release verification
-
 ## Microsoft Store
 
 The reserved product is [Vaelo Chat, 9PDKBBJC8MVN](https://apps.microsoft.com/detail/9PDKBBJC8MVN).

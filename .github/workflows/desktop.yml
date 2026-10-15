@@ -58,7 +58,7 @@ jobs:
           echo "id=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG" --jq .id)" >> "$GITHUB_OUTPUT"
 
   build:
-    if: always() && needs.validate.result == 'success' && (needs.release.result == 'success' || needs.release.result == 'skipped')
+    if: ${{ !cancelled() && needs.validate.result == 'success' && (needs.release.result == 'success' || needs.release.result == 'skipped') }}
     needs: [validate, release]
     strategy:
       fail-fast: false
