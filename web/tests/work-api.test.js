@@ -13,6 +13,7 @@ function setup() {
   const blob = {
     async get(path) { const value = files.get(path); return value ? { stream: new Response(value.text).body, blob: { etag: value.etag } } : null; },
     async put(path, text) { files.set(path, { text, etag: String(++etag) }); },
+    async del(paths) { for (const path of [].concat(paths)) files.delete(path); },
   };
   let reads = 0;
   const handler = createWorkHandler({ configuration: () => cfg, configured: () => true,
@@ -53,9 +54,12 @@ test("work mutation requires matching origin, CSRF and JSON even with a valid se
 test("authenticated save/read/run/delete flow strips forged output and ignores requested account", async () => {
   const app = setup(), token = await signSession(user, cfg);
   const invoke = async overrides => { const res = response(); await app.handler(await request(token, overrides), res); return res; };
-  const save = await invoke({ body: { action: "save", sub: "attacker", record: { id: "one", capabilityId: 3, title: "Return", input: {}, output: { status: "completed" } }, base: null } });
+  const save = await invoke({ body: { action: "save", sub: "attacker", record: { id: "one", workspaceId: "refund", title: "Return", check: { id: "refund", input: {} }, documents: [{ id: "d", slot: "order", name: "receipt.txt", text: "Paid 20" }], output: { status: "completed" } }, base: null } });
   assert.equal(save.statusCode, 200); assert.equal(save.body.record.output, null);
   const read = await invoke({ method: "GET", url: "/api/work?id=one&sub=attacker" }); assert.deepEqual(read.body.record, save.body.record);
+  assert.equal(read.body.documents, undefined, "document text only travels when asked for");
+  const withText = await invoke({ method: "GET", url: "/api/work?id=one&documents=1" });
+  assert.deepEqual(Object.values(withText.body.documents), ["Paid 20"]);
   const run = await invoke({ body: { action: "run", id: "one", base: save.body.record.revision, output: { status: "completed" } } });
   assert.equal(run.body.record.output.status, "unverified");
   const stale = await invoke({ body: { action: "delete", id: "one", base: save.body.record.revision } }); assert.equal(stale.statusCode, 409);
@@ -65,7 +69,7 @@ test("authenticated save/read/run/delete flow strips forged output and ignores r
 
 test("same email with a different authenticated subject has no access to another account", async () => {
   const app = setup(), owner = await signSession(user, cfg), other = await signSession({ ...user, sub: "account-two" }, cfg);
-  const saved = response(); await app.handler(await request(owner, { body: { action: "save", record: { id: "one", capabilityId: 1, title: "Private", input: {} }, base: null } }), saved);
+  const saved = response(); await app.handler(await request(owner, { body: { action: "save", record: { id: "one", workspaceId: "contract-review", title: "Private" }, base: null } }), saved);
   const res = response(); await app.handler(await request(other, { method: "GET", url: "/api/work?id=one" }), res); assert.equal(res.statusCode, 404);
 });
 
@@ -73,5 +77,5 @@ test("missing Blob configuration honestly returns 503 and never invokes storage"
   let reached = false;
   const handler = createWorkHandler({ configuration: () => cfg, configured: () => false, storeFactory: () => { reached = true; } });
   const res = response(); await handler(await request(await signSession(user, cfg), { method: "GET" }), res);
-  assert.equal(res.statusCode, 503); assert.match(res.body.error, /not configured/); assert.equal(reached, false);
+  assert.equal(res.statusCode, 503); assert.match(res.body.error, /isn’t set up yet/); assert.equal(reached, false);
 });

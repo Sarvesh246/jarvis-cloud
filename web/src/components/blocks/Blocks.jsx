@@ -25,7 +25,8 @@ import { SourceIcon } from "./SourceIcon.jsx";
 import { Highlighted } from "./Highlighted.jsx";
 import { Rolling } from "../Rolling.jsx";
 import { readWorkProposal } from "../../lib/work-proposals.js";
-import { CAPABILITIES } from "../../../shared/capabilities.js";
+import { getWorkspace } from "../../../shared/workspaces.js";
+import { getCheck } from "../../../shared/checks.js";
 import "./blocks.css";
 
 /* A reply is rendered as typed blocks: prose, code, tables, sources. Each
@@ -109,15 +110,16 @@ function CodeBlock({ children, node, "data-src": src }) {
   if (language === "vaelo-work") {
     const proposal = readWorkProposal(textOf(children));
     const complete = fenceClosed(content, node?.position?.start?.offset, node?.position?.end?.offset);
-    if (!complete || live) return <p className="work-proposal-note">Preparing a work proposal…</p>;
-    if (!proposal) return <p className="work-proposal-note">This work proposal could not be read. Ask Vaelo to prepare it again.</p>;
-    const capability = CAPABILITIES.find(c => c.id === proposal.capabilityId);
+    if (!complete || live) return <p className="work-proposal-note">Filling it in…</p>;
+    if (!proposal) return <p className="work-proposal-note">This didn’t come through properly. Ask Vaelo to fill it in again.</p>;
+    const workspace = getWorkspace(proposal.workspaceId);
+    const check = proposal.check && getCheck(proposal.check.id);
     return <section className="work-proposal">
-      <span className="label">Proposed work</span>
-      <h3>{proposal.title || capability.title}</h3>
-      <p>{capability.description}</p>
-      <p className="work-proposal-note">Review the inputs before saving or running checks. Nothing has been changed.</p>
-      <button className="text-button" onClick={() => open({kind:"work-proposal", proposal})}>Review in Workroom <ArrowsOut size={15} /></button>
+      <span className="label">Ready for you to check</span>
+      <h3>{proposal.title || workspace?.title || "Your own workspace"}</h3>
+      <p>{check ? `${workspace?.title || "Workspace"} · ${check.title}` : workspace?.summary || "A workspace you set up yourself."}</p>
+      <p className="work-proposal-note">Vaelo filled this in. Open it to check it before you save.</p>
+      <button className="text-button" onClick={() => open({kind:"work-proposal", proposal})}>Open it <ArrowsOut size={15} /></button>
     </section>;
   }
   if (STRUCTURED.has(language)) {

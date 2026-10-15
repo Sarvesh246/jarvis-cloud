@@ -19,7 +19,9 @@ import { Composer } from "./components/Composer.jsx";
 import { Workspace } from "./components/Workspace.jsx";
 import { Settings } from "./components/Settings.jsx";
 import { Workroom } from "./components/Workroom.jsx";
-import { refreshWorkReferences } from "./lib/workroom.js";
+import { refreshWorkReferences, workContextFor, proposalDraft, chatToWorkspace } from "./lib/workroom.js";
+import { getWorkspace } from "../shared/workspaces.js";
+import { getCheck } from "../shared/checks.js";
 import { Mark } from "./components/Mark.jsx";
 import { PresentationContext } from "./components/blocks/Blocks.jsx";
 import { applyPrefs, readPrefs, savePrefs } from "./lib/preferences.js";
@@ -364,7 +366,11 @@ export function App() {
   const [prefs, setPrefs] = useState(readPrefs);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [workroomOpen, setWorkroomOpen] = useState(false);
-  const [workProposal, setWorkProposal] = useState(null);
+  /* A draft for the Workroom to open with: a proposal from a reply, a
+     document to verify, or a conversation saved as a workspace. */
+  const [workDraft, setWorkDraft] = useState(null);
+  /* A starter chosen in the Workroom, sent once its conversation is ready. */
+  const [queuedPrompt, setQueuedPrompt] = useState(null);
   const prefsRef = useRef(prefs);
   prefsRef.current = prefs;
   const swipe = useRef(null);
@@ -848,15 +854,24 @@ export function App() {
     setWorkspace(entry.item);
   }
 
-  function discussWork(record) {
-    if (!activeId || !record?.revision) return;
-    const workContext = { id: record.id, revision: record.revision, title: record.title, scope: record.scope };
-    setChats(current => current.map(chat => chat.id === activeId
-      ? { ...chat, updated: Date.now(), workContext } : chat));
+  /* A workspace opens in a conversation of its own (or the empty one you're
+     in), so its brief and documents travel with every message there. */
+  function startWork(record, prompt) {
+    if (!record?.revision) return;
+    const workContext = workContextFor(record);
+    let chatId = activeId;
+    if (active && !active.messages.length) {
+      setChats(current => current.map(chat => chat.id === activeId ? { ...chat, updated: Date.now(), workContext } : chat));
+    } else {
+      const chat = { ...freshChat(), workContext };
+      chatId = chat.id;
+      setChats(current => cap([chat, ...current]));
+      selectChat(chat.id);
+    }
     setWorkroomOpen(false);
-    setWorkProposal(null);
-    if (!draft.trim()) setDraft(`Help me with “${record.title}”. Review the saved inputs, ask for any missing facts, and propose the next useful step.`);
-    textarea.current?.focus();
+    setWorkDraft(null);
+    if (prompt) setQueuedPrompt({ chatId, text: prompt });
+    else requestAnimationFrame(() => textarea.current?.focus());
   }
 
   function updateSelectedWork(record) {
@@ -865,10 +880,26 @@ export function App() {
 
   function openWorkProposal(item) {
     if (item?.kind !== "work-proposal") return false;
-    setWorkProposal(item.proposal);
+    const draft = proposalDraft(item.proposal, { getWorkspace, getCheck });
+    if (!draft) return false;
+    setWorkDraft({ draft, panel: draft.check ? "check" : "setup", message: "Vaelo filled this in for you. Check it, then save it." });
     setWorkroomOpen(true);
     return true;
   }
+
+  function saveChatAsWorkspace() {
+    if (!active?.messages.length) return;
+    const { draft, skipped } = chatToWorkspace(active);
+    setWorkDraft({ draft, message: `What you asked for became the instructions${draft.documents.length ? `, and your ${draft.documents.length === 1 ? "file was" : "files were"} kept` : ""}. Change anything you like, then save.${skipped.length ? ` Left out: ${skipped.join(", ")} (pictures or very long files).` : ""}` });
+    setWorkroomOpen(true);
+  }
+
+  useEffect(() => {
+    if (!queuedPrompt || busy || !online || session?.offline) return;
+    if (active?.id !== queuedPrompt.chatId || !active.workContext) return;
+    setQueuedPrompt(null);
+    send({ text: queuedPrompt.text });
+  });
 
   /* Back from a document to the reply it began as, briefly marked */
   function revealMessage(id) {
@@ -1781,7 +1812,7 @@ export function App() {
     [],
   );
   const openFromWorkspace = useCallback(
-    (item) => { if (item?.kind === "work-proposal") {setWorkProposal(item.proposal);setWorkroomOpen(true);}
+    (item) => { if (item?.kind === "work-proposal") openWorkProposal(item);
       else setWorkspace((current) => ({ ...item, messageId: current?.messageId })); },
     [],
   );
@@ -1798,7 +1829,7 @@ export function App() {
       setActiveId(null);
       setSession(null);
       setWorkroomOpen(false);
-      setWorkProposal(null);
+      setWorkDraft(null);
       await loadSession();
     } catch (err) {
       setError(err.message);
@@ -1879,7 +1910,7 @@ export function App() {
           }}
           onSignOut={logout}
           onOpenWork={openWork}
-          onWorkroom={() => { setMenu(false); setWorkProposal(null); setWorkroomOpen(true); }}
+          onWorkroom={() => { setMenu(false); setWorkDraft(null); setWorkroomOpen(true); }}
           workroomOpen={workroomOpen}
         />
 
@@ -1910,6 +1941,7 @@ export function App() {
             onRename={renameChat}
             onOpenRail={() => setMenu(true)}
             onToggleRail={toggleRail}
+            onSaveAsWorkspace={messages.length > 0 && session?.user ? saveChatAsWorkspace : undefined}
           />
           {syncIssue && <Notice>{syncIssue}</Notice>}
 
@@ -1981,10 +2013,17 @@ export function App() {
           <div className="dock">
             {active?.workContext && (
               <div className="selected-work-context" role="status">
-                <span>Using saved {active.workContext.scope} work: {active.workContext.title}</span>
-                <button className="text-button" onClick={() => {setWorkProposal(null);setWorkroomOpen(true);}}>Review</button>
+                <span>Using <strong>{active.workContext.title}</strong>. Vaelo has its files and knows the job.</span>
+                <button className="text-button" onClick={() => {setWorkDraft(null);setWorkroomOpen(true);}}>Open in Workroom</button>
                 <button className="text-button" onClick={() => setChats(current => current.map(chat => chat.id === activeId
-                  ? {...chat,updated:Date.now(),workContext:undefined} : chat))}>Remove from chat</button>
+                  ? {...chat,updated:Date.now(),workContext:undefined} : chat))}>Stop using it</button>
+                {!messages.length && !busy && (getWorkspace(active.workContext.workspaceId)?.starters || active.workContext.starters || []).length > 0 && (
+                  <div className="work-dock-starters" role="group" aria-label="Ways to start">
+                    {(getWorkspace(active.workContext.workspaceId)?.starters || active.workContext.starters).map((item) => (
+                      <button key={item} disabled={!online || !!session.offline} onClick={() => send({ text: item })}>{item}</button>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
             {/* Scrolled away while Vaelo works, the pill carries its face and
@@ -2075,10 +2114,10 @@ export function App() {
             onReveal={revealMessage}
             onRevise={(request) => requestRevision({ csrf: session.csrf, ...request })}
             onVerifyDocument={(messageId, title) => {
-              setWorkProposal({capabilityId:1,title:`Verify ${title}`,scope:"personal",input:{
-                contract:{id:crypto.randomUUID(),resource:{kind:"document",id:`${activeId}:${messageId}`},checks:[]},
-                source:{kind:"vaelo-document",conversationId:activeId,messageId}
-              }});
+              /* The document is picked here, so the person only says what it must contain. */
+              const draft = proposalDraft({ workspaceId: "document-check", title: `Check ${title}`.slice(0, 160), scope: "personal",
+                check: { id: "document", input: { source: { kind: "vaelo-document", conversationId: activeId, messageId } } } }, { getWorkspace, getCheck });
+              setWorkDraft({ draft, panel: "check", message: "Write what the document must say, then tap Work it out." });
               setWorkroomOpen(true);
             }}
           />
@@ -2097,9 +2136,9 @@ export function App() {
           onChange={(patch) => setPrefs((current) => ({ ...current, ...patch }))}
           onClose={() => setSettingsOpen(false)}
         />
-        <Workroom open={workroomOpen} session={session} initialProposal={workProposal}
-          onClose={() => {setWorkroomOpen(false);setWorkProposal(null);}}
-          onDiscuss={discussWork} onRecordChange={updateSelectedWork} />
+        <Workroom open={workroomOpen} session={session} initialDraft={workDraft}
+          onClose={() => {setWorkroomOpen(false);setWorkDraft(null);}}
+          onStart={startWork} onRecordChange={updateSelectedWork} />
       </div>
       </PresentationContext.Provider>
     </IconContext.Provider>

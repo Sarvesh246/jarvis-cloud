@@ -10,20 +10,22 @@ To give the cloud the same 30-plus provider pool local Jarvis uses, set `FREELLM
 
 ## Run locally
 
-The web app includes Workroom, opened from the conversation rail. It keeps private,
-versioned work records in the same configured Vercel Blob store as conversations.
-Its 36 bounded operations cover verification, memory impact and migration review,
-document reconciliation, planning, evidence review and handoff. Save inputs, run the
-saved version, and choose Discuss to share that record with the current chat.
-Vaelo can prepare a proposal in a reply; reviewing it does not save or run it.
+The web app includes the Workroom, opened from the conversation rail. Think of it as
+a shelf of ready-made workspaces: applying for a job, reviewing a lease, chasing a
+refund, debugging, splitting trip costs and thirty-odd more. Each one already
+has the long prompt written. You drop in your documents once, and every conversation
+you start from it carries that brief and those documents, so you can get straight to
+work. You can also set up your own, or save any conversation as a workspace from its
+title bar.
 
-Documents in the workspace have a Verify action. It reads the account's saved
-document independently and checks the declared title or text requirements.
-Unsynced edits and external delivery are outside that check. Other operations
-evaluate supplied data; they do not connect calendar or merchant accounts,
-run arbitrary research code, submit applications, or schedule background checks.
-Workroom supports reviewed imports, exports, explicit deletion, offline reading,
-and conflict recovery without overwriting another device's edits.
+A few workspaces include a check that code works out from details you enter, such as
+whether a refund has fully arrived or who owes whom. The model never computes those.
+Workspaces and their document text live privately in the same Vercel Blob store as
+conversations. Very long documents are shortened from the middle so a chat stays within
+its context; the Workroom says when that will happen.
+
+Gotcha: saved records from before workspaces are upgraded on read. The handful whose
+tool was retired stay readable, and can be exported or deleted.
 
 Copy `.env.example` to `.env`, generate a random `API_SERVER_KEY` of at least 32 characters, and add your OpenRouter key. Optional provider keys enable the corresponding fallbacks and research tools.
 

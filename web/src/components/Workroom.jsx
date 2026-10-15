@@ -1,130 +1,122 @@
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { X, Plus, Trash, DownloadSimple, UploadSimple, ArrowClockwise, ArrowLeft, ArrowRight, Play, ChatCircle, ListChecks, FolderOpen } from '@phosphor-icons/react';
-import { CAPABILITIES } from '../../shared/capabilities.js';
-import { schemaValue, inferredSchema, fieldTitle, validateInput, readWorkCache, writeWorkCache, requestWork, importWork, draftMatches, prepareInput, valueForType } from '../lib/workroom.js';
+import { X, Plus, Trash, DownloadSimple, UploadSimple, ArrowClockwise, ArrowLeft, ArrowRight, ChatCircle, Calculator, FolderOpen, FileText, ClipboardText, Sparkle, Check as Tick } from '@phosphor-icons/react';
+import { WORKSPACES, AUDIENCES, getWorkspace } from '../../shared/workspaces.js';
+import { getCheck, CHECKS, missingAnswers } from '../../shared/checks.js';
+import { parseMoney, parseDate, formatMoney, formatDate } from '../../shared/plain.js';
+import { WORK_LIMITS, CUSTOM_WORKSPACE, workspaceFor, checkFor, contextPlan } from '../../shared/work-records.js';
+import { readWorkCache, writeWorkCache, requestWork, importWork, draftMatches, blankDraft, saveBody, exportWork, readDocumentCache, writeDocumentCache,
+  documentSize, answersFor } from '../lib/workroom.js';
+import { readAttachment } from '../lib/attachments.js';
+import { AUDIENCE_NAMES, matchWorkspaces, resultOverview } from '../lib/workroom-view.js';
 import './workroom.css';
-import { TOOL_GROUPS, resultOverview } from '../lib/workroom-view.js';
 
-const TYPES = ['string', 'number', 'boolean', 'object', 'array'];
-const SCOPES = ['personal', 'work', 'client'];
-const TYPE_NAMES = {string:'Text',number:'Number',boolean:'Yes or no',object:'Group of details',array:'List'};
+const SCOPES = [['personal', 'Personal'], ['work', 'Work'], ['client', 'A client']];
+const SCOPE_NAME = Object.fromEntries(SCOPES);
+const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+const lookups = { getWorkspace, getCheck };
 
-function ValueType({ value, onChange, label }) {
-  return <label className="work-type">{label}<select value={inferredSchema(value).type} onChange={e => onChange(valueForType(e.target.value))}>
-    {TYPES.map(type => <option key={type} value={type}>{TYPE_NAMES[type]}</option>)}
-  </select></label>;
-}
-
-function FreeFields({ value, onChange, depth }) {
-  const [keyName, setKeyName] = useState('');
-  const [problem, setProblem] = useState('');
-  const object = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
-  function add() {
-    const key = keyName.trim();
-    if (!key || ['__proto__','constructor','prototype'].includes(key) || Object.hasOwn(object, key)) { setProblem('Use a new field name.'); return; }
-    onChange({ ...object, [key]: '' }); setKeyName(''); setProblem('');
-  }
-  return <>
-    {Object.entries(object).map(([key, item]) => <div className="work-record-row" key={key}>
-      <div className="work-row-tools"><span>{key}</span><ValueType value={item} label={`Type for ${key}`} onChange={next => onChange({ ...object, [key]: next })} />
-        <button type="button" className="icon-button" aria-label={`Remove field ${key}`} onClick={() => { const next = { ...object }; delete next[key]; onChange(next); }}><Trash size={18} weight="light" /></button></div>
-      <SchemaField schema={{ ...inferredSchema(item), title: fieldTitle(key) }} value={item} onChange={next => onChange({ ...object, [key]: next })} depth={depth + 1} />
-    </div>)}
-    <div className="work-add-field"><label>New field name<input value={keyName} onChange={e => setKeyName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add(); } }} /></label>
-      <button type="button" onClick={add}><Plus size={17} weight="light" />Add field</button></div>
-    {problem && <p className="work-problem" role="alert">{problem}</p>}
-  </>;
-}
-
-function SchemaField({ schema = {}, value, onChange, required = false, depth = 0 }) {
-  const id = useId();
-  const rowKeys = useRef([]), nextKey = useRef(0);
-  const title = schema.title || 'Value';
-  const fields = Object.entries(schema.properties || {});
-  const requiredFields = fields.filter(([key]) => schema.required?.includes(key));
-  const optionalFields = fields.filter(([key]) => !schema.required?.includes(key));
-  const renderFields = entries => entries.map(([key,child]) => <SchemaField key={key} schema={{...child,title:child.title || fieldTitle(key)}}
-    required={schema.required?.includes(key)} value={value?.[key] ?? schemaValue(child)} onChange={next=>onChange({...value,[key]:next})} depth={depth+1} />);
-  if (depth > 12) return <p className="work-problem">This record is too deeply nested to edit here. Remove the parent item and simplify it.</p>;
-  if (schema.type === 'object') return <fieldset className="work-fields"><legend>{title}{required ? ' · required' : ''}</legend>
-    {schema.description && <p className="work-help">{schema.description}</p>}
-    {schema.properties ? <>{renderFields(requiredFields)}{optionalFields.length>0 && <details className="work-extra-fields"><summary>Extra details <span>Optional</span></summary>{renderFields(optionalFields)}</details>}</>
-      : <FreeFields value={value} onChange={onChange} depth={depth} />}
-  </fieldset>;
-  if (schema.type === 'array') {
-    const items = Array.isArray(value) ? value : [];
-    rowKeys.current.length = Math.min(rowKeys.current.length, items.length);
-    while(rowKeys.current.length < items.length) rowKeys.current.push(`${id}-row-${nextKey.current++}`);
-    return <fieldset className="work-fields"><legend>{title}{required ? ' · required' : ''}</legend>
-      {schema.description && <p className="work-help">{schema.description}</p>}
-      {!items.length && <p className="work-help">Add the information you want to check.</p>}
-      {items.map((item, index) => <div className="work-record-row" key={rowKeys.current[index]}>
-        <div className="work-row-tools"><span>{title} {index + 1}</span>
-          {!schema.items?.type && <ValueType value={item} label={`Type for item ${index + 1}`} onChange={next => onChange(items.map((v, i) => i === index ? next : v))} />}
-          <button type="button" className="icon-button" aria-label={`Remove ${title} item ${index + 1}`} onClick={() => {rowKeys.current.splice(index,1);onChange(items.filter((_, i) => i !== index));}}><Trash size={18} weight="light" /></button></div>
-        <SchemaField schema={{ ...(schema.items?.type ? schema.items : inferredSchema(item)), title: schema.items?.title || `Item ${index + 1}` }} value={item} onChange={next => onChange(items.map((v, i) => i === index ? next : v))} depth={depth + 1} />
-      </div>)}
-      <button type="button" className="work-text-button" onClick={() => onChange([...items, schemaValue(schema.items || { type: 'string' })])}><Plus size={17} weight="light" />Add {schema.items?.title?.toLowerCase() || 'item'}</button>
-    </fieldset>;
-  }
-  const common = { id, 'aria-required': required || undefined, 'aria-describedby': schema.description ? `${id}-help` : undefined };
-  return <div className="work-field"><label htmlFor={id}>{title}{required && <span className="work-required">Required</span>}</label>
-    {schema.enum ? <select {...common} value={value ?? ''} onChange={e => onChange(schema.enum.find(option => String(option) === e.target.value) ?? '')}><option value="">Choose…</option>{schema.enum.map(option => <option key={String(option)} value={String(option)}>{String(option)}</option>)}</select>
-      : schema.type === 'boolean' ? <select {...common} value={value === true ? 'true' : value === false ? 'false' : ''} onChange={e => onChange(e.target.value === '' ? '' : e.target.value === 'true')}><option value="">Choose yes or no…</option><option value="true">Yes</option><option value="false">No</option></select>
-        : ['number','integer'].includes(schema.type) ? <input {...common} type="number" step={schema.type === 'integer' ? '1' : 'any'} min={schema.minimum} max={schema.maximum} value={value ?? ''} onChange={e => onChange(e.target.value === '' ? '' : Number(e.target.value))} />
-          : <textarea {...common} rows={2} value={value ?? ''} onChange={e => onChange(e.target.value)} />}
-    {schema.description && <p id={`${id}-help`} className="work-help">{schema.description}</p>}
-  </div>;
-}
-
-function Readable({ value, depth = 0 }) {
-  if (value === null || value === undefined) return <span className="work-help">Not provided</span>;
-  if (typeof value === 'boolean') return <span>{value ? 'Yes' : 'No'}</span>;
-  if (typeof value !== 'object') return <span className="work-value">{String(value) || 'Empty'}</span>;
-  if (depth >= 9) return <p className="work-help">Further details are available in the export.</p>;
-  if (Array.isArray(value)) return value.length ? <ol className="work-results-list">{value.slice(0, 80).map((item,i) => <li key={i}><Readable value={item} depth={depth + 1} /></li>)}{value.length > 80 && <li>Remaining items are available in the export.</li>}</ol> : <span className="work-help">No items</span>;
-  return <dl className="work-result-fields">{Object.entries(value).slice(0,80).map(([key,item]) => <div key={key}><dt>{fieldTitle(key)}</dt><dd><Readable value={item} depth={depth + 1} /></dd></div>)}</dl>;
-}
-
-function download(records, title = 'vaelo-work') {
-  const url = URL.createObjectURL(new Blob([JSON.stringify({ format: 'vaelo-work/v1', records }, null, 2)], { type: 'application/json' }));
+function download(data, title = 'vaelo-backup') {
+  const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
   const anchor = document.createElement('a'); anchor.href = url; anchor.download = `${title.replace(/[^a-z0-9_-]/gi,'-').slice(0,70)}.json`; anchor.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export function Workroom({ open, onClose, session, onDiscuss, initialProposal = null, onRecordChange }) {
+/* One question of a check, answered in everyday words. Money and dates say
+   back what Vaelo understood, so a typo shows up before anything runs. */
+function CheckField({ field, value, onChange }) {
+  const id = useId();
+  const typed = value.trim();
+  let heard = null;
+  if (typed && field.kind === 'money') { const found = parseMoney(typed); heard = found ? { ok: true, text: `Got it: ${formatMoney(found.amount, found.symbol)}` } : { ok: false, text: 'Vaelo can’t see an amount yet. Try something like “$40”.' }; }
+  if (typed && field.kind === 'date') { const found = parseDate(typed); heard = found ? { ok: true, text: `Got it: ${formatDate(found)}` } : { ok: false, text: 'Vaelo can’t read that date yet. Try “30 Oct” or “next Friday”.' }; }
+  const box = field.kind === 'lines' || field.kind === 'paste';
+  const common = { id, value, onChange: e => onChange(e.target.value), 'aria-describedby': `${id}-hint${heard ? ` ${id}-heard` : ''}`, 'aria-required': field.required || undefined };
+  return <div className="work-field">
+    <label htmlFor={id}>{field.label}{!field.required && <span className="work-required">If you like</span>}</label>
+    {box ? <textarea {...common} rows={field.kind === 'paste' ? 6 : 4} /> : <input {...common} type="text" autoComplete="off" />}
+    <p id={`${id}-hint`} className="work-help">{field.hint}</p>
+    {heard && <p id={`${id}-heard`} className="work-heard" data-ok={heard.ok || undefined}>{heard.text}</p>}
+  </div>;
+}
+
+/* One named place for a file: drop it, choose it, or paste the words. */
+function DocumentSlot({ slot, docs, disabled, onFiles, onPaste, onRemove, onPreview, preview }) {
+  const input = useRef(null), id = useId();
+  const [over, setOver] = useState(false), [pasting, setPasting] = useState(false), [name, setName] = useState(''), [text, setText] = useState('');
+  const filled = docs.length > 0;
+  const extra = slot.id === 'extra';
+  function drop(event) {
+    event.preventDefault(); setOver(false);
+    if (!disabled && event.dataTransfer?.files?.length) onFiles([...event.dataTransfer.files], slot.id);
+  }
+  return <section className="work-slot" data-filled={filled || undefined} data-over={over || undefined} aria-labelledby={`${id}-label`}
+    onDragOver={e => { if (disabled) return; e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)} onDrop={drop}>
+    <div className="work-slot-head">
+      <h5 id={`${id}-label`}>{slot.label}</h5>
+      <span className="work-slot-need">{filled ? <><Tick size={15} aria-hidden="true" /> Added</> : slot.required ? 'Needed' : 'If you have it'}</span>
+    </div>
+    {slot.hint && <p className="work-help">{slot.hint}</p>}
+    {docs.map(doc => <div className="work-doc" key={doc.id}>
+      <FileText size={20} weight="light" aria-hidden="true" />
+      <span className="work-doc-name"><strong>{doc.name}</strong><span>{documentSize(doc.chars ?? doc.text?.length ?? 0)}{typeof doc.text === 'string' ? ' · not saved yet' : ''}</span></span>
+      <button type="button" className="work-text-button" aria-expanded={preview?.id === doc.id} onClick={() => onPreview(doc)}>{preview?.id === doc.id ? 'Hide' : 'Look'}</button>
+      <button type="button" className="icon-button" disabled={disabled} aria-label={`Remove ${doc.name}`} onClick={() => onRemove(doc.id)}><Trash size={18} weight="light" /></button>
+      {preview?.id === doc.id && <pre className="work-doc-preview" tabIndex={0}>{preview.text ?? 'You’re offline, so this file can’t be shown right now.'}</pre>}
+    </div>)}
+    {(!filled || extra) && !pasting && <div className="work-slot-actions">
+      <button type="button" disabled={disabled} onClick={() => input.current?.click()}><UploadSimple size={17} weight="light" />{filled ? 'Add another' : 'Choose a file'}</button>
+      <button type="button" disabled={disabled} onClick={() => { setPasting(true); setName(extra ? '' : slot.label); }}><ClipboardText size={17} weight="light" />Paste words</button>
+      <span className="work-slot-drop" aria-hidden="true">or drop a file here</span>
+    </div>}
+    {filled && !extra && !pasting && <button type="button" className="work-text-button" disabled={disabled} onClick={() => input.current?.click()}>Swap for another file</button>}
+    {pasting && <div className="work-paste">
+      <label>Paste the words here<textarea rows={6} value={text} autoFocus onChange={e => setText(e.target.value)} /></label>
+      <label>Call it<input value={name} maxLength={160} placeholder={slot.label} onChange={e => setName(e.target.value)} /></label>
+      <div className="work-inline-actions">
+        <button type="button" className="work-primary" disabled={!text.trim()} onClick={() => { onPaste({ name: name.trim() || slot.label, text: text.replace(/\r\n/g, '\n') }, slot.id); setPasting(false); setText(''); }}>Add</button>
+        <button type="button" onClick={() => { setPasting(false); setText(''); }}>Cancel</button>
+      </div>
+    </div>}
+    <input ref={input} type="file" hidden multiple={extra} onChange={e => { const files = [...(e.target.files || [])]; e.target.value = ''; if (files.length) onFiles(files, slot.id); }} />
+  </section>;
+}
+
+export function Workroom({ open, onClose, session, onStart, initialDraft = null, onRecordChange }) {
   const dialog = useRef(null), file = useRef(null), account = useRef(null), fetchSequence = useRef(0);
   const scrollArea = useRef(null), taskHeading = useRef(null), resultHeading = useRef(null);
   const sub = session?.user?.sub || null; account.current = sub;
   const [records, setRecords] = useState([]), [draft, setDraft] = useState(null), [base, setBase] = useState(null);
-  const [query, setQuery] = useState(''), [view, setView] = useState('tools'), [busy, setBusy] = useState(''), [problem, setProblem] = useState('');
+  const [query, setQuery] = useState(''), [view, setView] = useState('catalogue'), [busy, setBusy] = useState(''), [problem, setProblem] = useState('');
   const [status, setStatus] = useState(''), [cached, setCached] = useState(false), [conflict, setConflict] = useState(false);
   const [online, setOnline] = useState(() => typeof navigator === 'undefined' || navigator.onLine), [imports, setImports] = useState([]), [pending, setPending] = useState(null);
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  const [missing, setMissing] = useState([]);
-  const [group, setGroup] = useState('all');
-  const [panel, setPanel] = useState('details');
-  const capability = CAPABILITIES.find(c => c.id === draft?.capabilityId);
+  const [confirmDelete, setConfirmDelete] = useState(false), [missing, setMissing] = useState([]);
+  const [audience, setAudience] = useState('all'), [panel, setPanel] = useState('setup'), [preview, setPreview] = useState(null);
+  const texts = useRef({});
+  const workspace = draft ? workspaceFor(draft) : null;
+  const check = draft ? checkFor(draft) : null;
   const saved = records.find(record => record.id === draft?.id);
   const dirty = Boolean(draft && !draftMatches(saved, draft));
   const offline = !online || session?.offline;
   const mutationBusy = Boolean(busy);
-  const grouped = useMemo(() => {
-    const groups = new Map();
-    for (const item of CAPABILITIES.filter(c => (group==='all'||c.group===group) && `${c.id} ${c.title} ${c.description} ${TOOL_GROUPS[c.group]}`.toLowerCase().includes(query.toLowerCase()))) groups.set(item.group, [...(groups.get(item.group) || []), item]);
-    return [...groups];
-  }, [query, group]);
+  const custom = draft?.workspaceId === CUSTOM_WORKSPACE;
+  const matches = useMemo(() => matchWorkspaces(WORKSPACES, query, audience), [query, audience]);
+  const grouped = useMemo(() => AUDIENCES.map(item => [item, matches.filter(w => w.audience === item.id)]).filter(([, items]) => items.length), [matches]);
   const overview = saved?.output ? resultOverview(saved.output) : null;
+  const plan = draft && workspace && !workspace.retired ? contextPlan({ brief: custom ? draft.brief || '' : workspace.brief, notes: draft.notes || '', documents: draft.documents || [] }) : null;
+  const extraSlot = { id: 'extra', label: custom ? 'Files it should always have' : 'Anything else', hint: custom ? 'Notes, examples or anything Vaelo should read every time.' : 'Any other file that would help.' };
+  const neededMissing = workspace?.slots?.filter(s => s.required && !draft.documents.some(d => d.slot === s.id)) || [];
+  const answers = check && draft?.check ? answersFor(check, draft.check.input) : null;
+  const canCheck = Boolean(check && (!check.needsSource || answers?.source));
 
   useEffect(() => {
     if (!open) return;
     scrollArea.current?.scrollTo({top:0});
     (panel==='result' ? resultHeading.current : taskHeading.current)?.focus({preventScroll:true});
   }, [open, draft?.id, panel]);
-
   useEffect(() => { const yes=()=>setOnline(true), no=()=>setOnline(false); window.addEventListener('online',yes); window.addEventListener('offline',no); return ()=>{window.removeEventListener('online',yes);window.removeEventListener('offline',no);}; }, []);
   useEffect(() => {
-    setRecords(readWorkCache(sub)); setDraft(null); setBase(null); setProblem(''); setStatus(''); setCached(true); setConflict(false); setImports([]); setPending(null); setBusy('');setQuery('');setGroup('all');setPanel('details');
+    setRecords(readWorkCache(sub)); texts.current = readDocumentCache(sub); setDraft(null); setBase(null); setProblem(''); setStatus(''); setCached(true); setConflict(false);
+    setImports([]); setPending(null); setBusy(''); setQuery(''); setAudience('all'); setPanel('setup'); setPreview(null);
   }, [sub]);
   useEffect(() => { const el=dialog.current; if(open && !el.open) el.showModal(); else if(!open && el.open) el.close(); }, [open]);
 
@@ -136,166 +128,287 @@ export function Workroom({ open, onClose, session, onDiscuss, initialProposal = 
       const data=await requestWork(null, {csrf:session?.csrf});
       if (account.current !== owner || sequence !== fetchSequence.current) return;
       setRecords(data.records || []); writeWorkCache(owner,data.records || []); setCached(false);
-    } catch(error) { if(account.current===owner) setProblem(error.status === 401 ? 'Sign in again to load your saved work.' : 'Could not refresh. Cached records remain available; your draft is kept.'); }
+    } catch(error) { if(account.current===owner) setProblem(error.status === 401 ? 'Please sign in again to see your saved work.' : 'Vaelo couldn’t get your latest work. What’s saved on this device is still here.'); }
     finally { if(account.current===owner && sequence===fetchSequence.current) setBusy(''); }
   }
   useEffect(() => { if(open && sub && !offline) refresh(); /* Refresh never replaces an open draft. */ }, [open, sub, offline]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
-    if(!open || !initialProposal || !sub) return;
-    const type=CAPABILITIES.find(c=>c.id===Number(initialProposal.capabilityId));
-    if(!type) {setProblem('This proposal uses an unsupported tool.');return;}
-    const loadProposal=()=>{
-      setDraft({id:crypto.randomUUID(),capabilityId:type.id,title:initialProposal.title || type.title,input:initialProposal.input || schemaValue(type.inputSchema),scope:SCOPES.includes(initialProposal.scope)?initialProposal.scope:'personal'});
-      setBase(null);setPanel('details');setConflict(false);setView('saved');setStatus('Vaelo prepared these details. Review them before checking.');
-    };
-    if(dirty)setPending(()=>loadProposal);else loadProposal();
-  }, [open, initialProposal, sub]);
+    if(!open || !initialDraft?.draft || !sub) return;
+    const load=()=>{ setDraft(structuredClone(initialDraft.draft)); setBase(null); setPanel(initialDraft.panel || 'setup'); setConflict(false); setProblem(''); setMissing([]); setPreview(null);
+      setStatus(initialDraft.message || 'Have a look, then save it. Nothing is saved yet.'); };
+    if(dirty) setPending(()=>load); else load();
+  }, [open, initialDraft, sub]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function edit(next) { setDraft(next); setStatus(''); setProblem(''); }
+  function setAnswer(key, value) { edit({ ...draft, check: { id: check.id, input: { ...answers, [key]: value } } }); setMissing([]); }
   function navigate(action) { if(mutationBusy) return; if(dirty) setPending(()=>action); else action(); }
-  function choose(record) { setDraft(structuredClone(record)); setBase(record.revision); setPanel(record.output?'result':'details'); setConflict(false); setProblem(''); setStatus(''); setConfirmDelete(false); setMissing([]); }
-  function create(type) { setDraft({id:crypto.randomUUID(),capabilityId:type.id,title:type.title,input:schemaValue(type.inputSchema),scope:'personal'});setBase(null);setPanel('details');setConflict(false);setProblem('');setStatus('');setMissing([]); }
+  function choose(record, keepPanel = false) {
+    setDraft(structuredClone(record)); setBase(record.revision);
+    if (!keepPanel) setPanel(record.output && !record.documents?.length ? 'result' : 'setup');
+    setConflict(false); setProblem(''); setStatus(''); setConfirmDelete(false); setMissing([]); setPreview(null);
+  }
+  function create(item) { setDraft(blankDraft(item, getCheck)); setBase(null); setPanel('setup'); setConflict(false); setProblem(''); setStatus(''); setMissing([]); setPreview(null); }
   function remember(record) {
     const next=record.deleted ? records.filter(r=>r.id!==record.id) : [record,...records.filter(r=>r.id!==record.id)];
     setRecords(next);writeWorkCache(sub,next);onRecordChange?.(record);return next;
   }
-  async function mutate(action, separate = false) {
-    if(!draft || !sub || offline || mutationBusy) return;
-    if(['save','check','discuss'].includes(action)&&!draft.title.trim()) {setProblem('Give this task a name before saving.');return;}
-    if(action==='check') {
-      const errors=validateInput(capability.inputSchema,prepareInput(capability.inputSchema,draft.input)); if(errors.length) {setPanel('details');setProblem('');setMissing(errors);return;}
+
+  async function addFiles(files, slotId) {
+    const room = WORK_LIMITS.documents - draft.documents.filter(d => slotId === 'extra' || d.slot !== slotId).length;
+    if (room <= 0) { setProblem(`There’s room for ${WORK_LIMITS.documents} files here. Remove one to add another.`); return; }
+    const notes = [], added = [];
+    for (const item of files.slice(0, slotId === 'extra' ? room : 1)) {
+      const read = await readAttachment(item);
+      if (read.kind === 'image') { notes.push(`${read.name} is a picture. Vaelo can’t keep pictures here yet, so type or paste what it says instead.`); continue; }
+      if (read.state === 'empty') { notes.push(`${read.name} is empty.`); continue; }
+      if (read.state === 'too-large' || read.body?.length > WORK_LIMITS.documentChars) { notes.push(`${read.name} is too long to keep here. Paste just the part you need.`); continue; }
+      if (read.state !== 'ready') { notes.push(`Vaelo can’t open ${read.name} here. Open it yourself, copy the words, then use “Paste words”.`); continue; }
+      added.push({ id: crypto.randomUUID(), slot: slotId, name: read.name.slice(0, 160), text: read.body, chars: read.body.length });
     }
+    if (slotId === 'extra' && files.length > room) notes.push(`Only ${plural(room, 'more file')} could fit.`);
+    if (added.length) setDraft(current => ({ ...current, documents: slotId === 'extra' ? [...current.documents, ...added] : [...current.documents.filter(d => d.slot !== slotId), ...added] }));
+    setStatus(''); setProblem(notes.join('\n'));
+  }
+  function addPasted({ name, text }, slotId) {
+    if (text.length > WORK_LIMITS.documentChars) { setProblem('That’s too long to keep here. Paste just the part you need.'); return; }
+    if (slotId === 'extra' && draft.documents.length >= WORK_LIMITS.documents) { setProblem(`There’s room for ${WORK_LIMITS.documents} files here. Remove one to add another.`); return; }
+    const doc = { id: crypto.randomUUID(), slot: slotId, name: name.slice(0, 160), text, chars: text.length };
+    edit({ ...draft, documents: slotId === 'extra' ? [...draft.documents, doc] : [...draft.documents.filter(d => d.slot !== slotId), doc] });
+  }
+  async function loadTexts(record) {
+    if (!record?.documents?.length || record.documents.every(d => typeof texts.current[d.sha] === 'string')) return texts.current;
+    if (offline || !sub) return texts.current;
+    const data = await requestWork(null, { csrf: session?.csrf, query: `?id=${encodeURIComponent(record.id)}&documents=1` });
+    texts.current = { ...texts.current, ...Object.fromEntries(Object.entries(data.documents || {}).filter(([, t]) => typeof t === 'string')) };
+    writeDocumentCache(sub, texts.current, records);
+    return texts.current;
+  }
+  async function togglePreview(doc) {
+    if (preview?.id === doc.id) { setPreview(null); return; }
+    const show = text => setPreview({ id: doc.id, text: typeof text === 'string' ? text.slice(0, 6000) + (text.length > 6000 ? '\n\n…' : '') : null });
+    if (typeof doc.text === 'string') { show(doc.text); return; }
+    try { show((await loadTexts(saved || draft))[doc.sha]); } catch { show(null); }
+  }
+  async function exportRecords(list, name) {
+    try {
+      setBusy('export');
+      for (const record of list) await loadTexts(record).catch(() => {});
+      const data = exportWork(list, texts.current);
+      download(data, name);
+      const gaps = data.records.reduce((n, r) => n + r.documents.filter(d => d.missing).length, 0);
+      setStatus(gaps ? `Backup saved. ${plural(gaps, 'file')} couldn’t be added while you’re offline.` : 'Backup saved to your downloads.');
+    } finally { setBusy(''); }
+  }
+
+  async function mutate(action, { separate = false, prompt } = {}) {
+    if(!draft || !sub || offline || mutationBusy) return;
+    if(!draft.title.trim()) { setPanel('setup'); setProblem(custom ? 'Give it a name first, like “Weekly report”.' : 'Give it a name first.'); return; }
     if(action==='run') {
-      if(dirty || !saved || !base) {setProblem('Save your current changes before running.');return;}
-      const errors=validateInput(capability.inputSchema,prepareInput(capability.inputSchema,draft.input)); if(errors.length) {setPanel('details');setProblem('');setMissing(errors);return;}
+      const gaps = missingAnswers(check, answers);
+      if(gaps.length) { setPanel('check'); setProblem(''); setMissing(gaps); return; }
     }
     const owner=sub;
     setBusy(action);setProblem('');setMissing([]);setStatus('');
     const id=separate?crypto.randomUUID():draft.id;
     try {
-      const saveFirst=['save','check','discuss'].includes(action);
-      const needsSave=saveFirst && (dirty || !base || separate || action==='save');
       let record=saved;
-      if(needsSave) {
-        const data=await requestWork({action:'save',record:{id,capabilityId:draft.capabilityId,title:draft.title.trim(),input:prepareInput(capability.inputSchema,draft.input),scope:draft.scope},base:separate?null:base},{csrf:session?.csrf});
+      if(action!=='delete' && (dirty || !base || separate)) {
+        const body = saveBody(draft, check);
+        // A separate copy gets fresh identifiers for itself and its files.
+        const ids = new Map(body.documents.map(d => [d.id, separate ? crypto.randomUUID() : d.id]));
+        const pendingTexts = Object.fromEntries(draft.documents.filter(d => typeof d.text === 'string').map(d => [ids.get(d.id), d.text]));
+        const data=await requestWork({action:'save',record:{...body,id,documents:body.documents.map(d=>({...d,id:ids.get(d.id)}))},base:separate?null:base},{csrf:session?.csrf});
         if(account.current!==owner)return;
-        record=data.record;remember(record);choose(record);
-      }
-      if(action==='check'||action==='run') {
-        const data=await requestWork({action:'run',id:record.id,base:record.revision},{csrf:session?.csrf});
         record=data.record;
-      } else if(action==='delete') record=(await requestWork({action,id,base},{csrf:session?.csrf})).record;
+        for (const doc of record.documents || []) if (pendingTexts[doc.id]) texts.current[doc.sha] = pendingTexts[doc.id];
+        const next = remember(record); writeDocumentCache(owner, texts.current, next); choose(record, true);
+      }
+      if(action==='run') record=(await requestWork({action:'run',id:record.id,base:record.revision},{csrf:session?.csrf})).record;
+      else if(action==='delete') record=(await requestWork({action,id,base},{csrf:session?.csrf})).record;
       if(account.current!==owner) return;
       remember(record);setCached(false);setConflict(false);
-      if(action==='delete') {setDraft(null);setBase(null);setConfirmDelete(false);setStatus('Saved record deleted.');return;}
-      choose(record);
-      if(action==='discuss'){onDiscuss?.(record);return;}
-      if(action==='check'||action==='run')setPanel('result');
-      setStatus(action==='run'||action==='check'?'Your check is finished.':separate?'Saved as a separate task.':'Draft saved. You can come back to it later.');
+      if(action==='delete') {setDraft(null);setBase(null);setConfirmDelete(false);setStatus('Deleted.');return;}
+      choose(record, true);
+      if(action==='start'){onStart?.(record, prompt);return;}
+      if(action==='run'){setPanel('result');return;}
+      setStatus(separate?'Saved as a copy.':'Saved. It’ll be here next time.');
     } catch(error) {
       if(account.current!==owner) return;
-      if(error.status===409) {setConflict(true);setProblem('This saved record changed on another device. Your edits are kept. Refresh the list to review the latest version, then reload it or save your edits as a separate record.');}
-      else setProblem(error.status===401?'Sign in again before saving or running. Your edits are kept.':error.message || 'Could not save. Your edits are kept.');
+      if(error.status===409 && /changed|syncing/i.test(error.message)) {setConflict(true);setProblem('This was changed on another device. Your changes are still here.');}
+      else setProblem(error.status===401?'Please sign in again. Your changes are still here.':error.message || 'That didn’t save. Your changes are still here, so try again.');
     } finally {if(account.current===owner)setBusy('');}
   }
   async function importFile(event) {
     const selected=event.target.files?.[0];event.target.value='';if(!selected)return;
-    try { if(selected.size>2_000_000)throw new Error('Choose a file smaller than 2 MB.'); const items=importWork(await selected.text(),CAPABILITIES);setImports(items);setStatus(`${items.length} imported ${items.length===1?'record is':'records are'} ready to preview. Nothing has been saved.`); }
-    catch(error){setProblem(error instanceof SyntaxError?'This file is not a readable work export.':error.message);}
+    try { if(selected.size>4_000_000)throw new Error('That file is too big. Choose one under 4 MB.'); const items=importWork(await selected.text(),lookups);setImports(items);setStatus(`Found ${plural(items.length,'workspace')}. Open one to look at it. Nothing is saved yet.`); }
+    catch(error){setProblem(error instanceof SyntaxError?'That isn’t a Vaelo backup file.':error.message);}
   }
+  function leaveTask() { navigate(()=>{setDraft(null);setBase(null);setProblem('');setConfirmDelete(false);setQuery('');setMissing([]);setPreview(null);}); }
 
-  function leaveTask() {
-    navigate(()=>{setDraft(null);setBase(null);setProblem('');setConfirmDelete(false);setQuery('');});
-  }
-  const matchingRecords=records.filter(r=>`${r.title} ${r.scope}`.toLowerCase().includes(query.toLowerCase()));
+  const matchingRecords=records.filter(r=>`${r.title} ${workspaceFor(r)?.title || ''}`.toLowerCase().includes(query.toLowerCase()));
+  const starters = custom ? (draft?.starters || []).filter(Boolean) : workspace?.starters || [];
+  const canAct = Boolean(sub) && !offline && !mutationBusy && !conflict;
+  const busyText = {loading:'Getting your work…',save:'Saving…',start:'Getting things ready…',run:'Working it out…',delete:'Deleting…',export:'Making your backup…'}[busy];
+  const fillPrompt = check ? `Please fill in “${check.title}” for me from my files and notes.` : '';
+
   return <dialog ref={dialog} className="workroom" aria-labelledby="workroom-title" aria-describedby="workroom-description"
     onClose={onClose} onCancel={e=>{e.preventDefault();onClose();}}>
     <header className="workroom-head">
-      <div><h2 id="workroom-title">Workroom</h2><p id="workroom-description">A little help with the things you need to get done.</p></div>
-      <button className="icon-button" aria-label="Close workroom" onClick={onClose}><X size={22} weight="light" /></button>
+      <div><h2 id="workroom-title">Workroom</h2><p id="workroom-description">Pick a task, add your files, and start.</p></div>
+      <button className="icon-button" aria-label="Close the Workroom" onClick={onClose}><X size={22} /></button>
     </header>
     <div className="workroom-notices" aria-live="polite">
-      {!sub?<p>Sign in to save your tasks.</p>:offline?<p>You’re offline. Read saved tasks or prepare changes; reconnect to save and check them.</p>:cached&&<p>Showing your saved copy while we check for updates.</p>}
-      {busy&&<p>{busy==='loading'?'Loading your tasks…':['check','run'].includes(busy)?'Saving and checking your task…':busy==='delete'?'Deleting your task…':'Saving your task…'}</p>}
-      {status&&busy!=='loading'&&<p>{status}</p>}
+      {!sub?<p>Sign in to save your work.</p>:offline?<p>You’re offline. You can read what you’ve saved; saving comes back when you’re online.</p>:cached&&!busy&&<p>Showing what’s saved on this device while Vaelo checks for updates.</p>}
+      {busyText&&<p>{busyText}</p>}
+      {status&&!busy&&<p>{status}</p>}
     </div>
-    {draft&&missing.length>0&&<div className="work-error" role="alert"><p>Fill in these details first, then try again:</p>
-      <ul className="work-missing">{missing.slice(0,8).map((item,i)=><li key={i}>{item.replace(/^Inputs( · |: )/,'')}</li>)}{missing.length>8&&<li>…and {missing.length-8} more</li>}</ul></div>}
-    {problem&&<div className="work-error" role="alert"><p>{problem}</p>{conflict?<div className="work-inline-actions">
-      <button disabled={mutationBusy||offline} onClick={refresh}>Get latest saved tasks</button>
-      <button disabled={mutationBusy||offline} onClick={()=>mutate('save',true)}>Save my copy</button>
-      {saved&&saved.revision!==base&&<button disabled={mutationBusy} onClick={()=>choose(saved)}>Use saved copy and discard my changes</button>}
-    </div>:<button disabled={mutationBusy||offline} onClick={refresh}>Refresh saved tasks</button>}</div>}
-    {pending&&<div className="work-error" role="alert"><p>You have unsaved changes. Keep working, or discard them to leave this task.</p><div className="work-inline-actions">
-      <button onClick={()=>setPending(null)}>Keep editing</button><button onClick={()=>{const go=pending;setPending(null);go();}}>Discard changes</button>
+    {draft&&missing.length>0&&<div className="work-error" role="alert"><p>Please answer these first:</p>
+      <ul className="work-missing">{missing.map((item,i)=><li key={i}>{item}</li>)}</ul></div>}
+    {problem&&<div className="work-error" role="alert"><p>{problem}</p>{conflict&&<div className="work-inline-actions">
+      <button disabled={mutationBusy||offline} onClick={refresh}>Show me the newest</button>
+      <button disabled={mutationBusy||offline} onClick={()=>mutate('save',{separate:true})}>Keep mine as a copy</button>
+      {saved&&saved.revision!==base&&<button disabled={mutationBusy} onClick={()=>choose(saved)}>Use the newest</button>}
+    </div>}</div>}
+    {pending&&<div className="work-error" role="alert"><p>You have changes that aren’t saved. Keep going, or throw them away?</p><div className="work-inline-actions">
+      <button onClick={()=>setPending(null)}>Keep going</button><button onClick={()=>{const go=pending;setPending(null);go();}}>Throw them away</button>
     </div></div>}
     <input ref={file} type="file" accept="application/json,.json" hidden onChange={importFile} />
     <div ref={scrollArea} className="workroom-scroll" key={draft ? `task-${draft.id}` : 'browse'}>
       {!draft ? <>
         <div className="work-home-nav">
-          <div className="work-tabs" role="group" aria-label="Choose a view">
-            <button aria-pressed={view==='tools'} onClick={()=>{setView('tools');setQuery('');}}>Start a task</button>
-            <button aria-pressed={view==='saved'} onClick={()=>{setView('saved');setQuery('');}}>My saved tasks <span>{records.length}</span></button>
+          <div className="work-tabs" role="group" aria-label="Choose what to see">
+            <button aria-pressed={view==='catalogue'} onClick={()=>{setView('catalogue');setQuery('');}}>Workspaces</button>
+            <button aria-pressed={view==='saved'} onClick={()=>{setView('saved');setQuery('');}}>Saved <span>{records.length}</span></button>
           </div>
-          <details className="work-file-menu"><summary>Files &amp; backup</summary><div>
-            <button onClick={()=>file.current?.click()} disabled={mutationBusy}><UploadSimple size={17} />Import a file</button>
-            <button onClick={()=>download(records)} disabled={!records.length}><DownloadSimple size={17} />Export saved tasks</button>
-            <button onClick={refresh} disabled={!sub||offline||mutationBusy}><ArrowClockwise size={17} />Refresh tasks</button>
+          <details className="work-file-menu"><summary>Backup</summary><div>
+            <button onClick={()=>exportRecords(records,'vaelo-backup')} disabled={!records.length||mutationBusy}><DownloadSimple size={17} />Save a backup file</button>
+            <button onClick={()=>file.current?.click()} disabled={mutationBusy}><UploadSimple size={17} />Load a backup file</button>
+            <button onClick={refresh} disabled={!sub||offline||mutationBusy}><ArrowClockwise size={17} />Refresh</button>
           </div></details>
         </div>
-        {imports.length>0&&<section className="work-imports" aria-label="Import preview"><h3>Tasks ready to import</h3><p>Open a task to review it. Nothing is saved until you choose to save.</p>
-          <div className="work-inline-actions">{imports.map((item,i)=><button key={i} onClick={()=>navigate(()=>{create(CAPABILITIES.find(c=>c.id===item.capabilityId));setDraft({...item,id:crypto.randomUUID()});setImports(imports.filter((_,j)=>j!==i));})}>{item.title || `Task ${i+1}`}</button>)}<button onClick={()=>setImports([])}>Dismiss</button></div>
+        {imports.length>0&&<section className="work-imports" aria-label="Ready to load"><h3>Ready to load</h3><p>Open one to look at it. Nothing is saved until you save it.</p>
+          <div className="work-inline-actions">{imports.map((item,i)=><button key={i} onClick={()=>navigate(()=>{setDraft({...item,id:crypto.randomUUID()});setBase(null);setPanel('setup');setImports(imports.filter((_,j)=>j!==i));})}>{item.title}</button>)}<button onClick={()=>setImports([])}>Never mind</button></div>
         </section>}
-        <section className="work-browser" aria-label={view==='tools'?'Choose a tool':'My saved tasks'}>
-          <div className="work-browser-head"><div><h3>{view==='tools'?'What would you like help with?':'Pick up where you left off.'}</h3>
-            <p>{view==='tools'?'Choose one task. We’ll walk through the details together.':'Your saved details and results stay together here.'}</p></div>
-            <label className="work-search"><span className="sr-only">{view==='tools'?'Find a tool':'Find a saved task'}</span>
-              <input type="search" aria-label={view==='tools'?'Find a tool':'Find a saved task'} value={query} onChange={e=>setQuery(e.target.value)} placeholder={view==='tools'?'Find a tool…':'Find a saved task…'} /></label>
+        <section className="work-browser" aria-label={view==='catalogue'?'Workspaces':'Saved work'}>
+          <div className="work-browser-head"><div><h3>{view==='catalogue'?'What are you working on?':'Pick up where you left off.'}</h3>
+            <p>{view==='catalogue'?'Each one already knows the job. Add your files and start.':'Your files and answers are kept together.'}</p></div>
+            <label className="work-search"><span className="sr-only">{view==='catalogue'?'Search workspaces':'Search saved work'}</span>
+              <input type="search" value={query} onChange={e=>setQuery(e.target.value)} placeholder={view==='catalogue'?'Search, like “refund” or “essay”':'Search your saved work'} /></label>
           </div>
-          {view==='tools'?<>
-            <div className="work-categories" role="group" aria-label="Filter tools by topic">
-              <button aria-pressed={group==='all'} onClick={()=>setGroup('all')}>All tools</button>
-              {Object.entries(TOOL_GROUPS).map(([key,label])=><button key={key} aria-pressed={group===key} onClick={()=>setGroup(key)}>{label}</button>)}
+          {view==='catalogue'?<>
+            <div className="work-categories" role="group" aria-label="Show workspaces for">
+              <button aria-pressed={audience==='all'} onClick={()=>setAudience('all')}>Everyone</button>
+              {AUDIENCES.map(item=><button key={item.id} aria-pressed={audience===item.id} onClick={()=>setAudience(item.id)}>{item.label}</button>)}
             </div>
-            {grouped.map(([name,items])=><section className="work-tool-group" key={name}>
-              {group==='all'&&<h4>{TOOL_GROUPS[name] || name}</h4>}<div className="work-tool-grid">{items.map(item=><button className="work-tool-card" key={item.id} onClick={()=>navigate(()=>create(item))}>
-                <span><strong>{item.title}</strong><span>{item.description}</span></span><ArrowRight size={18} weight="light" aria-hidden="true" />
-              </button>)}</div>
+            {audience==='all'&&!query&&<button className="work-own" onClick={()=>navigate(()=>create({id:CUSTOM_WORKSPACE}))}>
+              <Sparkle size={22} weight="light" aria-hidden="true" /><span><strong>Make your own</strong><span>Tell Vaelo what to do once, add your files, and use it again and again.</span></span><ArrowRight size={18} aria-hidden="true" />
+            </button>}
+            {grouped.map(([group,items])=><section className="work-group" key={group.id} aria-labelledby={`work-group-${group.id}`}>
+              <header><h4 id={`work-group-${group.id}`}>{group.label}</h4><p>{group.line}</p></header>
+              <ul className="work-entries">{items.map(item=><li key={item.id}><button className="work-entry" onClick={()=>navigate(()=>create(item))}>
+                <span className="work-entry-text"><strong>{item.title}</strong><span>{item.summary}</span>
+                  <span className="work-entry-meta">{item.slots.some(s=>s.required)?`You’ll need: ${item.slots.filter(s=>s.required).map(s=>s.label.toLowerCase()).join(', ')}`:'Files are up to you'}{item.check?<> · <em>Can work it out for you</em></>:null}</span></span>
+                <ArrowRight size={18} weight="light" aria-hidden="true" />
+              </button></li>)}</ul>
             </section>)}
-            {!grouped.length&&<p className="work-empty">No tools match that search. Try a shorter word or another topic.</p>}
-          </>:matchingRecords.length?<div className="work-saved-list">{matchingRecords.map(record=><button className="work-saved-card" key={record.id} onClick={()=>navigate(()=>choose(record))}>
-            <FolderOpen size={23} weight="light" aria-hidden="true" /><span><strong>{record.title}</strong><span>{fieldTitle(record.scope || 'personal')} · {record.output?'Result saved':'Draft'}{record.updated?` · ${new Date(record.updated).toLocaleDateString()}`:''}</span></span><ArrowRight size={18} aria-hidden="true" />
-          </button>)}</div>:<div className="work-empty"><FolderOpen size={35} weight="light" /><h4>{records.length?'No tasks match that search.':'Your tasks will live here.'}</h4>
-            <p>{records.length?'Try a different word.':'Start a task, add your details, and save it to come back later.'}</p><button className="work-primary" onClick={()=>{setView('tools');setQuery('');}}>Start a task <Plus size={17} /></button></div>}
+            {!grouped.length&&<p className="work-empty">Nothing matches that. Try a shorter word, or make your own.</p>}
+          </>:matchingRecords.length?<div className="work-saved-list">{matchingRecords.map(record=>{const w=workspaceFor(record);const n=record.documents?.length||0;return <button className="work-saved-card" key={record.id} onClick={()=>navigate(()=>choose(record))}>
+            <FolderOpen size={23} weight="light" aria-hidden="true" /><span><strong>{record.title}</strong>
+              <span>{w?.retired?'Old tool · read only':w?.custom?'Your own':w?.title}{n?` · ${plural(n,'file')}`:''} · {SCOPE_NAME[record.scope]||'Personal'}{record.output?' · Has an answer':''}{record.updated?` · ${new Date(record.updated).toLocaleDateString(undefined,{day:'numeric',month:'short'})}`:''}</span></span><ArrowRight size={18} aria-hidden="true" />
+          </button>;})}</div>:<div className="work-empty"><FolderOpen size={35} weight="light" /><h4>{records.length?'Nothing matches that.':'Your saved work will live here.'}</h4>
+            <p>{records.length?'Try a different word.':'Pick a workspace, add your files and save it. Next time, everything is ready.'}</p><button className="work-primary" onClick={()=>{setView('catalogue');setQuery('');}}>See workspaces <ArrowRight size={17} /></button></div>}
         </section>
-      </> : <section className="work-task" aria-label="Your task">
-        <button className="work-back" disabled={mutationBusy} onClick={leaveTask}><ArrowLeft size={17} />{view==='saved'?'Back to saved tasks':'Back to tools'}</button>
-        <header className="work-detail-head"><p>{TOOL_GROUPS[capability?.group] || capability?.group}</p><h3 ref={taskHeading} tabIndex={-1}>{capability?.title || 'Your task'}</h3><p>{capability?.description}</p></header>
-        {saved?.output&&<div className="work-panel-tabs" role="group" aria-label="Task view"><button aria-pressed={panel==='details'} onClick={()=>setPanel('details')}>Details</button><button aria-pressed={panel==='result'} onClick={()=>setPanel('result')}>Result</button></div>}
-        {panel==='result'&&saved?.output?<section className="work-output" aria-label="Your result">
-          <div className="work-result-heading"><ListChecks size={25} weight="light" aria-hidden="true" /><h4 ref={resultHeading} tabIndex={-1}>{overview.title}</h4></div>
-          {dirty&&<p className="work-help">This result uses your last saved details. Save and check again to include your edits.</p>}
-          {overview.facts.length>0&&<ul className="work-findings">{overview.facts.map((fact,i)=><li key={i}>{fact}</li>)}</ul>}
-          <p className="work-help">{saved.output.result?.mode==='native-document-readback'?'This check read your saved Vaelo document. Edits that have not synced are left out.':'This result uses the details you added. It does not change anything in other apps.'}</p>
-          <details className="work-result-details"><summary>See the full result</summary><Readable value={saved.output.result} /></details>
-          {saved.output.limitations?.length>0&&<details className="work-result-details"><summary>What this check can and cannot tell you</summary><Readable value={saved.output.limitations} /></details>}
-          <div className="work-action-bar"><button className="work-primary" disabled={dirty||mutationBusy||offline||conflict} onClick={()=>mutate('discuss')}><ChatCircle size={18} />Ask Vaelo about this</button><button disabled={mutationBusy} onClick={()=>setPanel('details')}>Edit details</button><button disabled={dirty||mutationBusy||offline||conflict} onClick={()=>mutate('run')}>Check again</button></div>
-        </section>:<>
-          <form onSubmit={e=>{e.preventDefault();mutate('check');}}>
-            <fieldset disabled={mutationBusy} className="work-editor"><SchemaField key={`${draft.id}:${draft.capabilityId}`} schema={{...capability?.inputSchema,title:'Add your details'}} value={draft.input} onChange={input=>edit({...draft,input})} /></fieldset>
-            <details className="work-task-options"><summary>Task name &amp; folder <span>{fieldTitle(draft.scope)}</span></summary><div className="work-field"><label htmlFor="work-title">Task name</label><input id="work-title" maxLength={160} value={draft.title} onChange={e=>edit({...draft,title:e.target.value})} disabled={mutationBusy} /></div>
-              <div className="work-field"><label htmlFor="work-scope">Keep this under</label><select id="work-scope" value={draft.scope} onChange={e=>edit({...draft,scope:e.target.value})} disabled={mutationBusy}>{SCOPES.map(scope=><option key={scope} value={scope}>{fieldTitle(scope)}</option>)}</select><p className="work-help">Vaelo uses this task in a conversation only when you choose to discuss it.</p></div>
-            </details>
-            <div className="work-action-bar"><button className="work-primary" type="submit" disabled={!sub||offline||mutationBusy||conflict}><Play size={17} />{busy==='check'?'Checking…':'Save & check'}</button>
-              <button type="button" title="Saves what you have so far and opens a conversation about it" disabled={!sub||offline||mutationBusy||conflict} onClick={()=>mutate('discuss')}><ChatCircle size={17} />Ask Vaelo for help</button>
-              <span className="work-save-state">{dirty?<button type="button" className="work-text-button" disabled={!sub||offline||mutationBusy||conflict} onClick={()=>mutate('save')}>Save draft</button>:'Saved'}</span>
+      </> : <section className="work-task" aria-label={workspace?.title || 'Workspace'}>
+        <button className="work-back" disabled={mutationBusy} onClick={panel==='setup'||workspace?.retired?leaveTask:()=>setPanel('setup')}><ArrowLeft size={17} />{panel==='setup'||workspace?.retired?(view==='saved'?'Saved':'All workspaces'):'Back'}</button>
+        {workspace?.retired ? <section className="work-retired">
+          <header className="work-detail-head"><p>Old tool</p><h3 ref={taskHeading} tabIndex={-1}>{draft.title}</h3></header>
+          <p>This was made with a tool Vaelo doesn’t have any more. You can save a backup copy of it, or delete it.</p>
+          <div className="work-inline-actions"><button disabled={mutationBusy} onClick={()=>exportRecords([saved||draft],draft.title)}><DownloadSimple size={17} />Save a backup copy</button>
+            {!confirmDelete?<button disabled={mutationBusy||offline} onClick={()=>setConfirmDelete(true)}><Trash size={17} />Delete</button>
+              :<><button disabled={mutationBusy||offline} onClick={()=>mutate('delete')}>Yes, delete it</button><button onClick={()=>setConfirmDelete(false)}>Keep it</button></>}</div>
+        </section> : panel==='setup' ? <>
+          <header className="work-detail-head">
+            <p>{custom?'Your own workspace':AUDIENCE_NAMES[workspace?.audience]}</p>
+            <h3 ref={taskHeading} tabIndex={-1}>{custom ? draft.title || 'Make your own' : workspace?.title}</h3>
+            {!custom&&<p>{workspace?.summary}</p>}
+          </header>
+          <form className="work-setup" onSubmit={e=>{e.preventDefault();mutate('start');}}>
+            <div className="work-setup-main">
+              {custom&&<>
+                <div className="work-field"><label htmlFor="work-title">What’s it called?</label><input id="work-title" maxLength={160} value={draft.title} placeholder="Like “Weekly report” or “Spanish homework”" onChange={e=>edit({...draft,title:e.target.value})} disabled={mutationBusy} /></div>
+                <div className="work-field"><label htmlFor="work-brief">What should Vaelo do?</label>
+                  <textarea id="work-brief" rows={6} maxLength={WORK_LIMITS.brief} value={draft.brief||''} placeholder="Like: “Check my Spanish homework. Point out mistakes, explain why, and let me fix them myself.”" onChange={e=>edit({...draft,brief:e.target.value})} disabled={mutationBusy} />
+                  <p className="work-help">Vaelo does this every time you start a chat from here.</p></div>
+              </>}
+              <section className="work-docs" aria-labelledby="work-docs-title">
+                <h4 id="work-docs-title">Your files</h4>
+                <p className="work-help">Add them once. Vaelo keeps them here for next time. Files with words work best, or paste the words in.</p>
+                {(workspace?.slots||[]).map(slot=><DocumentSlot key={slot.id} slot={slot} docs={draft.documents.filter(d=>d.slot===slot.id)} disabled={mutationBusy}
+                  onFiles={addFiles} onPaste={addPasted} preview={preview} onPreview={togglePreview}
+                  onRemove={id=>{edit({...draft,documents:draft.documents.filter(d=>d.id!==id)});if(preview?.id===id)setPreview(null);}} />)}
+                {custom&&<DocumentSlot slot={extraSlot} docs={draft.documents} disabled={mutationBusy} onFiles={addFiles} onPaste={addPasted} preview={preview} onPreview={togglePreview}
+                  onRemove={id=>{edit({...draft,documents:draft.documents.filter(d=>d.id!==id)});if(preview?.id===id)setPreview(null);}} />}
+              </section>
+              <details className="work-more" open={Boolean(draft.notes) || draft.documents.some(d=>d.slot==='extra'&&!custom) || undefined}>
+                <summary>More options</summary>
+                {!custom&&<DocumentSlot slot={extraSlot} docs={draft.documents.filter(d=>d.slot==='extra'||!(workspace?.slots||[]).some(s=>s.id===d.slot))} disabled={mutationBusy}
+                  onFiles={addFiles} onPaste={addPasted} preview={preview} onPreview={togglePreview}
+                  onRemove={id=>{edit({...draft,documents:draft.documents.filter(d=>d.id!==id)});if(preview?.id===id)setPreview(null);}} />}
+                <div className="work-field"><label htmlFor="work-notes">Anything Vaelo should know?</label>
+                  <textarea id="work-notes" rows={3} maxLength={WORK_LIMITS.notes} value={draft.notes||''} placeholder="Like: “It’s due on Friday” or “Keep it short.”" onChange={e=>edit({...draft,notes:e.target.value})} disabled={mutationBusy} /></div>
+                {custom&&<fieldset className="work-fields"><legend>Questions you ask a lot</legend>
+                  <p className="work-help">They turn into buttons, so you can ask with one tap.</p>
+                  {(draft.starters||[]).map((item,i)=><div className="work-starter-edit" key={i}><input aria-label={`Question ${i+1}`} maxLength={WORK_LIMITS.starterChars} value={item} placeholder="Like “Check this week’s homework”" onChange={e=>edit({...draft,starters:draft.starters.map((s,j)=>j===i?e.target.value:s)})} />
+                    <button type="button" className="icon-button" aria-label={`Remove question ${i+1}`} onClick={()=>edit({...draft,starters:draft.starters.filter((_,j)=>j!==i)})}><Trash size={18} weight="light" /></button></div>)}
+                  {(draft.starters||[]).length<WORK_LIMITS.starters&&<button type="button" className="work-text-button" onClick={()=>edit({...draft,starters:[...(draft.starters||[]),'']})}><Plus size={17} />Add a question</button>}
+                </fieldset>}
+                {custom&&<div className="work-field"><label htmlFor="work-check">Something Vaelo can work out for you</label><select id="work-check" value={draft.check?.id||''} onChange={e=>{const c=getCheck(e.target.value);edit({...draft,check:c?{id:c.id,input:answersFor(c)}:null});}}>
+                  <option value="">Nothing extra</option>{CHECKS.filter(c=>!c.needsSource).map(c=><option key={c.id} value={c.id}>{c.title}</option>)}</select></div>}
+                {!custom&&<div className="work-field"><label htmlFor="work-title">Name</label><input id="work-title" maxLength={160} value={draft.title} onChange={e=>edit({...draft,title:e.target.value})} disabled={mutationBusy} /></div>}
+                <div className="work-field"><label htmlFor="work-scope">Keep it with</label><select id="work-scope" value={draft.scope} onChange={e=>edit({...draft,scope:e.target.value})} disabled={mutationBusy}>{SCOPES.map(([value,name])=><option key={value} value={value}>{name}</option>)}</select>
+                  <p className="work-help">Only you see this. Vaelo uses it only in chats you start from here.</p></div>
+                {!custom&&<div className="work-brief"><h5>What Vaelo already knows</h5><p>{workspace.brief}</p></div>}
+                {base&&<div className="work-manage"><div className="work-inline-actions"><button type="button" disabled={mutationBusy} onClick={()=>exportRecords([saved||draft],draft.title)}><DownloadSimple size={17} />Save a backup copy</button>
+                  {!confirmDelete&&<button type="button" disabled={mutationBusy||offline||conflict} onClick={()=>setConfirmDelete(true)}><Trash size={17} />Delete</button>}</div>
+                  {confirmDelete&&<div className="work-delete"><p>Delete this, with its files and answers? You can’t undo this.</p><button type="button" disabled={mutationBusy||offline} onClick={()=>mutate('delete')}>Yes, delete it</button><button type="button" onClick={()=>setConfirmDelete(false)}>Keep it</button></div>}</div>}
+              </details>
+            </div>
+            <aside className="work-setup-aside">
+              {starters.length>0&&<section className="work-starters" aria-labelledby="work-starters-title"><h4 id="work-starters-title">Ask straight away</h4>
+                <div className="work-chips">{starters.map(item=><button type="button" key={item} disabled={!canAct} onClick={()=>mutate('start',{prompt:item})}>{item}</button>)}</div></section>}
+              {check&&<section className="work-check-card" aria-labelledby="work-check-title"><Calculator size={22} weight="light" aria-hidden="true" />
+                <div><h4 id="work-check-title">{check.title}</h4><p>{check.description}</p>
+                  {canCheck ? <div className="work-inline-actions">
+                    <button type="button" onClick={()=>setPanel(saved?.output&&!dirty?'result':'check')}>{saved?.output?'See the answer':'Work it out'}</button>
+                    {check.needsSource?null:<button type="button" className="work-text-button" disabled={!canAct} onClick={()=>mutate('start',{prompt:fillPrompt})}>Let Vaelo fill it in</button>}
+                  </div> : <p className="work-help">To check a document, open it in a chat and tap Verify.</p>}</div>
+              </section>}
+              {plan&&draft.documents.length>0&&<p className="work-context" data-trimmed={plan.trimmed||undefined}>{plan.trimmed
+                ? 'Some files are very long, so Vaelo reads the start and end of them. If you need a part from the middle, paste it into the chat.'
+                : 'Vaelo reads all of your files every time you ask something.'}</p>}
+            </aside>
+            <div className="work-action-bar">
+              <button className="work-primary" type="submit" disabled={!canAct}><ChatCircle size={18} />{busy==='start'?'Getting ready…':'Start a chat'}</button>
+              <span className="work-save-state">{dirty||!base?<button type="button" className="work-text-button" disabled={!canAct} onClick={()=>mutate('save')}>Save for later</button>:'Saved'}</span>
+              {neededMissing.length>0&&<p className="work-help work-action-note">Tip: add {neededMissing.map(s=>s.label.toLowerCase()).join(' and ')} for the best help.</p>}
             </div>
           </form>
-        </>}
-        {base&&<details className="work-task-options work-manage"><summary>Export or delete this task</summary><div className="work-inline-actions"><button onClick={()=>download([draft],draft.title)}><DownloadSimple size={17} />Export task</button>
-          {!confirmDelete&&<button disabled={mutationBusy||offline||conflict} onClick={()=>setConfirmDelete(true)}><Trash size={17} />Delete task</button>}</div>
-          {confirmDelete&&<div className="work-delete"><p>Delete this task and its saved result? This cannot be undone here.</p><button disabled={mutationBusy||offline} onClick={()=>mutate('delete')}>Yes, delete task</button><button onClick={()=>setConfirmDelete(false)}>Keep task</button></div>}
-        </details>}
+        </> : panel==='check' && check ? <form className="work-check" onSubmit={e=>{e.preventDefault();mutate('run');}}>
+          <header className="work-detail-head"><p>{workspace?.title}</p><h3 ref={taskHeading} tabIndex={-1}>{check.title}</h3><p>{check.description}</p></header>
+          <fieldset disabled={mutationBusy} className="work-editor">
+            {check.fields.map(item=><CheckField key={item.id} field={item} value={answers[item.id]||''} onChange={value=>setAnswer(item.id,value)} />)}
+          </fieldset>
+          <div className="work-action-bar"><button className="work-primary" type="submit" disabled={!canAct}><Calculator size={18} />{busy==='run'?'Working it out…':'Work it out'}</button>
+            {!check.needsSource&&<button type="button" className="work-text-button" disabled={!canAct} onClick={()=>mutate('start',{prompt:fillPrompt})}>Let Vaelo fill it in from my files</button>}</div>
+        </form> : panel==='result' && saved?.output ? <section className="work-output" aria-label="The answer">
+          <p className="work-result-kicker">{check?.title}</p>
+          <h3 ref={resultHeading} tabIndex={-1}>{overview.title}</h3>
+          {dirty&&<p className="work-help">This answer is from before your latest changes. Tap “Work it out again” to update it.</p>}
+          {overview.facts.length>0&&<ul className="work-findings">{overview.facts.map((fact,i)=><li key={i}>{fact}</li>)}</ul>}
+          <details className="work-result-details"><summary>What this can and can’t tell you</summary><ul>{(saved.output.limitations||[]).map((item,i)=><li key={i}>{item}</li>)}</ul></details>
+          <div className="work-action-bar"><button className="work-primary" disabled={!canAct} onClick={()=>mutate('start',{prompt:`Help me with this: ${overview.title}.`})}><ChatCircle size={18} />Talk it through</button>
+            <button disabled={mutationBusy} onClick={()=>setPanel('check')}>Change my answers</button><button disabled={!canAct} onClick={()=>mutate('run')}>Work it out again</button></div>
+        </section> : null}
       </section>}
     </div>
   </dialog>;

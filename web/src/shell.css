@@ -300,3 +300,10 @@
 .selected-work-context { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-3); padding: var(--s-3) var(--s-4); border-top: 1px solid var(--hairline); font-size: var(--t-xs); color: var(--muted); }
 .selected-work-context > span { flex: 1 1 16rem; overflow-wrap: anywhere; }
 .selected-work-context button { min-height: var(--hit); font-size: var(--t-xs); }
+.selected-work-context strong { font-weight: var(--w-ui); color: var(--ink); }
+/* An empty conversation in a workspace offers its starters as the first move */
+.work-dock-starters { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.selected-work-context .work-dock-starters button { padding: var(--s-2) var(--s-3); border: 1px solid var(--hairline); border-radius: var(--r-sm); background: var(--surface); color: var(--ink-soft); font-style: italic; font-size: var(--t-xs); text-align: left; cursor: pointer; transition: border-color var(--dur-1) var(--ease); }
+.selected-work-context .work-dock-starters button:disabled { opacity: 0.5; cursor: default; }
+@media (hover: hover) and (pointer: fine) { .selected-work-context .work-dock-starters button:hover:not(:disabled) { border-color: var(--gilt); } }
+@media (max-width: 700px) { .work-dock-starters { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; } .selected-work-context .work-dock-starters button { flex-shrink: 0; white-space: nowrap; } }

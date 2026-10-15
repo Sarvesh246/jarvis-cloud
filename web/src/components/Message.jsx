@@ -123,7 +123,7 @@ function Context({ context, usage }) {
     parts.push(`this conversation (${context.turns} earlier ${context.turns === 1 ? "message" : "messages"})`);
   else parts.push("your message");
   if (context.files?.length) parts.push(context.files.join(", "));
-  if (context.work) parts.push(`saved work: ${context.work}`);
+  if (context.work) parts.push(`workspace: ${context.work}`);
   const mode = [
     context.role && context.role !== "none" && `as ${context.role}`,
     context.research && "research",

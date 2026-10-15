@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState } from "react";
-import { List, SidebarSimple } from "@phosphor-icons/react";
+import { FolderSimplePlus, List, SidebarSimple } from "@phosphor-icons/react";
 import "./header.css";
 
 /* The header only names the conversation. What Vaelo is doing is shown
-   where it is happening: in the reply itself. */
-export function Header({ title, canRename, onRename, onOpenRail, onToggleRail }) {
+   where it is happening: in the reply itself. Its one action keeps a
+   conversation that went well as a workspace to reuse. */
+export function Header({ title, canRename, onRename, onOpenRail, onToggleRail, onSaveAsWorkspace }) {
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(title);
   const input = useRef(null);
@@ -66,6 +67,16 @@ export function Header({ title, canRename, onRename, onOpenRail, onToggleRail })
           </button>
         )}
       </div>
+      {onSaveAsWorkspace && (
+        <button
+          className="icon-button header-save-work"
+          aria-label="Save this conversation as a workspace"
+          data-tip="Save as a workspace"
+          onClick={onSaveAsWorkspace}
+        >
+          <FolderSimplePlus size={21} />
+        </button>
+      )}
     </header>
   );
 }
