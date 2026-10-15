@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import { X } from "@phosphor-icons/react";
 import { notifySupport } from "../lib/preferences.js";
+import { allowNotifications, DESKTOP, STORE_BUILD } from "../lib/desktop.js";
+import { DesktopUpdates } from "./DesktopUpdates.jsx";
 import "./settings.css";
 
 /* How Vaelo looks and how much it shows. A short sheet, not a control
@@ -58,10 +60,8 @@ export function Settings({ open, prefs, onChange, onClose }) {
     setProblem("");
     if (!on) return onChange({ notify: false });
     try {
-      const answer =
-        Notification.permission === "granted" ? "granted" : await Notification.requestPermission();
-      if (answer === "granted") onChange({ notify: true });
-      else setProblem("Notifications are blocked for Vaelo. Allow them in your browser’s settings.");
+      if (await allowNotifications()) onChange({ notify: true });
+      else setProblem(DESKTOP ? "Allow notifications for Vaelo in your system settings." : "Notifications are blocked for Vaelo. Allow them in your browser’s settings.");
     } catch {
       setProblem("This browser can’t show notifications.");
     }
@@ -141,6 +141,7 @@ export function Settings({ open, prefs, onChange, onClose }) {
           )}
         </fieldset>
 
+        {DESKTOP && (STORE_BUILD ? <p className="settings-note">Updates are delivered by Microsoft Store.</p> : <DesktopUpdates />)}
         <p className="settings-foot">Kept on this device only.</p>
       </div>
     </dialog>

@@ -28,6 +28,7 @@ import { readWorkProposal } from "../../lib/work-proposals.js";
 import { getWorkspace } from "../../../shared/workspaces.js";
 import { getCheck } from "../../../shared/checks.js";
 import "./blocks.css";
+import { DESKTOP, copyText, saveDesktopFile } from "../../lib/desktop.js";
 
 /* A reply is rendered as typed blocks: prose, code, tables, sources. Each
    block carries the controls that suit it and can be promoted into the
@@ -48,7 +49,7 @@ export function useCopy() {
   const [done, setDone] = useState(false);
   const copy = async (text) => {
     try {
-      await navigator.clipboard.writeText(text);
+      await copyText(text);
       setDone(true);
       setTimeout(() => setDone(false), 1600);
     } catch {
@@ -59,6 +60,10 @@ export function useCopy() {
 }
 
 export function download(name, text, type = "text/plain") {
+  if (DESKTOP) return saveDesktopFile(name, text).catch(() => {
+    alert("The file could not be saved. Please try again.");
+    return false;
+  });
   const url = URL.createObjectURL(new Blob([text], { type: `${type};charset=utf-8` }));
   const link = Object.assign(document.createElement("a"), { href: url, download: name });
   document.body.append(link);

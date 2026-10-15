@@ -3,6 +3,7 @@
    defaults come back. public/prefs.js applies the same attributes before the
    first paint, so a chosen theme never flashes the other one. */
 
+import { DESKTOP } from "./desktop.js";
 export const PREFS_KEY = "vaelo-preferences";
 
 export const DEFAULTS = {
@@ -66,6 +67,7 @@ export function applyPrefs(prefs, root = document.documentElement) {
 /* Whether this browser can tell you a reply is ready while you're away.
    On an iPhone that needs Vaelo installed to the home screen first. */
 export function notifySupport() {
+  if (DESKTOP) return "available";
   if (typeof window === "undefined") return "none";
   if ("Notification" in window && "serviceWorker" in navigator) return "available";
   const ios = /iPhone|iPad|iPod/.test(navigator.userAgent);
