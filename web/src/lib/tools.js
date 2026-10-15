@@ -51,7 +51,8 @@ export function summarizeSteps(steps = []) {
     counts.set(info.kind, entry);
   }
   return [...counts.values()].map(({ info, n }) => {
-    if (n === 1) return info.past;
+    // Every todo_list call rewrites the same plan, so it is one plan, not n.
+    if (n === 1 || info.kind === "plan") return info.past;
     if (info.kind === "search") return `Searched the web ${n}×`;
     if (info.kind === "read") return `Read ${n} pages`;
     return `${info.past} · ${n} ${info.unit[1]}`;

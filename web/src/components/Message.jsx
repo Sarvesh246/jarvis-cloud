@@ -30,6 +30,7 @@ import { Rolling } from "./Rolling.jsx";
 import { Rendered, SourceStrip, imageTiles, useCopy, useSources } from "./blocks/Blocks.jsx";
 import { summarizeSteps, toolDetail, toolInfo } from "../lib/tools.js";
 import { formatSize } from "../lib/attachments.js";
+import { orderPlan, planSummary } from "../lib/plan.js";
 import "./message.css";
 
 /* Seconds since `from`, ticking once a second while `live`. */
@@ -277,6 +278,78 @@ function Process({ message, live, phase }) {
   );
 }
 
+const still = () =>
+  document.documentElement.dataset.motion === "reduce" ||
+  matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/* Said in words as well as shape: the visible word where the state is
+   unusual, a spoken one where the mark and the strike already show it. */
+const PLAN_WORDS = {
+  pending: { spoken: ", to do" },
+  in_progress: { shown: "now" },
+  completed: { spoken: ", done" },
+  cancelled: { shown: "dropped" },
+};
+
+/* Hermes's plan for this reply, kept as a ledger. Finished items are struck
+   through and settle beneath the open ones; each row glides to its new place
+   rather than jumping (FLIP, measured against the list itself). */
+function Plan({ plan }) {
+  const items = orderPlan(plan?.items);
+  const rows = useRef(new Map());
+  const places = useRef(new Map());
+
+  useLayoutEffect(() => {
+    const moving = !still();
+    const ease = getComputedStyle(document.documentElement).getPropertyValue("--ease").trim() || "ease";
+    for (const [id, row] of rows.current) {
+      const top = row.offsetTop;
+      const before = places.current.get(id);
+      places.current.set(id, top);
+      if (moving && before !== undefined && before !== top)
+        row.animate([{ transform: `translateY(${before - top}px)` }, { transform: "none" }], {
+          duration: 520,
+          easing: ease,
+        });
+    }
+  });
+
+  if (!items.length) return null;
+  const done = items.filter((item) => item.status === "completed").length;
+  return (
+    <section className="plan" aria-label={`Plan, ${planSummary(items)}`}>
+      <p className="plan-head" aria-hidden="true">
+        <span className="label">Plan</span>
+        <span className="plan-count">
+          <Rolling value={done} /> of {items.length} done
+        </span>
+      </p>
+      <ol className="plan-list">
+        {items.map((item) => {
+          const words = PLAN_WORDS[item.status];
+          return (
+            <li
+              key={item.id}
+              ref={(row) => (row ? rows.current.set(item.id, row) : rows.current.delete(item.id))}
+              data-state={item.status}
+              data-nested={item.parent ? "true" : undefined}
+            >
+              <span className="plan-mark" aria-hidden="true">
+                {item.status === "completed" && <Check size={10} weight="bold" />}
+              </span>
+              <span className="plan-text">
+                <span className="plan-words">{item.content}</span>
+              </span>
+              {words.shown && <span className="plan-state">{words.shown}</span>}
+              {words.spoken && <span className="sr-only">{words.spoken}</span>}
+            </li>
+          );
+        })}
+      </ol>
+    </section>
+  );
+}
+
 function Edit({ initial, onSave, onCancel }) {
   const [value, setValue] = useState(initial);
   const field = useRef(null);
@@ -480,6 +553,7 @@ function MessageView({ message, fresh, busy, live, streaming, phase, isLast, edi
       </div>
       <div className="message-body">
         {!mine && <Process message={message} live={live && !streaming} phase={phase} />}
+        {!mine && <Plan plan={message.plan} />}
         {!mine && live && makingImage(message) && (
           <>
             <div className="image-pending" role="img" aria-label="Making the image">

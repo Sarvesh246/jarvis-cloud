@@ -21,6 +21,7 @@ import {
   spliceSource,
 } from "../src/lib/library.js";
 import { answerApproval, approvalInput, chatInput, guidance, requestNote } from "../server/chat.js";
+import { PLAN_LIMITS, mergePlan, orderPlan, planSummary, readPlan } from "../src/lib/plan.js";
 
 test("Hermes tool events read as plain activity, including the preview Hermes sends", () => {
   // Hermes sends {tool, label, toolCallId, status}; the label carries the query.
@@ -351,4 +352,77 @@ test("images go with the message they were attached to; later turns get a note",
   assert.deepEqual(now.content[1], { type: "image_url", image_url: { url: "data:image/jpeg;base64,AAAA" } });
   assert.deepEqual(now.mode, message.mode);
   assert.equal(wireMessage(message, { latest: false, images }).content, "Look\n\n[Image shared earlier: chart.png]");
+});
+
+test("a Hermes plan keeps only id, content, status and parent from each task", () => {
+  // The todo_list tool returns {todos, revision, summary}; Vaelo reads the same shape.
+  const plan = readPlan({
+    revision: 3,
+    summary: { total: 4 },
+    todos: [
+      { id: "1", content: "  Find   the timetable ", status: "completed", secret: "x" },
+      { id: "2", content: "Compare fares", status: "IN_PROGRESS" },
+      { id: "2", content: "A duplicate id is dropped", status: "pending" },
+      { id: "3", content: "Book seats", status: "someday", parent: "2" },
+      { id: "4", content: "", status: "pending" },
+      "not a task",
+    ],
+  });
+  assert.deepEqual(plan, {
+    revision: 3,
+    items: [
+      { id: "1", content: "Find the timetable", status: "completed" },
+      { id: "2", content: "Compare fares", status: "in_progress" },
+      { id: "3", content: "Book seats", status: "pending", parent: "2" },
+    ],
+  });
+  assert.equal(readPlan('{"todos":[{"id":"a","content":"From a JSON string","status":"pending"}]}').items[0].id, "a");
+  assert.equal(readPlan("not json"), null);
+  assert.equal(readPlan({ label: "Planning 4 tasks" }), null);
+  const long = readPlan({ todos: Array.from({ length: 60 }, (_, i) => ({ id: `${i}`, content: "x".repeat(900) })) });
+  assert.equal(long.items.length, PLAN_LIMITS.items);
+  assert.equal(long.items[0].content.length, PLAN_LIMITS.chars);
+});
+
+test("finished tasks sink beneath open ones in the order they were finished", () => {
+  const first = mergePlan(null, readPlan({ revision: 1, todos: [
+    { id: "a", content: "A", status: "in_progress" },
+    { id: "b", content: "B", status: "pending" },
+    { id: "c", content: "C", status: "pending" },
+  ] }), 100);
+  assert.deepEqual(orderPlan(first.items).map((item) => item.id), ["a", "b", "c"]);
+  assert.equal(planSummary(first.items), "0 of 3 done");
+
+  const second = mergePlan(first, readPlan({ revision: 2, todos: [
+    { id: "a", content: "A", status: "completed" },
+    { id: "b", content: "B", status: "in_progress" },
+    { id: "c", content: "C", status: "pending" },
+  ] }), 200);
+  assert.deepEqual(orderPlan(second.items).map((item) => item.id), ["b", "c", "a"]);
+
+  const third = mergePlan(second, readPlan({ revision: 3, todos: [
+    { id: "a", content: "A", status: "completed" },
+    { id: "b", content: "B", status: "cancelled" },
+    { id: "c", content: "C", status: "in_progress" },
+  ] }), 300);
+  // "a" keeps the moment it was first finished, so it stays above "b".
+  assert.equal(third.items[0].doneAt, 200);
+  assert.deepEqual(orderPlan(third.items).map((item) => item.id), ["c", "a", "b"]);
+  assert.equal(planSummary(third.items), "1 of 3 done");
+
+  // A late frame from an older revision never rolls the plan back.
+  assert.equal(mergePlan(third, readPlan({ revision: 2, todos: [{ id: "a", content: "A", status: "pending" }] })), third);
+
+  // Subtasks keep their authored order so they stay under their parent.
+  const nested = [
+    { id: "p", content: "P", status: "completed", doneAt: 1 },
+    { id: "q", content: "Q", status: "pending", parent: "p" },
+  ];
+  assert.deepEqual(orderPlan(nested), nested);
+
+  // Each todo_list call rewrites the same plan, so the receipt says it once.
+  assert.deepEqual(summarizeSteps([{ tool: "todo_list" }, { tool: "todo_list" }, { tool: "web_search" }]), [
+    "Planned",
+    "Searched the web",
+  ]);
 });

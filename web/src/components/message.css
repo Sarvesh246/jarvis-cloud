@@ -717,6 +717,138 @@
   padding-left: var(--s-4);
 }
 
+/* The plan reads like a ledger page: a label over a rule, one ruled line per
+   task. Finished work is struck through in ink and settles to the foot. */
+.plan {
+  margin: 0 0 var(--s-5);
+  animation: fade var(--dur-2) var(--ease) both;
+}
+
+.plan-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-3);
+  margin: 0;
+  padding-bottom: var(--s-2);
+  border-bottom: 1px solid var(--hairline-strong);
+}
+
+.plan-count {
+  font-size: var(--t-xs);
+  font-weight: var(--w-ui);
+  font-variant-numeric: tabular-nums lining-nums;
+  color: var(--muted);
+}
+
+.plan-list {
+  position: relative;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.plan-list li {
+  position: relative;
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-3);
+  padding: var(--s-2) 0;
+  border-bottom: 1px solid var(--hairline);
+  font-size: var(--t-base);
+  line-height: 1.5;
+  color: var(--ink);
+  animation: arrive var(--dur-2) var(--ease) both;
+}
+
+.plan-list li[data-nested] {
+  padding-left: var(--s-5);
+}
+
+/* Shape carries the state alongside the words: an open ring to do, a ring
+   with a gilt heart now, a filled seal done, a short bar dropped. */
+.plan-mark {
+  flex: none;
+  position: relative;
+  top: 0.1em;
+  display: grid;
+  place-items: center;
+  width: 0.875rem;
+  height: 0.875rem;
+  border: 1px solid var(--hairline-strong);
+  border-radius: 50%;
+  color: var(--on-gilt);
+  transition:
+    background-color var(--dur-2) var(--ease),
+    border-color var(--dur-2) var(--ease);
+}
+
+.plan-list li[data-state="in_progress"] .plan-mark {
+  border-color: var(--gilt);
+}
+
+.plan-list li[data-state="in_progress"] .plan-mark::after {
+  content: "";
+  width: 0.375rem;
+  height: 0.375rem;
+  border-radius: 50%;
+  background: var(--gilt);
+  animation: ember 1.8s ease-in-out infinite;
+}
+
+.plan-list li[data-state="completed"] .plan-mark {
+  border-color: var(--gilt);
+  background: var(--gilt);
+}
+
+.plan-list li[data-state="cancelled"] .plan-mark {
+  border-color: transparent;
+}
+
+.plan-list li[data-state="cancelled"] .plan-mark::after {
+  content: "";
+  width: 0.625rem;
+  height: 1px;
+  background: var(--muted);
+}
+
+/* The strike is drawn left to right as a task finishes, and wraps with the
+   words when a task runs over two lines. */
+.plan-text {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  transition: color var(--dur-2) var(--ease);
+}
+
+.plan-words {
+  background: linear-gradient(currentColor, currentColor) no-repeat 0 58% / 0% 1px;
+  transition: background-size var(--dur-3) var(--ease);
+}
+
+.plan-list li:is([data-state="completed"], [data-state="cancelled"]) .plan-text {
+  color: var(--muted);
+}
+
+.plan-list li:is([data-state="completed"], [data-state="cancelled"]) .plan-words {
+  background-size: 100% 1px;
+}
+
+.plan-list li[data-state="in_progress"] .plan-text {
+  font-weight: var(--w-ui);
+}
+
+.plan-state {
+  flex: none;
+  font-size: var(--t-xs);
+  font-style: italic;
+  color: var(--gilt-ink);
+}
+
+.plan-list li[data-state="cancelled"] .plan-state {
+  color: var(--muted);
+}
+
 .reasoning-toggle {
   display: inline-flex;
   align-items: center;

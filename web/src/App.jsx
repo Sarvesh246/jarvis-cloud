@@ -25,6 +25,7 @@ import { requestRevision } from "./lib/revise.js";
 import { Toast, Notice } from "./components/Toast.jsx";
 import { Opening, SignIn } from "./components/SignIn.jsx";
 import { toolInfo } from "./lib/tools.js";
+import { mergePlan, readPlan } from "./lib/plan.js";
 import { classifyError } from "./lib/errors.js";
 import { PHONE } from "./lib/use-phone.js";
 import {
@@ -172,6 +173,7 @@ const snapshot = ({
   reasoning,
   notes,
   usage,
+  plan,
 }) => ({
   content,
   activity,
@@ -187,6 +189,7 @@ const snapshot = ({
   reasoning,
   notes,
   usage,
+  plan,
 });
 
 function readCollapsed() {
@@ -1036,6 +1039,11 @@ export function App() {
         setLivePhase(pendingApproval ? "listening" : done ? "thinking" : "working");
         noteTool({ tool, callId: data.toolCallId || data.tool_call_id, label: data.label, done });
         if (!done) announce(toolInfo(tool).now);
+      }
+      /* Hermes's plan for this reply, as the whole list after each change. */
+      if (name === "hermes.todo" || (name === "hermes.tool.progress" && data.todos)) {
+        const plan = readPlan(data);
+        if (plan?.items.length) updateMessage((message) => ({ plan: mergePlan(message.plan, plan) }));
       }
       if (name === "approval.request") {
         pendingApproval = true;
