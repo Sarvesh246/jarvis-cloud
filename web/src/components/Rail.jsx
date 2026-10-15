@@ -6,7 +6,6 @@ import {
   MagnifyingGlass,
   Table,
   Plus,
-  Toolbox,
   PushPin,
   PushPinSlash,
   SignOut,
@@ -14,6 +13,7 @@ import {
   X,
 } from "@phosphor-icons/react";
 import { BrandWordmark } from "./Mark.jsx";
+import { WorkroomIcon } from "./WorkroomIcon.jsx";
 import { groupChats, searchChats } from "../lib/format.js";
 import { collectWork, searchWork } from "../lib/library.js";
 import "./rail.css";
@@ -207,6 +207,7 @@ export function Rail({
   busy,
   open,
   collapsed,
+  workroomOpen = false,
   user,
   onClose,
   onNew,
@@ -250,7 +251,7 @@ export function Rail({
         </button>
       </div>
 
-      <button className="rail-new" onClick={onNew} disabled={busy || pristine}>
+      <button className="rail-new rail-new-conversation" onClick={onNew} disabled={busy || pristine}>
         <Plus size={16} />
         <span>New conversation</span>
         <kbd>Ctrl K</kbd>
@@ -364,8 +365,8 @@ export function Rail({
       </nav>
 
       <div className="rail-foot">
-        <button className="rail-new" onClick={onWorkroom} aria-haspopup="dialog">
-          <Toolbox size={17} aria-hidden="true" /><span>Workroom</span>
+        <button className="rail-new rail-workroom" onClick={onWorkroom} aria-haspopup="dialog" aria-expanded={workroomOpen}>
+          <WorkroomIcon open={workroomOpen} size={20} /><span>Workroom</span>
         </button>
         <p className="rail-note">Private conversations and saved work.</p>
         <div className="rail-account">

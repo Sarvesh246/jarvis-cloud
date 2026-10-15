@@ -5,6 +5,7 @@ import '@fontsource-variable/newsreader/opsz.css';
 import '../../src/design/tokens.css';
 import '../../src/design/base.css';
 import { Workroom } from '../../src/components/Workroom.jsx';
+import { WorkroomIcon } from '../../src/components/WorkroomIcon.jsx';
 
 const records=new Map(); let conflictOnce=false;
 const nativeFetch=window.fetch.bind(window);
@@ -22,6 +23,7 @@ window.fetch=async(url,options={})=>{
 };
 function Fixture(){
   const [open,setOpen]=useState(true),[discussed,setDiscussed]=useState('');
-  return <><main style={{padding:'2rem'}}><h1>Workroom component test fixture</h1><p>Mock account and in-memory API. No production sign-in, engine run, or persistence.</p><button onClick={()=>setOpen(true)}>Open workroom</button><button onClick={()=>{conflictOnce=true;setOpen(true);}}>Make next write conflict</button><p role="status">{discussed}</p></main><Workroom open={open} onClose={()=>setOpen(false)} session={{user:{sub:'workroom-component-fixture'},csrf:'fixture-only'}} onDiscuss={record=>{setDiscussed(`Selected saved version: ${record.title} · ${record.revision}`);setOpen(false);}} /></>;
+  return <><main style={{padding:'2rem'}}><h1>Workroom component test fixture</h1><p>Mock account and in-memory API. No production sign-in, engine run, or persistence.</p><button onClick={()=>setOpen(true)}><WorkroomIcon open={open} />Open workroom</button><button onClick={()=>{conflictOnce=true;setOpen(true);}}>Make next write conflict</button><p role="status">{discussed}</p></main><Workroom open={open} onClose={()=>setOpen(false)} session={{user:{sub:'workroom-component-fixture'},csrf:'fixture-only'}} onDiscuss={record=>{setDiscussed(`Selected saved version: ${record.title} · ${record.revision}`);setOpen(false);}} /></>;
 }
 createRoot(document.getElementById('root')).render(<Fixture/>);
+

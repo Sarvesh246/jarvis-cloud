@@ -1,0 +1,38 @@
+.workroom-icon {
+  display: block;
+  flex: none;
+  overflow: visible;
+}
+
+/* Hinge sits on the case's back-left corner, where lid meets body. Closing is
+   quick and plain; opening overshoots slightly so the lid settles like a hinge. */
+.workroom-icon-lid {
+  transform-box: view-box;
+  transform-origin: 3.5px 12.5px;
+  transform: rotate(0deg);
+  transition: transform 160ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.workroom-icon[data-open] .workroom-icon-lid,
+button:active .workroom-icon-lid,
+button:focus-visible .workroom-icon-lid {
+  transform: rotate(-26deg);
+  transition: transform 320ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  button:hover:not(:disabled) .workroom-icon-lid {
+    transform: rotate(-26deg);
+    transition: transform 320ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workroom-icon-lid {
+    transition: none !important;
+  }
+}
+
+:root[data-motion="reduce"] .workroom-icon-lid {
+  transition: none !important;
+}

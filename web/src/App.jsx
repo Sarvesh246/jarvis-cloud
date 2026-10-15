@@ -1880,6 +1880,7 @@ export function App() {
           onSignOut={logout}
           onOpenWork={openWork}
           onWorkroom={() => { setMenu(false); setWorkProposal(null); setWorkroomOpen(true); }}
+          workroomOpen={workroomOpen}
         />
 
         <main

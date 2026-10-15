@@ -68,3 +68,7 @@ test('saved-only discussion comparison detects scope and input edits',()=>{
   assert.equal(draftMatches(record,structuredClone(record)),true);
   assert.equal(draftMatches(record,{...record,scope:'client'}),false);assert.equal(draftMatches(record,{...record,input:{x:2}}),false);
 });
+test('a missing required field is reported once, by its own label',()=>{
+  const schema={type:'object',required:['maxCost'],properties:{maxCost:{type:'number',title:'Maximum cost'}}};
+  assert.deepEqual(validateInput(schema,{maxCost:''}),['Inputs · Maximum cost is required.']);
+});

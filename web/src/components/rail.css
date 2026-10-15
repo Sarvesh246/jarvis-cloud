@@ -52,7 +52,7 @@
   color: var(--gilt-ink);
 }
 
-.rail-new:hover:not(:disabled) svg {
+.rail-new-conversation:hover:not(:disabled) svg {
   transform: rotate(90deg);
 }
 

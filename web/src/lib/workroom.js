@@ -43,11 +43,11 @@ export function validateInput(schema, value, label = 'Inputs', depth = 0) {
   if (schema.enum && value !== '' && !schema.enum.some(option => Object.is(option, value))) errors.push(`${label}: choose a listed value.`);
   if (schema.type === 'object') {
     if (!value || Array.isArray(value) || typeof value !== 'object') return [`${label}: add a record.`];
-    for (const name of schema.required || []) if (value[name] === '' || value[name] === undefined || value[name] === null) errors.push(`${label} · ${fieldTitle(name)} is required.`);
+    for (const name of schema.required || []) if (value[name] === '' || value[name] === undefined || value[name] === null) errors.push(`${label} · ${schema.properties?.[name]?.title || fieldTitle(name)} is required.`);
     for (const [key, child] of Object.entries(value)) {
       if (forbidden.has(key)) { errors.push(`${label}: reserved field name.`); continue; }
       const childSchema = schema.properties?.[key] || inferredSchema(child);
-      if (child === '' && !schema.required?.includes(key)) continue;
+      if (child === '' || child === null || child === undefined) continue; // Missing required values are reported once above.
       errors.push(...validateInput(childSchema, child, `${label} · ${childSchema.title || fieldTitle(key)}`, depth + 1));
     }
   } else if (schema.type === 'array') {
