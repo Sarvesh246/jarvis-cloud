@@ -6,6 +6,7 @@ import {
   MagnifyingGlass,
   Table,
   Plus,
+  Toolbox,
   PushPin,
   PushPinSlash,
   SignOut,
@@ -215,6 +216,7 @@ export function Rail({
   onSettings,
   onSignOut,
   onOpenWork,
+  onWorkroom,
 }) {
   const [query, setQuery] = useState("");
   const [view, setView] = useState("chats");
@@ -362,7 +364,10 @@ export function Rail({
       </nav>
 
       <div className="rail-foot">
-        <p className="rail-note">Kept privately on this device.</p>
+        <button className="rail-new" onClick={onWorkroom} aria-haspopup="dialog">
+          <Toolbox size={17} aria-hidden="true" /><span>Workroom</span>
+        </button>
+        <p className="rail-note">Private conversations and saved work.</p>
         <div className="rail-account">
           <span className="rail-avatar" aria-hidden="true">
             {user.name?.[0]}

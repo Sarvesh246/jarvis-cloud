@@ -7,6 +7,7 @@ import {
   HttpError,
 } from "../server/security.js";
 import { LIMITS, chatInput, resumeInput, streamChat } from "../server/chat.js";
+import { withSelectedWork } from "../server/work-context.js";
 
 /* POST starts a reply and follows it; GET picks a reply back up after the
    last event the page saw. Either way the reply itself runs on the relay. */
@@ -22,6 +23,7 @@ export default async function handler(req, res) {
     } else {
       sameOrigin(req, cfg);
       input = chatInput(await readJson(req, LIMITS.body));
+      input = await withSelectedWork(input, user);
     }
     await streamChat(req, res, cfg, user, input);
   } catch (error) {

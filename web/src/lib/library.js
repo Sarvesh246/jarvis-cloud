@@ -38,7 +38,7 @@ export function parseFences(content = "") {
   const pattern = /^```([\w+-]*)[^\n]*\n([\s\S]*?)^```\s*$/gm;
   for (const match of content.matchAll(pattern)) {
     const language = match[1].toLowerCase();
-    if (STRUCTURED.has(language)) continue;
+    if (STRUCTURED.has(language) || language === "vaelo-work") continue;
     const source = match[2].replace(/\n$/, "");
     fences.push({ language, source, lines: source.split("\n").length });
   }

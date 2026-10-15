@@ -10,6 +10,21 @@ To give the cloud the same 30-plus provider pool local Jarvis uses, set `FREELLM
 
 ## Run locally
 
+The web app includes Workroom, opened from the conversation rail. It keeps private,
+versioned work records in the same configured Vercel Blob store as conversations.
+Its 36 bounded operations cover verification, memory impact and migration review,
+document reconciliation, planning, evidence review and handoff. Save inputs, run the
+saved version, and choose Discuss to share that record with the current chat.
+Vaelo can prepare a proposal in a reply; reviewing it does not save or run it.
+
+Documents in the workspace have a Verify action. It reads the account's saved
+document independently and checks the declared title or text requirements.
+Unsynced edits and external delivery are outside that check. Other operations
+evaluate supplied data; they do not connect calendar or merchant accounts,
+run arbitrary research code, submit applications, or schedule background checks.
+Workroom supports reviewed imports, exports, explicit deletion, offline reading,
+and conflict recovery without overwriting another device's edits.
+
 Copy `.env.example` to `.env`, generate a random `API_SERVER_KEY` of at least 32 characters, and add your OpenRouter key. Optional provider keys enable the corresponding fallbacks and research tools.
 
 ```sh

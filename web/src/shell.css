@@ -297,3 +297,6 @@
     height: var(--hit);
   }
 }
+.selected-work-context { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-3); padding: var(--s-3) var(--s-4); border-top: 1px solid var(--hairline); font-size: var(--t-xs); color: var(--muted); }
+.selected-work-context > span { flex: 1 1 16rem; overflow-wrap: anywhere; }
+.selected-work-context button { min-height: var(--hit); font-size: var(--t-xs); }

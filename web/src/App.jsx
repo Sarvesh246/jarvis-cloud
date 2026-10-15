@@ -18,6 +18,8 @@ import { Message, liveLine } from "./components/Message.jsx";
 import { Composer } from "./components/Composer.jsx";
 import { Workspace } from "./components/Workspace.jsx";
 import { Settings } from "./components/Settings.jsx";
+import { Workroom } from "./components/Workroom.jsx";
+import { refreshWorkReferences } from "./lib/workroom.js";
 import { Mark } from "./components/Mark.jsx";
 import { PresentationContext } from "./components/blocks/Blocks.jsx";
 import { applyPrefs, readPrefs, savePrefs } from "./lib/preferences.js";
@@ -361,6 +363,8 @@ export function App() {
   const [online, setOnline] = useState(() => navigator.onLine !== false);
   const [prefs, setPrefs] = useState(readPrefs);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [workroomOpen, setWorkroomOpen] = useState(false);
+  const [workProposal, setWorkProposal] = useState(null);
   const prefsRef = useRef(prefs);
   prefsRef.current = prefs;
   const swipe = useRef(null);
@@ -844,6 +848,28 @@ export function App() {
     setWorkspace(entry.item);
   }
 
+  function discussWork(record) {
+    if (!activeId || !record?.revision) return;
+    const workContext = { id: record.id, revision: record.revision, title: record.title, scope: record.scope };
+    setChats(current => current.map(chat => chat.id === activeId
+      ? { ...chat, updated: Date.now(), workContext } : chat));
+    setWorkroomOpen(false);
+    setWorkProposal(null);
+    if (!draft.trim()) setDraft(`Help me with “${record.title}”. Review the saved inputs, ask for any missing facts, and propose the next useful step.`);
+    textarea.current?.focus();
+  }
+
+  function updateSelectedWork(record) {
+    setChats(current => refreshWorkReferences(current,record));
+  }
+
+  function openWorkProposal(item) {
+    if (item?.kind !== "work-proposal") return false;
+    setWorkProposal(item.proposal);
+    setWorkroomOpen(true);
+    return true;
+  }
+
   /* Back from a document to the reply it began as, briefly marked */
   function revealMessage(id) {
     if (matchMedia("(max-width: 74.9375rem)").matches) setWorkspace(null);
@@ -1010,6 +1036,7 @@ export function App() {
           role: "user",
           content: composeContent(edit.text, files),
           mode,
+          ...(original.workContext && { workContext: original.workContext }),
           ...(files.length && { text: edit.text, attachments: files }),
         },
       ];
@@ -1045,6 +1072,7 @@ export function App() {
           role: "user",
           content,
           mode,
+          ...(active.workContext && { workContext: active.workContext }),
           ...(files.length && {
             text: typed,
             attachments: files.map(({ id, name, size, chars, body, state, kind, thumb }) => ({
@@ -1070,6 +1098,7 @@ export function App() {
       research: mode.research,
       style: mode.style,
       role: mode.role,
+      ...(lastUser.workContext && { work: lastUser.workContext.title }),
     };
     fresh.current.add(lastUser.id);
     fresh.current.add(id);
@@ -1118,7 +1147,8 @@ export function App() {
       title: active.messages.length
         ? active.title
         : String(messages[0].text || messages[0].content).slice(0, 48),
-      start: { conversationId: chatId, runId: id, messages: input },
+      start: { conversationId: chatId, runId: id, messages: input,
+        ...(lastUser.workContext && {work:{id:lastUser.workContext.id,revision:lastUser.workContext.revision}}) },
     });
   }
 
@@ -1144,8 +1174,10 @@ export function App() {
     const at = chat?.messages.findIndex((message) => message.id === id) ?? -1;
     if (at < 1) return null;
     const { messages } = wireHistory(chat.messages.slice(0, at));
+    const selectedWork = chat.messages.slice(0, at).findLast(message => message.role === "user")?.workContext;
     return messages.length && messages.at(-1).role === "user"
-      ? { conversationId: chatId, runId: id, messages }
+      ? { conversationId: chatId, runId: id, messages,
+          ...(selectedWork && {work:{id:selectedWork.id,revision:selectedWork.revision}}) }
       : null;
   }
 
@@ -1741,7 +1773,7 @@ export function App() {
       send({
         text: "Please find a way to do that without anything that needs approval, or tell me exactly what you would need approved and why.",
       }),
-    open: (id, item) => setWorkspace({ ...item, messageId: id }),
+    open: (id, item) => { if (!openWorkProposal(item)) setWorkspace({ ...item, messageId: id }); },
     approve: (id, choice) => answerApproval(id, choice),
   };
   const onAction = useCallback(
@@ -1749,7 +1781,8 @@ export function App() {
     [],
   );
   const openFromWorkspace = useCallback(
-    (item) => setWorkspace((current) => ({ ...item, messageId: current?.messageId })),
+    (item) => { if (item?.kind === "work-proposal") {setWorkProposal(item.proposal);setWorkroomOpen(true);}
+      else setWorkspace((current) => ({ ...item, messageId: current?.messageId })); },
     [],
   );
 
@@ -1764,6 +1797,8 @@ export function App() {
       setChats([]);
       setActiveId(null);
       setSession(null);
+      setWorkroomOpen(false);
+      setWorkProposal(null);
       await loadSession();
     } catch (err) {
       setError(err.message);
@@ -1844,6 +1879,7 @@ export function App() {
           }}
           onSignOut={logout}
           onOpenWork={openWork}
+          onWorkroom={() => { setMenu(false); setWorkProposal(null); setWorkroomOpen(true); }}
         />
 
         <main
@@ -1942,6 +1978,14 @@ export function App() {
           )}
 
           <div className="dock">
+            {active?.workContext && (
+              <div className="selected-work-context" role="status">
+                <span>Using saved {active.workContext.scope} work: {active.workContext.title}</span>
+                <button className="text-button" onClick={() => {setWorkProposal(null);setWorkroomOpen(true);}}>Review</button>
+                <button className="text-button" onClick={() => setChats(current => current.map(chat => chat.id === activeId
+                  ? {...chat,updated:Date.now(),workContext:undefined} : chat))}>Remove from chat</button>
+              </div>
+            )}
             {/* Scrolled away while Vaelo works, the pill carries its face and
                 current action, so status shows where you are looking. */}
             {away && messages.length > 0 && (
@@ -2029,6 +2073,13 @@ export function App() {
             onWorkChange={updateWork}
             onReveal={revealMessage}
             onRevise={(request) => requestRevision({ csrf: session.csrf, ...request })}
+            onVerifyDocument={(messageId, title) => {
+              setWorkProposal({capabilityId:1,title:`Verify ${title}`,scope:"personal",input:{
+                contract:{id:crypto.randomUUID(),resource:{kind:"document",id:`${activeId}:${messageId}`},checks:[]},
+                source:{kind:"vaelo-document",conversationId:activeId,messageId}
+              }});
+              setWorkroomOpen(true);
+            }}
           />
         )}
 
@@ -2045,6 +2096,9 @@ export function App() {
           onChange={(patch) => setPrefs((current) => ({ ...current, ...patch }))}
           onClose={() => setSettingsOpen(false)}
         />
+        <Workroom open={workroomOpen} session={session} initialProposal={workProposal}
+          onClose={() => {setWorkroomOpen(false);setWorkProposal(null);}}
+          onDiscuss={discussWork} onRecordChange={updateSelectedWork} />
       </div>
       </PresentationContext.Provider>
     </IconContext.Provider>

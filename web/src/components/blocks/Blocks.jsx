@@ -24,6 +24,8 @@ import {
 import { SourceIcon } from "./SourceIcon.jsx";
 import { Highlighted } from "./Highlighted.jsx";
 import { Rolling } from "../Rolling.jsx";
+import { readWorkProposal } from "../../lib/work-proposals.js";
+import { CAPABILITIES } from "../../../shared/capabilities.js";
 import "./blocks.css";
 
 /* A reply is rendered as typed blocks: prose, code, tables, sources. Each
@@ -102,8 +104,22 @@ function languageOf(children) {
    In a mapped document each block carries where it sits in the Markdown
    (data-src), so a selection can be traced back to the words behind it. */
 function CodeBlock({ children, node, "data-src": src }) {
-  const { content } = useContext(BlockContext);
+  const { content, open, live } = useContext(BlockContext);
   const language = languageOf(children);
+  if (language === "vaelo-work") {
+    const proposal = readWorkProposal(textOf(children));
+    const complete = fenceClosed(content, node?.position?.start?.offset, node?.position?.end?.offset);
+    if (!complete || live) return <p className="work-proposal-note">Preparing a work proposal…</p>;
+    if (!proposal) return <p className="work-proposal-note">This work proposal could not be read. Ask Vaelo to prepare it again.</p>;
+    const capability = CAPABILITIES.find(c => c.id === proposal.capabilityId);
+    return <section className="work-proposal">
+      <span className="label">Proposed work</span>
+      <h3>{proposal.title || capability.title}</h3>
+      <p>{capability.description}</p>
+      <p className="work-proposal-note">Review the inputs before saving or running checks. Nothing has been changed.</p>
+      <button className="text-button" onClick={() => open({kind:"work-proposal", proposal})}>Review in Workroom <ArrowsOut size={15} /></button>
+    </section>;
+  }
   if (STRUCTURED.has(language)) {
     const source = textOf(children);
     return language === "metrics" ? (

@@ -6,6 +6,7 @@ import {
   DownloadSimple,
   MagnifyingGlass,
   Printer,
+  ShieldCheck,
   X,
 } from "@phosphor-icons/react";
 import { Rendered, download, looksLikeSvg, useCopy, useSources } from "./blocks/Blocks.jsx";
@@ -250,6 +251,7 @@ export function Workspace({
   onWorkChange,
   onReveal,
   onRevise,
+  onVerifyDocument,
 }) {
   const [width, setWidth] = useState(readWidth);
   const [done, copy] = useCopy();
@@ -372,6 +374,11 @@ export function Workspace({
           </h2>
         </div>
         <div className="ws-actions">
+          {item.kind === "document" && onVerifyDocument && (
+            <button className="block-tool" onClick={() => onVerifyDocument(item.messageId, titles.document)}>
+              <ShieldCheck size={16} /><span>Verify</span>
+            </button>
+          )}
           {item.kind !== "sources" && (
             <>
               <button className="block-tool" onClick={() => copy(text)}>

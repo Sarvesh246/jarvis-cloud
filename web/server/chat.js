@@ -1,5 +1,6 @@
 import { forgetHealthy, noteHealthy, waitForBackend } from "./backend-readiness.js";
 import { HttpError } from "./security.js";
+import { WORK_GUIDANCE } from "./work-context.js";
 
 /* How a reply should be shaped is a typed choice, not free text from the
    browser. The proxy owns the wording, so a client can only pick from these.
@@ -86,7 +87,7 @@ export function requestNote({ style = "balanced", research = false, role = "none
 }
 
 export function guidance() {
-  return `${FORMAT}\n\n${RESEARCH_METHOD}`;
+  return `${FORMAT}\n\n${RESEARCH_METHOD}\n\n${WORK_GUIDANCE}`;
 }
 
 function readMode(mode) {
@@ -190,7 +191,17 @@ export function chatInput(body) {
   /* The reply's own id names its run on the relay, so the page can find it
      again after a dropped connection. Older pages don't send one. */
   const runId = RUN_ID.test(body.runId || "") ? body.runId : crypto.randomUUID();
-  return { conversationId: body.conversationId, runId, messages, ...mode };
+  let work;
+  if (body.work !== undefined) {
+    if (!body.work || typeof body.work !== "object" ||
+        typeof body.work.id !== "string" || !/^[\w-]{1,100}$/.test(body.work.id) ||
+        ["__proto__", "constructor", "prototype"].includes(body.work.id) ||
+        typeof body.work.revision !== "string" || !/^[\w-]{1,100}$/.test(body.work.revision) ||
+        Object.keys(body.work).some(key => !["id", "revision"].includes(key)))
+      throw new HttpError(400, "Choose a saved work record and revision.");
+    work = { id: body.work.id, revision: body.work.revision };
+  }
+  return { conversationId: body.conversationId, runId, messages, ...mode, ...(work && {work}) };
 }
 
 const RUN_ID = /^[a-f0-9-]{36}$/;

@@ -861,3 +861,8 @@
     transform: scale(0.85);
   }
 }
+/* Proposals are readable task drafts; no model-generated markup executes. */
+.work-proposal { margin-block: var(--s-5); padding-block: var(--s-4); border-block: 1px solid var(--hairline-strong); }
+.work-proposal h3 { margin-block: var(--s-2); font-size: var(--t-lg); }
+.work-proposal p { margin-block: var(--s-2); }
+.work-proposal-note { font-size: var(--t-sm); color: var(--muted); }
