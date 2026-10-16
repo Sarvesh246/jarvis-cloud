@@ -332,7 +332,7 @@ class Relay:
             # A lost start response can be retried after the answer finished.
             # Keep its numbered frames rather than running tools a second time.
             # Failed starts (including a busy cloud) may still be retried.
-            if existing is not None and (not existing.done or existing.outcome == "complete"):
+            if existing is not None and (not existing.done or existing.outcome in ("complete", "stopped")):
                 return existing
             run = self.runs[run_id] = Run(run_id, owner)
             stopped_at = self.early_stops.pop((owner, run_id), None)

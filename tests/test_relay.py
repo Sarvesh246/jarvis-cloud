@@ -363,6 +363,16 @@ class RelayTests(unittest.TestCase):
         self.assertEqual(original.frames, frames)
         self.assertEqual(len(hermes.requests), 1)
 
+    def test_retrying_a_stopped_start_does_not_resurrect_the_run(self):
+        hermes, relay, port = self.boot([])
+        relay.stop_early(RUN, OWNER)
+        self.start(port)
+        original = self.finished(relay)
+        self.assertEqual(original.outcome, "stopped")
+        self.assertEqual(self.start(port)[0], 202)
+        self.assertIs(relay.find(RUN, OWNER), original)
+        self.assertEqual(len(hermes.requests), 0)
+
     def test_stop_cancels_the_hermes_run(self):
         closed = threading.Event()
 
