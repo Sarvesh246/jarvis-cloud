@@ -54,12 +54,67 @@ export function formatSize(bytes) {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
+/* Files arrive in whatever encoding saved them. PowerShell's `>` and
+   Notepad's "Unicode" write UTF-16, Excel on Windows writes CSV in
+   Windows-1252; reading those as UTF-8 hands the model nulls and
+   replacement marks. A byte-order mark decides first, then UTF-16 without
+   one (every other byte zero), then strict UTF-8, then Windows-1252, which
+   accepts any byte. Returns null when the result isn't text at all. */
+function utf16Order(bytes) {
+  const pairs = Math.min(bytes.length >> 1, 2048);
+  if (pairs < 2) return "";
+  let even = 0;
+  let odd = 0;
+  for (let i = 0; i < pairs; i += 1) {
+    if (bytes[i * 2] === 0) even += 1;
+    if (bytes[i * 2 + 1] === 0) odd += 1;
+  }
+  if (odd > pairs * 0.4 && even < pairs * 0.05) return "utf-16le";
+  if (even > pairs * 0.4 && odd < pairs * 0.05) return "utf-16be";
+  return "";
+}
+
+function looksBinary(text) {
+  if (text.includes("\u0000")) return true;
+  const sample = text.slice(0, 8000);
+  const controls = sample.match(/[\u0001-\u0008\u000e-\u001f\u007f]/g)?.length || 0;
+  return controls > sample.length * 0.1;
+}
+
+export function decodeText(buffer) {
+  const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+  let encoding = "";
+  let start = 0;
+  if (bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) [encoding, start] = ["utf-8", 3];
+  else if (bytes[0] === 0xff && bytes[1] === 0xfe) [encoding, start] = ["utf-16le", 2];
+  else if (bytes[0] === 0xfe && bytes[1] === 0xff) [encoding, start] = ["utf-16be", 2];
+  else encoding = utf16Order(bytes);
+  const body = bytes.subarray(start);
+  let text;
+  if (encoding) text = new TextDecoder(encoding, { ignoreBOM: true }).decode(body);
+  else {
+    try {
+      text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(body);
+    } catch {
+      text = new TextDecoder("windows-1252").decode(body);
+    }
+  }
+  return looksBinary(text) ? null : text;
+}
+
+/* A fence one backtick longer than any run inside the file, so a Markdown
+   file's own code blocks can't close it early. */
+function fenceFor(body) {
+  const longest = Math.max(0, ...(body.match(/`{3,}/g) || []).map((run) => run.length));
+  return "`".repeat(Math.max(3, longest + 1));
+}
+
 /* What the model receives: your words, then each file set off as a block. */
 export function composeContent(text = "", attachments = []) {
   const files = attachments
     .filter((file) => file.state === "ready" && file.kind !== "image")
     .map((file) => {
-      const fence = file.body.includes("```") ? "````" : "```";
+      const fence = fenceFor(file.body);
       return `Attached file: ${file.name}\n${fence}${LANG[extensionOf(file.name)] || ""}\n${file.body}\n${fence}`;
     });
   return [String(text).trim(), ...files].filter(Boolean).join("\n\n");
@@ -169,7 +224,11 @@ export async function readAttachment(file) {
     };
   if (file.size > READ_LIMIT)
     return { ...base, state: "too-large", note: `Too large to read here (${formatSize(file.size)}).` };
-  const body = (await file.text()).replace(/\r\n/g, "\n");
+  const decoded = decodeText(await file.arrayBuffer());
+  if (decoded === null)
+    return { ...base, state: "unsupported", note: "This file doesn’t contain readable text." };
+  const body = decoded.replace(/\r\n?/g, "\n");
+  if (!body.trim()) return { ...base, state: "empty", note: "This file is empty." };
   if (body.length > MESSAGE_LIMIT - 2_000)
     return { ...base, state: "too-large", note: "Too much text for one message. Add it to a Workroom workspace or split it into smaller files." };
   return { ...base, state: "ready", body, chars: body.length };
