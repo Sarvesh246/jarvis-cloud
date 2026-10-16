@@ -1,5 +1,5 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
-import { get, put, del } from "@vercel/blob";
+import { get, put, del } from "./kv-storage.js";
 import { HttpError, signSession } from "./security.js";
 
 const digest = value => createHash("sha256").update(value).digest("base64url");

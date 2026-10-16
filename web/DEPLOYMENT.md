@@ -17,11 +17,14 @@ minutes and then tells the page to ask again, so a reply can run longer than
 any one function. Starting a reply twice with the same id follows the first
 run rather than starting another.
 
-Conversations use the project's **private** `vaelo-chats` Vercel Blob store.
-`BLOB_READ_WRITE_TOKEN` is server-only and must be connected to each deployment
-environment. The authenticated `/api/chats` endpoint partitions storage by the
-verified Google subject; writes require the existing origin and CSRF checks.
-Reads bypass the Blob CDN cache so other devices see committed updates.
+Conversations, saved work and desktop sign-in grants live in a Postgres
+database (Neon, via the Vercel Marketplace) in one `kv_store` table that the
+server creates on first use. `DATABASE_URL` is server-only and must be set on
+each deployment environment. The authenticated `/api/chats` endpoint partitions
+storage by the verified Google subject; writes require the existing origin and
+CSRF checks. Compare-and-swap writes use a per-row `etag`, so other devices
+always see committed updates. (This replaced Vercel Blob, whose free tier of
+operations ran out under five-second sync polling.)
 
 Visible, online clients sync every five seconds and on focus, visibility and
 network recovery. Existing browser history migrates on the first authenticated

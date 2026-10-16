@@ -1,12 +1,13 @@
 import { ChatStore } from "../server/chat-store.js";
 import { notifyFeed } from "../server/chat.js";
+import { storageConfigured } from "../server/kv-storage.js";
 import { settings, authorize, sameOrigin, readJson, json, fail, HttpError } from "../server/security.js";
 
 export default async function handler(req, res) {
   try {
     const cfg = settings();
     const user = await authorize(req, cfg);
-    if (!process.env.BLOB_READ_WRITE_TOKEN)
+    if (!storageConfigured())
       throw new HttpError(503, "Conversation sync is not configured.");
     const store = new ChatStore(user.sub);
     if (req.method === "GET") {

@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { get, put, del, BlobPreconditionFailedError } from "@vercel/blob";
+import { get, put, del, isConflict, storageConfigured } from "./kv-storage.js";
 import { HttpError } from "./security.js";
 import { WORK_LIMITS, upgradeRecord, CUSTOM_WORKSPACE } from "../shared/work-records.js";
 import { getWorkspace } from "../shared/workspaces.js";
@@ -176,7 +176,7 @@ export class WorkStore {
         await this.collect(current.records, records);
         return result;
       } catch (error) {
-        if (!(error instanceof BlobPreconditionFailedError) && !/already exists/i.test(error.message)) throw error;
+        if (!isConflict(error)) throw error;
       }
     }
     throw new HttpError(409, "Your work changed somewhere else while saving. Please try again in a moment.");
@@ -292,7 +292,7 @@ export class WorkStore {
 }
 
 export async function readWorkContext(sub, id, { storage } = {}) {
-  if (!storage && !process.env.BLOB_READ_WRITE_TOKEN) throw new HttpError(503, "Saving isn’t set up yet, so your work can’t be saved right now.");
+  if (!storage && !storageConfigured()) throw new HttpError(503, "Saving isn’t set up yet, so your work can’t be saved right now.");
   const store = new WorkStore(sub, storage);
   const record = await store.record(id);
   return { record, documents: await store.documents(record) };

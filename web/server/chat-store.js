@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { get, put, del, BlobPreconditionFailedError } from "@vercel/blob";
+import { get, put, del, isConflict } from "./kv-storage.js";
 import { HttpError } from "./security.js";
 
 export const PART_SIZE = 500_000;
@@ -93,8 +93,7 @@ export class ChatStore {
         return next;
       } catch (error) {
         // The first create also races safely: allowOverwrite:false is atomic.
-        if (!(error instanceof BlobPreconditionFailedError) &&
-            !/already exists/i.test(error.message)) throw error;
+        if (!isConflict(error)) throw error;
       }
     }
     throw new HttpError(409, "Conversations are syncing. Please try again.");

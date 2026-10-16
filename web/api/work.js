@@ -1,4 +1,5 @@
 import { WorkStore, MAX_WORK_REQUEST_BYTES } from "../server/work-store.js";
+import { storageConfigured } from "../server/kv-storage.js";
 import { settings, authorize, sameOrigin, readJson, json, fail, HttpError } from "../server/security.js";
 
 // Dependency injection replaces storage/engine only; authentication and CSRF always execute.
@@ -8,7 +9,7 @@ export function createWorkHandler({ storeFactory = sub => new WorkStore(sub, und
     return runWorkCheck(id, input, { ...options, sub });
   },
 }), configuration = settings,
-  configured = () => Boolean(process.env.BLOB_READ_WRITE_TOKEN) } = {}) {
+  configured = storageConfigured } = {}) {
   return async function handler(req, res) {
     try {
       const cfg = configuration();
