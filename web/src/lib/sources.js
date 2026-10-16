@@ -61,11 +61,36 @@ function trimLink(href) {
   }
 }
 
+/* The address a link points at once Markdown has read it: backslash
+   escapes and character references undone, as the rendered link has them,
+   so a source and its inline mark always agree on the address. */
+const ENTITIES = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'" };
+function readDestination(href) {
+  return href
+    .replace(/\\([!-/:-@[-`{-~])/g, "$1")
+    .replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (entity, name) =>
+      name[0] === "#"
+        ? String.fromCodePoint(Number(name[1].toLowerCase() === "x" ? `0${name.slice(1)}` : name.slice(1)))
+        : ENTITIES[name.toLowerCase()] ?? entity,
+    );
+}
+
+/* A bare address ends before emphasis that closes around it, as in
+   **https://example.com** or _https://example.com_, the way GFM reads it. */
+function trimBare(href) {
+  let link = href;
+  for (;;) {
+    const next = trimLink(link).replace(/[*_~]+$/, "");
+    if (next === link) return link;
+    link = next;
+  }
+}
+
 export function collectSources(markdown = "") {
   const text = String(markdown).replace(/```[\s\S]*?(```|$)/g, "").replace(/`[^`\n]*`/g, "");
   const found = new Map();
   const add = (href, title, context) => {
-    const url = parseUrl(trimLink(href));
+    const url = parseUrl(href);
     if (!url) return;
     const key = url.href.replace(/#.*$/, "").replace(/\/$/, "");
     const existing = found.get(key);
@@ -84,9 +109,15 @@ export function collectSources(markdown = "") {
     });
   };
   /* Wikipedia-style links keep their balanced brackets: …/Foo_(bar). */
-  const pattern = /\[([^\]]*)\]\((https?:\/\/(?:[^\s()]|\([^\s()]*\))+)\)|<(https?:\/\/[^>\s]+)>|(https?:\/\/(?:[^\s<>()\]]|\([^\s<>()\]]*\))+)/g;
+  const pattern = /\[([^\]]*)\]\((https?:\/\/(?:[^\s()]|\([^\s()]*\))+)\)|\[([^\]]*)\]\(<(https?:\/\/[^>\n]+)>\)|<(https?:\/\/[^>\s]+)>|(https?:\/\/(?:[^\s<>()\]]|\([^\s<>()\]]*\))+)/g;
   for (const match of text.matchAll(pattern)) {
-    const href = match[2] || match[3] || match[4];
+    const href = match[2]
+      ? readDestination(trimLink(match[2]))
+      : match[4]
+        ? readDestination(match[4])
+        : match[5]
+          ? readDestination(match[5])
+          : trimBare(match[6]); // a bare address is used as written, as GFM does
     /* The sentence the link supports, not the whole paragraph */
     const lineStart = text.lastIndexOf("\n", match.index) + 1;
     const lineEnd = text.indexOf("\n", match.index);
@@ -110,7 +141,7 @@ export function collectSources(markdown = "") {
       .replace(/\s{2,}/g, " ")
       .trim()
       .slice(0, 220);
-    add(href, usefulTitle(match[1], href), context);
+    add(href, usefulTitle(match[1] ?? match[3], href), context);
   }
   return [...found.values()];
 }

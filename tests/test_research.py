@@ -112,6 +112,19 @@ class ResearchTests(unittest.TestCase):
         self.assertIn("5000 mAh", content)
         self.assertIn("[…]", content)
 
+    def test_long_pages_keep_what_follows_a_matching_heading(self):
+        mod = self.module
+        filler = "\n\n".join(f"Unrelated paragraph {i} about gardening and weather patterns in spring." * 3 for i in range(200))
+        steps = "\n\n".join(f"{n}. Hold the button marked {n} for ten seconds, then release it." for n in range(1, 5))
+        page = "Router manual.\n\n" + filler + "\n\n## How to factory reset the Archer AX55\n\n" + steps + "\n\n" + filler
+        focused = mod.focus(page, "factory reset Archer AX55")
+        self.assertIn("How to factory reset", focused)
+        for n in range(1, 5):
+            self.assertIn(f"{n}. Hold the button marked {n}", focused)
+        self.assertLessEqual(len(focused), mod.PAGE_CHARS)
+        # The rest of the room is used rather than left empty.
+        self.assertGreater(len(focused), mod.PAGE_CHARS * 0.8)
+
     def test_pages_from_nowhere_keep_their_opening_and_end(self):
         mod = self.module
         text = "Opening.\n\n" + "\n\n".join("Middle filler sentence number %d." % i for i in range(2000)) + "\n\nThe conclusion."
@@ -128,7 +141,8 @@ class ResearchTests(unittest.TestCase):
             headers = mod.Request("https://x").headers  # replaced below
             def __enter__(self): return self
             def __exit__(self, *args): pass
-            def read(self, size): return html
+            body = __import__("io").BytesIO(html)
+            def read1(self, size): return self.body.read(size)
         import email.message
         headers = email.message.Message()
         headers["Content-Type"] = "text/html; charset=utf-8"
@@ -144,8 +158,48 @@ class ResearchTests(unittest.TestCase):
         self.assertNotIn("var x", page["content"])
         self.assertNotIn("Menu", page["content"])
 
+    def test_a_page_that_trickles_in_is_given_up_on_in_time(self):
+        mod = self.module
+        clock = iter(range(0, 1000, 5))  # five seconds pass between reads
+        class Trickle:
+            def read1(self, size): return b"<p>a"
+        with patch.object(mod.time, "monotonic", side_effect=lambda: next(clock)):
+            with self.assertRaises(TimeoutError):
+                mod.read_within(Trickle(), mod.PAGE_BYTES, deadline=20)
+
+    def test_every_provider_shares_one_deadline_per_page(self):
+        mod = self.module
+        now = [0.0]
+        timeouts = []
+        def slow(name, url, timeout):
+            timeouts.append((name, timeout))
+            now[0] += timeout  # each attempt uses all the time it was given
+            raise TimeoutError(name)
+        with patch.dict(mod.os.environ, {"EXA_API_KEY": "k", "TAVILY_API_KEY": "k", "FIRECRAWL_API_KEY": "k"}, clear=True), \
+             patch.object(mod.time, "monotonic", side_effect=lambda: now[0]):
+            research = mod.Research()
+            research.read = slow
+            page = research.extract_one("https://slow.example/")
+        self.assertIn("error", page)
+        self.assertLessEqual(now[0], mod.PAGE_SECONDS)
+        self.assertEqual(timeouts[0][1], mod.REQUEST_TIMEOUT)
+        self.assertLess(len(timeouts), 4)
+
+    def test_page_furniture_never_counts_as_a_page(self):
+        mod = self.module
+        nav = "<nav><ul>" + "<li><a href=/x>Link</a></li>" * 30 + "</ul></nav>"
+        parser = mod.PageText()
+        parser.feed("<title>Real</title><svg><title>icon</title></svg>" + nav + "<form><h1>Notice</h1><p>Office hours are 9 to 5.</p></form>")
+        parser.close()
+        self.assertEqual(parser.title, "Real")
+        self.assertTrue(parser.text().startswith("# Notice"), parser.text()[:80])
+        self.assertIn("Office hours are 9 to 5.", parser.text())
+
     def test_direct_reads_never_reach_private_addresses(self):
         mod = self.module
+        for address in ("::7f00:1", "::ffff:0:7f00:1", "::a00:5"):
+            self.assertFalse(mod.public_ip(address), address)
+        self.assertTrue(mod.public_ip("::ffff:0:808:808"))
         for url in ("http://127.0.0.1/admin", "http://169.254.169.254/latest/meta-data", "http://10.0.0.5/", "file:///etc/passwd"):
             self.assertFalse(mod.public_host(url), url)
         with self.assertRaises(ValueError):
@@ -233,15 +287,16 @@ class ResearchTests(unittest.TestCase):
         class Response:
             def __enter__(self): return self
             def __exit__(self, *args): pass
-            def read(self, size):
-                self.size = size
-                return b"x" * size
+            sizes = []
+            def read1(self, size):
+                self.sizes.append(size)
+                return b"x" * size  # an endless body
         response = Response()
         with patch.dict(mod.os.environ, {"EXA_API_KEY": "fake"}, clear=True), \
              patch.object(mod, "urlopen", return_value=response) as request, patch.object(mod.json, "loads") as decode:
             with self.assertRaisesRegex(ValueError, "size limit"):
                 mod.post("exa", "/contents", {})
-        self.assertEqual(response.size, mod.RESPONSE_BYTES + 1)
+        self.assertEqual(sum(response.sizes), mod.RESPONSE_BYTES + 1)
         self.assertEqual(request.call_args.kwargs["timeout"], mod.REQUEST_TIMEOUT)
         decode.assert_not_called()
 

@@ -30,6 +30,11 @@ from urllib.parse import parse_qs, urlsplit
 RUN_ID = re.compile(r"^[a-f0-9-]{36}$")
 # A finished reply stays readable for an hour, long enough to come back to after a call.
 RETAIN_SECONDS = 3600
+# Stop can arrive before the start it answers (pressed while the request is still on its
+# way, or waiting for a sleeping server to wake). Such a stop is remembered this long, for
+# at most EARLY_STOPS ids at once.
+EARLY_STOP_SECONDS = 600
+EARLY_STOPS = 256
 # No reply runs longer than this; Hermes also asks the model to wrap up at three minutes.
 RUN_LIMIT_SECONDS = 15 * 60
 # Hermes sends a keepalive every 10s, so this much silence means the stream is dead.
@@ -155,6 +160,10 @@ class Run:
         )
 
     def finish(self, outcome):
+        # A stopped run says so, so anyone else following it (another device, a second tab)
+        # ends there instead of waiting on a reply that will never come.
+        if outcome == "stopped" and not self.done:
+            self.event("jarvis.stopped", {})
         with self.cond:
             if not self.done:
                 self.done, self.outcome, self.updated = True, outcome, time.time()
@@ -216,6 +225,7 @@ class Relay:
         self.host, self.port, self.key = upstream_host, upstream_port, api_key
         self.runs, self.lock = {}, threading.Lock()
         self.feeds = {}
+        self.early_stops = {}
         self.clock, self.sleep = clock, sleep
         self.guest_active, self.guest_log = 0, {}
         self.guest_connect = lambda: http.client.HTTPSConnection(
@@ -301,6 +311,17 @@ class Relay:
             ):
                 del self.runs[finished.pop(0).id]
 
+    def stop_early(self, run_id, owner):
+        """Remember a stop for a run that hasn't started yet, so it never does."""
+        now = self.clock()
+        with self.lock:
+            for key, at in list(self.early_stops.items()):
+                if now - at > EARLY_STOP_SECONDS:
+                    del self.early_stops[key]
+            if len(self.early_stops) >= EARLY_STOPS:
+                del self.early_stops[min(self.early_stops, key=self.early_stops.get)]
+            self.early_stops[(owner, run_id)] = now
+
     def start(self, run_id, owner, body):
         """Start a reply, or hand back the one already running under this id."""
         self.tidy()
@@ -314,7 +335,12 @@ class Relay:
             if existing is not None and (not existing.done or existing.outcome == "complete"):
                 return existing
             run = self.runs[run_id] = Run(run_id, owner)
+            stopped_at = self.early_stops.pop((owner, run_id), None)
         self.feed(owner).bump()
+        if stopped_at is not None and self.clock() - stopped_at <= EARLY_STOP_SECONDS:
+            run.stopped = True
+            run.finish("stopped")
+            return run
         threading.Thread(
             target=self.execute,
             args=(run, body),
@@ -657,6 +683,9 @@ def make_handler(relay):
                     return self.start(owner)
                 if len(parts) >= 3 and parts[1] == "runs" and RUN_ID.match(parts[2]):
                     run = relay.find(parts[2], owner)
+                    if run is None and method == "POST" and parts[3:] == ["stop"]:
+                        relay.stop_early(parts[2], owner)
+                        return self.send_json(200, {"stopped": True})
                     if run is None:
                         return self.send_json(404, {"error": "run not found"})
                     if method == "GET" and len(parts) == 4 and parts[3] == "events":

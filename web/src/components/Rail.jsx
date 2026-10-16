@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Code,
   FileText,
@@ -23,7 +23,7 @@ const WORK_KINDS = { document: "Document", code: "Code", table: "Table" };
 
 /* The things Vaelo has made, newest first, each a way back into the
    workspace and the conversation it came from. */
-function Library({ items, query, activeId, onOpen }) {
+function Library({ items, query, activeId, busy, onOpen }) {
   const shown = searchWork(items, query).slice(0, 80);
   if (!items.length)
     return (
@@ -49,6 +49,9 @@ function Library({ items, query, activeId, onOpen }) {
               <button
                 className="work-row"
                 data-active={entry.chatId === activeId || undefined}
+                /* Like the conversation rows: a reply in progress keeps you
+                   in its conversation. */
+                disabled={busy && entry.chatId !== activeId}
                 onClick={() => onOpen(entry)}
               >
                 <Icon size={17} aria-hidden="true" className="work-icon" />
@@ -206,6 +209,7 @@ export function Rail({
   activeId,
   busy,
   open,
+  phone = false,
   collapsed,
   workroomOpen = false,
   user,
@@ -231,18 +235,39 @@ export function Rail({
   const groups = groupChats(chats);
   const pristine = chats.length === 1 && !chats[0].messages.length;
 
+  /* On a phone the rail is a drawer: closed, it is out of the tab order
+     and hidden from screen readers; opened, focus moves into it; closed
+     again, focus goes back to the button that opens it, unless choosing
+     something in it already moved focus on. */
+  const aside = useRef(null);
+  const close = useRef(null);
+  const wasOpen = useRef(open);
+  useEffect(() => {
+    if (!phone || open === wasOpen.current) return;
+    wasOpen.current = open;
+    if (open) close.current?.focus({ preventScroll: true });
+    else {
+      const focus = document.activeElement;
+      if (!focus || focus === document.body || aside.current?.contains(focus))
+        document.querySelector(".header-rail-mobile")?.focus({ preventScroll: true });
+    }
+  }, [open, phone]);
+
   return (
     <aside
+      ref={aside}
       className="rail"
       data-open={open}
       data-collapsed={collapsed}
       aria-label="Conversations"
+      inert={phone && !open ? true : undefined}
     >
       <div className="rail-head">
         <span className="rail-brand">
           <BrandWordmark size={32} />
         </span>
         <button
+          ref={close}
           className="icon-button rail-close"
           aria-label="Close conversations"
           onClick={onClose}
@@ -316,7 +341,7 @@ export function Rail({
         aria-label={view === "library" ? "Library" : results ? "Search results" : "Past conversations"}
       >
         {view === "library" ? (
-          <Library items={work} query={query} activeId={activeId} onOpen={onOpenWork} />
+          <Library items={work} query={query} activeId={activeId} busy={busy} onOpen={onOpenWork} />
         ) : results ? (
           <section>
             <h2 className="label" aria-live="polite">
