@@ -131,6 +131,7 @@ export class ChatSync {
     try {
       const remote = (await this.request("/api/chats")).entries;
       const blocked = new Set();
+      let failure = null;
       for (const [id, entry] of Object.entries(remote)) {
         if (entry.version === this.base[id]?.version) continue;
         if (this.busy() && this.dirty(id)) { blocked.add(id); continue; }
@@ -139,9 +140,10 @@ export class ChatSync {
           chat = entry.deleted ? null : await this.download(id, entry);
         } catch (error) {
           // Replaced while this pass read it; the next pass reads the new one.
-          if (error.status !== 404) throw error;
+          if (error.status === 401) throw error;
           blocked.add(id);
-          this.again = true;
+          if (error.status === 404) this.again = true;
+          else failure ??= error;
           continue;
         }
         if (this.stopped) return;
@@ -166,7 +168,6 @@ export class ChatSync {
       const ids = new Set([...this.current.keys(), ...Object.keys(this.base)]);
       /* One conversation that can't sync (too large, refused) must not hold
          back the rest; the first failure is reported once they've all tried. */
-      let failure = null;
       for (const id of ids) {
         if (this.stopped) return;
         let forced = false;

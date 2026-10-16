@@ -116,6 +116,28 @@ test("large conversations cross the API in bounded chunks without losing content
   assert.deepEqual(b.chats, [original]);
 });
 
+test("one failed download does not prevent other conversations from syncing", async () => {
+  const { device } = setup();
+  const remote = device([chat('broken'), chat('healthy')]);
+  await remote.sync.tick();
+  const local = device([chat('local')]);
+  const request = local.sync.request;
+  local.sync.request = async (path, body) => {
+    if (path.includes('id=broken')) throw new Error('Temporary read failure');
+    return request(path, body);
+  };
+  await local.sync.tick();
+  assert.ok(local.chats.some(item => item.id === 'healthy'));
+  assert.equal(local.sync.dirty('local'), false, 'independent local work is uploaded');
+  assert.ok(local.issue, 'the failed download remains visible');
+  assert.equal(local.sync.base.broken, undefined, 'a failed read is never acknowledged');
+  local.sync.request = request;
+  await local.sync.tick();
+  assert.ok(local.chats.some(item => item.id === 'broken'));
+  assert.equal(local.issue, '');
+  local.sync.stop(); remote.sync.stop();
+});
+
 test("conditional manifest writes preserve disjoint simultaneous changes and reject stale edits", async () => {
   const { store } = setup();
   const write = async (id, version, base = null) => {
