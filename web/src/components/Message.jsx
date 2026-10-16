@@ -673,7 +673,7 @@ function MessageView({ message, fresh, busy, live, streaming, phase, isLast, edi
                 {mine ? (
                   shown
                 ) : (
-                  <Rendered content={message.content} sources={sources} onOpen={open} live={live} />
+                  <Rendered stateKey={message.id} content={message.content} sources={sources} onOpen={open} live={live} />
                 )}
                 {streaming && <span className="caret" aria-hidden="true" />}
               </div>

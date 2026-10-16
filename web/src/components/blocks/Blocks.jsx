@@ -21,6 +21,8 @@ import {
   parseTimeline,
   timelineText,
 } from "../../lib/structured.js";
+import { blockKey, readChecklist, saveChecklist, visibleRows, numberSeries } from "../../lib/intelligent-ui.js";
+import { NumberExplorer } from "./LocalTools.jsx";
 import { SourceIcon } from "./SourceIcon.jsx";
 import { Highlighted } from "./Highlighted.jsx";
 import { Rolling } from "../Rolling.jsx";
@@ -496,10 +498,14 @@ function tableData(node) {
 }
 
 function Chart({ columns, rows, plan }) {
-  const [column, setColumn] = useState(plan.values[0]);
+  const [choice, setColumn] = useState(plan.values[0]);
+  const column = plan.values.includes(choice) ? choice : plan.values[0];
   const values = rows.map((row) => toNumber(row[column]));
   // Blank cells have no bar and don't count towards the scale.
   const max = Math.max(0, ...values.filter(Number.isFinite).map(Math.abs)) || 1;
+  const signed = values.some(value => value < 0);
+  const unit = numberSeries(rows, column)?.unit || "";
+  const scaleLabel = `${unit === "%" ? "" : unit}${max.toLocaleString()}${unit === "%" ? "%" : ""}`;
   const labelOf = (row, i) => (plan.label != null ? cellText(row[plan.label]) : `Row ${i + 1}`);
   const rank = (v) => (Number.isFinite(v) ? v : -Infinity);
   const order = values.map((v, i) => i).filter((i) => Number.isFinite(values[i]))
@@ -508,12 +514,11 @@ function Chart({ columns, rows, plan }) {
   return (
     <div className="chart">
       {plan.values.length > 1 && (
-        <div className="chart-pick" role="radiogroup" aria-label="Column to chart">
+        <div className="chart-pick" role="group" aria-label="Column to chart">
           {plan.values.map((i) => (
             <button
               key={i}
-              role="radio"
-              aria-checked={i === column}
+              aria-pressed={i === column}
               className="chip"
               data-on={i === column || undefined}
               onClick={() => setColumn(i)}
@@ -524,15 +529,16 @@ function Chart({ columns, rows, plan }) {
         </div>
       )}
       <p className="chart-summary">{summary}</p>
-      <ol className="chart-bars" aria-hidden="true">
+      <p className="chart-scale">{signed ? "Bars extend left (negative) and right (positive) from zero." : "Bars start at zero."} Scale: {scaleLabel} {signed ? "on either side" : "at full width"}.</p>
+      <ol className="chart-bars">
         {rows.map((row, i) => (
           <li key={i}>
             <span className="chart-label">{labelOf(row, i)}</span>
-            <span className="chart-track">
+            <span className="chart-track" data-signed={signed || undefined} aria-hidden="true">
               <span
                 className="chart-bar"
                 data-negative={values[i] < 0 || undefined}
-                style={{ "--w": `${Number.isFinite(values[i]) ? (Math.abs(values[i]) / max) * 100 : 0}%` }}
+                style={{ "--w": `${Number.isFinite(values[i]) ? (Math.abs(values[i]) / max) * (signed ? 50 : 100) : 0}%` }}
               />
             </span>
             <span className="chart-value">{cellText(row[column])}</span>
@@ -543,14 +549,30 @@ function Chart({ columns, rows, plan }) {
   );
 }
 
+function TableView(props) {
+  const { live, stateKey, content } = useContext(BlockContext);
+  const position = props.node.position;
+  const source = content?.slice(position?.start?.offset, position?.end?.offset) || hastText(props.node);
+  const identity = blockKey(stateKey || "view", position?.start?.offset, live ? "streaming" : source);
+  return <TableBlock key={identity} {...props} />;
+}
+
 function TableBlock({ node, "data-src": src }) {
-  const { open, presentation } = useContext(BlockContext);
+  const { open, presentation, live, interactive } = useContext(BlockContext);
   const data = useMemo(() => tableData(node), [node]);
   const [sort, setSort] = useState({ column: null, direction: "asc" });
   const [view, setView] = useState("table");
   const [done, copy] = useCopy();
+  const [query, setQuery] = useState("");
+  const [selected, setSelected] = useState([]);
+  const [onlySelected, setOnlySelected] = useState(false);
+  const enhance = presentation !== "minimal" && !live && interactive && data.rows.length >= 2 && data.rows.length <= 200 && data.columns.length <= 20;
+  const visible = useMemo(() => enhance ? visibleRows(data.rows, query, selected, onlySelected) : data.rows.map((_, i) => i), [data, enhance, query, selected, onlySelected]);
+  const visibleSet = new Set(visible);
   const numeric = data.columns.map((_, i) => isNumericColumn(data.rows, i));
-  const plan = presentation === "minimal" ? null : chartable(data.columns, data.rows);
+  const candidate = presentation === "minimal" || live ? null : chartable(data.columns, data.rows);
+  const chartColumns = candidate?.values.filter(i => numberSeries(data.rows, i)) || [];
+  const plan = chartColumns.length ? { ...candidate, values: chartColumns } : null;
   const order = useMemo(() => {
     const indexed = data.rows.map((row, i) => [...row, i]);
     return sortRows(indexed, sort.column, sort.direction).map((row) => row.at(-1));
@@ -629,13 +651,22 @@ function TableBlock({ node, "data-src": src }) {
           </button>
         </span>
       </figcaption>
-      {view === "chart" && plan ? (
-        <Chart columns={data.columns} rows={data.rows} plan={plan} />
+      {enhance && <div className="local-table-tools">
+        <div className="local-controls">
+          <label>Filter rows <input type="search" maxLength={200} value={query} onChange={e => setQuery(e.target.value)} placeholder="Find in this table" /></label>
+          <button className="block-tool" aria-pressed={onlySelected} disabled={!selected.length && !onlySelected} onClick={() => setOnlySelected(v => !v)}>Compare selected ({selected.length})</button>
+          <button className="block-tool" onClick={() => { setQuery(""); setSelected([]); setOnlySelected(false); setSort({ column: null, direction: "asc" }); }}>Reset view</button>
+        </div>
+        <p className="local-note" role="status">{visible.length} of {data.rows.length} rows · Controls run locally. Copy and CSV keep the original table.</p>
+      </div>}
+      {view === "chart" && plan && visible.length > 0 ? (
+        <Chart columns={data.columns} rows={visible.map(i => data.rows[i])} plan={plan} />
       ) : (
         <div className="table-scroll" tabIndex={0} role="region" aria-label="Table, scrolls sideways">
           <table>
             <thead>
               <tr>
+                {enhance && <th scope="col"><span className="sr-only">Compare</span></th>}
                 {data.heads.map((head, i) => (
                   <th
                     key={i}
@@ -649,21 +680,18 @@ function TableBlock({ node, "data-src": src }) {
                         : undefined
                     }
                   >
-                    <button onClick={() => toggle(i)} data-tip="Sort by this column">
+                    <button onClick={() => toggle(i)} aria-label={`Sort by ${data.columns[i]}`} data-tip="Sort by this column">
                       {inline(head, i)}
-                      {sort.column === i && (
-                        <span className="sort-mark" aria-hidden="true">
-                          {sort.direction === "asc" ? "↑" : "↓"}
-                        </span>
-                      )}
+                      <span className="sort-mark" aria-hidden="true">{sort.column === i ? sort.direction === "asc" ? "↑" : "↓" : "↕"}</span>
                     </button>
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {order.map((r) => (
+              {order.filter(r => visibleSet.has(r)).map((r) => (
                 <tr key={r}>
+                  {enhance && <td><input type="checkbox" aria-label={`Compare row ${r + 1}: ${data.rows[r][0]}`} checked={selected.includes(r)} onChange={e => setSelected(items => e.target.checked ? [...items, r] : items.filter(i => i !== r))} /></td>}
                   {data.cells[r].map((cell, i) => (
                     <td key={i} data-numeric={numeric[i] || undefined}>
                       {inline(cell, i)}
@@ -675,6 +703,8 @@ function TableBlock({ node, "data-src": src }) {
           </table>
         </div>
       )}
+      {enhance && visible.length === 0 && <p className="local-note">No matching rows. Reset the view to see the full table.</p>}
+      {enhance && visible.length > 0 && <NumberExplorer columns={data.columns} rows={visible.map(i => data.rows[i])} />}
     </figure>
   );
 }
@@ -737,11 +767,59 @@ function ImageRef({ alt, src }) {
   );
 }
 
+function LocalList({ node, children, ordered = false, "data-src": src, ...props }) {
+  const { presentation, live, interactive, stateKey, content } = useContext(BlockContext);
+  const Tag = ordered ? "ol" : "ul";
+  if (!interactive || live || presentation === "minimal") return <Tag {...props} data-src={src}>{children}</Tag>;
+  const items = (node.children || []).filter(n => n.tagName === "li");
+  const supported = n => n.type === "text" || (["p", "strong", "em", "del", "code", "a", "br", "input"].includes(n.tagName) && (n.children || []).every(supported));
+  const nested = items.some(item => !(item.children || []).every(supported));
+  const checkbox = n => n.tagName === "input" ? n : (n.children || []).map(checkbox).find(Boolean);
+  const defaults = items.map(item => !!checkbox(item)?.properties?.checked);
+  const tasks = items.some(item => !!checkbox(item));
+  const signature = content?.slice(node.position?.start?.offset, node.position?.end?.offset) || items.map(hastText).join("\n");
+  const key = blockKey(stateKey || "temporary", node.position?.start?.offset, signature);
+  // Key the inner component by the exact block, so edits and versions reset state.
+  if (nested || items.length < (tasks ? 1 : 2) || items.length > 80 || signature.length > 50000) {
+    return <Tag {...props} data-src={src}>{children}</Tag>;
+  }
+  return <Checklist key={key} storageKey={stateKey ? key : null} defaults={defaults} tasks={tasks} items={items} original={children} ordered={ordered} src={src} start={props.start} />;
+}
+
+function Checklist({ storageKey, defaults, tasks, items, original, ordered, src, start }) {
+  const [active, setActive] = useState(tasks);
+  const [values, setValues] = useState(() => storageKey ? readChecklist(storageKey, defaults) : defaults);
+  const [saved, setSaved] = useState(true);
+  const Tag = ordered ? "ol" : "ul";
+  const completed = values.filter(Boolean).length;
+  function update(next) {
+    setValues(next);
+    setSaved(storageKey ? saveChecklist(storageKey, next) : false);
+  }
+  return <div className="local-checklist" data-src={src}>
+    <div className="local-checklist-bar">
+      <button className="block-tool" aria-pressed={active} onClick={() => setActive(v => !v)}>{active ? "Show original list" : "Use as checklist"}</button>
+      {active && <><span className="local-note" role="status">{completed} / {items.length} done</span><button className="block-tool" onClick={() => update(defaults)}>Reset checks</button></>}
+    </div>
+    {active ? <>
+      <progress max={items.length} value={completed} aria-label="Checklist progress" />
+      <ul className="local-check-items">{items.map((item, i) => <li key={i}>
+        <label><input type="checkbox" checked={values[i]} onChange={e => update(values.map((v, j) => j === i ? e.target.checked : v))} />
+          <span data-checked={values[i] || undefined}>{ordered && <span className="local-step">{(start || 1) + i}. </span>}{item.children.filter(n => n.tagName !== "input").map((n, j) => inline(n, j))}</span>
+        </label>
+      </li>)}</ul>
+      <p className="local-note">{saved && storageKey ? "Checks stay on this device." : "Checks last for this view; storage is unavailable."} Vaelo’s answer stays unchanged; checks are not sent to the model.</p>
+    </> : <Tag start={ordered ? start : undefined}>{original}</Tag>}
+  </div>;
+}
+
 const components = {
   a: ({ href, children }) => <SourceLink href={href}>{children}</SourceLink>,
   img: ImageRef,
   pre: CodeBlock,
-  table: TableBlock,
+  table: TableView,
+  ul: LocalList,
+  ol: props => <LocalList {...props} ordered />,
 };
 
 const remarkPlugins = [remarkGfm];
@@ -801,7 +879,7 @@ export function useSources(content) {
   return useMemo(() => collectSources(content || ""), [content]);
 }
 
-export function Rendered({ content, sources, onOpen, mapped = false, live = false }) {
+export function Rendered({ content, sources, onOpen, mapped = false, live = false, stateKey }) {
   const presentation = useContext(PresentationContext);
   const value = useMemo(
     () => ({
@@ -811,8 +889,10 @@ export function Rendered({ content, sources, onOpen, mapped = false, live = fals
       presentation,
       content,
       live,
+      stateKey,
+      interactive: !mapped,
     }),
-    [sources, onOpen, presentation, content, live],
+    [sources, onOpen, presentation, content, live, stateKey, mapped],
   );
   return (
     <BlockContext.Provider value={value}>

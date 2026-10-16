@@ -257,9 +257,8 @@
 
 .chart-label {
   max-width: 14rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  line-height: 1.4;
 }
 
 .chart-track {
@@ -314,9 +313,7 @@
 
 .metrics-title {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
   font-size: var(--t-sm);
   font-weight: var(--w-ui);
   color: var(--ink-soft);
@@ -339,7 +336,7 @@
 
 .metrics-lead-value {
   font-size: var(--t-xl);
-  font-weight: 300;
+  font-weight: 480;
   line-height: 1.05;
   font-variant-numeric: lining-nums tabular-nums;
   color: var(--ink);
@@ -866,3 +863,65 @@
 .work-proposal h3 { margin-block: var(--s-2); font-size: var(--t-lg); }
 .work-proposal p { margin-block: var(--s-2); }
 .work-proposal-note { font-size: var(--t-sm); color: var(--muted); }
+/* Readability and local interaction controls. */
+.block-bar { flex-wrap: wrap; padding-block: var(--s-2); }
+.block-tools { flex-wrap: wrap; justify-content: flex-end; }
+.block-tool { min-height: var(--hit); }
+.block-tool:disabled { opacity: .5; cursor: default; }
+.table-block th button { min-height: var(--hit); font-size: var(--t-sm); letter-spacing: normal; text-transform: none; color: var(--ink-soft); }
+.table-block td { padding-block: var(--s-3); min-width: 5rem; overflow-wrap: anywhere; }
+.table-block tbody tr:nth-child(even) { background: var(--gilt-wash); }
+.table-block tbody tr:hover, .table-block tbody tr:has(input:checked) { background: var(--gilt-wash); }
+.table-block td:has(input) { min-width: 2.75rem; padding-inline: var(--s-2); }
+.table-block input[type=checkbox], .local-check-items input { width: 1.25rem; height: 1.25rem; accent-color: var(--gilt-ink); flex: none; }
+.chart-summary { color: var(--ink-soft); line-height: 1.5; }
+.chart-scale { margin: 0 0 var(--s-4); font-size: var(--t-xs); color: var(--muted); }
+.chart-track { position: relative; height: .875rem; }
+.chart-track[data-signed]::after { content: ''; position: absolute; left: 50%; top: -.25rem; bottom: -.25rem; width: 1px; background: var(--ink-soft); }
+.chart-track[data-signed] .chart-bar { position: absolute; left: 50%; border-radius: 0 var(--r-sm) var(--r-sm) 0; }
+.chart-track[data-signed] .chart-bar[data-negative] { left: auto; right: 50%; border-radius: var(--r-sm) 0 0 var(--r-sm); transform-origin: right; }
+.chart-value { align-self: center; white-space: nowrap; font-weight: var(--w-strong); }
+.metrics-lead-label, .metric dt { font-size: var(--t-sm); color: var(--ink-soft); }
+.metrics-lead-value, .metric-value { overflow-wrap: anywhere; max-width: 100%; }
+.metrics-note { font-size: var(--t-sm); line-height: 1.5; font-style: normal; }
+.metrics .metric-delta { color: var(--ink-soft); }
+.timeline-when { font-size: var(--t-sm); letter-spacing: normal; text-transform: none; line-height: 1.5; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.timeline-what { line-height: 1.55; font-weight: var(--w-ui); min-width: 0; overflow-wrap: anywhere; }
+.timeline-detail { padding-top: var(--s-1); font-weight: var(--w-read); line-height: 1.5; color: var(--ink-soft); }
+.local-table-tools, .local-explorer { padding: var(--s-3) 0; border-bottom: 1px solid var(--hairline); }
+.local-controls, .local-checklist-bar { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-2) var(--s-3); }
+.local-controls label { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-2); font-size: var(--t-sm); }
+.local-controls input, .local-controls select { min-height: var(--hit); max-width: 100%; min-width: 0; padding: var(--s-2); border: 1px solid var(--hairline-strong); border-radius: var(--r-sm); background: var(--surface); color: var(--ink); font: inherit; }
+.local-controls input[type=number] { width: 8rem; }
+.local-controls input[type=search] { width: 14rem; }
+.local-note { margin: var(--s-2) 0; font-size: var(--t-xs); line-height: 1.5; color: var(--muted); }
+.local-explorer summary { cursor: pointer; min-height: var(--hit); align-content: center; font-size: var(--t-sm); font-weight: var(--w-strong); }
+.local-numbers { display: flex; flex-wrap: wrap; gap: var(--s-5); }
+.local-numbers dt { font-size: var(--t-xs); color: var(--muted); }
+.local-numbers dd { margin: 0; font-size: var(--t-lg); font-variant-numeric: tabular-nums; }
+.prose .local-results, .local-results { margin: var(--s-3) 0; padding: 0; list-style: none; }
+.local-results li { display: flex; justify-content: space-between; gap: var(--s-4); padding: var(--s-2); border-bottom: 1px solid var(--hairline); }
+.local-results output { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.local-results li > span { min-width: 0; overflow-wrap: anywhere; }
+.local-checklist { margin-bottom: var(--s-5); }
+.local-checklist progress { width: 100%; height: .4rem; accent-color: var(--gilt-ink); }
+.prose .local-check-items, .local-check-items { list-style: none; padding: 0; margin: var(--s-2) 0; }
+.local-check-items li { margin: 0; border-bottom: 1px solid var(--hairline); }
+.local-check-items label { display: flex; gap: var(--s-3); align-items: start; padding: var(--s-3) var(--s-2); min-height: var(--hit); cursor: pointer; line-height: 1.5; }
+.local-check-items input { margin-top: .15rem; }
+.local-check-items [data-checked] { text-decoration: line-through; color: var(--muted); }
+.local-step { color: var(--muted); font-variant-numeric: tabular-nums; }
+@media (max-width: 540px) {
+  .table-block .block-tool span, .metrics .block-tool span, .timeline .block-tool span { display: inline; }
+  .table-block .block-count { display: inline; }
+  .block-bar .block-tools { flex-basis: 100%; margin-left: 0; justify-content: flex-start; }
+  .prose .chart-bars, .chart-bars { min-width: 0; grid-template-columns: minmax(4rem, 1fr) minmax(3rem, 1.5fr) auto; gap: var(--s-3) var(--s-2); }
+  .chart-label { max-width: none; }
+  .timeline-list li { grid-template-columns: minmax(4rem, 6rem) minmax(0, 1fr); }
+  .local-controls { align-items: stretch; }
+  .local-controls label { width: 100%; }
+  .local-controls input[type=search] { width: 100%; }
+  .prose .metrics-grid, .metrics-grid { grid-template-columns: repeat(auto-fit, minmax(min(10rem, 100%), 1fr)); }
+}
+@media (prefers-reduced-motion: reduce) { .chart-bar { animation: none; } }
+:root[data-motion=reduce] .chart-bar { animation: none; }

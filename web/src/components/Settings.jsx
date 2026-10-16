@@ -30,7 +30,7 @@ const GROUPS = [
     key: "presentation",
     label: "Replies",
     options: [
-      { value: "adaptive", label: "Adaptive", note: "Figures, timelines and charts when they help." },
+      { value: "adaptive", label: "Adaptive", note: "Charts, comparisons and checklists. Controls run locally." },
       { value: "minimal", label: "Minimal", note: "Plain text and tables, nothing more." },
     ],
   },
