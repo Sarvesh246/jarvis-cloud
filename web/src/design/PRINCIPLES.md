@@ -17,7 +17,8 @@ instead of boxes, italic for the emotional register.
    "Web search", "Waking up"); afterwards it folds into a receipt ("Thought
    for 8s · 2 steps") that opens to the steps. Stopping keeps what was
    written and offers Continue; retrying keeps earlier versions (1 / 2);
-   any of your messages can be edited and resent; removing a conversation
+   any of your messages can be edited and resent, and the conversation as
+   it stood before the edit is kept as a copy; removing a conversation
    offers Undo instead of a confirmation.
 3. **Calm tempo.** 180–600ms, `--ease`, no bounce, no spin, no flash. Ambient
    breathing is 6s. Reduced motion removes movement and keeps meaning.

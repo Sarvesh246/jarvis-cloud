@@ -9,10 +9,15 @@ export function Header({ title, canRename, onRename, onOpenRail, onToggleRail, o
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(title);
   const input = useRef(null);
+  const name = useRef(null);
+  const wasEditing = useRef(false);
 
   useEffect(() => setValue(title), [title]);
   useEffect(() => {
     if (editing) input.current?.select();
+    // Done renaming: focus goes back to the name, not to the top of the page.
+    else if (wasEditing.current && document.activeElement === document.body) name.current?.focus();
+    wasEditing.current = editing;
   }, [editing]);
 
   function commit() {
@@ -49,7 +54,12 @@ export function Header({ title, canRename, onRename, onOpenRail, onToggleRail, o
             onChange={(event) => setValue(event.target.value)}
             onBlur={commit}
             onKeyDown={(event) => {
-              if (event.key === "Enter") commit();
+              if (event.nativeEvent.isComposing || event.keyCode === 229) return;
+              if (event.key === "Enter") {
+                // Otherwise the same Enter would press the name once focus returns to it.
+                event.preventDefault();
+                commit();
+              }
               if (event.key === "Escape") {
                 setValue(title);
                 setEditing(false);
@@ -58,6 +68,7 @@ export function Header({ title, canRename, onRename, onOpenRail, onToggleRail, o
           />
         ) : (
           <button
+            ref={name}
             className="header-title"
             disabled={!canRename}
             data-tip={canRename ? "Rename conversation" : undefined}

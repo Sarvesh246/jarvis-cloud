@@ -33,7 +33,7 @@ import { toolInfo } from "./lib/tools.js";
 import { mergePlan, readPlan } from "./lib/plan.js";
 import { classifyError } from "./lib/errors.js";
 import { JOIN_WINDOW, continueRequest, joinOnto, retryRequest } from "./lib/continuation.js";
-import { PHONE } from "./lib/use-phone.js";
+import { PHONE, usePhone } from "./lib/use-phone.js";
 import { DESKTOP, desktopSignIn, desktopSignOut, desktopGuest, desktopLeaveGuest, desktopNotification, cancelDesktopSignIn } from "./lib/desktop.js";
 import { readDesktopHandoff, markDesktopHandoffStarted } from "./lib/desktop-handoff.js";
 import { DesktopHandoff } from "./components/DesktopHandoff.jsx";
@@ -355,6 +355,11 @@ export function App() {
   const [activeId, setActiveId] = useState(null);
   const [draft, setDraft] = useState("");
   const [attachments, setAttachments] = useState([]);
+  /* What was being written in each conversation, kept while you look at
+     another one, so switching never throws away a half-written message. */
+  const drafts = useRef(new Map());
+  const writing = useRef({ draft: "", attachments: [] });
+  writing.current = { chatId: activeId, draft, attachments };
   const [options, setOptions] = useState({ research: false, style: "balanced", role: "none" });
   const [busy, setBusy] = useState(false);
   const [livePhase, setLivePhase] = useState("idle");
@@ -364,6 +369,7 @@ export function App() {
   const warming = useRef(null);
   const lastReady = useRef(0);
   const [menu, setMenu] = useState(false);
+  const phone = usePhone();
   const [collapsed, setCollapsed] = useState(readCollapsed);
   const [storageIssue, setStorageIssue] = useState(false);
   const [toast, setToast] = useState(null);
@@ -757,6 +763,9 @@ export function App() {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
         if (!busy) newChat();
+      } else if (event.key === "Escape" && menu && phone && !document.querySelector("dialog[open]")) {
+        // The phone drawer is in front of everything else, so it closes first.
+        setMenu(false);
       } else if (event.key === "Escape" && busy && !event.defaultPrevented && !document.querySelector("dialog[open]")) {
         // Esc closes an open dialog first; it stops the reply only from the conversation itself.
         stopReply();
@@ -771,9 +780,18 @@ export function App() {
     return () => removeEventListener("keydown", onKey);
   });
 
+  /* Following only ever moves the view down, so any move up that leaves
+     the end of the conversation is the reader's own (wheel, touch, keys,
+     scrollbar) and stops following at once. Moving back down to near the
+     end picks following up again. A view pulled up because the
+     conversation got shorter is still at the end, so it keeps following. */
+  const lastTop = useRef(0);
   function onScroll() {
     const el = conversation.current;
-    pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 96;
+    const fromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    if (el.scrollTop < lastTop.current - 1 && fromBottom > 2) pinned.current = false;
+    else if (fromBottom < 96) pinned.current = true;
+    lastTop.current = el.scrollTop;
     setAway(!pinned.current);
     setQuote(null);
   }
@@ -791,7 +809,18 @@ export function App() {
     el?.scrollTo({ top: el.scrollHeight, behavior: reducedMotion() ? "auto" : "smooth" });
   }
 
+  /* While Vaelo writes a reply, you stay in its conversation, as the rail's
+     rows already do: the live reply, Stop and Esc all belong to it, and
+     another conversation would otherwise show it as its own. Following a
+     reply from another device is different; leaving just stops following. */
+  const STAY = "Vaelo is still replying here. You can switch once it finishes, or stop it first.";
+  function canLeave(id) {
+    // Refs, not state: a toast's action may run from an older render.
+    return !abort.current || id === writing.current.chatId || Boolean(mirrorChat.current);
+  }
+
   function newChat() {
+    if (!canLeave(null)) return;
     if (active && !active.messages.length) {
       textarea.current?.focus();
       setMenu(false);
@@ -803,11 +832,24 @@ export function App() {
   }
 
   function selectChat(id) {
+    if (!canLeave(id)) {
+      showToast({ text: STAY });
+      return;
+    }
     pinned.current = true;
     setAway(false);
+    // Read from the latest render: a toast's action may be an older closure.
+    const now = writing.current;
+    if (id !== now.chatId) {
+      if (now.draft.trim() || now.attachments.length)
+        drafts.current.set(now.chatId, { draft: now.draft, attachments: now.attachments });
+      else drafts.current.delete(now.chatId);
+      const kept = drafts.current.get(id);
+      drafts.current.delete(id);
+      setDraft(kept?.draft || "");
+      setAttachments(kept?.attachments || []);
+    }
     setActiveId(id);
-    setDraft("");
-    setAttachments([]);
     setError("");
     setMenu(false);
     setWorkspace(null);
@@ -905,6 +947,8 @@ export function App() {
      in), so its brief and documents travel with every message there. */
   function startWork(record, prompt) {
     if (!record?.revision) return;
+    // Shown in the Workroom, which stays open with the work ready to start.
+    if (busy && active?.messages.length && !canLeave(null)) throw new Error(STAY);
     const workContext = workContextFor(record);
     let chatId = activeId;
     if (active && !active.messages.length) {
@@ -995,6 +1039,7 @@ export function App() {
   /* When a conversation has outgrown the context, carry the thread of it
      into a fresh one instead of leaving the person stuck. */
   function carryOver() {
+    if (!canLeave(null)) return;
     const last = active.messages.findLast((message) => message.role === "user");
     const chat = freshChat();
     setChats((current) => cap([chat, ...current]));
@@ -1039,13 +1084,15 @@ export function App() {
           imageData.current.set(pending[i].id, read.data);
           delete read.data;
         }
-        setAttachments((current) =>
-          current.map((item) =>
+        const settle = (list) =>
+          list.map((item) =>
             item.id === pending[i].id
               ? { ...read, id: item.id, name: item.name, size: item.size, kind: read.kind || item.kind }
               : item,
-          ),
-        );
+          );
+        setAttachments(settle);
+        // Still reading when you switched conversations: it finishes in the kept draft.
+        for (const kept of drafts.current.values()) kept.attachments = settle(kept.attachments);
       }),
     );
     textarea.current?.focus();
@@ -1115,6 +1162,19 @@ export function App() {
       if (at < 0) return;
       const original = active.messages[at];
       const files = original.attachments || [];
+      /* Resending an edit replaces everything after it. What was there is
+         never thrown away: the conversation as it stood is kept as a copy. */
+      if (active.messages.slice(at + 1).some((message) => message.content)) {
+        const kept = {
+          ...structuredClone(active),
+          id: crypto.randomUUID(),
+          title: `${active.title} · before edit`.slice(0, 80),
+          pinned: undefined,
+          pinnedAt: undefined,
+        };
+        setChats((current) => cap([...current, kept]));
+        showToast({ text: `The conversation before your edit is kept as “${kept.title}”.` });
+      }
       messages = [
         ...active.messages.slice(0, at),
         {
@@ -1871,7 +1931,11 @@ export function App() {
   handlers.current = {
     retry: () => send({ retry: true }),
     continue: () => send({ text: "Continue" }),
-    edit: (id, text) => send({ edit: { id, text } }),
+    edit: (id, text) => {
+      // The edited message is replaced, so focus waits in the composer.
+      if (!matchMedia("(pointer: coarse)").matches) textarea.current?.focus({ preventScroll: true });
+      return send({ edit: { id, text } });
+    },
     version: (id, index) => selectVersion(id, index),
     branch: (id) => branchFrom(id),
     carry: () => carryOver(),
@@ -2002,6 +2066,7 @@ export function App() {
           activeId={activeId}
           busy={busy}
           open={menu}
+          phone={phone}
           collapsed={collapsed}
           user={session.user}
           onClose={() => setMenu(false)}
@@ -2021,6 +2086,9 @@ export function App() {
 
         <main
           className="stage"
+          /* Behind the open phone drawer, the page is out of reach of
+             keyboards and screen readers, as it is out of reach of touch. */
+          inert={phone && menu ? true : undefined}
           onDragEnter={(event) => {
             if (event.dataTransfer?.types?.includes("Files")) {
               event.preventDefault();

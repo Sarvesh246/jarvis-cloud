@@ -350,7 +350,7 @@
   transition: background var(--dur-1) var(--ease);
 }
 
-.work-row:hover {
+.work-row:hover:not(:disabled) {
   background: var(--gilt-wash);
 }
 
