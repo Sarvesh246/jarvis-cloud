@@ -8,7 +8,7 @@
     "desktop:msix": "pwsh -NoProfile -File desktop/package-msix.ps1",
     "desktop:dev": "tauri dev",
     "desktop:build": "tauri build",
-    "desktop:icons": "tauri icon public/icons/icon-512.png",
+    "desktop:icons": "node scripts/generate-icons.mjs --desktop",
     "icons": "node scripts/generate-icons.mjs",
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
