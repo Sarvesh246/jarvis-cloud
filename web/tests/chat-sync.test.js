@@ -270,3 +270,57 @@ test("a message sent on one device while the other finished a reply is merged, n
   ), null);
   assert.equal(liveReply({ messages: [reply({ startedAt: Date.now() - 2 * 60 * 60 * 1000 })] }), null);
 });
+
+for (const failedAction of ["part", "commit"]) {
+  test(`a failed live-reply ${failedAction} is retried while the reply is still running`, async () => {
+    const { device } = setup();
+    const a = device([chat()]); await a.sync.tick();
+    const started = { ...chat(), messages: [...chat().messages, reply()] };
+    const original = a.sync.request;
+    let failed = false;
+    a.sync.request = async (path, body) => {
+      if (!failed && body?.action === failedAction) {
+        failed = true;
+        throw new TypeError("Connection lost");
+      }
+      return original(path, body);
+    };
+    // Queue directly so the test controls each pass without push's timer.
+    a.sync.forced.add("chat-one");
+    a.sync.current.set("chat-one", started);
+    await a.sync.tick();
+    assert.ok(a.issue);
+    await a.sync.tick();
+    const phone = device(); await phone.sync.tick();
+    assert.equal(phone.chats[0].messages.at(-1).run, started.messages.at(-1).run);
+    assert.equal(phone.chats[0].messages.at(-1).running, true);
+    assert.equal(a.issue, "");
+    assert.equal(a.sync.forced.size, 0);
+    a.sync.stop(); phone.sync.stop();
+  });
+}
+
+test("a new live save queued during an upload survives that upload's acknowledgement", async () => {
+  const { device } = setup();
+  const a = device([chat()]); await a.sync.tick();
+  const started = { ...chat(), messages: [...chat().messages, reply()] };
+  a.sync.current.set("chat-one", started);
+  a.sync.forced.add("chat-one");
+  const original = a.sync.request;
+  let queued = false;
+  a.sync.request = async (path, body) => {
+    if (!queued && body?.action === "part") {
+      queued = true;
+      a.sync.current.set("chat-one", { ...started,
+        messages: [...chat().messages, reply({ run: "continued-run" })] });
+      a.sync.forced.add("chat-one");
+    }
+    return original(path, body);
+  };
+  await a.sync.tick();
+  assert.equal(a.sync.forced.has("chat-one"), true);
+  await a.sync.tick();
+  const phone = device(); await phone.sync.tick();
+  assert.equal(phone.chats[0].messages.at(-1).run, "continued-run");
+  a.sync.stop(); phone.sync.stop();
+});

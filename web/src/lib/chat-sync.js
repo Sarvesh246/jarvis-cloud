@@ -169,10 +169,11 @@ export class ChatSync {
       let failure = null;
       for (const id of ids) {
         if (this.stopped) return;
+        let forced = false;
         try {
         if (blocked.has(id) || !this.dirty(id)) continue;
         if (liveReply(this.current.get(id)) && !this.forced.has(id)) continue;
-        this.forced.delete(id);
+        forced = this.forced.delete(id);
         const chat = this.current.get(id);
         const mark = fingerprint(chat);
         const version = this.uuid();
@@ -191,6 +192,10 @@ export class ChatSync {
         this.base[id] = { version, fingerprint: mark };
         this.persist();
         } catch (error) {
+          // A failed upload must still publish the run for other devices to
+          // follow. Consume only this attempt's request, preserving any new
+          // push queued while the upload was in flight.
+          if (forced) this.forced.add(id);
           if (error.status === 409 || error.status === 401) throw error;
           failure ??= error;
         }
