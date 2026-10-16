@@ -18,6 +18,7 @@ import math
 import os
 import re
 import socket
+import time
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from http.client import HTTPConnection, HTTPSConnection
 from urllib.request import (
@@ -33,6 +34,9 @@ from urllib.request import (
 from agent.web_search_provider import WebSearchProvider
 
 REQUEST_TIMEOUT = 15
+# One page gets this long in all, across every provider tried and the direct read; a socket
+# timeout alone only bounds each wait, and a server can trickle bytes just under it.
+PAGE_SECONDS = 25
 SEARCH_TIMEOUT = 12
 RESPONSE_BYTES = 512 * 1024
 PAGE_BYTES = 1024 * 1024
@@ -69,6 +73,20 @@ STOP = frozenset(
 )
 
 
+def read_within(response, limit, deadline):
+    """Up to ``limit`` bytes of a response, giving up once ``deadline`` (monotonic) passes."""
+    chunks, size = [], 0
+    while size < limit:
+        if time.monotonic() > deadline:
+            raise TimeoutError("The page took too long to arrive")
+        chunk = response.read1(min(64 * 1024, limit - size))
+        if not chunk:
+            break
+        chunks.append(chunk)
+        size += len(chunk)
+    return b"".join(chunks)
+
+
 def post(provider, path, payload, timeout=REQUEST_TIMEOUT):
     key = os.environ.get(KEYS[provider], "").strip()
     headers = {"Content-Type": "application/json", "Accept": "application/json"}
@@ -81,9 +99,10 @@ def post(provider, path, payload, timeout=REQUEST_TIMEOUT):
         headers=headers,
         method="POST",
     )
+    deadline = time.monotonic() + timeout
     with urlopen(req, timeout=timeout) as response:
-        # Bound the download before decoding or allocating the parsed JSON tree.
-        data = response.read(RESPONSE_BYTES + 1)
+        # Bound the download, in size and time, before decoding or parsing it.
+        data = read_within(response, RESPONSE_BYTES + 1, deadline)
     if len(data) > RESPONSE_BYTES:
         raise ValueError("Research response exceeded its size limit")
     return json.loads(data)
@@ -233,9 +252,11 @@ def focus(text, query, limit=PAGE_CHARS):
     """Fit a long page into ``limit`` characters around what was asked.
 
     The opening stays (it names the page and usually defines the subject); the rest of the
-    room goes to the paragraphs that share the most words with the query, kept in page order
-    with a marker wherever text was skipped. Without a query it keeps the opening and the end,
-    where conclusions and dates tend to sit."""
+    room goes to the paragraphs that share the most words with the query, then to what follows
+    each of them (the steps under a matching heading, the table after a matching sentence,
+    which rarely repeat the query's words), kept in page order with a marker wherever text was
+    skipped. Without a query it keeps the opening and the end, where conclusions and dates
+    tend to sit."""
     if len(text) <= limit:
         return text
     blocks = []
@@ -277,7 +298,25 @@ def focus(text, query, limit=PAGE_CHARS):
             if len(blocks[index]) + 2 <= budget:
                 chosen.append(index)
                 budget -= len(blocks[index]) + 2
-        keep = sorted(head + chosen)
+        # Room left over goes to what follows each match, the best matches first, one
+        # block further on each round, until the room or the page runs out.
+        taken = set(head) | set(chosen)
+        reach = {index: index for index in chosen}
+        growing = True
+        while growing and budget > 0:
+            growing = False
+            for index in chosen:
+                after = reach[index] + 1
+                if after >= len(blocks) or after in taken:
+                    continue
+                if len(blocks[after]) + 2 > budget:
+                    reach[index] = len(blocks)  # no gaps inside a passage: this one ends here
+                    continue
+                reach[index] = after
+                taken.add(after)
+                budget -= len(blocks[after]) + 2
+                growing = True
+        keep = sorted(taken)
         note = "[Long page: showing its opening and the passages most relevant to the search.]"
     else:
         keep = list(head)
@@ -389,7 +428,6 @@ class PageText(HTMLParser):
         "footer",
         "header",
         "aside",
-        "form",
         "button",
         "iframe",
         "template",
@@ -425,7 +463,9 @@ class PageText(HTMLParser):
     def handle_starttag(self, tag, attrs):
         if tag in self.SKIP:
             self.skipping += 1
-        elif tag == "title":
+        elif self.skipping:
+            return  # inside navigation or a script: none of its structure is kept either
+        elif tag == "title" and not self.title:
             self.in_title = True
         elif tag in self.BLOCK:
             self.parts.append(
@@ -442,6 +482,8 @@ class PageText(HTMLParser):
     def handle_endtag(self, tag):
         if tag in self.SKIP and self.skipping:
             self.skipping -= 1
+        elif self.skipping:
+            return
         elif tag == "title":
             self.in_title = False
         elif tag in self.BLOCK:
@@ -460,7 +502,7 @@ class PageText(HTMLParser):
         ).strip()
 
 
-def fetch_page(url):
+def fetch_page(url, timeout=REQUEST_TIMEOUT):
     """The last resort when every provider fails: read the page directly, public hosts only."""
     if not public_host(url):
         raise ValueError("Not a public address")
@@ -475,10 +517,11 @@ def fetch_page(url):
             "Accept": "text/html,application/xhtml+xml,text/plain;q=0.8",
         },
     )
-    with opener.open(req, timeout=REQUEST_TIMEOUT) as response:
+    deadline = time.monotonic() + timeout
+    with opener.open(req, timeout=timeout) as response:
         kind = response.headers.get_content_type()
         charset = response.headers.get_content_charset() or "utf-8"
-        raw = response.read(PAGE_BYTES)
+        raw = read_within(response, PAGE_BYTES, deadline)
     if kind not in ("text/html", "application/xhtml+xml", "text/plain"):
         raise ValueError("Not a readable page")
     body = raw.decode(charset, errors="replace")
@@ -487,7 +530,10 @@ def fetch_page(url):
     parser = PageText()
     parser.feed(body)
     parser.close()
-    return {"title": " ".join(parser.title.split()), "content": parser.text()}
+    content = parser.text()
+    if not re.search(r"\w", content):
+        raise LookupError("empty page")  # only furniture: let the caller say it couldn't read it
+    return {"title": " ".join(parser.title.split()), "content": content}
 
 
 class Research(WebSearchProvider):
@@ -549,7 +595,7 @@ class Research(WebSearchProvider):
             "provider": "+".join(answered),
         }
 
-    def read(self, name, url):
+    def read(self, name, url, timeout=REQUEST_TIMEOUT):
         if name == "exa":
             # A live crawl only when Exa has no cached copy, so fresh pages still come back.
             data = post(
@@ -560,6 +606,7 @@ class Research(WebSearchProvider):
                     "text": {"maxCharacters": PAGE_CHARS * 3},
                     "livecrawl": "fallback",
                 },
+                timeout,
             )
             rows = data.get("results", [])
         elif name == "tavily":
@@ -567,6 +614,7 @@ class Research(WebSearchProvider):
                 name,
                 "/extract",
                 {"urls": [url], "extract_depth": "basic", "format": "text"},
+                timeout,
             ).get("results", [])
         elif name == "firecrawl":
             data = post(
@@ -576,12 +624,13 @@ class Research(WebSearchProvider):
                     "url": url,
                     "formats": ["markdown"],
                     "onlyMainContent": True,
-                    "timeout": 15000,
+                    "timeout": int(max(1, timeout - 1) * 1000),
                 },
+                timeout,
             )
             rows = [data.get("data", {})] if data.get("success") else []
         else:
-            rows = [fetch_page(url)]
+            rows = [fetch_page(url, timeout)]
         for item in rows:
             content = (
                 item.get("text")
@@ -602,9 +651,13 @@ class Research(WebSearchProvider):
 
     def extract_one(self, url):
         query = self.found_by.get(page_key(url), "")
+        deadline = time.monotonic() + PAGE_SECONDS
         for name in [name for name in KEYS if configured(name)] + ["direct"]:
+            left = deadline - time.monotonic()
+            if left < 2:
+                break  # out of time for this page: say so rather than keep the reply waiting
             try:
-                title, content, published = self.read(name, url)
+                title, content, published = self.read(name, url, min(REQUEST_TIMEOUT, left))
             except Exception:
                 continue
             page = {
