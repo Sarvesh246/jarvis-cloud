@@ -93,12 +93,16 @@ function sessionKey(cfg) {
 }
 
 export async function signSession(user, cfg, audience = "jarvis-web") {
+  const signedOut = await (cfg.revocations || revocations).epoch(user.sub, audience);
+  // NumericDate permits fractional seconds. A new sign-in must be strictly
+  // newer than a sign-out even when both happen within the same clock tick.
+  const issued = Math.max(Date.now() / 1000, signedOut + 0.001);
   return new SignJWT({ email: user.email, name: user.name })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(user.sub)
     .setIssuer(cfg.origin)
     .setAudience(audience)
-    .setIssuedAt()
+    .setIssuedAt(issued)
     .setExpirationTime(`${duration}s`)
     .sign(sessionKey(cfg));
 }
@@ -128,7 +132,7 @@ export async function sessionUser(req, cfg) {
     });
     if (!payload.sub || !cfg.email || payload.email !== cfg.email) return null;
     const signedOut = await (cfg.revocations || revocations).epoch(payload.sub, audience);
-    if ((payload.iat || 0) < signedOut) return null;
+    if ((payload.iat || 0) <= signedOut) return null;
     if (desktop) req[desktopAuth] = true;
     return {
       sub: payload.sub,

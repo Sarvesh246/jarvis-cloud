@@ -36,7 +36,7 @@ export class Revocations {
   async revoke(sub, audience) {
     if (!this.enabled()) return;
     const key = pathFor(sub, audience);
-    const epoch = Math.floor(this.now() / 1000);
+    const epoch = this.now() / 1000;
     await this.storage.put(key, JSON.stringify({ epoch }), {
       access: "private", addRandomSuffix: false, allowOverwrite: true, contentType: "application/json",
     });

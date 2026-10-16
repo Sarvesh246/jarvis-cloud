@@ -204,6 +204,29 @@ test("signing out ends that kind of session everywhere, even a copied token", as
   assert.deepEqual(await sessionUser(request(await signSession(user, cfg)), { ...cfg, revocations: here }), user);
 });
 
+test("sign-out revokes tokens issued in the same second and immediate sign-in still works", async () => {
+  const { Revocations } = await import("../server/revocation.js");
+  const rows = new Map();
+  const store = {
+    async get(path) { return rows.has(path) ? { stream: new Response(rows.get(path)).body } : null; },
+    async put(path, text) { rows.set(path, text); },
+  };
+  const instant = Math.floor(Date.now() / 1000) * 1000;
+  const epochs = new Revocations(store, { enabled: () => true, now: () => instant });
+  const live = { ...cfg, revocations: epochs };
+  const token = await new SignJWT({ email: user.email, name: user.name })
+    .setProtectedHeader({ alg: "HS256" }).setSubject(user.sub).setIssuer(cfg.origin)
+    .setAudience("jarvis-web").setIssuedAt(instant / 1000).setExpirationTime("1h")
+    .sign(new TextEncoder().encode(cfg.secret));
+  assert.deepEqual(await sessionUser(request(token), live), user);
+  await epochs.revoke(user.sub, "jarvis-web");
+  assert.equal(await sessionUser(request(token), live), null);
+  const newlySignedIn = await signSession(user, live);
+  assert.deepEqual(await sessionUser(request(newlySignedIn), live), user);
+  const cold = new Revocations(store, { enabled: () => true, now: () => instant });
+  assert.equal(await sessionUser(request(token), { ...cfg, revocations: cold }), null);
+});
+
 test("a session is refused, not trusted, when its sign-out record can't be read", async () => {
   const { Revocations } = await import("../server/revocation.js");
   const broken = new Revocations({ async get() { throw new Error("database down"); } }, { enabled: () => true });
