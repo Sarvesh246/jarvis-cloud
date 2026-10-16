@@ -31,6 +31,9 @@ export function sortRows(rows, column, direction = "asc") {
   return [...rows].sort((a, b) => {
     const x = numeric ? toNumber(a[column]) : cellText(a[column]).toLowerCase();
     const y = numeric ? toNumber(b[column]) : cellText(b[column]).toLowerCase();
+    // Blank cells in a numeric column go last either way, so the order stays consistent.
+    if (numeric && (Number.isNaN(x) || Number.isNaN(y)))
+      return Number.isNaN(x) - Number.isNaN(y);
     if (x < y) return -1 * sign;
     if (x > y) return 1 * sign;
     return 0;
@@ -38,7 +41,9 @@ export function sortRows(rows, column, direction = "asc") {
 }
 
 function csvCell(value) {
-  const text = cellText(value);
+  let text = cellText(value);
+  // A spreadsheet would run "=…", "+…", "-…" or "@…" as a formula.
+  if (/^[=+\-@]/.test(text) && Number.isNaN(toNumber(text))) text = `'${text}`;
   return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 

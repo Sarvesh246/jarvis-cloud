@@ -37,7 +37,8 @@ export function useChatSync({ session, chats, setChats, busyId, onConflict }) {
       onConflict: () => latest.current.onConflict(),
       request: async (path, body) => {
         const response = await fetch(path, {
-          signal: AbortSignal.any([controller.signal, AbortSignal.timeout(60000)]),
+          // AbortSignal.any needs Safari 17.4; older phones still sync, without the timeout.
+          signal: AbortSignal.any ? AbortSignal.any([controller.signal, AbortSignal.timeout(60000)]) : controller.signal,
           cache: "no-store",
           ...(body === undefined ? {} : { method: "POST", headers: {
             "Content-Type": "application/json", "X-CSRF-Token": session.csrf,

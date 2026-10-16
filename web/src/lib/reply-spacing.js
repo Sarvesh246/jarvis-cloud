@@ -15,7 +15,8 @@ export function normalizeReplySpacing(value) {
       return line;
     }
     if (/^(?: {4}|\t)/.test(line)) return line;
-    const literal = /`+[^`]*(?:`+|$)|https?:\/\/[^\s<>]+|\]\([^\n)]*\)|<[^>\n]*>/g;
+    // Bare addresses and paths (www.site.com/a?Q=1, file.py?Foo) are literal too.
+    const literal = /`+[^`]*(?:`+|$)|https?:\/\/[^\s<>]+|\]\([^\n)]*\)|<[^>\n]*>|[^\s?!]*[./][^\s?!]*[?!]\S*/g;
     let output = "", at = 0;
     const prose = (text) => text.replace(/([?!])(?=[A-Z])/g, "$1 ");
     for (const match of line.matchAll(literal)) {

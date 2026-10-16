@@ -361,7 +361,8 @@ function flip(event) {
 function SourceLink({ href, children }) {
   const { byKey, open } = useContext(BlockContext);
   const url = parseUrl(href || "");
-  if (!url) return <a href={href}>{children}</a>;
+  // A refused address (javascript:, data:) stays text: an empty href would reload the app.
+  if (!url) return href ? <a href={href}>{children}</a> : <span>{children}</span>;
   const source = byKey.get(sourceKey(href));
   const text = textOf(children).trim();
   const bare = !text || /^\[?\d+\]?$/.test(text) || text === href || text === domainOf(href);
@@ -493,9 +494,12 @@ function tableData(node) {
 function Chart({ columns, rows, plan }) {
   const [column, setColumn] = useState(plan.values[0]);
   const values = rows.map((row) => toNumber(row[column]));
-  const max = Math.max(...values.map(Math.abs)) || 1;
+  // Blank cells have no bar and don't count towards the scale.
+  const max = Math.max(0, ...values.filter(Number.isFinite).map(Math.abs)) || 1;
   const labelOf = (row, i) => (plan.label != null ? cellText(row[plan.label]) : `Row ${i + 1}`);
-  const order = values.map((v, i) => i).sort((a, b) => values[b] - values[a]);
+  const rank = (v) => (Number.isFinite(v) ? v : -Infinity);
+  const order = values.map((v, i) => i).filter((i) => Number.isFinite(values[i]))
+    .sort((a, b) => rank(values[b]) - rank(values[a]));
   const summary = `${columns[column]}: highest is ${labelOf(rows[order[0]], order[0])} at ${cellText(rows[order[0]][column])}; lowest is ${labelOf(rows[order.at(-1)], order.at(-1))} at ${cellText(rows[order.at(-1)][column])}.`;
   return (
     <div className="chart">
@@ -524,7 +528,7 @@ function Chart({ columns, rows, plan }) {
               <span
                 className="chart-bar"
                 data-negative={values[i] < 0 || undefined}
-                style={{ "--w": `${(Math.abs(values[i]) / max) * 100}%` }}
+                style={{ "--w": `${Number.isFinite(values[i]) ? (Math.abs(values[i]) / max) * 100 : 0}%` }}
               />
             </span>
             <span className="chart-value">{cellText(row[column])}</span>

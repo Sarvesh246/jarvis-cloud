@@ -31,6 +31,7 @@ import { Rendered, SourceStrip, imageTiles, useCopy, useSources } from "./blocks
 import { summarizeSteps, toolDetail, toolInfo } from "../lib/tools.js";
 import { LONG_QUIET_MS, QUIET_MS, afterStep, clock, stillLine, thinkingPreview } from "../lib/live.js";
 import { formatSize } from "../lib/attachments.js";
+import { isLongReply } from "../lib/library.js";
 import { orderPlan, planSummary } from "../lib/plan.js";
 import "./message.css";
 import { HoldButton } from "./HoldButton.jsx";
@@ -589,7 +590,7 @@ function MessageView({ message, fresh, busy, live, streaming, phase, isLast, edi
   const act = useCallback((type, payload) => onAction(type, message.id, payload), [onAction, message.id]);
   const open = useCallback((item) => act("open", item), [act]);
   const canAct = isLast && !busy;
-  const long = !mine && (message.content?.length > 1400 || /^#{1,3} /m.test(message.content || ""));
+  const long = !mine && isLongReply(message.content || "");
   const face = streaming
     ? "speaking"
     : waiting
@@ -651,7 +652,7 @@ function MessageView({ message, fresh, busy, live, streaming, phase, isLast, edi
             />
           ) : (
             shown && (
-              <div className="prose">
+              <div className="prose" dir={mine ? "auto" : undefined}>
                 {mine ? (
                   shown
                 ) : (

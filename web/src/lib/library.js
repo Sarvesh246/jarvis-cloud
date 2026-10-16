@@ -12,7 +12,12 @@ import { STRUCTURED } from "./structured.js";
 
 /* The same test the transcript uses to offer "Open" on a reply */
 export function isLongReply(content = "") {
-  return content.length > 1400 || /^#{1,3} /m.test(content);
+  return content.length > 1400 || /^#{1,3} /m.test(withoutCode(content));
+}
+
+/* A "# comment" in a code block isn't a heading. */
+export function withoutCode(content = "") {
+  return String(content).replace(/```[\s\S]*?(```|$)/g, "").replace(/~~~[\s\S]*?(~~~|$)/g, "");
 }
 
 function plain(text) {
@@ -25,7 +30,7 @@ function plain(text) {
 
 /* A document is named by its first heading, else its opening words */
 export function docTitle(content = "", fallback = "Untitled document") {
-  const heading = content.match(/^#{1,3}\s+(.+)$/m)?.[1];
+  const heading = withoutCode(content).match(/^#{1,3}\s+(.+)$/m)?.[1];
   if (heading) return plain(heading).slice(0, 80);
   const outside = content.replace(/```[\s\S]*?(```|$)/g, "");
   const line = outside.split("\n").map(plain).find((text) => text.length > 3);

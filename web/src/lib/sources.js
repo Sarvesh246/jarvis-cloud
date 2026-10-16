@@ -48,11 +48,24 @@ function usefulTitle(text, href) {
 
 /* Markdown link syntax, autolinks and bare URLs, in reading order. Code is
    skipped so a URL inside an example is not mistaken for a citation. */
+/* Sentence punctuation after a link isn't part of it; a closing bracket is
+   only when the address opened one, as in …/wiki/Foo_(bar). */
+function trimLink(href) {
+  let link = href;
+  for (;;) {
+    const next = link.replace(/[.,;:!?]+$/, "");
+    const unbalanced = next.endsWith(")") && next.split("(").length < next.split(")").length;
+    const trimmed = unbalanced ? next.slice(0, -1) : next;
+    if (trimmed === link) return link;
+    link = trimmed;
+  }
+}
+
 export function collectSources(markdown = "") {
   const text = String(markdown).replace(/```[\s\S]*?(```|$)/g, "").replace(/`[^`\n]*`/g, "");
   const found = new Map();
   const add = (href, title, context) => {
-    const url = parseUrl(href.replace(/[).,;:!?]+$/, ""));
+    const url = parseUrl(trimLink(href));
     if (!url) return;
     const key = url.href.replace(/#.*$/, "").replace(/\/$/, "");
     const existing = found.get(key);
@@ -70,7 +83,8 @@ export function collectSources(markdown = "") {
       index: found.size + 1,
     });
   };
-  const pattern = /\[([^\]]*)\]\((https?:\/\/[^\s)]+)\)|<(https?:\/\/[^>\s]+)>|(https?:\/\/[^\s<>()\]]+)/g;
+  /* Wikipedia-style links keep their balanced brackets: …/Foo_(bar). */
+  const pattern = /\[([^\]]*)\]\((https?:\/\/(?:[^\s()]|\([^\s()]*\))+)\)|<(https?:\/\/[^>\s]+)>|(https?:\/\/(?:[^\s<>()\]]|\([^\s<>()\]]*\))+)/g;
   for (const match of text.matchAll(pattern)) {
     const href = match[2] || match[3] || match[4];
     /* The sentence the link supports, not the whole paragraph */
@@ -102,6 +116,6 @@ export function collectSources(markdown = "") {
 }
 
 export function sourceKey(href) {
-  const url = parseUrl(String(href).replace(/[).,;:!?]+$/, ""));
+  const url = parseUrl(trimLink(String(href)));
   return url ? url.href.replace(/#.*$/, "").replace(/\/$/, "") : "";
 }

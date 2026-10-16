@@ -37,7 +37,7 @@ export function groupChats(chats, now = Date.now()) {
 /* Matches titles first, then anything said in the conversation. Returns the
    matching chats with a short excerpt around the first hit in the text. */
 export function searchChats(chats, query) {
-  const needle = String(query).trim().toLowerCase();
+  const needle = String(query).replace(/\s+/g, " ").trim().toLowerCase();
   if (!needle) return null;
   const results = [];
   for (const chat of chats) {
@@ -46,10 +46,14 @@ export function searchChats(chats, query) {
       continue;
     }
     for (const message of chat.messages) {
-      const text = String(message.text ?? message.content ?? "")
+      const raw = String(message.text ?? message.content ?? "").replace(/\s+/g, " ");
+      /* Text is searched as written ("my_variable", "C#") and with Markdown
+         marks removed ("**bold**" finds "bold"); the excerpt comes from
+         whichever matched. */
+      const plain = raw
         .replace(/\]\([^)]*\)/g, "]")
-        .replace(/[#*_`>[\]|]/g, "")
-        .replace(/\s+/g, " ");
+        .replace(/[#*_`>[\]|]/g, "");
+      const text = raw.toLowerCase().includes(needle) ? raw : plain;
       const at = text.toLowerCase().indexOf(needle);
       if (at < 0) continue;
       /* A narrow rail shows little, so the excerpt starts just before the hit */

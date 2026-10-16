@@ -39,9 +39,11 @@ export function liveReply(chat, now = Date.now()) {
    to one still running and otherwise the saved copy. Histories that truly
    diverged, or other edits on both sides (a rename, a pin), return null and
    are kept as a copy. */
-const outside = ({ messages, updated, ...rest }) => JSON.stringify(rest);
+const outside = ({ messages, updated, pinned, pinnedAt, ...rest }) => JSON.stringify(rest);
 export function mergeChats(local, remote) {
   if (!local || !remote || outside(local) !== outside(remote)) return null;
+  // A pin is a flag, not an edit worth a copy: the device that toggled it last wins.
+  const pin = (local.pinnedAt || 0) > (remote.pinnedAt || 0) ? local : remote;
   const mine = local.messages, theirs = remote.messages;
   for (let i = 0; i < Math.min(mine.length, theirs.length); i++)
     if (mine[i].id !== theirs[i].id) return null;
@@ -51,7 +53,8 @@ export function mergeChats(local, remote) {
     if (!a || !b) return message;
     return a.running && !b.running ? b : b.running && !a.running ? a : b;
   });
-  return { ...remote, messages, updated: Math.max(local.updated || 0, remote.updated || 0) };
+  return { ...remote, messages, updated: Math.max(local.updated || 0, remote.updated || 0),
+    pinned: pin.pinned, pinnedAt: pin.pinnedAt };
 }
 
 // The acknowledged baseline and local edits survive offline restarts together.
@@ -67,10 +70,19 @@ export class ChatSync {
     this.running = false;
     this.again = false;
     this.forced = new Set();
+    this.saveTimer = null;
+    // Leaving the page writes the backup at once rather than after the pause.
+    this.flush = () => { if (this.saveTimer) this.persist(); };
+    globalThis.addEventListener?.("pagehide", this.flush);
+    globalThis.document?.addEventListener?.("visibilitychange", this.flush);
   }
   observe(chats) {
     this.current = new Map(chats.map((chat) => [chat.id, chat]));
-    this.persist();
+    /* A streaming reply changes the chats every frame; writing the whole
+       list to localStorage each time stalls the page, so while one streams
+       writes are batched. Anything else (a delete, a rename) is saved now. */
+    if (![...this.current.values()].some((chat) => liveReply(chat))) this.persist();
+    else this.saveTimer ??= setTimeout(() => this.persist(), 400);
     if (this.forced.size) void this.tick();
   }
   /* Save this conversation now, even mid-reply: a reply starting, or moving
@@ -82,6 +94,8 @@ export class ChatSync {
     setTimeout(() => { if (this.forced.size) void this.tick(); }, 1000);
   }
   persist() {
+    clearTimeout(this.saveTimer);
+    this.saveTimer = null;
     try {
       this.storage.setItem(syncKey(this.sub), JSON.stringify({ chats: [...this.current.values()], base: this.base }));
       this.storage.removeItem(`jarvis-chats:${this.sub}`);
@@ -142,8 +156,12 @@ export class ChatSync {
         this.emit();
       }
       const ids = new Set([...this.current.keys(), ...Object.keys(this.base)]);
+      /* One conversation that can't sync (too large, refused) must not hold
+         back the rest; the first failure is reported once they've all tried. */
+      let failure = null;
       for (const id of ids) {
         if (this.stopped) return;
+        try {
         if (blocked.has(id) || !this.dirty(id)) continue;
         if (liveReply(this.current.get(id)) && !this.forced.has(id)) continue;
         this.forced.delete(id);
@@ -164,7 +182,12 @@ export class ChatSync {
         // Changes made during the upload remain dirty for the next pass.
         this.base[id] = { version, fingerprint: mark };
         this.persist();
+        } catch (error) {
+          if (error.status === 409 || error.status === 401) throw error;
+          failure ??= error;
+        }
       }
+      if (failure) throw failure;
       this.onStatus("");
     } catch (error) {
       if (!this.stopped) this.onStatus(error.status === 409 ? "" :
@@ -178,5 +201,10 @@ export class ChatSync {
       }
     }
   }
-  stop() { this.stopped = true; }
+  stop() {
+    this.flush();
+    globalThis.removeEventListener?.("pagehide", this.flush);
+    globalThis.document?.removeEventListener?.("visibilitychange", this.flush);
+    this.stopped = true;
+  }
 }

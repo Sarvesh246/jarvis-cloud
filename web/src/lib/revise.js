@@ -31,8 +31,10 @@ export async function requestRevision({ csrf, source, start, end, instruction, s
   let text = "";
   let completed = false;
   await readEvents(response.body, (name, data) => {
-    if (name === "jarvis.error") throw new Error(data.message || "Vaelo couldn’t revise that.");
     if (name === "jarvis.complete") completed = true;
+    // The relay numbers every frame, so "[DONE]" arrives as data that isn't JSON.
+    if (data == null) return;
+    if (name === "jarvis.error") throw new Error(data.message || "Vaelo couldn’t revise that.");
     const choice = data.choices?.[0];
     if (choice?.delta?.content) {
       text += choice.delta.content;

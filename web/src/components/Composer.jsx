@@ -260,7 +260,7 @@ const ROLE_CHOICES = [
 /* On a larger screen the tools open beside the button. The roles have a
    page of their own, reached from the main list, so the main list stays
    short and the roles keep their full descriptions. */
-function ToolsMenu({ options, onOptions, onClose, anchor }) {
+function ToolsMenu({ options, onOptions, onClose, anchor, guest }) {
   const menu = useRef(null);
   const [glide, setGlide] = useState(null);
   const [page, setPage] = useState("main");
@@ -375,7 +375,8 @@ function ToolsMenu({ options, onOptions, onClose, anchor }) {
         </div>
       ) : (
         <div className="tools-menu-page" key="main" data-from={returned ? "left" : undefined}>
-          <button
+          {/* Guests are answered without tools, so there is no research to offer. */}
+          {!guest && <button
             role="menuitemcheckbox"
             aria-checked={options.research}
             className="tools-item"
@@ -387,7 +388,7 @@ function ToolsMenu({ options, onOptions, onClose, anchor }) {
               <span className="tools-note">Searches the web and cites what it finds.</span>
             </span>
             {options.research && <Check size={16} className="tools-check" />}
-          </button>
+          </button>}
           <button
             role="menuitem"
             aria-haspopup="menu"
@@ -435,7 +436,7 @@ function ToolsMenu({ options, onOptions, onClose, anchor }) {
    slides in for the other. Drag it down or tap outside to put it away. */
 const CLOSE_AFTER = 80;
 
-function ToolsSheet({ options, onOptions, onClose }) {
+function ToolsSheet({ options, onOptions, onClose, guest }) {
   const [page, setPage] = useState("main");
   const [height, setHeight] = useState();
   const [pull, setPull] = useState(0);
@@ -511,7 +512,7 @@ function ToolsSheet({ options, onOptions, onClose }) {
         </div>
         <div className="tools-pages" style={{ height }} data-page={page}>
           <div className="tools-page" ref={pages.main} inert={page !== "main"}>
-            <button
+            {!guest && <button
               role="switch"
               aria-checked={options.research}
               className="tools-item"
@@ -523,7 +524,7 @@ function ToolsSheet({ options, onOptions, onClose }) {
                 <span className="tools-note">Searches the web and cites what it finds.</span>
               </span>
               {options.research && <Check size={18} className="tools-check" />}
-            </button>
+            </button>}
             <button className="tools-item" onClick={() => setPage("role")}>
               <RoleIcon size={20} />
               <span className="tools-text">
@@ -682,6 +683,7 @@ export const Composer = forwardRef(function Composer(
     >
       <AttachmentList items={attachments} onRemove={onRemoveFile} />
       <textarea
+        dir="auto"
         ref={textarea}
         value={draft}
         onChange={(event) => onChange(event.target.value)}
@@ -696,7 +698,7 @@ export const Composer = forwardRef(function Composer(
           dictation.listening
             ? "Listening…"
             : role?.placeholder ||
-              (options.research ? "What should Vaelo look into?" : "Write to Vaelo")
+              (options.research && !guest ? "What should Vaelo look into?" : "Write to Vaelo")
         }
         aria-label="Message Vaelo"
         aria-describedby="composer-status"
@@ -723,7 +725,7 @@ export const Composer = forwardRef(function Composer(
             type="file"
             multiple
             hidden
-            accept="image/png,image/jpeg,image/webp,image/gif,text/*,.md,.markdown,.csv,.tsv,.json,.jsonl,.xml,.yml,.yaml,.toml,.ini,.log,.html,.css,.js,.jsx,.ts,.tsx,.py,.rb,.go,.rs,.java,.kt,.swift,.c,.h,.cpp,.cs,.php,.sh,.ps1,.sql,.svg"
+            accept={`${guest ? "" : "image/png,image/jpeg,image/webp,image/gif,"}text/*,.md,.markdown,.csv,.tsv,.json,.jsonl,.xml,.yml,.yaml,.toml,.ini,.log,.html,.css,.js,.jsx,.ts,.tsx,.py,.rb,.go,.rs,.java,.kt,.swift,.c,.h,.cpp,.cs,.php,.sh,.ps1,.sql,.svg`}
             onChange={(event) => {
               onFiles([...event.target.files]);
               event.target.value = "";
@@ -757,6 +759,7 @@ export const Composer = forwardRef(function Composer(
             </button>
             {menu && phone && (
               <ToolsSheet
+                guest={guest}
                 options={options}
                 onOptions={onOptions}
                 onClose={(refocus) => {
@@ -767,6 +770,7 @@ export const Composer = forwardRef(function Composer(
             )}
             {menu && !phone && (
               <ToolsMenu
+                guest={guest}
                 options={options}
                 onOptions={onOptions}
                 anchor={toolsButton}

@@ -244,12 +244,12 @@ export function Workroom({ open, onClose, session, onStart, initialDraft = null,
   }
   async function importFile(event) {
     const selected=event.target.files?.[0];event.target.value='';if(!selected)return;
-    try { if(selected.size>4_000_000)throw new Error('That file is too big. Choose one under 4 MB.'); const items=importWork(await selected.text(),lookups);setImports(items);setStatus(`Found ${plural(items.length,'workspace')}. Open one to look at it. Nothing is saved yet.`); }
+    try { if(selected.size>4_000_000)throw new Error('That file is too big. Choose one under 4 MB.'); const items=importWork(await selected.text(),lookups);setImports(items);setProblem('');setStatus(`Found ${plural(items.length,'workspace')}. Open one to look at it. Nothing is saved yet.`); }
     catch(error){setProblem(error instanceof SyntaxError?'That isn’t a Vaelo backup file.':error.message);}
   }
   function leaveTask() { navigate(()=>{setDraft(null);setBase(null);setProblem('');setConfirmDelete(false);setQuery('');setMissing([]);setPreview(null);}); }
 
-  const matchingRecords=records.filter(r=>`${r.title} ${workspaceFor(r)?.title || ''}`.toLowerCase().includes(query.toLowerCase()));
+  const matchingRecords=records.filter(r=>`${r.title} ${workspaceFor(r)?.title || ''}`.toLowerCase().includes(query.trim().toLowerCase()));
   const starters = custom ? (draft?.starters || []).filter(Boolean) : workspace?.starters || [];
   const canAct = Boolean(sub) && !offline && !mutationBusy && !conflict;
   const busyText = {loading:'Getting your work…',save:'Saving…',start:'Getting things ready…',run:'Working it out…',delete:'Deleting…',export:'Making your backup…'}[busy];
@@ -304,7 +304,7 @@ export function Workroom({ open, onClose, session, onStart, initialDraft = null,
               <button aria-pressed={audience==='all'} onClick={()=>setAudience('all')}>Everyone</button>
               {AUDIENCES.map(item=><button key={item.id} aria-pressed={audience===item.id} onClick={()=>setAudience(item.id)}>{item.label}</button>)}
             </div>
-            {audience==='all'&&!query&&<button className="work-own" onClick={()=>navigate(()=>create({id:CUSTOM_WORKSPACE}))}>
+            {audience==='all'&&!query.trim()&&<button className="work-own" onClick={()=>navigate(()=>create({id:CUSTOM_WORKSPACE}))}>
               <Sparkle size={22} weight="light" aria-hidden="true" /><span><strong>Make your own</strong><span>Tell Vaelo what to do once, add your files, and use it again and again.</span></span><ArrowRight size={18} aria-hidden="true" />
             </button>}
             {grouped.map(([group,items])=><section className="work-group" key={group.id} aria-labelledby={`work-group-${group.id}`}>

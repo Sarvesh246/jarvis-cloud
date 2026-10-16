@@ -173,7 +173,14 @@ export function workContextFor(record) {
 
 export function refreshWorkReferences(chats, record, updated = Date.now()) {
   if (!record?.id) return chats;
-  return chats.map(chat => !chat.workContext || chat.workContext.id !== record.id ? chat : {
-    ...chat, updated, workContext: record.deleted ? undefined : workContextFor(record),
+  const next = record.deleted ? undefined : workContextFor(record);
+  const uses = item => item?.workContext?.id === record.id;
+  /* Each message remembers the workspace it was sent with, and Try again or
+     Edit resend that. Pointing them at the newest revision keeps a resend
+     from being refused as out of date. */
+  return chats.map(chat => !uses(chat) && !chat.messages?.some(uses) ? chat : {
+    ...chat, updated,
+    ...(uses(chat) && { workContext: next }),
+    messages: (chat.messages || []).map(message => !uses(message) ? message : { ...message, workContext: next }),
   });
 }

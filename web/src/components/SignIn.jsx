@@ -101,7 +101,7 @@ export function SignIn({
               Continue as guest
             </button>
             <p className="entry-quiet">
-              Guest chats are not saved and can’t use saved work, files or images.
+              Guest chats are not saved and can’t use saved work, web research or images.
             </p>
           </>
         )}

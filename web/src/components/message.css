@@ -513,6 +513,17 @@
   white-space: nowrap;
 }
 
+/* A refused file explains why; on a phone that sentence must wrap, not push
+   the remove button off the screen. */
+.attachment:is([data-state="unsupported"], [data-state="too-large"], [data-state="empty"]) .attachment-meta {
+  min-width: 0;
+  white-space: normal;
+}
+
+.attachment-remove {
+  flex: none;
+}
+
 .attachment[data-state="reading"] .attachment-meta {
   animation: ember 1.6s ease-in-out infinite;
 }

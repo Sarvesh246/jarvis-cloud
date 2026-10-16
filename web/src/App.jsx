@@ -757,7 +757,8 @@ export function App() {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
         if (!busy) newChat();
-      } else if (event.key === "Escape" && busy) {
+      } else if (event.key === "Escape" && busy && !event.defaultPrevented && !document.querySelector("dialog[open]")) {
+        // Esc closes an open dialog first; it stops the reply only from the conversation itself.
         stopReply();
       } else if (event.key === "Escape" && workspace) {
         setWorkspace(null);
@@ -814,16 +815,20 @@ export function App() {
     textarea.current?.focus();
   }
 
+  /* Renames, pins and deletions reach other devices now rather than on the
+     next minute-long safety check, which also makes a clash less likely. */
   function renameChat(title) {
     setChats((current) =>
       current.map((chat) => (chat.id === activeId ? { ...chat, title } : chat)),
     );
+    pushChat(activeId);
   }
 
   function togglePin(id) {
     setChats((current) =>
-      current.map((chat) => (chat.id === id ? { ...chat, pinned: !chat.pinned } : chat)),
+      current.map((chat) => (chat.id === id ? { ...chat, pinned: !chat.pinned, pinnedAt: Date.now() } : chat)),
     );
+    pushChat(id);
   }
 
   function removeChat(id) {
@@ -832,6 +837,7 @@ export function App() {
     let next = chats.filter((chat) => chat.id !== id);
     if (!next.length) next = [freshChat()];
     setChats(next);
+    pushChat(id);
     if (id === activeId) selectChat(next[0].id);
     if (!removed.messages.length) return;
     showToast({
@@ -999,8 +1005,16 @@ export function App() {
   }
 
   async function addFiles(files) {
+    /* A guest's reply is text only, so an image is turned away here rather
+       than after sending. */
+    if (guest && files.some(isImage)) {
+      showToast({ text: "Guest mode is text only. Sign in to attach images." });
+      files = files.filter((file) => !isImage(file));
+    }
     const room = 8 - attachments.length;
     const list = files.slice(0, Math.max(0, room));
+    if (files.length > list.length)
+      showToast({ text: `A message can carry up to 8 files. ${files.length - list.length === 1 ? "One was" : `${files.length - list.length} were`} left out.` });
     if (!list.length) return;
     const pending = list.map((file) => ({
       id: crypto.randomUUID(),
@@ -1505,6 +1519,12 @@ export function App() {
                 body: JSON.stringify(body),
               });
           if (!response.ok) {
+            /* A gateway hiccup while picking a reply back up is the
+               connection, not the reply: the run carries on, so ask again. */
+            if (started && [502, 503, 504].includes(response.status)) {
+              await response.body?.cancel();
+              throw new Error("The connection to Vaelo dropped.");
+            }
             const result = await response.json().catch(() => ({}));
             throw Object.assign(new Error(result.error || "Vaelo could not respond."), {
               status: response.status,
