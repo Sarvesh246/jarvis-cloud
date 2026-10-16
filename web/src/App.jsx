@@ -644,7 +644,8 @@ export function App() {
      visible placeholder, and if it never does (a content blocker, a hung
      script) the page says so and offers a retry instead of showing nothing. */
   useEffect(() => {
-    if (DESKTOP || session?.user || !session?.configured || !googleButton.current || preferRedirect) return;
+    const signedIn = session?.user && !(desktopHandoff && session.user.guest);
+    if (DESKTOP || signedIn || !session?.configured || !googleButton.current || preferRedirect) return;
     let mounted = true;
     const box = googleButton.current;
     setGsi("loading");
@@ -710,7 +711,7 @@ export function App() {
       clearTimeout(giveUp);
       scheme.removeEventListener("change", redraw);
     };
-  }, [session?.configured, session?.clientId, session?.csrf, session?.user, gsiAttempt]);
+  }, [session?.configured, session?.clientId, session?.csrf, session?.user, desktopHandoff, gsiAttempt]);
 
   /* Keep the newest words in view, but only while the reader is already at
      the bottom. Runs before paint so following never visibly jumps. */
@@ -1878,7 +1879,10 @@ export function App() {
   }
 
   if (loading) return <Opening />;
-  if (!session?.user)
+  /* A guest has no account to hand to the desktop app, so a pending handoff
+     still needs a real Google sign-in. */
+  const handoffNeedsAccount = Boolean(desktopHandoff && session?.user?.guest);
+  if (!session?.user || handoffNeedsAccount)
     return (
       <SignIn
         configured={session?.configured}
@@ -1895,7 +1899,7 @@ export function App() {
           catch (err) { setError(String(err.message || err)); }
           finally { setDesktopSigningIn(false); }
         }}
-        onGuest={session?.csrf ? continueAsGuest : undefined}
+        onGuest={session?.csrf && !desktopHandoff ? continueAsGuest : undefined}
         onRetryGoogle={() => {
           googleScript = null;
           setGsiAttempt((n) => n + 1);
