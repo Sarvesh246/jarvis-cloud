@@ -9,6 +9,7 @@ import React, {
 import { ArrowDown, FileArrowUp, IconContext, Quotes } from "@phosphor-icons/react";
 import { readEvents } from "./stream.js";
 import { normalizeReplySpacing, normalizeSavedReplySpacing } from "./lib/reply-spacing.js";
+import { requestForReply } from "./lib/adaptive-ui.js";
 import { liveReply, readSyncCache } from "./lib/chat-sync.js";
 import { useChatSync } from "./lib/use-chat-sync.js";
 import { Rail } from "./components/Rail.jsx";
@@ -2189,6 +2190,7 @@ export function App() {
                     <Message
                       key={message.id}
                       message={message}
+                      requestText={requestForReply(messages, index)}
                       fresh={fresh.current.has(message.id)}
                       busy={busy}
                       phase={live ? livePhase : undefined}

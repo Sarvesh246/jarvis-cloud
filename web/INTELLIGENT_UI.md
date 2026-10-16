@@ -2,22 +2,26 @@
 
 Vaelo makes structured parts of an existing answer interactive in the browser.
 The renderer consumes ordinary Markdown and the existing `metrics` and `timeline`
-fences. It adds no prompt instructions, UI-planning requests, retries, model calls,
-tool calls, or third-party runtime dependencies. The chat request and model
-history are unchanged. Local interactions also work offline after a reply loads.
+fences. The existing formatting instructions now choose useful shapes automatically,
+using a shorter replacement instruction block. There are no additional UI-planning
+requests, retries, model calls, tool calls, or third-party runtime dependencies.
+Normal answer tokens still apply; generated answer length can vary. Local
+interactions also work offline after a reply loads.
 
 ## What people can do
 
 - Filter tables and select rows to compare. Sorting preserves source row identity.
   Reset restores the original ordering and clears filters and selection.
-- Switch numeric tables to charts with complete labels, exact values, readable
+- Suitable numeric series open as charts automatically; comparisons stay as tables.
+  Switch either view manually. Charts have complete labels, exact values, readable
   summaries, and a zero baseline. Negative values extend left of zero; positive
   values extend right. Every plotted value remains accessible to screen readers.
 - Open **Explore numbers**, choose a column and multiply its values by a factor.
   Results are a labeled local what-if, never a prediction or an inferred formula.
   Mixed currencies, mixed percentage/plain-number columns, blanks, invalid input,
   and non-finite results cannot become numeric scenarios.
-- Toggle Markdown tasks directly, or choose **Use as checklist** on a simple list.
+- Toggle Markdown tasks directly. Packing lists and clear action steps also open
+  as checklists automatically; other simple lists retain **Use as checklist**.
   Completion progress is visible, resettable, and stored on this device. The
   original list remains available. New reply versions have separate state when
   the block changes; different message IDs never share checks.
@@ -39,8 +43,15 @@ normally. Existing figures and timelines can continue to render progressively.
 Simple lists only are enhanced; nested or unsupported rich lists retain the
 original Markdown. Checklist enhancement is limited to 80 items / 50,000 text
 characters, table exploration to 200 rows / 20 columns, and charts to 40 rows.
-List conversion is opt-in except for explicit Markdown tasks. Number exploration
-stays collapsed until requested. Minimal presentation disables the new controls,
+Automatic selection uses the nearest answer section and conservative checks on
+existing data. Dated lists can become timelines; short label/value lists can
+become figures. Rich lists with links or code are not rewritten as figures or
+timelines, preserving source links and formatting. Original-list controls remain
+available. Quantities and budget breakdowns expose number exploration directly;
+it stays collapsed on other tables. Simple facts remain prose. Explicit requests
+for plain text disable automatic presentation for that reply. The original user
+request is passed locally to the renderer, never sent in a second request.
+Minimal presentation disables the new controls,
 and mapped document editing keeps its existing selection-to-source behavior.
 
 Completion storage holds at most 200 block entries with opaque block identifiers
@@ -63,6 +74,9 @@ would add output/prompt tokens and cannot honestly promise unchanged usage.
 Run `npm test` and `npm run build` from `web`. Regression tests cover state
 isolation, reloads, damaged/blocked storage, storage bounds, row filtering,
 unchanged source data, mixed units, overflow, and the local-only module boundary.
-The development-only `/tests/fixtures/intelligent-ui.html` page exercises the real
+The development-only `/tests/fixtures/adaptive-ui.html` page checks ordinary
+requests and unfenced Markdown responses across all automatic selections,
+negative examples, plain-text requests, streaming, and minimal presentation.
+`/tests/fixtures/intelligent-ui.html` exercises the real
 renderer with fixed data, both themes, narrow layout, streaming, and minimal
 presentation. It is not included in the production Vite entry point.

@@ -12,7 +12,7 @@ import {
   Table,
 } from "@phosphor-icons/react";
 import { collectSources, domainOf, kindLabel, parseUrl, sourceKey } from "../../lib/sources.js";
-import { cellText, chartable, isNumericColumn, sortRows, toCSV, toNumber, toTSV } from "../../lib/table.js";
+import { cellText, isNumericColumn, sortRows, toCSV, toNumber, toTSV } from "../../lib/table.js";
 import {
   STRUCTURED,
   fenceClosed,
@@ -22,6 +22,7 @@ import {
   timelineText,
 } from "../../lib/structured.js";
 import { blockKey, readChecklist, saveChecklist, visibleRows, numberSeries } from "../../lib/intelligent-ui.js";
+import { inferListPresentation, sectionContext, tablePresentation, wantsPlainReply, safeChartPlan } from "../../lib/adaptive-ui.js";
 import { TableScroll } from "./TableScroll.jsx";
 import { NumberExplorer } from "./LocalTools.jsx";
 import { SourceIcon } from "./SourceIcon.jsx";
@@ -559,10 +560,13 @@ function TableView(props) {
 }
 
 function TableBlock({ node, "data-src": src }) {
-  const { open, presentation, live, interactive } = useContext(BlockContext);
+  const { open, presentation, live, interactive, automatic, content } = useContext(BlockContext);
   const data = useMemo(() => tableData(node), [node]);
   const [sort, setSort] = useState({ column: null, direction: "asc" });
-  const [view, setView] = useState("table");
+  const context = useMemo(() => sectionContext(content, node.position?.start?.offset), [content, node.position?.start?.offset]);
+  const suggested = useMemo(() => automatic ? tablePresentation(data.columns, data.rows, context) : { view: "table", explore: false }, [automatic, data, context]);
+  const [chosenView, setView] = useState(null);
+  const view = chosenView || suggested.view;
   const [done, copy] = useCopy();
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState([]);
@@ -571,9 +575,7 @@ function TableBlock({ node, "data-src": src }) {
   const visible = useMemo(() => enhance ? visibleRows(data.rows, query, selected, onlySelected) : data.rows.map((_, i) => i), [data, enhance, query, selected, onlySelected]);
   const visibleSet = new Set(visible);
   const numeric = data.columns.map((_, i) => isNumericColumn(data.rows, i));
-  const candidate = presentation === "minimal" || live ? null : chartable(data.columns, data.rows);
-  const chartColumns = candidate?.values.filter(i => numberSeries(data.rows, i)) || [];
-  const plan = chartColumns.length ? { ...candidate, values: chartColumns } : null;
+  const plan = presentation === "minimal" || live ? null : safeChartPlan(data.columns, data.rows);
   const order = useMemo(() => {
     const indexed = data.rows.map((row, i) => [...row, i]);
     return sortRows(indexed, sort.column, sort.direction).map((row) => row.at(-1));
@@ -705,7 +707,7 @@ function TableBlock({ node, "data-src": src }) {
         </TableScroll>
       )}
       {enhance && visible.length === 0 && <p className="local-note">No matching rows. Reset the view to see the full table.</p>}
-      {enhance && visible.length > 0 && <NumberExplorer columns={data.columns} rows={visible.map(i => data.rows[i])} />}
+      {enhance && visible.length > 0 && <NumberExplorer defaultOpen={suggested.explore} columns={data.columns} rows={visible.map(i => data.rows[i])} />}
     </figure>
   );
 }
@@ -769,7 +771,7 @@ function ImageRef({ alt, src }) {
 }
 
 function LocalList({ node, children, ordered = false, "data-src": src, ...props }) {
-  const { presentation, live, interactive, stateKey, content } = useContext(BlockContext);
+  const { presentation, live, interactive, stateKey, content, automatic } = useContext(BlockContext);
   const Tag = ordered ? "ol" : "ul";
   if (!interactive || live || presentation === "minimal") return <Tag {...props} data-src={src}>{children}</Tag>;
   const items = (node.children || []).filter(n => n.tagName === "li");
@@ -784,11 +786,25 @@ function LocalList({ node, children, ordered = false, "data-src": src, ...props 
   if (nested || items.length < (tasks ? 1 : 2) || items.length > 80 || signature.length > 50000) {
     return <Tag {...props} data-src={src}>{children}</Tag>;
   }
-  return <Checklist key={key} storageKey={stateKey ? key : null} defaults={defaults} tasks={tasks} items={items} original={children} ordered={ordered} src={src} start={props.start} />;
+  const rich = items.some(item => {
+    const simple = n => n.type === "text" || (["p", "strong", "em"].includes(n.tagName) && (n.children || []).every(simple));
+    return !(item.children || []).every(simple);
+  });
+  const inferred = automatic && !tasks ? inferListPresentation(items.map(hastText), { context: sectionContext(content, node.position?.start?.offset), rich }) : null;
+  if (inferred?.kind === "metrics" || inferred?.kind === "timeline") return <InferredList key={key} inferred={inferred} original={<Tag {...props}>{children}</Tag>} src={src} />;
+  return <Checklist key={key} autoActive={inferred?.kind === "checklist"} storageKey={stateKey ? key : null} defaults={defaults} tasks={tasks} items={items} original={children} ordered={ordered} src={src} start={props.start} />;
 }
 
-function Checklist({ storageKey, defaults, tasks, items, original, ordered, src, start }) {
-  const [active, setActive] = useState(tasks);
+function InferredList({ inferred, original, src }) {
+  const [originalView, setOriginalView] = useState(false);
+  return <div className="inferred-block" data-src={src}>
+    {originalView ? original : inferred.kind === "metrics" ? <Metrics source={inferred.source} settled /> : <Timeline source={inferred.source} settled />}
+    <button className="block-tool" onClick={() => setOriginalView(v => !v)}>{originalView ? "Show visual view" : "Show original list"}</button>
+  </div>;
+}
+
+function Checklist({ storageKey, defaults, tasks, autoActive, items, original, ordered, src, start }) {
+  const [active, setActive] = useState(tasks || autoActive);
   const [values, setValues] = useState(() => storageKey ? readChecklist(storageKey, defaults) : defaults);
   const [saved, setSaved] = useState(true);
   const Tag = ordered ? "ol" : "ul";
@@ -880,8 +896,9 @@ export function useSources(content) {
   return useMemo(() => collectSources(content || ""), [content]);
 }
 
-export function Rendered({ content, sources, onOpen, mapped = false, live = false, stateKey }) {
-  const presentation = useContext(PresentationContext);
+export function Rendered({ content, sources, onOpen, mapped = false, live = false, stateKey, requestText = "" }) {
+  const preference = useContext(PresentationContext);
+  const presentation = wantsPlainReply(requestText) ? "minimal" : preference;
   const value = useMemo(
     () => ({
       sources,
@@ -891,9 +908,10 @@ export function Rendered({ content, sources, onOpen, mapped = false, live = fals
       content,
       live,
       stateKey,
-      interactive: !mapped,
+      interactive: !mapped && !wantsPlainReply(requestText),
+      automatic: !mapped && presentation !== "minimal" && !live,
     }),
-    [sources, onOpen, presentation, content, live, stateKey, mapped],
+    [sources, onOpen, presentation, content, live, stateKey, mapped, requestText],
   );
   return (
     <BlockContext.Provider value={value}>

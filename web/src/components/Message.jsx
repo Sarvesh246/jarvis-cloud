@@ -587,7 +587,7 @@ const ERROR_ACTION = {
   auth: { label: "Sign in again", icon: SignIn, type: "signin" },
 };
 
-function MessageView({ message, fresh, busy, live, streaming, phase, isLast, edited, onAction }) {
+function MessageView({ message, requestText = "", fresh, busy, live, streaming, phase, isLast, edited, onAction }) {
   const [copied, copy] = useCopy();
   const [editing, setEditing] = useState(false);
   const editButton = useRef(null);
@@ -673,7 +673,7 @@ function MessageView({ message, fresh, busy, live, streaming, phase, isLast, edi
                 {mine ? (
                   shown
                 ) : (
-                  <Rendered stateKey={message.id} content={message.content} sources={sources} onOpen={open} live={live} />
+                  <Rendered requestText={requestText} stateKey={message.id} content={message.content} sources={sources} onOpen={open} live={live} />
                 )}
                 {streaming && <span className="caret" aria-hidden="true" />}
               </div>
