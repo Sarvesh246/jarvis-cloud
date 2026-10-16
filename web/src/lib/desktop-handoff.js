@@ -17,3 +17,10 @@ export function readDesktopHandoff(storage = sessionStorage, url = new URL(locat
   } catch { storage.removeItem(KEY); return null; }
 }
 export const clearDesktopHandoff = () => sessionStorage.removeItem(KEY);
+/* Remembers that this tab sent the person to Google for the handoff, so the
+   fresh sign-in can count as their go-ahead when they come back. */
+export function markDesktopHandoffStarted(pending, storage = sessionStorage) {
+  const started = { ...pending, started: true };
+  try { storage.setItem(KEY, JSON.stringify(started)); } catch { /* the confirm button remains */ }
+  return started;
+}

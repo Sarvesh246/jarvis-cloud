@@ -52,6 +52,24 @@ fn callback_code(request: &str, port: u16, expected_state: &str) -> Option<Strin
     Some(code.clone())
 }
 
+/* The last page the browser shows. Browsers only let a script close a tab a
+   script opened, so the close attempt usually does nothing and the words
+   carry the message while Vaelo brings itself to the front. */
+fn callback_page(ok: bool) -> String {
+    let (title, line) = if ok {
+        ("You’re signed in", "Vaelo is open and ready. You can close this tab.")
+    } else {
+        ("Sign-in didn’t go through", "Return to Vaelo and try signing in again.")
+    };
+    let close = if ok { "<script>setTimeout(()=>window.close(),600)</script>" } else { "" };
+    format!(
+        "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Vaelo</title><style>\
+html{{color-scheme:dark}}body{{margin:0;min-height:100vh;display:grid;place-items:center;background:radial-gradient(circle at 50% 0,#2a221c,#141010 70%);color:#f3ece0;font-family:Newsreader,Georgia,'Times New Roman',serif;text-align:center}}\
+main{{padding:24px 16px;max-width:520px}}.mark{{font-size:64px;color:#d9a86a;line-height:1}}h1{{font-weight:400;font-size:clamp(32px,6vw,48px);margin:32px 0 12px}}p{{font-size:19px;opacity:.85;margin:0}}\
+</style></head><body><main><div class=\"mark\">V</div><h1>{title}</h1><p>{line}</p></main>{close}</body></html>"
+    )
+}
+
 #[derive(Deserialize)]
 struct Exchange {
     token: String,
@@ -96,10 +114,9 @@ async fn sign_in(app: &tauri::AppHandle) -> Result<(), String> {
             let code = if matches!(read, Ok(Ok(()))) {
                 callback_code(&String::from_utf8_lossy(&request), port, &state)
             } else { None };
-            let body = if code.is_some() { "Sign-in received. Return to Vaelo to finish. You can close this tab." }
-                else { "This sign-in return could not be verified. Return to Vaelo and try again." };
+            let body = callback_page(code.is_some());
             let status = if code.is_some() { "200 OK" } else { "400 Bad Request" };
-            let response = format!("HTTP/1.1 {status}\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Length: {}\r\nCache-Control: no-store\r\nReferrer-Policy: no-referrer\r\nConnection: close\r\n\r\n{body}", body.len());
+            let response = format!("HTTP/1.1 {status}\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nCache-Control: no-store\r\nReferrer-Policy: no-referrer\r\nContent-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'\r\nConnection: close\r\n\r\n{body}", body.len());
             let _ = timeout(Duration::from_secs(2), socket.write_all(response.as_bytes())).await;
             if let Some(code) = code { break Ok::<String, String>(code); }
         }

@@ -35,7 +35,7 @@ import { classifyError } from "./lib/errors.js";
 import { JOIN_WINDOW, continueRequest, joinOnto, retryRequest } from "./lib/continuation.js";
 import { PHONE } from "./lib/use-phone.js";
 import { DESKTOP, desktopSignIn, desktopSignOut, desktopGuest, desktopLeaveGuest, desktopNotification, cancelDesktopSignIn } from "./lib/desktop.js";
-import { readDesktopHandoff } from "./lib/desktop-handoff.js";
+import { readDesktopHandoff, markDesktopHandoffStarted } from "./lib/desktop-handoff.js";
 import { DesktopHandoff } from "./components/DesktopHandoff.jsx";
 import {
   IMAGE_LIMIT,
@@ -475,7 +475,7 @@ export function App() {
         if (!last || (navigator.onLine !== false && err.name !== "TypeError")) throw err;
         result = { user: last, csrf: "", configured: true, offline: true };
       }
-      if (!result.user && googleReturn) {
+      if ((!result.user || result.user.guest) && googleReturn) {
         const back = googleReturn;
         googleReturn = null;
         if (back.error) setError(back.error);
@@ -712,6 +712,19 @@ export function App() {
       scheme.removeEventListener("change", redraw);
     };
   }, [session?.configured, session?.clientId, session?.csrf, session?.user, desktopHandoff, gsiAttempt]);
+
+  /* The desktop app opened this tab only to sign in, so go straight to
+     Google's account picker. Once per handoff: if the person cancels or it
+     fails, they land on the normal sign-in screen instead of looping. */
+  const autoDesktopSignIn = Boolean(
+    !DESKTOP && !loading && !error && desktopHandoff && !desktopHandoff.started &&
+    (!session?.user || session.user.guest) && session?.configured && session?.csrf,
+  );
+  useEffect(() => {
+    if (!autoDesktopSignIn) return;
+    setDesktopHandoff(markDesktopHandoffStarted(desktopHandoff));
+    googleRedirect(session);
+  }, [autoDesktopSignIn]);
 
   /* Keep the newest words in view, but only while the reader is already at
      the bottom. Runs before paint so following never visibly jumps. */
@@ -1878,7 +1891,7 @@ export function App() {
     }
   }
 
-  if (loading) return <Opening />;
+  if (loading || autoDesktopSignIn) return <Opening />;
   /* A guest has no account to hand to the desktop app, so a pending handoff
      still needs a real Google sign-in. */
   const handoffNeedsAccount = Boolean(desktopHandoff && session?.user?.guest);
@@ -1907,7 +1920,7 @@ export function App() {
       />
     );
 
-  if (desktopHandoff) return <DesktopHandoff pending={desktopHandoff} session={session} onCancel={() => setDesktopHandoff(null)} />;
+  if (desktopHandoff) return <DesktopHandoff pending={desktopHandoff} session={session} auto={Boolean(desktopHandoff.started)} onCancel={() => setDesktopHandoff(null)} />;
 
   return (
     <IconContext.Provider value={{ weight: "light", size: 20 }}>

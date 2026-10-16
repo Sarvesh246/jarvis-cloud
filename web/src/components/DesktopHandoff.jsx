@@ -1,10 +1,19 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { clearDesktopHandoff } from "../lib/desktop-handoff.js";
 import { Mark } from "./Mark.jsx";
 
-export function DesktopHandoff({ pending, session, onCancel }) {
+/* `auto` means this tab just sent the person through Google's account picker
+   for this handoff, which is their go-ahead. A session that was already
+   signed in still asks, so a stray desktop link can't reuse it silently. */
+export function DesktopHandoff({ pending, session, auto = false, onCancel }) {
   const [problem, setProblem] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState(auto);
+  const started = useRef(false);
+  useEffect(() => {
+    if (!auto || started.current) return;
+    started.current = true;
+    approve();
+  }, [auto]);
   async function approve() {
     setBusy(true); setProblem("");
     try {
@@ -20,7 +29,7 @@ export function DesktopHandoff({ pending, session, onCancel }) {
   }
   return <main className="entry"><div className="entry-body">
     <Mark phase="idle" />
-    <h1>Continue to Vaelo desktop</h1>
+    <h1>{busy ? "Opening Vaelo desktop" : "Continue to Vaelo desktop"}</h1>
     <p>Sign in to the desktop app as {session.user.email}.</p>
     <p>Continue only if you just opened sign-in from the Vaelo application.</p>
     <button className="google-own" disabled={busy} onClick={approve}>{busy ? "Opening Vaelo…" : "Continue to Vaelo"}</button>

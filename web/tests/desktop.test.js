@@ -5,7 +5,7 @@ import { DesktopAuth } from "../server/desktop-auth.js";
 import { signSession, sessionUser, sameOrigin, settings, cookieNames } from "../server/security.js";
 import { createDesktopAuthHandler } from "../api/desktop-auth.js";
 import { createDesktopFetch, CLOUD_ORIGIN } from "../src/lib/desktop-transport.js";
-import { readDesktopHandoff } from "../src/lib/desktop-handoff.js";
+import { readDesktopHandoff, markDesktopHandoffStarted } from "../src/lib/desktop-handoff.js";
 import { pcmWav } from "../src/lib/dictation.js";
 import { decodeAudio, transcribe } from "../server/transcription.js";
 import transcribeHandler from "../api/transcribe.js";
@@ -120,6 +120,19 @@ test("browser handoff survives Google redirect but refuses expired and arbitrary
   assert.equal(readDesktopHandoff(memory, new URL("https://vaelo.example/"), 302000), null);
   url.searchParams.set("port", "443");
   assert.equal(readDesktopHandoff(memory, url), null);
+});
+
+test("a handoff sent to Google remembers it across the redirect, and a fresh one does not", () => {
+  const map = new Map();
+  const memory = { getItem: k => map.get(k), setItem: (k, v) => map.set(k, v), removeItem: k => map.delete(k) };
+  const url = new URL(`https://vaelo.example/?desktop=1&port=45000&state=${proof}&challenge=${challenge}`);
+  const pending = readDesktopHandoff(memory, url, 1000);
+  assert.equal(pending.started, undefined);
+  assert.equal(markDesktopHandoffStarted(pending, memory).started, true);
+  const back = readDesktopHandoff(memory, new URL("https://vaelo.example/#id_token=google"), 2000);
+  assert.equal(back.started, true);
+  assert.equal(back.challenge, challenge);
+  assert.equal(readDesktopHandoff(memory, url, 3000).started, undefined);
 });
 
 test("native transport failures retain offline recovery and standard abort semantics", async () => {
