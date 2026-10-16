@@ -113,6 +113,29 @@ function forgetLiveReply(id) {
   writeLiveReplies(live);
 }
 
+/* The live-reply list is shared by every tab of this browser, so one tab
+   owns each reply: it holds a lock while it follows it. A tab opened or
+   reloaded meanwhile follows that reply as a mirror instead, and never
+   starts a second continuation of it if the run is lost. */
+const replyLock = (id) => `vaelo-reply:${id}`;
+function holdReplyLock(id) {
+  if (typeof navigator === "undefined" || !navigator.locks?.request) return () => {};
+  let release;
+  const held = new Promise((resolve) => {
+    release = resolve;
+  });
+  navigator.locks.request(replyLock(id), () => held).catch(() => {});
+  return release;
+}
+async function replyOwnedElsewhere(id) {
+  try {
+    const { held = [] } = (await navigator.locks?.query?.()) || {};
+    return held.some((lock) => lock.name === replyLock(id));
+  } catch {
+    return false;
+  }
+}
+
 function stopped() {
   return Object.assign(new Error("Stopped"), { name: "AbortError" });
 }
@@ -399,6 +422,7 @@ export function App() {
   const replyId = useRef(null);
   const stopping = useRef(false);
   const resuming = useRef(new Set());
+  const watchedHere = useRef(new Set());
   /* Replies this device has followed from another device, by message and run. */
   const mirrored = useRef(new Set());
   const mirrorChat = useRef(null);
@@ -1347,6 +1371,7 @@ export function App() {
     replyRun.current = run;
     if (mirror) mirrorChat.current = chatId;
     else rememberLiveReply(id, chatId, run);
+    const releaseLock = mirror ? null : holdReplyLock(id);
     const mirrorKey = `${id}:${run}`;
     let quiet = false;
     let completed = false;
@@ -1795,6 +1820,7 @@ export function App() {
       setBusy(false);
       setLivePhase("idle");
       if (!mirror && !detached && !lost) forgetLiveReply(id);
+      releaseLock?.();
       if (mirror) {
         mirrorChat.current = null;
         // Leaving the conversation: coming back to it follows the reply again.
@@ -1864,19 +1890,27 @@ export function App() {
         continue;
       }
       if (resuming.current.has(id)) return;
+      // Already followed here while another tab owned it: that tab finishes it.
+      if (watchedHere.current.has(id)) continue;
       resuming.current.add(id);
       setActiveId(chat.id);
-      followReply({
-        chatId: chat.id,
-        id,
-        run: typeof entry.run === "string" ? entry.run : id,
-        title: chat.title,
-        resumeFrom: {
-          content: message.content || "",
-          reasoning: message.reasoning || "",
-          startedAt: message.startedAt,
-        },
-      }).finally(() => resuming.current.delete(id));
+      replyOwnedElsewhere(id)
+        .then((elsewhere) => {
+          if (elsewhere) watchedHere.current.add(id);
+          return followReply({
+            chatId: chat.id,
+            id,
+            run: typeof entry.run === "string" ? entry.run : id,
+            title: chat.title,
+            mirror: elsewhere,
+            resumeFrom: {
+              content: message.content || "",
+              reasoning: message.reasoning || "",
+              startedAt: message.startedAt,
+            },
+          });
+        })
+        .finally(() => resuming.current.delete(id));
       return;
     }
   }, [session?.user?.sub, session?.offline, busy, chats.length > 0]);
