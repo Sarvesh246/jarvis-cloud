@@ -155,6 +155,10 @@ class Run:
         )
 
     def finish(self, outcome):
+        # A stopped run says so, so anyone else following it (another device, a second tab)
+        # ends there instead of waiting on a reply that will never come.
+        if outcome == "stopped" and not self.done:
+            self.event("jarvis.stopped", {})
         with self.cond:
             if not self.done:
                 self.done, self.outcome, self.updated = True, outcome, time.time()

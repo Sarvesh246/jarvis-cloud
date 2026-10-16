@@ -374,6 +374,10 @@ class RelayTests(unittest.TestCase):
         run = self.finished(relay)
         self.assertEqual(run.outcome, "stopped")
         self.assertTrue(closed.wait(3), "Hermes never saw the disconnect")
+        # Another reader following the run learns it was stopped instead of waiting on a
+        # reply that will never finish.
+        _, frames = self.events(port)
+        self.assertEqual([name for _, name, _ in frames][-1], "jarvis.stopped")
 
     def test_a_run_without_an_answer_is_asked_once_more(self):
         hermes, relay, port = self.boot(

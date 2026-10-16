@@ -1302,6 +1302,7 @@ export function App() {
     let frame = 0;
     let runId = "";
     let pendingApproval = false;
+    let endedElsewhere = false;
     let seq = -1;
     let fromScratch = Boolean(resumeFrom);
     const startedAt = resumeFrom?.startedAt || Date.now();
@@ -1347,7 +1348,21 @@ export function App() {
         return { activity: list.slice(-24) };
       });
     }
+    /* Words held back while joining a continuation are part of the answer
+       even when the join never completes (another cut, an error, Stop). */
+    function releaseHeld() {
+      if (joining && joinBuffer) {
+        received += joinOnto(received, joinBuffer);
+        schedule();
+      }
+      joining = false;
+      joinBuffer = "";
+    }
     function onEvent(name, data) {
+      /* Someone stopped this reply (another device, another tab): what was
+         written is kept, and there is nothing more to wait for. */
+      if (name === "jarvis.stopped")
+        throw Object.assign(new Error("Stopped."), { stoppedElsewhere: true });
       if (name === "jarvis.error")
         throw Object.assign(new Error(data.message || "Vaelo could not finish."), {
           status: data.status,
@@ -1356,18 +1371,13 @@ export function App() {
         });
       if (name === "jarvis.complete") {
         completed = true;
-        if (joining && joinBuffer) {
-          received += joinOnto(received, joinBuffer);
-          schedule();
-        }
-        joining = false;
-        joinBuffer = "";
+        releaseHeld();
       }
       /* The answer was cut off and Vaelo is carrying it on: what follows
          joins the words already written. */
       if (name === "jarvis.continue") {
+        releaseHeld();
         joining = true;
-        joinBuffer = "";
         return;
       }
       /* The run ended without an answer and the proxy is asking again;
@@ -1572,7 +1582,7 @@ export function App() {
             },
           );
         } catch (err) {
-          if (controller.signal.aborted) throw err;
+          if (controller.signal.aborted || err.stoppedElsewhere) throw err;
           if (err.fromServer) {
             /* Vaelo restarted (a deploy, a crash) and this reply's run went
                with it. Nothing is lost on the page: the work carries on in a
@@ -1619,6 +1629,9 @@ export function App() {
             if (!busyNow) throw err;
             busyTries += 1;
             started = false;
+            /* The relay starts the retry afresh under the same id, numbered
+               from the beginning again; nothing of the refused run is kept. */
+            seq = -1;
             updateMessage({ live: "Vaelo is finishing something else first" });
             await pause(busyTries > 2 ? 15000 : 5000, controller.signal);
             continue;
@@ -1654,9 +1667,11 @@ export function App() {
       succeeded = true;
     } catch (err) {
       controller.abort();
+      releaseHeld();
       cancelAnimationFrame(frame);
       frame = 0;
       if (received || reasoning) flush();
+      endedElsewhere = Boolean(err.stoppedElsewhere);
       if (mirror && (err.code === "run_missing" || err.dropped)) {
         /* The device that sent this reply carries it on and reports it. */
         quiet = true;
@@ -1671,7 +1686,7 @@ export function App() {
         updateMessage({ interrupted: true, note: text });
         setError(text);
         announce(text);
-      } else if (err.name === "AbortError") {
+      } else if (err.name === "AbortError" || err.stoppedElsewhere) {
         /* Stopping is a choice, not a failure: keep what was written. */
         updateMessage({ stopped: true });
         announce("Stopped.");
@@ -1695,7 +1710,7 @@ export function App() {
       }
       /* A reply that carries on without this page stays marked as running.
          A mirror leaves the final word to the device that sent it. */
-      const carriesOn = detached || lost || quiet || (mirror && !stopping.current);
+      const carriesOn = detached || lost || quiet || (mirror && !stopping.current && !endedElsewhere);
       updateMessage((message) => {
         const patch = { live: "" };
         if (!carriesOn) patch.running = undefined;

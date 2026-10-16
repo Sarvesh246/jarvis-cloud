@@ -282,7 +282,10 @@ async function startRun(cfg, user, input, signal, request) {
 }
 
 /* Pass the relay's numbered frames through untouched, until the run ends,
-   the page leaves, or this function's time is nearly up. */
+   the page leaves, or this function's time is nearly up. Only whole frames
+   go out: a network chunk can end partway through one, and a heartbeat or
+   a closing jarvis.resume written after half a frame would fuse with it
+   into one unreadable frame whose number the page then counts as seen. */
 async function followRun(res, cfg, user, runId, after, signal, request, deadline) {
   let response;
   try {
@@ -304,12 +307,18 @@ async function followRun(res, cfg, user, runId, after, signal, request, deadline
     return "cut";
   }
   const decoder = new TextDecoder();
+  let pending = "";
   let tail = "";
   try {
     for await (const chunk of response.body) {
       if (signal.aborted) return "left";
-      tail = (tail + decoder.decode(chunk, { stream: true })).slice(-64);
-      if (!res.write(chunk))
+      pending += decoder.decode(chunk, { stream: true });
+      const boundary = pending.lastIndexOf("\n\n");
+      if (boundary < 0) continue;
+      const whole = pending.slice(0, boundary + 2);
+      pending = pending.slice(boundary + 2);
+      tail = (tail + whole).slice(-64);
+      if (!res.write(whole))
         await new Promise((resolve) => {
           res.once("drain", resolve);
           res.once("close", resolve);
