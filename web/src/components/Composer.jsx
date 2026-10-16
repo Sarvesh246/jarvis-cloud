@@ -626,6 +626,7 @@ export const Composer = forwardRef(function Composer(
     onRemoveFile,
     onOptions,
     onDictating,
+    guest = false,
   },
   textarea,
 ) {
@@ -828,7 +829,7 @@ export const Composer = forwardRef(function Composer(
           {!draft && !note && (
             <span className="composer-hint">Enter to send · Shift+Enter for a new line</span>
           )}
-          {dictation.supported && (
+          {dictation.supported && !guest && (
             <button
               type="button"
               className="icon-button composer-tool composer-mic"

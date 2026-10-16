@@ -1,6 +1,6 @@
 import {
   settings,
-  authorize,
+  authorizeAny,
   sameOrigin,
   readJson,
   json,
@@ -13,7 +13,7 @@ export default async function handler(req, res) {
   try {
     if (req.method !== "POST") throw new HttpError(405, "Method not allowed.");
     const cfg = settings();
-    const user = await authorize(req, cfg);
+    const user = await authorizeAny(req, cfg);
     sameOrigin(req, cfg);
     const { runId } = resumeInput({ run: (await readJson(req, 1000))?.runId });
     json(res, 200, await stopRun(cfg, user, runId));

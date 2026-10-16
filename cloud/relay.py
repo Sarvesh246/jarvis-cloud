@@ -45,6 +45,15 @@ BODY_LIMIT = 8 * 1024 * 1024
 # attempts in all) while this much time is left.
 RECOVERY_MIN_SECONDS = 60
 ATTEMPTS = 3
+# Guests (the web app's "Continue as guest") are answered by the model provider directly,
+# never by Hermes, so they get no terminal, files, memory or saved work. They are limited
+# so one visitor can't use up the free provider allowance.
+GUEST_OWNER = "web:guest:"
+GUEST_CONCURRENT = 2
+GUEST_PER_HOUR = 20
+GUEST_ALL_PER_HOUR = 120
+GUEST_MAX_TOKENS = 1500
+GUEST_BUSY = "Guest mode is busy or has reached its hourly limit. Try again later, or sign in."
 NO_ANSWER = "Vaelo finished working but the model didn’t write an answer. Try again; a second go usually works."
 HOP_HEADERS = {
     "connection",
@@ -195,6 +204,68 @@ class Relay:
         self.runs, self.lock = {}, threading.Lock()
         self.feeds = {}
         self.clock, self.sleep = clock, sleep
+        self.guest_active, self.guest_log = 0, {}
+        self.guest_connect = lambda: http.client.HTTPSConnection(
+            "openrouter.ai", timeout=UPSTREAM_SILENCE_SECONDS
+        )
+
+    def guest_admit(self, owner):
+        """Count a guest reply in, or say why not: too many at once, or too many this hour."""
+        now = self.clock()
+        with self.lock:
+            for key in list(self.guest_log):
+                self.guest_log[key] = [t for t in self.guest_log[key] if now - t < 3600]
+                if not self.guest_log[key]:
+                    del self.guest_log[key]
+            mine = self.guest_log.get(owner, [])
+            total = sum(len(times) for times in self.guest_log.values())
+            if (
+                self.guest_active >= GUEST_CONCURRENT
+                or len(mine) >= GUEST_PER_HOUR
+                or total >= GUEST_ALL_PER_HOUR
+            ):
+                return {"message": GUEST_BUSY, "status": 429}
+            self.guest_log[owner] = [*mine, now]
+            self.guest_active += 1
+        return None
+
+    def guest_release(self):
+        with self.lock:
+            self.guest_active = max(0, self.guest_active - 1)
+
+    def open_guest(self, run, messages):
+        """Ask the model provider directly, with no tools, in the same streamed shape."""
+        key = os.environ.get("OPENROUTER_API_KEY", "")
+        if not key:
+            return None, {"message": "Guest mode is not available right now.", "status": 503}
+        payload = {
+            "model": "openrouter/free",
+            "messages": messages,
+            "stream": True,
+            "max_tokens": GUEST_MAX_TOKENS,
+        }
+        connection = self.guest_connect()
+        run.connection = connection
+        try:
+            connection.request(
+                "POST",
+                "/api/v1/chat/completions",
+                body=json.dumps(payload).encode(),
+                headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+            )
+            response = connection.getresponse()
+        except OSError:
+            connection.close()
+            if run.stopped:
+                return None, None
+            return None, {"message": "Vaelo is temporarily unavailable. Please try again.", "status": 503}
+        if response.status == 200:
+            return response, None
+        response.read(64 * 1024)
+        connection.close()
+        if response.status == 429:
+            return None, {"message": GUEST_BUSY, "status": 429}
+        return None, {"message": "Vaelo is temporarily unavailable. Please try again.", "status": 503}
 
     # ---- run bookkeeping -------------------------------------------------------------------
 
@@ -250,6 +321,8 @@ class Relay:
 
     def open(self, run, body, messages, recovering=False):
         """POST the chat to Hermes; the response to stream, or an error event's payload."""
+        if run.owner.startswith(GUEST_OWNER):
+            return self.open_guest(run, messages)
         payload = {"model": "jarvis", "messages": messages, "stream": True}
         if isinstance(body.get("model_options"), dict):
             payload["model_options"] = body["model_options"]
@@ -414,6 +487,13 @@ class Relay:
         dropped stream) is continued from where it stopped. The reader sees one reply."""
         started = self.clock()
         messages = body["messages"]
+        guest = run.owner.startswith(GUEST_OWNER)
+        if guest:
+            refusal = self.guest_admit(run.owner)
+            if refusal:
+                run.event("jarvis.error", refusal)
+                run.finish("error")
+                return
         timer = threading.Timer(RUN_LIMIT_SECONDS, self.time_out, args=(run,))
         timer.daemon = True
         timer.start()
@@ -468,6 +548,8 @@ class Relay:
             run.finish("error")
         finally:
             timer.cancel()
+            if guest:
+                self.guest_release()
             self.feed(run.owner).bump()
 
     def time_out(self, run):

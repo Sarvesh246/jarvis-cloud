@@ -59,6 +59,7 @@ const RAIL_KEY = "vaelo-rail-collapsed";
 /* Who was signed in last, so the installed app can open your conversations
    to read while offline. Only the account id and display name are kept. */
 const LAST_USER_KEY = "vaelo-last-user";
+const GUEST_CHATS_KEY = "vaelo-guest-chats";
 
 /* The conversation open in this tab or app window. Session storage outlives
    a reload but not a fresh launch, which is exactly the line we want. */
@@ -491,19 +492,24 @@ export function App() {
       }
       setSession(result);
       if (result.user) {
+        const guest = Boolean(result.user.guest);
         try {
-          localStorage.setItem(
-            LAST_USER_KEY,
-            JSON.stringify({ sub: result.user.sub, name: result.user.name }),
-          );
+          if (!guest)
+            localStorage.setItem(
+              LAST_USER_KEY,
+              JSON.stringify({ sub: result.user.sub, name: result.user.name }),
+            );
         } catch {
           /* reading offline is a nicety */
         }
         let saved = [];
         try {
-          saved = readSyncCache(result.user.sub)?.chats || JSON.parse(
-            localStorage.getItem(`jarvis-chats:${result.user.sub}`) || "[]",
-          );
+          /* A guest's chats live only in this tab (sessionStorage). */
+          saved = guest
+            ? JSON.parse(sessionStorage.getItem(GUEST_CHATS_KEY) || "[]")
+            : readSyncCache(result.user.sub)?.chats || JSON.parse(
+                localStorage.getItem(`jarvis-chats:${result.user.sub}`) || "[]",
+              );
           saved = Array.isArray(saved)
             ? cap(
                 saved.filter(
@@ -566,8 +572,20 @@ export function App() {
     if (online && session?.offline) loadSession();
   }, [online, session?.offline]);
 
+  const guest = Boolean(session?.user?.guest);
+
+  /* Guests are never synced or stored on a device; their chats follow the tab. */
+  useEffect(() => {
+    if (!guest) return;
+    try {
+      sessionStorage.setItem(GUEST_CHATS_KEY, JSON.stringify(chats));
+    } catch {
+      /* a full tab store just means a reload starts fresh */
+    }
+  }, [guest, chats]);
+
   const { issue: syncIssue, push: pushChat } = useChatSync({
-    session, chats, setChats, busyId: busy ? activeId : null,
+    session: guest ? { ...session, user: null } : session, chats, setChats, busyId: busy ? activeId : null,
     onConflict: () => showToast({ text: "Both devices edited this conversation. Your changes were kept in a device copy." }),
   });
 
@@ -1826,12 +1844,23 @@ export function App() {
     [],
   );
 
+  async function continueAsGuest() {
+    setError("");
+    try {
+      await request("/api/guest", {});
+      await loadSession();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
   async function logout() {
     try {
       if (DESKTOP) await desktopSignOut();
       else await request("/api/logout", {});
       try {
         localStorage.removeItem(LAST_USER_KEY);
+        sessionStorage.removeItem(GUEST_CHATS_KEY);
       } catch {
         /* nothing to forget */
       }
@@ -1864,6 +1893,7 @@ export function App() {
           catch (err) { setError(String(err.message || err)); }
           finally { setDesktopSigningIn(false); }
         }}
+        onGuest={session?.csrf ? continueAsGuest : undefined}
         onRetryGoogle={() => {
           googleScript = null;
           setGsiAttempt((n) => n + 1);
@@ -1962,7 +1992,7 @@ export function App() {
             onRename={renameChat}
             onOpenRail={() => setMenu(true)}
             onToggleRail={toggleRail}
-            onSaveAsWorkspace={messages.length > 0 && session?.user ? saveChatAsWorkspace : undefined}
+            onSaveAsWorkspace={messages.length > 0 && session?.user && !guest ? saveChatAsWorkspace : undefined}
           />
           {syncIssue && <Notice>{syncIssue}</Notice>}
 
@@ -2103,6 +2133,7 @@ export function App() {
               }
               onOptions={(patch) => setOptions((current) => ({ ...current, ...patch }))}
               onDictating={setDictating}
+              guest={guest}
             />
           </div>
 

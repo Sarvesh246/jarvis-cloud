@@ -1,6 +1,6 @@
 import {
   settings,
-  authorize,
+  authorizeAny,
   json,
   fail,
   HttpError,
@@ -14,7 +14,7 @@ export default async function handler(req, res) {
   try {
     if (req.method !== "GET") throw new HttpError(405, "Method not allowed.");
     const cfg = settings();
-    await authorize(req, cfg);
+    await authorizeAny(req, cfg);
     if (!cfg.backend.startsWith("https://") || !cfg.apiKey)
       throw new HttpError(503, "Cloud connection is not configured.");
     if (await probeBackend(cfg.backend)) return json(res, 200, { ready: true, status: "ok" });

@@ -1,4 +1,4 @@
-import { randomBytes, timingSafeEqual } from "node:crypto";
+import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { SignJWT, jwtVerify, createRemoteJWKSet } from "jose";
 
 const googleKeys = createRemoteJWKSet(
@@ -28,7 +28,11 @@ export function settings(env = process.env) {
 
 export function cookieNames(cfg) {
   const prefix = cfg.secure ? "__Host-" : "";
-  return { session: `${prefix}jarvis-session`, csrf: `${prefix}jarvis-csrf` };
+  return {
+    session: `${prefix}jarvis-session`,
+    csrf: `${prefix}jarvis-csrf`,
+    guest: `${prefix}jarvis-guest`,
+  };
 }
 
 export function cookies(req) {
@@ -117,6 +121,43 @@ export async function sessionUser(req, cfg) {
       email: payload.email,
       name: displayName(payload.name),
     };
+  } catch {
+    return null;
+  }
+}
+
+/* A guest is a throwaway identity for trying Vaelo without signing in. It has
+   its own cookie and audience, so it can never be read as the owner, and the
+   "guest:" subject is what tells the relay to answer without any tools. */
+const guestDuration = 24 * 60 * 60;
+export const GUEST_PREFIX = "guest:";
+
+export async function signGuest(cfg) {
+  return new SignJWT({})
+    .setProtectedHeader({ alg: "HS256" })
+    .setSubject(`${GUEST_PREFIX}${randomUUID()}`)
+    .setIssuer(cfg.origin)
+    .setAudience("vaelo-guest")
+    .setIssuedAt()
+    .setExpirationTime(`${guestDuration}s`)
+    .sign(sessionKey(cfg));
+}
+
+export function guestCookie(value, cfg, maxAge = guestDuration) {
+  return cookie(cookieNames(cfg).guest, value, cfg, maxAge);
+}
+
+export async function guestUser(req, cfg) {
+  const token = cookies(req)[cookieNames(cfg).guest];
+  if (!token) return null;
+  try {
+    const { payload } = await jwtVerify(token, sessionKey(cfg), {
+      issuer: cfg.origin,
+      audience: "vaelo-guest",
+      algorithms: ["HS256"],
+    });
+    if (typeof payload.sub !== "string" || !/^guest:[a-f0-9-]{36}$/.test(payload.sub)) return null;
+    return { sub: payload.sub, email: "", name: "Guest", guest: true };
   } catch {
     return null;
   }
@@ -218,6 +259,14 @@ export function fail(res, error) {
 
 export async function authorize(req, cfg) {
   const user = await sessionUser(req, cfg);
+  if (!user) throw new HttpError(401, "Sign in to use Vaelo.");
+  return user;
+}
+
+/* Owner or guest. Only the chat, stop and status routes use this; every
+   route that touches saved chats, work, files or devices stays owner-only. */
+export async function authorizeAny(req, cfg) {
+  const user = (await sessionUser(req, cfg)) || (await guestUser(req, cfg));
   if (!user) throw new HttpError(401, "Sign in to use Vaelo.");
   return user;
 }

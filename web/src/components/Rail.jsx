@@ -365,10 +365,14 @@ export function Rail({
       </nav>
 
       <div className="rail-foot">
-        <button className="rail-new rail-workroom" onClick={onWorkroom} aria-haspopup="dialog" aria-expanded={workroomOpen}>
-          <WorkroomIcon open={workroomOpen} size={20} /><span>Workroom</span>
-        </button>
-        <p className="rail-note">Private conversations and saved work.</p>
+        {!user.guest && (
+          <button className="rail-new rail-workroom" onClick={onWorkroom} aria-haspopup="dialog" aria-expanded={workroomOpen}>
+            <WorkroomIcon open={workroomOpen} size={20} /><span>Workroom</span>
+          </button>
+        )}
+        <p className="rail-note">
+          {user.guest ? "Guest chat. Nothing is saved after you close this tab." : "Private conversations and saved work."}
+        </p>
         <div className="rail-account">
           <span className="rail-avatar" aria-hidden="true">
             {user.name?.[0]}
@@ -385,8 +389,8 @@ export function Rail({
           </button>
           <button
             className="icon-button"
-            aria-label="Sign out"
-            data-tip="Sign out"
+            aria-label={user.guest ? "Leave guest mode" : "Sign out"}
+            data-tip={user.guest ? "Leave guest mode" : "Sign out"}
             disabled={busy}
             onClick={onSignOut}
           >

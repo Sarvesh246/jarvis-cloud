@@ -182,6 +182,36 @@ class RelayTests(unittest.TestCase):
             time.sleep(0.02)
         self.fail("the run never finished")
 
+    def test_guest_replies_go_to_the_provider_with_no_tools_and_stay_off_hermes(self):
+        guest = "web:guest:" + "a" * 8 + "-" + "b" * 4 + "-" + "c" * 4 + "-" + "d" * 4 + "-" + "e" * 12
+        hermes, relay, port = self.boot([])
+        provider = FakeHermes([[chunk("Hello.", "stop"), "data: [DONE]"]])
+        self.addCleanup(provider.close)
+        relay.guest_connect = lambda: http.client.HTTPConnection(
+            "127.0.0.1", provider.server.server_port, timeout=10
+        )
+        with mock.patch.dict("os.environ", {"OPENROUTER_API_KEY": "or-key"}):
+            self.assertEqual(self.start(port, owner=guest)[0], 202)
+            run = self.finished(relay)
+        self.assertEqual(run.outcome, "complete")
+        self.assertEqual(hermes.requests, [])
+        sent = provider.requests[0]
+        self.assertEqual(sent["path"], "/api/v1/chat/completions")
+        self.assertEqual(sent["headers"]["Authorization"], "Bearer or-key")
+        self.assertNotIn("tools", sent["body"])
+        self.assertEqual(relay.guest_active, 0)
+
+    def test_guests_are_limited_per_hour_and_at_once(self):
+        _, relay, _ = self.boot([])
+        guest = "web:guest:x"
+        for _ in range(relay_module.GUEST_PER_HOUR):
+            self.assertIsNone(relay.guest_admit(guest))
+            relay.guest_release()
+        self.assertEqual(relay.guest_admit(guest)["status"], 429)
+        self.assertIsNone(relay.guest_admit("web:guest:y"))
+        self.assertIsNone(relay.guest_admit("web:guest:z"))
+        self.assertEqual(relay.guest_admit("web:guest:w")["status"], 429)
+
     def test_devices_hear_at_once_when_a_conversation_or_reply_changes(self):
         with mock.patch.object(relay_module, "FEED_SECONDS", 1), \
                 mock.patch.object(relay_module, "KEEPALIVE_SECONDS", 0.2):

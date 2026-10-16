@@ -2,6 +2,7 @@ import {
   settings,
   csrfToken,
   sessionUser,
+  guestUser,
   json,
   fail,
   HttpError,
@@ -13,7 +14,7 @@ export default async function handler(req, res) {
     const cfg = settings();
     const csrf = csrfToken(req, res, cfg);
     json(res, 200, {
-      user: await sessionUser(req, cfg),
+      user: (await sessionUser(req, cfg)) || (cfg.secret.length >= 32 ? await guestUser(req, cfg) : null),
       csrf,
       clientId: cfg.clientId,
       configured: !!cfg.clientId && !!cfg.email && cfg.secret.length >= 32,

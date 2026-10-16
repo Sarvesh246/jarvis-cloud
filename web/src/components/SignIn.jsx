@@ -36,6 +36,7 @@ export function SignIn({
   onGoogleRedirect,
   signingIn = false,
   onCancelSignIn,
+  onGuest,
 }) {
   const own = googleState === "failed" || googleState === "hidden" || googleState === "redirect";
   return (
@@ -93,6 +94,16 @@ export function SignIn({
               Try again
             </button>
           </p>
+        )}
+        {onGuest && (
+          <>
+            <button className="text-button guest-entry" onClick={onGuest}>
+              Continue as guest
+            </button>
+            <p className="entry-quiet">
+              Guest chats are not saved and can’t use saved work, files or images.
+            </p>
+          </>
         )}
         <p className="entry-quiet">Private to your Google account.</p>
       </div>

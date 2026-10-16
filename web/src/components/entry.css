@@ -189,6 +189,17 @@
   color: var(--muted);
 }
 
+/* A plain second way in, as easy to find as Google's button */
+.guest-entry {
+  margin-top: var(--s-5);
+  min-height: 2.75rem;
+  padding: 0 var(--s-5);
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  color: inherit;
+  text-decoration: none;
+}
+
 /* Sign-in fits on one screen, toolbars included */
 @media (max-width: 47.9375rem), (pointer: coarse) and (max-height: 31.25rem) {
   .entry {
