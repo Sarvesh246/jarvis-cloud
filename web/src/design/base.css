@@ -262,6 +262,39 @@ a:hover {
   color: var(--muted);
 }
 
+/* Fingers need room: on a touch screen every control takes at least the
+   44px target. Text controls grow; small round buttons keep their look and
+   an invisible ring around them takes the touch. (:root lifts these over
+   each component's own sizes, whichever stylesheet loads last.) */
+@media (pointer: coarse) {
+  :root .text-button,
+  :root .process-receipt,
+  :root .rail-link,
+  :root .header-title,
+  :root .jump {
+    min-height: var(--hit);
+  }
+
+  :root .icon-button.small {
+    width: var(--hit);
+    height: var(--hit);
+  }
+
+  :root :is(.attachment-remove, .mode-chip button, .rail-search-clear) {
+    position: relative;
+  }
+
+  :root :is(.attachment-remove, .mode-chip button, .rail-search-clear)::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: var(--hit);
+    height: var(--hit);
+    transform: translate(-50%, -50%);
+  }
+}
+
 /* Reduced motion removes movement and keeps meaning: from the system, or
    chosen in Settings. Every state still has its words. */
 @media (prefers-reduced-motion: reduce) {
