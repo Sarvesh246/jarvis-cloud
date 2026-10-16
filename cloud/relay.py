@@ -62,6 +62,16 @@ GUEST_PER_HOUR = 20
 GUEST_ALL_PER_HOUR = 120
 GUEST_MAX_TOKENS = 1500
 GUEST_BUSY = "Guest mode is busy or has reached its hourly limit. Try again later, or sign in."
+# A greeting or a self-contained small ask (the web decides, and sends a short system prompt
+# for it) is answered straight from a fast model with no tool schemas, so the router can pick
+# for speed instead of for agent capability. Anything that goes wrong on that route falls back
+# to Hermes, so it can only ever save time, never lose a reply.
+FAST_MAX_TOKENS = 4000
+FAST_SECONDS = 45
+FAST_SYSTEM_CHARS = 8000
+# Effort levels sent to a provider directly. "none" is rejected by models whose reasoning is
+# mandatory, and the free routes pick the model themselves, so it is sent as "minimal".
+DIRECT_EFFORTS = {"none": "minimal", "minimal": "minimal", "low": "low", "medium": "medium", "high": "high"}
 NO_ANSWER = "Vaelo finished working but the model didn’t write an answer. Try again; a second go usually works."
 HOP_HEADERS = {
     "connection",
@@ -115,6 +125,36 @@ def with_note(content, note):
     return [{"type": "text", "text": note}, *parts]
 
 
+def direct_reasoning(body):
+    """The ``reasoning`` object for a provider asked directly, or None to leave its default."""
+    options = body.get("model_options")
+    effort = options.get("reasoning_effort") if isinstance(options, dict) else None
+    effort = DIRECT_EFFORTS.get(str(effort).strip().lower()) if effort is not None else None
+    return {"effort": effort} if effort else None
+
+
+def fast_route(environ):
+    """Where a fast reply goes: the FreeLLMAPI router told the turn is chat (it then weighs
+    speed over agent capability), else OpenRouter's free pool, else nowhere."""
+    url = environ.get("FREELLMAPI_URL", "").strip().rstrip("/")
+    key = environ.get("FREELLMAPI_API_KEY", "").strip()
+    if url.startswith("https://") and key:
+        parts = urlsplit(url if url.endswith("/v1") else url + "/v1")
+        if parts.hostname:
+            return {
+                "host": parts.hostname, "port": parts.port,
+                "path": parts.path.rstrip("/") + "/chat/completions", "key": key,
+                "model": "auto", "headers": {"X-FreeLLM-Task-Type": "chat"}, "name": "router",
+            }
+    key = environ.get("OPENROUTER_API_KEY", "").strip()
+    if key:
+        return {
+            "host": "openrouter.ai", "port": None, "path": "/api/v1/chat/completions", "key": key,
+            "model": "openrouter/free", "headers": {}, "name": "openrouter",
+        }
+    return None
+
+
 def answered(seen):
     text = seen["content"].strip()
     return bool(text) and text != "(empty)"
@@ -132,6 +172,10 @@ class Run:
         self.cond = threading.Condition()
         self.connection = None
         self.timed_out = self.overflowed = False
+        # Which route answered, and when thinking and the answer first arrived (relay clock),
+        # so a slow reply can be told apart: waiting on a provider, thinking, or writing.
+        self.route = None
+        self.first_thought = self.first_answer = None
 
     def emit(self, frame, optional=False, reserved=False):
         """Number and keep one SSE frame (without its trailing blank line). Relayed frames
@@ -231,6 +275,10 @@ class Relay:
         self.guest_connect = lambda: http.client.HTTPSConnection(
             "openrouter.ai", timeout=UPSTREAM_SILENCE_SECONDS
         )
+        self.fast_connect = lambda host, port: http.client.HTTPSConnection(
+            host, port, timeout=FAST_SECONDS
+        )
+        self.report = lambda line: print(line, flush=True)
 
     def guest_admit(self, owner, retry=False):
         """Count a guest reply in, or say why not: too many at once, or too many this hour.
@@ -259,7 +307,42 @@ class Relay:
         with self.lock:
             self.guest_active = max(0, self.guest_active - 1)
 
-    def open_guest(self, run, messages):
+    def open_fast(self, run, messages, body):
+        """Ask a fast model directly with the web's short system prompt and no tools; the
+        response to stream, or None to let Hermes answer instead."""
+        route = fast_route(os.environ)
+        if route is None:
+            return None
+        payload = {
+            "model": route["model"],
+            "messages": [{"role": "system", "content": body["fast"]},
+                         *[m for m in messages if m.get("role") != "system"]],
+            "stream": True,
+            "max_tokens": FAST_MAX_TOKENS,
+        }
+        reasoning = direct_reasoning(body)
+        if reasoning:
+            payload["reasoning"] = reasoning
+        connection = self.fast_connect(route["host"], route["port"])
+        run.connection = connection
+        try:
+            connection.request(
+                "POST", route["path"], body=json.dumps(payload).encode(),
+                headers={"Authorization": f"Bearer {route['key']}",
+                         "Content-Type": "application/json", **route["headers"]},
+            )
+            response = connection.getresponse()
+        except (OSError, http.client.HTTPException):
+            connection.close()
+            return None
+        if response.status == 200:
+            run.route = route["name"]
+            return response
+        response.read(64 * 1024)
+        connection.close()
+        return None
+
+    def open_guest(self, run, messages, body=None):
         """Ask the model provider directly, with no tools, in the same streamed shape."""
         key = os.environ.get("OPENROUTER_API_KEY", "")
         if not key:
@@ -270,6 +353,9 @@ class Relay:
             "stream": True,
             "max_tokens": GUEST_MAX_TOKENS,
         }
+        reasoning = direct_reasoning(body or {})
+        if reasoning:
+            payload["reasoning"] = reasoning
         connection = self.guest_connect()
         run.connection = connection
         try:
@@ -365,7 +451,16 @@ class Relay:
     def open(self, run, body, messages, recovering=False):
         """POST the chat to Hermes; the response to stream, or an error event's payload."""
         if run.owner.startswith(GUEST_OWNER):
-            return self.open_guest(run, messages)
+            run.route = "guest"
+            return self.open_guest(run, messages, body)
+        # Only a first attempt goes fast: a recovery or continuation needs Hermes's full turn.
+        if body.get("fast") and not recovering:
+            response = self.open_fast(run, messages, body)
+            if response is not None:
+                return response, None
+            if run.stopped:
+                return None, None
+        run.route = "hermes"
         payload = {"model": "jarvis", "messages": messages, "stream": True}
         if isinstance(body.get("model_options"), dict):
             payload["model_options"] = body["model_options"]
@@ -504,6 +599,10 @@ class Relay:
         )
         delta = choice.get("delta") if isinstance(choice.get("delta"), dict) else {}
         content = delta.get("content")
+        if isinstance(content, str) and content.strip() and run.first_answer is None:
+            run.first_answer = self.clock()
+        elif (delta.get("reasoning_content") or delta.get("reasoning")) and run.first_thought is None:
+            run.first_thought = self.clock()
         if isinstance(content, str):
             # A short prefix tells an empty reply from a real one; the answer itself is kept
             # (bounded) so a cut-off reply can be continued from where it stopped.
@@ -600,6 +699,20 @@ class Relay:
             if guest:
                 self.guest_release()
             self.feed(run.owner).bump()
+            self.log_timing(run, body, started)
+
+    def log_timing(self, run, body, started):
+        """One line per reply, with no content: the route, the requested effort, and how long
+        until the first thinking and the first answer text, for tuning the fast paths."""
+        def since(at):
+            return f"{at - started:.1f}s" if at is not None else "-"
+        options = body.get("model_options")
+        effort = options.get("reasoning_effort") if isinstance(options, dict) else None
+        self.report(
+            f"vaelo run {run.id[:8]} route={run.route or '-'} effort={effort or 'default'} "
+            f"first_thought={since(run.first_thought)} first_answer={since(run.first_answer)} "
+            f"total={self.clock() - started:.1f}s outcome={run.outcome}"
+        )
 
     def time_out(self, run):
         if not run.done:
@@ -725,10 +838,13 @@ def make_handler(relay):
                 or messages[-1].get("role") != "user"
             ):
                 return self.send_json(400, {"error": "invalid run"})
+            fast = body.get("fast")
+            if not isinstance(fast, str) or not fast.strip() or len(fast) > FAST_SYSTEM_CHARS:
+                fast = None
             run = relay.start(
                 run_id,
                 owner,
-                {"messages": messages, "model_options": body.get("model_options")},
+                {"messages": messages, "model_options": body.get("model_options"), "fast": fast},
             )
             if run is None:
                 return self.send_json(409, {"error": "run belongs to another session"})

@@ -30,6 +30,28 @@ interactions also work offline after a reply loads.
   timeline dates remain separate from event details, and table headers visibly
   advertise sorting. Mobile controls keep their text labels.
 
+## Reply shapes and effort
+
+The proxy reads each message locally (`server/request-profile.js`, no model call)
+and adds one line to its `[Vaelo request: …]` note naming the shape the answer
+should take: a comparison or shortlist gets one table with a row per option and a
+verdict per need, a how-to gets numbered steps, a greeting gets a sentence or two,
+and so on. An explicit request ("in a table", "no bullets", "one sentence") always
+wins. Messages with no clear shape get no line, and the general guidance decides.
+
+The same reading sets reasoning depth. Greetings, arithmetic, conversions, stable
+definitions and short rewrites think minimally and go to the relay's fast route,
+which asks a fast model directly with a short prompt and no tools, then falls back
+to Hermes if that route fails. Debugging, multi-constraint comparisons and
+medical, legal or financial questions think more. Anything mentioning tools,
+current facts, personal context, files or images stays on the ordinary path.
+`tests/request-profile.test.js` holds the prompt corpus; add a case there whenever
+a reply comes back in the wrong shape.
+
+The relay logs one line per reply (route, effort, time to first thinking and to
+first answer), and the proxy logs whether the backend had to be woken, so slow
+replies can be split into wake time, provider wait and reasoning.
+
 ## Boundaries and efficiency
 
 The trusted component library owns all behavior. Model content is data, never

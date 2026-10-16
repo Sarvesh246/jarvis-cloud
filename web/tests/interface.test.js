@@ -313,7 +313,8 @@ test("a role travels with its message and combines with style and research", () 
   // older messages and clients without a role get Vaelo as usual
   const plain = chatInput({ ...base, messages: [{ role: "user", content: "Hi" }] });
   assert.equal(plain.role, "none");
-  assert.equal(plain.messages[0].content, "Hi");
+  // no role note, only the shape a greeting's reply should take
+  assert.equal(plain.messages[0].content, "Hi\n\n[Vaelo request: reply shape: one or two natural sentences, no headings, lists or tables]");
   for (const role of ["tutor", "skeptic", "advocate", "guide"])
     assert.match(requestNote({ role }), new RegExp(`^\\[Vaelo request: act as [^:]*${role}`));
   // the wording is the proxy's own; a client can only pick a name from the list

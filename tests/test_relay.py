@@ -121,6 +121,7 @@ class RelayTests(unittest.TestCase):
             0, hermes.server.server_port, KEY, host="127.0.0.1"
         )
         relay.sleep = lambda seconds: None
+        relay.report = lambda line: None
         threading.Thread(target=server.serve_forever, daemon=True).start()
         self.servers.append(server)
         return hermes, relay, server.server_port
@@ -223,6 +224,123 @@ class RelayTests(unittest.TestCase):
         self.assertEqual(sent["headers"]["Authorization"], "Bearer or-key")
         self.assertNotIn("tools", sent["body"])
         self.assertEqual(relay.guest_active, 0)
+
+    def start_fast(self, port, fast="You are Vaelo, briefly.", effort="minimal"):
+        return self.call(port, "POST", "/vaelo/runs", {
+            "id": RUN,
+            "messages": [
+                {"role": "system", "content": "full prompt"},
+                {"role": "user", "content": "hello"},
+            ],
+            "model_options": {"reasoning_effort": effort},
+            "fast": fast,
+        })
+
+    def fast_provider(self, relay, scripts):
+        provider = FakeHermes(scripts)
+        self.addCleanup(provider.close)
+        targets = []
+
+        def connect(host, port):
+            targets.append((host, port))
+            return http.client.HTTPConnection("127.0.0.1", provider.server.server_port, timeout=10)
+        relay.fast_connect = connect
+        return provider, targets
+
+    def test_a_quick_reply_goes_to_the_router_as_chat_with_no_tools_and_stays_off_hermes(self):
+        hermes, relay, port = self.boot([])
+        provider, targets = self.fast_provider(relay, [[chunk("Hi there.", "stop"), "data: [DONE]"]])
+        env = {"FREELLMAPI_URL": "https://router.example/v1", "FREELLMAPI_API_KEY": "fk",
+               "OPENROUTER_API_KEY": "or-key"}
+        with mock.patch.dict("os.environ", env):
+            self.assertEqual(self.start_fast(port)[0], 202)
+            run = self.finished(relay)
+        self.assertEqual(run.outcome, "complete")
+        self.assertEqual(run.route, "router")
+        self.assertEqual(hermes.requests, [])
+        self.assertEqual(targets, [("router.example", None)])
+        sent = provider.requests[0]
+        self.assertEqual(sent["path"], "/v1/chat/completions")
+        self.assertEqual(sent["headers"]["Authorization"], "Bearer fk")
+        self.assertEqual(sent["headers"]["X-FreeLLM-Task-Type"], "chat")
+        body = sent["body"]
+        self.assertEqual(body["model"], "auto")
+        self.assertEqual(body["messages"][0], {"role": "system", "content": "You are Vaelo, briefly."})
+        self.assertEqual([m["role"] for m in body["messages"]], ["system", "user"])
+        self.assertEqual(body["reasoning"], {"effort": "minimal"})
+        self.assertNotIn("tools", body)
+
+    def test_without_a_router_a_quick_reply_uses_openrouter_free(self):
+        hermes, relay, port = self.boot([])
+        provider, targets = self.fast_provider(relay, [[chunk("Hi.", "stop"), "data: [DONE]"]])
+        with mock.patch.dict("os.environ", {"OPENROUTER_API_KEY": "or-key", "FREELLMAPI_URL": ""}):
+            self.start_fast(port)
+            run = self.finished(relay)
+        self.assertEqual((run.outcome, run.route), ("complete", "openrouter"))
+        self.assertEqual(targets, [("openrouter.ai", None)])
+        self.assertEqual(provider.requests[0]["path"], "/api/v1/chat/completions")
+        self.assertEqual(provider.requests[0]["body"]["model"], "openrouter/free")
+        self.assertEqual(hermes.requests, [])
+
+    def test_a_failing_fast_route_falls_back_to_hermes_with_the_full_prompt(self):
+        hermes, relay, port = self.boot([[chunk("From Hermes.", "stop"), "data: [DONE]"]])
+        provider, _ = self.fast_provider(relay, [503])
+        with mock.patch.dict("os.environ", {"OPENROUTER_API_KEY": "or-key", "FREELLMAPI_URL": ""}):
+            self.start_fast(port)
+            run = self.finished(relay)
+        self.assertEqual((run.outcome, run.route), ("complete", "hermes"))
+        self.assertEqual(len(provider.requests), 1)
+        self.assertEqual(hermes.requests[0]["body"]["messages"][0]["content"], "full prompt")
+        self.assertEqual(hermes.requests[0]["body"]["model_options"], {"reasoning_effort": "minimal"})
+
+    def test_an_empty_fast_reply_is_recovered_by_hermes_not_retried_fast(self):
+        hermes, relay, port = self.boot([[chunk("Written by Hermes.", "stop"), "data: [DONE]"]])
+        provider, _ = self.fast_provider(relay, [[chunk("", "stop"), "data: [DONE]"]])
+        with mock.patch.dict("os.environ", {"OPENROUTER_API_KEY": "or-key", "FREELLMAPI_URL": ""}):
+            self.start_fast(port)
+            run = self.finished(relay)
+        self.assertEqual(run.outcome, "complete")
+        self.assertEqual(len(provider.requests), 1)
+        self.assertEqual(len(hermes.requests), 1)
+
+    def test_a_malformed_fast_prompt_is_ignored_and_hermes_answers(self):
+        for fast in (42, "", "x" * (relay_module.FAST_SYSTEM_CHARS + 1)):
+            with self.subTest(fast=type(fast).__name__):
+                hermes, relay, port = self.boot([[chunk("Hermes.", "stop"), "data: [DONE]"]])
+                provider, _ = self.fast_provider(relay, [])
+                with mock.patch.dict("os.environ", {"OPENROUTER_API_KEY": "or-key"}):
+                    self.start_fast(port, fast=fast)
+                    run = self.finished(relay)
+                    relay.runs.clear()
+                self.assertEqual(run.route, "hermes")
+                self.assertEqual(provider.requests, [])
+
+    def test_guests_send_the_requested_reasoning_depth_never_none(self):
+        guest = "web:guest:depth"
+        for effort, expected in (("low", {"effort": "low"}), ("none", {"effort": "minimal"}), (None, None)):
+            with self.subTest(effort=effort):
+                _, relay, port = self.boot([])
+                provider = FakeHermes([[chunk("Hello.", "stop"), "data: [DONE]"]])
+                self.addCleanup(provider.close)
+                relay.guest_connect = lambda: http.client.HTTPConnection(
+                    "127.0.0.1", provider.server.server_port, timeout=10)
+                with mock.patch.dict("os.environ", {"OPENROUTER_API_KEY": "or-key"}):
+                    self.call(port, "POST", "/vaelo/runs", {
+                        "id": RUN, "messages": [{"role": "user", "content": "hi"}],
+                        **({"model_options": {"reasoning_effort": effort}} if effort else {}),
+                    }, owner=guest)
+                    self.finished(relay)
+                self.assertEqual(provider.requests[0]["body"].get("reasoning"), expected)
+
+    def test_fast_route_prefers_an_https_router_and_needs_a_key(self):
+        route = relay_module.fast_route
+        self.assertIsNone(route({}))
+        self.assertEqual(route({"OPENROUTER_API_KEY": "k"})["name"], "openrouter")
+        self.assertEqual(route({"FREELLMAPI_URL": "http://plain.example", "FREELLMAPI_API_KEY": "f",
+                                "OPENROUTER_API_KEY": "k"})["name"], "openrouter")
+        router = route({"FREELLMAPI_URL": "https://r.example:8443/", "FREELLMAPI_API_KEY": "f"})
+        self.assertEqual((router["host"], router["port"], router["path"]),
+                         ("r.example", 8443, "/v1/chat/completions"))
 
     def test_guests_are_limited_per_hour_and_at_once(self):
         _, relay, _ = self.boot([])

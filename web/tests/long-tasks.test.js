@@ -295,6 +295,30 @@ test("everyday replies ask for brief thinking; research and thorough keep full d
   assert.deepEqual(await sent({ style: "balanced", research: false, role: "guide" }), { reasoning_effort: "low" });
 });
 
+test("a quick message offers the relay a fast route; anything else and guests never do", async () => {
+  const sent = async (content, who = user, mode = {}) => {
+    const { req, res } = fakeExchange();
+    const { request, calls } = fakeRelay();
+    const parsed = chatInput({ conversationId, runId, messages: [{ role: "user", content, mode: { style: "balanced", research: false, ...mode } }] });
+    await streamChat(req, res, cfg, who, who.guest ? { ...parsed } : parsed, request);
+    return JSON.parse(calls.find((call) => call.url.endsWith("/vaelo/runs")).options.body);
+  };
+  const greeting = await sent("hello!");
+  assert.equal(greeting.model_options.reasoning_effort, "minimal");
+  assert.match(greeting.fast, /^You are Vaelo/);
+  assert.match(greeting.fast, /"display_name":"Owner"/);
+  // the full prompt still travels, so the relay can fall back to Hermes
+  assert.match(greeting.messages[0].content, /Research method/);
+  assert.doesNotMatch(greeting.fast, /Research method/);
+  const laptops = await sent("find the best 4 laptops under 1500 usd and compare them for gaming, engineering classes and local AI models");
+  assert.equal(laptops.fast, undefined);
+  assert.equal(laptops.model_options.reasoning_effort, "medium");
+  assert.equal((await sent("hello!", user, { research: true })).fast, undefined);
+  const guest = await sent("hello!", { sub: "guest:x", guest: true });
+  assert.equal(guest.fast, undefined);
+  assert.equal(guest.model_options.reasoning_effort, "minimal");
+});
+
 test("a backend that just answered is not health-checked again before the next message", async () => {
   const { request, calls } = fakeRelay();
   for (let i = 0; i < 3; i += 1) {

@@ -125,7 +125,8 @@ test("chat input rejects model/system overrides, oversized context and invalid c
     messages: [{ role: "user", content: "Hello" }],
     model: "paid-model",
   };
-  assert.equal(chatInput(body).messages[0].content, "Hello");
+  // the words arrive as sent; only the proxy's own shape note is added
+  assert.match(chatInput(body).messages[0].content, /^Hello\n\n\[Vaelo request: reply shape: [^\]]+\]$/);
   assert.equal(chatInput(body).model, undefined);
   assert.throws(
     () =>
