@@ -36,6 +36,9 @@ RUN_LIMIT_SECONDS = 15 * 60
 UPSTREAM_SILENCE_SECONDS = 90
 # Memory bounds on a 512 MB instance. A long answer is one to two megabytes of frames.
 RUN_BYTES = 6 * 1024 * 1024
+# Past RUN_BYTES only thinking is dropped; this is the hard stop for answer frames too, so a
+# runaway model can't hold memory for the whole fifteen minutes. Status frames still fit.
+RUN_MAX_BYTES = 10 * 1024 * 1024
 TOTAL_BYTES = 32 * 1024 * 1024
 KEEPALIVE_SECONDS = 10
 # A device listening for changes is let go after this long and simply asks again.
@@ -123,23 +126,33 @@ class Run:
         self.created = self.updated = time.time()
         self.cond = threading.Condition()
         self.connection = None
-        self.timed_out = False
+        self.timed_out = self.overflowed = False
 
-    def emit(self, frame, optional=False):
-        """Number and keep one SSE frame (without its trailing blank line)."""
+    def emit(self, frame, optional=False, reserved=False):
+        """Number and keep one SSE frame (without its trailing blank line). Relayed frames
+        stop at RUN_MAX_BYTES and the run is stopped; ``reserved`` (Vaelo's own small status
+        frames) always fit, so the reader still learns how the run ended."""
+        overflow = False
         with self.cond:
-            if self.done:
+            if self.done or (self.overflowed and not reserved):
                 return
             if optional and self.size > RUN_BYTES:
                 return  # past the budget, thinking text is dropped before the answer is
             data = f"id: {len(self.frames)}\n{frame}\n\n".encode()
-            self.frames.append(data)
-            self.size += len(data)
-            self.updated = time.time()
-            self.cond.notify_all()
+            if not reserved and self.size + len(data) > RUN_MAX_BYTES:
+                self.overflowed = overflow = True
+            else:
+                self.frames.append(data)
+                self.size += len(data)
+                self.updated = time.time()
+                self.cond.notify_all()
+        if overflow:
+            self.stop()
 
     def event(self, name, data):
-        self.emit(f"event: {name}\ndata: {json.dumps(data, ensure_ascii=False)}")
+        self.emit(
+            f"event: {name}\ndata: {json.dumps(data, ensure_ascii=False)}", reserved=True
+        )
 
     def finish(self, outcome):
         with self.cond:
@@ -209,8 +222,10 @@ class Relay:
             "openrouter.ai", timeout=UPSTREAM_SILENCE_SECONDS
         )
 
-    def guest_admit(self, owner):
-        """Count a guest reply in, or say why not: too many at once, or too many this hour."""
+    def guest_admit(self, owner, retry=False):
+        """Count a guest reply in, or say why not: too many at once, or too many this hour.
+        Every provider call counts against the hour, so a ``retry`` (a recovery within a reply
+        already admitted) is logged too, but takes no extra concurrent slot."""
         now = self.clock()
         with self.lock:
             for key in list(self.guest_log):
@@ -220,13 +235,14 @@ class Relay:
             mine = self.guest_log.get(owner, [])
             total = sum(len(times) for times in self.guest_log.values())
             if (
-                self.guest_active >= GUEST_CONCURRENT
+                (not retry and self.guest_active >= GUEST_CONCURRENT)
                 or len(mine) >= GUEST_PER_HOUR
                 or total >= GUEST_ALL_PER_HOUR
             ):
                 return {"message": GUEST_BUSY, "status": 429}
             self.guest_log[owner] = [*mine, now]
-            self.guest_active += 1
+            if not retry:
+                self.guest_active += 1
         return None
 
     def guest_release(self):
@@ -503,6 +519,8 @@ class Relay:
             run.event("jarvis.status", {"message": "Vaelo is working…"})
             request = messages
             for attempt in range(ATTEMPTS):
+                if guest and attempt > 0 and self.guest_admit(run.owner, retry=True):
+                    break  # out of guest allowance: end with what arrived, like a last attempt
                 response, failure = self.open(run, body, request, recovering=attempt > 0)
                 if failure:
                     run.event("jarvis.error", failure)
@@ -524,6 +542,10 @@ class Relay:
                     request = [*messages[:-1], {**messages[-1], "content": with_note(
                         messages[-1]["content"], recovery_note(seen["tools"]))}]
             if run.stopped:
+                if run.overflowed:
+                    run.event("jarvis.error", {"code": "too_long", "message":
+                              "This reply grew past Vaelo’s size limit and was stopped. What arrived is kept."})
+                    return run.finish("error")
                 if run.timed_out:
                     run.event("jarvis.error", {"code": "time_limit", "message":
                               "This reply ran past fifteen minutes. What arrived is kept; choose Continue to pick up from there."})

@@ -89,9 +89,12 @@ class FakeHermes:
                 self.send_response(200)
                 self.send_header("Content-Type", "text/event-stream")
                 self.end_headers()
-                for frame in script:
-                    self.wfile.write((frame + "\n\n").encode())
-                    self.wfile.flush()
+                try:
+                    for frame in script:
+                        self.wfile.write((frame + "\n\n").encode())
+                        self.wfile.flush()
+                except OSError:
+                    pass  # the relay hung up (a stopped or oversized run)
 
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
         self.server.daemon_threads = True
@@ -545,6 +548,61 @@ class RelayTests(unittest.TestCase):
         run.emit(chunk("answer"))
         self.assertEqual(len(run.frames), 1)
         self.assertIn(b"answer", run.frames[0])
+
+    def test_answer_frames_stop_at_the_hard_cap_but_status_frames_still_fit(self):
+        run = relay_module.Run(RUN, OWNER)
+        run.size = relay_module.RUN_MAX_BYTES - 10
+        run.emit(chunk("too much"))
+        run.emit(chunk("x"))  # nothing after the cut, or the reader would see a gap
+        self.assertEqual(run.frames, [])
+        self.assertTrue(run.overflowed and run.stopped)
+        run.event("jarvis.error", {"code": "too_long"})
+        self.assertEqual(len(run.frames), 1)
+
+    def test_a_runaway_answer_ends_the_run_with_a_clear_error(self):
+        frames = [chunk("y" * 200) for _ in range(200)] + [chunk(None, "stop"), "data: [DONE]"]
+        hermes, relay, port = self.boot([frames])
+        with mock.patch.object(relay_module, "RUN_MAX_BYTES", 4000):
+            self.start(port)
+            run = self.finished(relay)
+        self.assertEqual(run.outcome, "error")
+        self.assertLessEqual(run.size, 4000 + 1000)
+        self.assertEqual(len(hermes.requests), 1)  # never retried or continued
+        _, frames = self.events(port)
+        self.assertEqual(frames[-1][1], "jarvis.error")
+        self.assertIn("too_long", frames[-1][2])
+
+    def boot_guest(self, replies):
+        _, relay, port = self.boot([])
+        provider = FakeHermes(replies)
+        self.addCleanup(provider.close)
+        relay.guest_connect = lambda: http.client.HTTPConnection(
+            "127.0.0.1", provider.server.server_port, timeout=10
+        )
+        return provider, relay, port
+
+    def test_every_guest_recovery_counts_against_the_hourly_allowance(self):
+        guest = "web:guest:retry"
+        empty = ['data: {"choices":[{"delta":{},"finish_reason":"cancelled"}]}', "data: [DONE]"]
+        provider, relay, port = self.boot_guest([empty, empty, empty])
+        with mock.patch.dict("os.environ", {"OPENROUTER_API_KEY": "or-key"}):
+            self.start(port, owner=guest)
+            self.finished(relay)
+        self.assertEqual(len(provider.requests), relay_module.ATTEMPTS)
+        self.assertEqual(len(relay.guest_log[guest]), relay_module.ATTEMPTS)
+        self.assertEqual(relay.guest_active, 0)
+
+    def test_a_guest_out_of_allowance_gets_no_recovery_calls(self):
+        guest = "web:guest:last"
+        empty = ['data: {"choices":[{"delta":{},"finish_reason":"cancelled"}]}', "data: [DONE]"]
+        provider, relay, port = self.boot_guest([empty, empty, empty])
+        relay.guest_log[guest] = [relay.clock()] * (relay_module.GUEST_PER_HOUR - 1)
+        with mock.patch.dict("os.environ", {"OPENROUTER_API_KEY": "or-key"}):
+            self.start(port, owner=guest)
+            run = self.finished(relay)
+        self.assertEqual(len(provider.requests), 1)
+        self.assertEqual(run.outcome, "error")
+        self.assertEqual(relay.guest_active, 0)
 
 
 if __name__ == "__main__":
