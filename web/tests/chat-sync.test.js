@@ -197,6 +197,34 @@ test("a streaming local reply is not replaced by a remote edit", async () => {
 const reply = (extra = {}) => ({ id: "reply-one", role: "assistant", content: "", run: "reply-one",
   running: true, startedAt: Date.now(), ...extra });
 
+test("concurrent reply version selections keep both histories instead of discarding the local choice", async () => {
+  const { device } = setup();
+  const versions = [{ content: "First answer" }, { content: "Second answer" }];
+  const original = { ...chat(), messages: [...chat().messages,
+    reply({ ...versions[1], versions, version: 1, running: undefined })] };
+  const desktop = device([original]), phone = device();
+  await desktop.sync.tick(); await phone.sync.tick();
+  // Desktop continues the conversation while an offline phone selects an older answer.
+  desktop.sync.observe([{ ...original, messages: [...original.messages,
+    { id: "next", role: "user", content: "Tell me more" }] }]);
+  phone.sync.observe([{ ...original, messages: [...chat().messages,
+    { ...original.messages[1], ...versions[0], version: 0 }] }]);
+  await desktop.sync.tick(); await phone.sync.tick();
+  assert.equal(phone.conflicts, 1);
+  assert.equal(phone.chats.length, 2);
+  assert.equal(phone.chats.find(item => item.id !== original.id).messages[1].content, "First answer");
+  const third = device(); await third.sync.tick();
+  assert.equal(third.chats.length, 2);
+  assert.equal(third.chats.find(item => item.id === original.id).messages.at(-1).content, "Tell me more");
+});
+
+test("matching message IDs cannot merge changed user text or different relay runs", () => {
+  assert.equal(mergeChats(chat(), chat("chat-one", "Changed text")), null);
+  const original = { ...chat(), messages: [reply()] };
+  assert.equal(mergeChats(original, { ...original,
+    messages: [{ ...original.messages[0], run: "other-run", content: "Other answer" }] }), null);
+});
+
 test("a reply being written is saved when it starts and ends, not on every word", async () => {
   const { device, store } = setup();
   const a = device([chat()]); await a.sync.tick();

@@ -352,6 +352,17 @@ class RelayTests(unittest.TestCase):
         self.finished(relay)
         self.assertEqual(len(hermes.requests), 1)
 
+    def test_retrying_a_completed_start_replays_the_answer_without_running_tools_again(self):
+        hermes, relay, port = self.boot([[chunk("Once.", "stop"), "data: [DONE]"]])
+        self.start(port)
+        original = self.finished(relay)
+        frames = list(original.frames)
+        self.assertEqual(original.outcome, "complete")
+        self.assertEqual(self.start(port)[0], 202)
+        self.assertIs(relay.find(RUN, OWNER), original)
+        self.assertEqual(original.frames, frames)
+        self.assertEqual(len(hermes.requests), 1)
+
     def test_stop_cancels_the_hermes_run(self):
         closed = threading.Event()
 

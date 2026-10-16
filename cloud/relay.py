@@ -308,9 +308,10 @@ class Relay:
             existing = self.runs.get(run_id)
             if existing is not None and existing.owner != owner:
                 return None
-            # The same id again while it runs (a retried request): follow the original.
-            # After it ended (a busy cloud, a failed start): start over.
-            if existing is not None and not existing.done:
+            # A lost start response can be retried after the answer finished.
+            # Keep its numbered frames rather than running tools a second time.
+            # Failed starts (including a busy cloud) may still be retried.
+            if existing is not None and (not existing.done or existing.outcome == "complete"):
                 return existing
             run = self.runs[run_id] = Run(run_id, owner)
         self.feed(owner).bump()

@@ -283,11 +283,34 @@ async function startRun(cfg, user, input, signal, request) {
 
 /* Pass the relay's numbered frames through untouched, until the run ends,
    the page leaves, or this function's time is nearly up. */
+async function writeChunk(res, chunk, signal) {
+  if (signal.aborted || res.destroyed || res.writableEnded) return false;
+  if (res.write(chunk)) return true;
+  return new Promise(resolve => {
+    const finish = drained => {
+      res.off("drain", drain);
+      res.off("close", closed);
+      res.off("error", closed);
+      signal.removeEventListener("abort", closed);
+      resolve(drained);
+    };
+    const drain = () => finish(true);
+    const closed = () => finish(false);
+    res.once("drain", drain);
+    res.once("close", closed);
+    res.once("error", closed);
+    signal.addEventListener("abort", closed, { once: true });
+    // A write may close the response before the listeners were installed.
+    if (signal.aborted || res.destroyed || res.writableEnded) closed();
+  });
+}
+
 async function followRun(res, cfg, user, runId, after, signal, request, deadline) {
+  const following = AbortSignal.any([signal, AbortSignal.timeout(Math.max(1, deadline - Date.now()))]);
   let response;
   try {
     response = await request(`${base(cfg)}/vaelo/runs/${runId}/events?after=${after}`, {
-      signal: AbortSignal.any([signal, AbortSignal.timeout(Math.max(1, deadline - Date.now()))]),
+      signal: following,
       headers: relayHeaders(cfg, user),
     });
   } catch {
@@ -309,11 +332,7 @@ async function followRun(res, cfg, user, runId, after, signal, request, deadline
     for await (const chunk of response.body) {
       if (signal.aborted) return "left";
       tail = (tail + decoder.decode(chunk, { stream: true })).slice(-64);
-      if (!res.write(chunk))
-        await new Promise((resolve) => {
-          res.once("drain", resolve);
-          res.once("close", resolve);
-        });
+      if (!await writeChunk(res, chunk, following)) return signal.aborted ? "left" : "cut";
     }
   } catch {
     return signal.aborted ? "left" : "cut";
@@ -421,11 +440,7 @@ export async function followFeed(req, res, cfg, user, after, request = fetch, { 
     res.flushHeaders?.();
     try {
       for await (const chunk of response.body) {
-        if (!res.write(chunk))
-          await new Promise((resolve) => {
-            res.once("drain", resolve);
-            res.once("close", resolve);
-          });
+        if (!await writeChunk(res, chunk, upstream.signal)) break;
       }
     } catch {
       /* out of time or the device left; it reconnects with the last number */

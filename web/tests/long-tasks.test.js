@@ -81,6 +81,61 @@ const user = { sub: "owner", name: "Owner" };
 const runId = "9f1c2d3e-4b5a-4c6d-8e7f-0a1b2c3d4e5f";
 const input = { conversationId, runId, messages: [{ role: "user", content: "hi" }] };
 
+test("slow readers do not accumulate close listeners while chat and feed streams drain", async () => {
+  for (const feed of [false, true]) {
+    const { req, res } = fakeExchange();
+    let writes = 0;
+    res.write = () => {
+      writes++;
+      setImmediate(() => res.emit("drain"));
+      return false;
+    };
+    const bytes = new TextEncoder().encode(': keepalive\n\n');
+    const request = async () => new Response(new ReadableStream({
+      start(controller) {
+        for (let i = 0; i < 20; i++) controller.enqueue(bytes);
+        controller.close();
+      },
+    }));
+    if (feed) await followFeed(req, res, cfg, user, -1, request);
+    else await streamChat(req, res, cfg, user, { ...input, after: -1 }, request);
+    assert.ok(writes >= 20);
+    for (const name of ["close", "drain", "error"]) assert.equal(res.listenerCount(name), 0, name);
+  }
+});
+
+test("a feed deadline releases a stalled reader and cancels its upstream stream", async () => {
+  const { req, res } = fakeExchange();
+  let cancelled = false;
+  res.write = () => false; // no drain, and the socket stays open
+  const request = async () => new Response(new ReadableStream({
+    start(controller) { controller.enqueue(new TextEncoder().encode(': keepalive\n\n')); },
+    cancel() { cancelled = true; },
+  }));
+  await followFeed(req, res, cfg, user, -1, request, { followMs: 25 });
+  assert.equal(cancelled, true);
+  assert.equal(res.ended, true);
+  for (const name of ["close", "drain", "error"]) assert.equal(res.listenerCount(name), 0, name);
+});
+
+test("a chat deadline releases a stalled reader so the reply can reconnect", async () => {
+  const { req, res, events } = fakeExchange();
+  let cancelled = false;
+  res.write = chunk => {
+    res.chunks.push(typeof chunk === "string" ? chunk : Buffer.from(chunk).toString());
+    return false;
+  };
+  const request = async () => new Response(new ReadableStream({
+    start(controller) { controller.enqueue(new TextEncoder().encode(': keepalive\n\n')); },
+    cancel() { cancelled = true; },
+  }));
+  await streamChat(req, res, cfg, user, { ...input, after: -1 }, request, { followMs: 25 });
+  assert.equal(cancelled, true);
+  assert.equal(res.ended, true);
+  assert.ok(events().some(event => event.name === "jarvis.resume"));
+  for (const name of ["close", "drain", "error"]) assert.equal(res.listenerCount(name), 0, name);
+});
+
 /* A stand-in for the relay in front of Hermes: it accepts runs and serves
    their numbered frames, ending with ": end" once the run is over. */
 function fakeRelay({ frames = ['id: 0\nevent: jarvis.complete\ndata: {"ok":true}'], end = true, health = () => true, start = 202, events } = {}) {

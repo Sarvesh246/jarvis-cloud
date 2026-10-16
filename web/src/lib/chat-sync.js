@@ -45,8 +45,16 @@ export function mergeChats(local, remote) {
   // A pin is a flag, not an edit worth a copy: the device that toggled it last wins.
   const pin = (local.pinnedAt || 0) > (remote.pinnedAt || 0) ? local : remote;
   const mine = local.messages, theirs = remote.messages;
-  for (let i = 0; i < Math.min(mine.length, theirs.length); i++)
-    if (mine[i].id !== theirs[i].id) return null;
+  for (let i = 0; i < Math.min(mine.length, theirs.length); i++) {
+    const a = mine[i], b = theirs[i];
+    if (a.id !== b.id) return null;
+    if (JSON.stringify(a) === JSON.stringify(b)) continue;
+    // Matching IDs alone do not make edits interchangeable: selecting a
+    // different saved reply version changes what the next request remembers.
+    // Only copies of the same live relay run may converge automatically.
+    if (a.role !== "assistant" || b.role !== "assistant" ||
+        !a.run || a.run !== b.run || (!a.running && !b.running)) return null;
+  }
   const longer = mine.length > theirs.length ? mine : theirs;
   const messages = longer.map((message, i) => {
     const a = mine[i], b = theirs[i];
