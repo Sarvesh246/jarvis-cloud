@@ -112,9 +112,23 @@ export function importWork(text, { getWorkspace, getCheck }) {
     if (!custom && !workspace) throw new Error('This backup has a workspace Vaelo doesn’t offer any more.');
     const check = record.check && getCheck(record.check.id) && record.check.input && typeof record.check.input === 'object' && !Array.isArray(record.check.input)
       ? { id: record.check.id, input: answersFor(getCheck(record.check.id), record.check.input) } : null;
-    const documents = (Array.isArray(record.documents) ? record.documents : []).filter(doc => typeof doc?.text === 'string' && doc.text.trim()).slice(0, WORK_LIMITS.documents)
-      .map(doc => ({ id: newId(), slot: typeof doc.slot === 'string' && (custom || doc.slot === 'extra' || workspace.slots.some(s => s.id === doc.slot)) ? doc.slot : 'extra',
-        name: clip(doc.name, 160) || 'Document', text: doc.text.slice(0, WORK_LIMITS.documentChars), chars: Math.min(doc.text.length, WORK_LIMITS.documentChars) }));
+    // A backup must restore every file in full. Reject an incomplete or
+    // oversized backup before offering any drafts, rather than losing text.
+    const files = record.documents ?? [];
+    if (!Array.isArray(files)) throw new Error('This backup has an invalid file list. Choose another backup.');
+    if (files.length > WORK_LIMITS.documents) throw new Error(`This backup has too many files in one workspace. Split it into workspaces with up to ${WORK_LIMITS.documents} files.`);
+    let chars = 0;
+    const documents = files.map(doc => {
+      const name = clip(doc?.name, 160) || 'Document';
+      if (doc?.missing || typeof doc?.text !== 'string' || !doc.text.trim())
+        throw new Error(`“${name}” is missing or empty in this backup. Make a new backup with all its files, then try again.`);
+      if (doc.text.length > WORK_LIMITS.documentChars)
+        throw new Error(`“${name}” is too long to load in full. Split the file into smaller files before importing.`);
+      chars += doc.text.length;
+      return { id: newId(), slot: typeof doc.slot === 'string' && (custom || doc.slot === 'extra' || workspace.slots.some(s => s.id === doc.slot)) ? doc.slot : 'extra',
+        name, text: doc.text, chars: doc.text.length };
+    });
+    if (chars > WORK_LIMITS.recordDocumentChars) throw new Error('These backup files are too long together. Split them into separate workspaces before importing.');
     // IDs, outputs and revisions are not imported as trusted saved state.
     return { workspaceId: record.workspaceId, title: clip(record.title, 160) || workspace?.title || 'Imported workspace',
       scope: SCOPE_NAMES.includes(record.scope) ? record.scope : 'personal', notes: clip(record.notes, WORK_LIMITS.notes), documents,
@@ -134,7 +148,7 @@ export function chatToWorkspace(chat) {
   const seen = new Set(); const documents = []; const skipped = [];
   for (const file of (chat?.messages || []).flatMap(m => m.role === 'user' ? m.attachments || [] : [])) {
     if (file.kind === 'image' || file.state !== 'ready' || typeof file.body !== 'string') { if (file.kind === 'image') skipped.push(file.name); continue; }
-    const key = `${file.name}:${file.body.length}`;
+    const key = JSON.stringify([file.name, file.body]);
     if (seen.has(key)) continue;
     seen.add(key);
     if (documents.length >= WORK_LIMITS.documents || file.body.length > WORK_LIMITS.documentChars) { skipped.push(file.name); continue; }

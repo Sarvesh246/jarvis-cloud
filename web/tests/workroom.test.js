@@ -57,11 +57,32 @@ test('exports carry document text; imports become review drafts and drop server 
   const exported = exportWork([record], { ['a'.repeat(64)]: 'Receipt' });
   assert.equal(exported.format, 'vaelo-work/v2'); assert.equal(exported.records[0].revision, undefined); assert.equal(exported.records[0].output, undefined);
   assert.deepEqual(exported.records[0].documents, [{ slot: 'order', name: 'r.txt', text: 'Receipt' }, { slot: 'extra', name: 'gone.txt', missing: true }]);
-  const [draft] = importWork(JSON.stringify(exported), lookups);
+  assert.throws(() => importWork(JSON.stringify(exported), lookups), /gone\.txt.*missing/i);
+  const complete = exportWork([record], { ['a'.repeat(64)]: 'Receipt', ['b'.repeat(64)]: 'Recovered' });
+  const [draft] = importWork(JSON.stringify(complete), lookups);
   assert.equal(draft.id, undefined); assert.equal(draft.revision, undefined); assert.equal(draft.output, undefined);
   assert.equal(draft.title, 'Refund'); assert.equal(draft.notes, 'n'); assert.deepEqual(draft.check, { id: 'refund', input: { owed: '$49.99', arrived: '$20', chaseBy: '' } });
-  assert.equal(draft.documents.length, 1); assert.equal(draft.documents[0].text, 'Receipt'); assert.ok(draft.documents[0].id);
+  assert.equal(draft.documents.length, 2); assert.equal(draft.documents[0].text, 'Receipt'); assert.ok(draft.documents[0].id);
   assert.throws(() => importWork('{invalid', lookups)); assert.throws(() => importWork(JSON.stringify({ workspaceId: 'nope' }), lookups));
+});
+
+test('backup imports reject incomplete and oversized documents instead of silently losing text', () => {
+  const doc = (text = 'Receipt') => ({ name: 'receipt.txt', slot: 'extra', text });
+  const restore = documents => importWork(JSON.stringify({ workspaceId: 'custom', title: 'Backup', documents }), lookups);
+  assert.throws(() => restore([doc('x'.repeat(WORK_LIMITS.documentChars + 1))]), /receipt\.txt.*too long/i);
+  assert.throws(() => restore(Array.from({ length: WORK_LIMITS.documents + 1 }, () => doc())), /too many files/i);
+  assert.throws(() => restore(Array.from({ length: 3 }, () => doc('x'.repeat(WORK_LIMITS.documentChars)))), /too long together/i);
+  for (const invalid of [null, { name: 'receipt.txt', sha: 'a'.repeat(64) }, doc(' '), doc(7)])
+    assert.throws(() => restore([invalid]), /missing|empty/i);
+  assert.throws(() => restore({ file: doc() }), /file list/i);
+  const original = 'é\n'.repeat(WORK_LIMITS.documentChars / 2);
+  assert.equal(restore([doc(original)])[0].documents[0].text, original);
+});
+
+test('saving a chat as a workspace keeps different same-name files of equal length', () => {
+  const files = ['Total: $10', 'Total: $20', 'Total: $10'].map(body => ({ name: 'receipt.txt', state: 'ready', body }));
+  const { draft } = chatToWorkspace({ messages: [{ role: 'user', content: 'Compare', attachments: files }] });
+  assert.deepEqual(draft.documents.map(doc => doc.text), ['Total: $10', 'Total: $20']);
 });
 
 test('older exports still import when their check survives, and say so when it does not', () => {
