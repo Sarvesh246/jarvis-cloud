@@ -60,6 +60,8 @@ export function useCopy() {
 }
 
 export function download(name, text, type = "text/plain") {
+  // Without a byte-order mark, Excel reads CSV as the local code page and mangles "€" and "é".
+  if (type === "text/csv" && !text.startsWith("﻿")) text = `﻿${text}`;
   if (DESKTOP) return saveDesktopFile(name, text).catch(() => {
     alert("The file could not be saved. Please try again.");
     return false;
