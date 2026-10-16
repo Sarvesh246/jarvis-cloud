@@ -11,25 +11,35 @@ const symbolFor = word => SYMBOLS.find(([pattern]) => pattern.test(word.trim()))
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
 const MONTH = '(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)';
 const BEFORE = String.raw`(us\$|a\$|c\$|nz\$|\$|£|€|₹|¥|rs\.?|usd|aud|cad|nzd|gbp|eur|inr|jpy)\s?`;
-const NUMBER = String.raw`(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d{1,2}))?`;
-const AFTER = String.raw`\s?(dollars?|bucks?|pounds?|quid|euros?|rupees?|yen|usd|aud|cad|nzd|gbp|eur|inr|jpy)\b`;
+const NUMBER = String.raw`(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d+))?`;
+// "20€" and "£5" both name their currency.
+const AFTER = String.raw`\s?((?:dollars?|bucks?|pounds?|quid|euros?|rupees?|yen|usd|aud|cad|nzd|gbp|eur|inr|jpy)\b|[€£¥₹])`;
 
 /* Every amount in a line, with whether it carried a currency and where. */
 export function findAmounts(text) {
   const source = String(text ?? '');
   const pattern = new RegExp(`(?:${BEFORE})?${NUMBER}(?:${AFTER})?`, 'gi');
   const found = [];
+  let consumed = 0; // a decimal comma reads past its match
   for (const match of source.matchAll(pattern)) {
-    const [whole, before, digits, cents, after] = match;
-    const end = match.index + whole.length;
+    if (match.index < consumed) continue;
+    let [whole, before, digits, cents, after] = match;
+    let end = match.index + whole.length;
     const near = source.slice(Math.max(0, match.index - 12), match.index).toLowerCase();
     const next = source.slice(end, end + 12).toLowerCase();
     // "3 Oct", "Oct 3", "3rd" and "10:30" are dates and times, not money.
     const dateLike = !before && !after && (new RegExp(`^\\s*(?:st|nd|rd|th)?\\s*(?:of\\s+)?${MONTH}`, 'i').test(next)
       || new RegExp(`${MONTH}\\.?\\s*$`, 'i').test(near) || /^(?:st|nd|rd|th)\b/.test(next) || /^[:/.-]\d/.test(next) || /[:/-]$/.test(near));
     if (dateLike) continue;
-    const amount = Number(digits.replace(/,/g, '')) + (cents ? Number(cents.padEnd(2, '0')) / 100 : 0);
+    // "-$10" is not $10: checks take amounts as written, so a negative one is left for the person to restate.
+    if (before && /(?:^|[\s(])[-−]$/.test(near)) continue;
+    // "12,50" is twelve and a half in much of the world, not twelve.
+    const comma = !cents && !after && /^,(\d{1,2})(?!\d)/.exec(source.slice(end));
+    if (comma) { cents = comma[1]; end += comma[0].length; whole = source.slice(match.index, end); }
+    // More than two decimals rounds to the cent rather than dropping digits.
+    const amount = Math.round((Number(digits.replace(/,/g, '')) + (cents ? Number(`0.${cents}`) : 0)) * 100) / 100;
     if (!Number.isFinite(amount)) continue;
+    consumed = end;
     found.push({ amount, symbol: before ? symbolFor(before) : after ? symbolFor(after) : null, marked: Boolean(before || after), index: match.index, end, text: whole.trim() });
   }
   return found;
@@ -50,6 +60,8 @@ export function formatMoney(amount, symbol = '') {
 
 const iso = date => date.toISOString().slice(0, 10);
 const utc = (year, month, day) => {
+  // 2026-13-01 is a typo, not January 2027.
+  if (month < 0 || month > 11) return null;
   const date = new Date(Date.UTC(year, month, day));
   return date.getUTCMonth() === ((month % 12) + 12) % 12 && date.getUTCDate() === day ? date : null;
 };
@@ -73,8 +85,9 @@ export function parseDate(text, now = Date.now()) {
     if (match[2] === 'month') { const d = new Date(base); d.setUTCMonth(d.getUTCMonth() + n); return iso(d); }
     return shift(n * (match[2] === 'week' ? 7 : 1));
   }
-  if ((match = /^(?:(next|this|on)\s+)?(sun|mon|tue|wed|thu|fri|sat)[a-z]*$/.exec(value))) {
-    const target = WEEKDAYS.indexOf(match[2]);
+  // Whole or short day names only, so "next month" isn't read as Monday.
+  if ((match = /^(?:(next|this|on)\s+)?(sunday|monday|tuesday|wednesday|thursday|friday|saturday|sun|mon|tues?|wed|thu(?:rs?)?|fri|sat)\.?$/.exec(value))) {
+    const target = WEEKDAYS.indexOf(match[2].slice(0, 3));
     // The coming one: "Friday" and "next Friday" both mean the next Friday ahead.
     const ahead = (target - base.getUTCDay() + 7) % 7 || 7;
     return shift(ahead);

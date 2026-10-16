@@ -164,8 +164,13 @@ export class WorkStore {
     for (let attempt = 0; attempt < 5; attempt++) {
       const current = await this.snapshot();
       const { records, result } = change(current.records);
+      /* Tombstones only need to outlast stale copies on other devices, so the
+         oldest go once there are too many rather than blocking every delete. */
+      const tombstones = Object.values(records).filter(item => item.deleted)
+        .sort((a, b) => a.updated.localeCompare(b.updated));
+      for (const old of tombstones.slice(0, Math.max(0, tombstones.length - MAX_TOMBSTONES))) delete records[old.id];
       const all = Object.values(records);
-      if (all.filter(item => !item.deleted).length > MAX_WORK_RECORDS || all.filter(item => item.deleted).length > MAX_TOMBSTONES)
+      if (all.filter(item => !item.deleted).length > MAX_WORK_RECORDS)
         throw new HttpError(413, "There’s room for 100 saved workspaces, and you’ve used them all. Save a backup, then delete some to make room.");
       const text = JSON.stringify({ schemaVersion: 1, records });
       if (Buffer.byteLength(text) > MAX_WORK_BYTES) throw new HttpError(413, "Your saved work is full. Save a backup, then delete some to make room.");
@@ -186,7 +191,11 @@ export class WorkStore {
   async collect(before, after) {
     if (!this.storage.del) return;
     const kept = references(after);
-    const orphans = [...references(before)].filter(sha => !kept.has(sha));
+    let orphans = [...references(before)].filter(sha => !kept.has(sha));
+    if (!orphans.length) return;
+    // A save that landed since this change may point at the same text again.
+    try { const now = references((await this.snapshot()).records); orphans = orphans.filter(sha => !now.has(sha)); }
+    catch { return; }
     if (!orphans.length) return;
     try { await this.storage.del(orphans.map(sha => workDocumentPath(this.sub, sha))); } catch { /* left for a later save */ }
   }
@@ -219,8 +228,9 @@ export class WorkStore {
     const { incomingChars, ...normalized } = normalizeWorkRecord(record); checkBase(base);
     if (incomingChars > WORK_LIMITS.recordDocumentChars)
       throw new HttpError(413, "These files are too long together. Remove one, or paste just the parts you need.");
-    normalized.documents = await this.upload(normalized.documents);
-    return this.mutate(records => {
+    const incoming = normalized.documents;
+    normalized.documents = await this.upload(incoming);
+    const saved = await this.mutate(records => {
       const existing = records[normalized.id];
       if (existing?.deleted || (existing?.revision ?? null) !== base)
         throw new HttpError(409, "This was changed on another device.");
@@ -229,6 +239,14 @@ export class WorkStore {
       const saved = { ...this.resolve(normalized.documents, records, normalized), revision: randomUUID(), updated: this.now(), output };
       return { records: { ...records, [saved.id]: saved }, result: saved };
     });
+    await this.restore(incoming);
+    return saved;
+  }
+  /* A delete elsewhere can remove shared text between this upload and the
+     index write; writing it again once the index points at it closes that. */
+  async restore(documents) {
+    try { await this.upload(documents.filter(item => typeof item.text === "string")); }
+    catch { /* the text was stored once already; a later save repairs it */ }
   }
   async run(id, base) {
     checkBase(base); const record = await this.record(id);
@@ -272,11 +290,13 @@ export class WorkStore {
       if (incomingChars > WORK_LIMITS.recordDocumentChars) throw new HttpError(413, `“${item.title}” has too much in its files to load.`);
       uploaded.push({ ...item, documents: await this.upload(item.documents) });
     }
-    return this.mutate(current => {
+    const result = await this.mutate(current => {
       if (uploaded.some(item => Object.hasOwn(current, item.id))) throw new HttpError(409, "Some of these are already saved here. Open them from Saved instead.");
       const imported = uploaded.map(item => ({ ...this.resolve(item.documents, current, item), revision: randomUUID(), updated: this.now(), output: null }));
       return { records: { ...current, ...Object.fromEntries(imported.map(item => [item.id, item])) }, result: imported };
     });
+    await this.restore(normalized.flatMap(item => item.documents));
+    return result;
   }
   /* The text behind a record's documents, keyed by content hash. A missing
      file reads as null so the caller can say which one to attach again. */

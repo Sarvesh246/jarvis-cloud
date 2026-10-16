@@ -122,7 +122,11 @@ def page_key(url):
 
 
 def site(url):
-    return (urlsplit(url).hostname or "").lower().removeprefix("www.")
+    # One malformed link in a result list must not sink the whole search.
+    try:
+        return (urlsplit(url).hostname or "").lower().removeprefix("www.")
+    except ValueError:
+        return ""
 
 
 def terms(text):

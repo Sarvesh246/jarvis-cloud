@@ -110,6 +110,7 @@ function groupChoice(a) {
       priorBurden: helped.some(name => sameName(name, person.name)) ? 1 : 0 };
   });
   const plan = kernels.choosePlan(members, options, { fairness: 'worst-member' });
+  requireInput(plan.status !== 'unknown', 'There are too many choices to compare at once. Narrow the list to 100 or fewer.');
   if (plan.status === 'proposed') return { status: 'proposed', choice: plan.option, alsoWorks: plan.alternatives };
   const closest = options.map(option => ({ option, cant: members.filter(m => !m.acceptable.includes(option)).map(m => m.id) }))
     .sort((x, y) => x.cant.length - y.cant.length)[0];
@@ -135,7 +136,9 @@ function purchase(a) {
     return { name, price: price.amount, yearly, found: amounts };
   });
   requireInput(items.length, 'Please add at least one option.');
-  const years = a.years ? Number((/(\d+(?:\.\d+)?)/.exec(a.years) || [])[1]) : 3;
+  // "18 months" is a year and a half, not eighteen years.
+  const kept = a.years ? /(\d+(?:\.\d+)?)\s*(months?|mos?\b)?/i.exec(a.years) : null;
+  const years = a.years ? (kept ? Number(kept[1]) / (kept[2] ? 12 : 1) : NaN) : 3;
   requireInput(Number.isFinite(years) && years >= 0 && years <= 50, 'I couldn’t read how long you’ll keep it. Try something like “3 years”.');
   const budget = a.budget ? parseMoney(a.budget) : null;
   requireInput(!a.budget || budget, 'I couldn’t find an amount in your budget. Try something like “$400”.');

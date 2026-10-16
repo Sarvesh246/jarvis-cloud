@@ -182,6 +182,16 @@ class RelayTests(unittest.TestCase):
             time.sleep(0.02)
         self.fail("the run never finished")
 
+    def test_a_negative_content_length_is_refused_instead_of_hanging(self):
+        _, _, port = self.boot([])
+        connection = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+        connection.putrequest("POST", "/vaelo/runs")
+        connection.putheader("Authorization", f"Bearer {KEY}")
+        connection.putheader("X-Hermes-Session-Key", OWNER)
+        connection.putheader("Content-Length", "-1")
+        connection.endheaders()
+        self.assertEqual(connection.getresponse().status, 400)
+
     def test_guest_replies_go_to_the_provider_with_no_tools_and_stay_off_hermes(self):
         guest = "web:guest:" + "a" * 8 + "-" + "b" * 4 + "-" + "c" * 4 + "-" + "d" * 4 + "-" + "e" * 12
         hermes, relay, port = self.boot([])

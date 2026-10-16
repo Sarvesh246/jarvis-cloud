@@ -20,6 +20,11 @@ class ResearchTests(unittest.TestCase):
         with patch.dict(sys.modules, {"agent": types.ModuleType("agent"), "agent.web_search_provider": interface}):
             spec.loader.exec_module(cls.module)
 
+    def test_one_malformed_link_does_not_break_fusing_results(self):
+        hits = [{"url": "http://[x", "title": "bad"}, {"url": "https://example.com/a", "title": "good"}]
+        fused = self.module.fuse([hits], 5)
+        self.assertIn("https://example.com/a", [hit["url"] for hit in fused])
+
     def test_search_falls_back_without_exposing_provider_errors(self):
         mod = self.module
         def response(name, path, payload, timeout=None):

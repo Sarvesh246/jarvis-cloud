@@ -563,6 +563,8 @@ def make_handler(relay):
         protocol_version = (
             "HTTP/1.0"  # bodies end when the connection closes: streaming-friendly
         )
+        # A client that stops sending mid-request must not hold a thread forever.
+        timeout = 60
 
         def log_message(self, format, *args):
             pass
@@ -590,7 +592,7 @@ def make_handler(relay):
 
         def body(self):
             length = int(self.headers.get("Content-Length") or 0)
-            if length > BODY_LIMIT:
+            if length < 0 or length > BODY_LIMIT:
                 raise ValueError("too large")
             return self.rfile.read(length) if length else b""
 

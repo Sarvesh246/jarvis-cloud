@@ -74,8 +74,13 @@ export class ChatStore {
       const current = await this.manifest();
       const entry = current.data.entries[id];
       if (entry?.version === version) return entry; // Idempotent after a lost response.
-      if ((entry?.version || null) !== base)
+      if ((entry?.version || null) !== base) {
+        // The device stages a fresh version when it tries again, so these parts are dead.
+        if (!deleted && this.storage.del)
+          await this.storage.del(Array.from({ length: parts }, (_, part) =>
+            this.partPath(id, version, part))).catch(() => {});
         throw new HttpError(409, "This conversation changed on another device.");
+      }
       const next = { version, deleted, parts: deleted ? 0 : parts, updated: Date.now() };
       try {
         await this.storage.put(`${this.prefix}/index.json`, JSON.stringify({

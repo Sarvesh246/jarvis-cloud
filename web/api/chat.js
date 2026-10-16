@@ -22,7 +22,7 @@ export default async function handler(req, res) {
       input = resumeInput(query);
     } else {
       sameOrigin(req, cfg);
-      input = chatInput(await readJson(req, LIMITS.body));
+      input = chatInput(await readJson(req, LIMITS.body), { guest: Boolean(user.guest) });
       input = user.guest ? guestInput(input) : await withSelectedWork(input, user);
     }
     await streamChat(req, res, cfg, user, input);

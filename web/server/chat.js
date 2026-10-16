@@ -141,6 +141,7 @@ function readContent(content, role) {
     return { type: "image_url", image_url: { url } };
   });
   if (images > LIMITS.images) throw new HttpError(400, "Attach up to four images at a time.");
+  if (!images && !parts.some((part) => part.text.trim())) throw new HttpError(400, "Invalid message.");
   if (chars > LIMITS.messageChars) throw new HttpError(400, "Invalid message.");
   return { content: parts, chars };
 }
@@ -159,7 +160,7 @@ ${note}` };
   return parts;
 }
 
-export function chatInput(body) {
+export function chatInput(body, { guest = false } = {}) {
   if (
     !body ||
     !/^[a-f0-9-]{36}$/.test(body.conversationId || "") ||
@@ -170,14 +171,17 @@ export function chatInput(body) {
     throw new HttpError(400, "Invalid conversation.");
   let total = 0;
   // A mode given at the top level applies to the newest message (older clients).
-  const fallback = readMode({ style: body.style, research: body.research });
+  /* A guest can't research: the note is written into the message text here,
+     so the mode is settled before it is, not afterwards. */
+  const modeOf = guest ? (mode) => ({ ...readMode(mode), research: false }) : readMode;
+  const fallback = modeOf({ style: body.style, research: body.research });
   const messages = body.messages.map((message, index, all) => {
     if (!["user", "assistant"].includes(message?.role))
       throw new HttpError(400, "Invalid message.");
     const { content, chars } = readContent(message.content, message.role);
     total += chars;
     if (message.role !== "user") return { role: message.role, content };
-    const mode = message.mode !== undefined ? readMode(message.mode) : index === all.length - 1 ? fallback : readMode();
+    const mode = message.mode !== undefined ? modeOf(message.mode) : index === all.length - 1 ? fallback : modeOf();
     return { role: "user", content: withNote(content, requestNote(mode)) };
   });
   if (total > LIMITS.totalChars)
@@ -188,7 +192,7 @@ export function chatInput(body) {
   if (messages.at(-1).role !== "user")
     throw new HttpError(400, "A conversation must end with your message.");
   const last = body.messages.at(-1);
-  const mode = last.mode !== undefined ? readMode(last.mode) : fallback;
+  const mode = last.mode !== undefined ? modeOf(last.mode) : fallback;
   /* The reply's own id names its run on the relay, so the page can find it
      again after a dropped connection. Older pages don't send one. */
   const runId = RUN_ID.test(body.runId || "") ? body.runId : crypto.randomUUID();
