@@ -214,3 +214,17 @@ test("amounts: negatives, decimal commas, extra decimals and trailing symbols", 
   assert.deepEqual(read("$40.999"), [[41, "$"]]);
   assert.deepEqual(read("20€"), [[20, "€"]]);
 });
+
+test("a source's address matches the link Markdown actually renders", () => {
+  const urls = (text) => collectSources(text).map((source) => source.url);
+  assert.deepEqual(urls("[Foo](https://en.wikipedia.org/wiki/Foo\\_bar)"), ["https://en.wikipedia.org/wiki/Foo_bar"]);
+  assert.deepEqual(urls("[q](https://a.example/?a=1&amp;b=2)"), ["https://a.example/?a=1&b=2"]);
+  assert.deepEqual(urls("**https://a.example/x** and _https://a.example/y_ and ~~https://a.example/z~~"), [
+    "https://a.example/x",
+    "https://a.example/y",
+    "https://a.example/z",
+  ]);
+  assert.deepEqual(urls("[spaced](<https://a.example/a b>)"), ["https://a.example/a%20b"]);
+  // An underscore that belongs to the address stays.
+  assert.deepEqual(urls("[x](https://a.example/snake_)"), ["https://a.example/snake_"]);
+});
