@@ -8,7 +8,8 @@
     "desktop:msix": "pwsh -NoProfile -File desktop/package-msix.ps1",
     "desktop:dev": "tauri dev",
     "desktop:build": "tauri build",
-    "desktop:icons": "tauri icon public/icons/vaelo-512-v5.png",
+    "desktop:icons": "node scripts/generate-icons.mjs --desktop",
+    "icons": "node scripts/generate-icons.mjs",
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
     "test": "node --test tests/*.test.js",
@@ -39,6 +40,7 @@
   "devDependencies": {
     "@tauri-apps/cli": "^2.12.3",
     "@vitejs/plugin-react": "6.1.2",
+    "sharp": "^0.35.5",
     "vite": "8.3.4"
   }
 }
