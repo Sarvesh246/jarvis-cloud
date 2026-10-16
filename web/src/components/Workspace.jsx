@@ -1,3 +1,4 @@
+import { TableScroll } from "./blocks/TableScroll.jsx";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowSquareOut,
@@ -198,8 +199,8 @@ function TableView({ item }) {
           {query ? `${shown.length} of ${item.rows.length}` : `${item.rows.length} rows`}
         </span>
       </label>
-      <div className="ws-grid table-block" tabIndex={0} role="region" aria-label="Table">
-        <table>
+      <TableScroll className="ws-grid table-block" wrapClassName="ws-grid-wrap" label="Table">
+        <table style={{ "--table-min-width": `${Math.min(38, item.columns.length * 7)}rem` }}>
           <thead>
             <tr>
               {item.columns.map((column, i) => (
@@ -236,7 +237,7 @@ function TableView({ item }) {
           </tbody>
         </table>
         {!shown.length && <p className="ws-empty">No rows match “{query.trim()}”.</p>}
-      </div>
+      </TableScroll>
     </>
   );
 }

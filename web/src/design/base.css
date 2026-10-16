@@ -145,10 +145,12 @@ a {
   text-decoration-color: color-mix(in srgb, var(--gilt) 55%, transparent);
   transition: text-decoration-color var(--dur-1) var(--ease);
 }
-
+@media (hover: hover) and (pointer: fine) {
 a:hover {
   text-decoration-color: var(--gilt);
 }
+}
+
 
 :focus-visible {
   outline: 1.5px solid var(--gilt);
@@ -198,11 +200,13 @@ a:hover {
     background var(--dur-1) var(--ease),
     color var(--dur-1) var(--ease);
 }
-
+@media (hover: hover) and (pointer: fine) {
 .icon-button:hover:not(:disabled) {
   background: var(--gilt-wash);
   color: var(--ink);
 }
+}
+
 
 .icon-button:disabled {
   opacity: 0.4;
@@ -220,10 +224,12 @@ a:hover {
   font-weight: var(--w-ui);
   transition: background var(--dur-1) var(--ease);
 }
-
+@media (hover: hover) and (pointer: fine) {
 .text-button:hover:not(:disabled) {
   background: var(--gilt-wash);
 }
+}
+
 
 .text-button:disabled {
   opacity: 0.45;
@@ -246,10 +252,12 @@ a:hover {
     border-color var(--dur-1) var(--ease),
     color var(--dur-1) var(--ease);
 }
-
+@media (hover: hover) and (pointer: fine) {
 .chip:hover {
   border-color: var(--gilt);
 }
+}
+
 
 .chip[data-on] {
   border-color: var(--gilt);

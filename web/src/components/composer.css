@@ -109,8 +109,12 @@
     background var(--dur-1) var(--ease),
     color var(--dur-1) var(--ease);
 }
-
-.mode-button:hover,
+@media (hover: hover) and (pointer: fine) {
+.mode-button:hover {
+  background: var(--gilt-wash);
+  color: var(--ink);
+}
+}
 .mode-button[aria-expanded="true"] {
   background: var(--gilt-wash);
   color: var(--ink);
@@ -184,11 +188,13 @@
   border-radius: 50%;
   color: var(--muted);
 }
-
+@media (hover: hover) and (pointer: fine) {
 .mode-chip button:hover {
   background: var(--gilt-wash);
   color: var(--ink);
 }
+}
+
 
 .composer-note:empty {
   display: none;
@@ -423,8 +429,11 @@
   margin-bottom: var(--s-1);
   border-radius: var(--r-md);
 }
-
-.tools-menu .tools-back:hover,
+@media (hover: hover) and (pointer: fine) {
+.tools-menu .tools-back:hover {
+  color: var(--ink);
+}
+}
 .tools-menu .tools-back:focus-visible {
   color: var(--ink);
 }
@@ -442,8 +451,11 @@
     transform: translateX(-12px);
   }
 }
-
-.tools-menu .tools-item:hover,
+@media (hover: hover) and (pointer: fine) {
+.tools-menu .tools-item:hover {
+  background: transparent;
+}
+}
 .tools-menu .tools-item:focus-visible {
   background: transparent;
 }
@@ -461,8 +473,12 @@
   text-align: left;
   transition: background var(--dur-1) var(--ease);
 }
-
-.tools-item:hover,
+@media (hover: hover) and (pointer: fine) {
+.tools-item:hover {
+  background: var(--gilt-wash);
+  outline-offset: -2px;
+}
+}
 .tools-item:focus-visible {
   background: var(--gilt-wash);
   outline-offset: -2px;
@@ -681,10 +697,12 @@
   border-color: var(--ink);
   color: var(--surface);
 }
-
+@media (hover: hover) and (pointer: fine) {
 .send:hover:not(:disabled) {
   transform: translateY(-1px);
 }
+}
+
 
 .send:active:not(:disabled) {
   transform: none;

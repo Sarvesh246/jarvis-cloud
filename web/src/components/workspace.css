@@ -35,8 +35,11 @@
   opacity: 0;
   transition: opacity var(--dur-1) var(--ease);
 }
-
-.ws-resize:hover::after,
+@media (hover: hover) and (pointer: fine) {
+.ws-resize:hover::after {
+  opacity: 0.6;
+}
+}
 .ws-resize:focus-visible::after,
 body.resizing .ws-resize::after {
   opacity: 0.6;
@@ -88,7 +91,7 @@ body.resizing iframe {
 .ws-actions {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: var(--s-2);
 }
 
 .ws-body {
@@ -289,7 +292,7 @@ body.resizing iframe {
 .doc-tools {
   display: inline-flex;
   margin-left: auto;
-  gap: 2px;
+  gap: var(--s-2);
 }
 
 /* The passage Vaelo will revise is marked in place, like a pencilled bracket */
@@ -536,9 +539,7 @@ body.resizing iframe {
   background: var(--surface);
 }
 
-.ws-grid tbody tr:hover {
-  background: var(--gilt-wash);
-}
+
 
 /* Beside the conversation on wide screens; a sheet over it otherwise, so the
    conversation never gets squeezed into an unreadable column. */
@@ -659,3 +660,9 @@ body.resizing iframe {
     min-height: calc(4.25rem + 0.875rem);
   }
 }
+
+.ws-head { flex-wrap: wrap; row-gap: var(--s-2); padding-bottom: var(--s-2); }
+.ws-title-group { flex: 1 1 10rem; }
+.ws-actions { flex-wrap: wrap; justify-content: flex-end; }
+.ws-grid { padding-inline: var(--s-4); scroll-padding-inline: var(--s-4); }
+.ws-grid:focus-visible { outline-offset: -2px; }

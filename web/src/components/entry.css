@@ -168,10 +168,12 @@
     border-color var(--dur-1) var(--ease),
     transform var(--dur-1) var(--ease);
 }
-
+@media (hover: hover) and (pointer: fine) {
 .google-own:hover {
   border-color: var(--gilt);
 }
+}
+
 
 .google-own:active {
   transform: translateY(1px);

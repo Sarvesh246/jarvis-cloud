@@ -79,10 +79,12 @@
   color: var(--gilt);
   min-height: var(--hit);
 }
-
+@media (hover: hover) and (pointer: fine) {
 .toast .text-button:hover {
   background: rgb(255 255 255 / 8%);
 }
+}
+
 
 /* A gentle, in-flow notice. Earth-toned, never red, always with a way forward. */
 .notice {

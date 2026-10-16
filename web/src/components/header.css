@@ -54,10 +54,12 @@
   text-align: left;
   transition: background var(--dur-1) var(--ease);
 }
-
+@media (hover: hover) and (pointer: fine) {
 .header-title:hover:not(:disabled) {
   background: var(--gilt-wash);
 }
+}
+
 
 .header-title-input {
   width: min(34rem, 60vw);

@@ -318,10 +318,12 @@
   color: var(--muted);
   transition: color var(--dur-1) var(--ease);
 }
-
+@media (hover: hover) and (pointer: fine) {
 .process-receipt:hover:not(:disabled) {
   color: var(--ink);
 }
+}
+
 
 .process-receipt:disabled {
   cursor: default;
@@ -550,11 +552,13 @@
     background var(--dur-1) var(--ease),
     color var(--dur-1) var(--ease);
 }
-
+@media (hover: hover) and (pointer: fine) {
 .attachment-remove:hover {
   background: var(--gilt-wash);
   color: var(--ink);
 }
+}
+
 
 /* A pause for permission, set as a margin note in gilt, not an alarm */
 .approval {
@@ -644,8 +648,8 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: var(--s-1);
-  margin: var(--s-3) 0 0 calc(var(--s-2) * -1);
+  gap: var(--s-2);
+  margin: var(--s-3) 0 0;
   opacity: 0;
   transition: opacity var(--dur-2) var(--ease);
 }
@@ -653,8 +657,11 @@
 .message[data-role="user"] .message-actions {
   margin-top: var(--s-1);
 }
-
-.message:hover .message-actions,
+@media (hover: hover) and (pointer: fine) {
+.message:hover .message-actions {
+  opacity: 1;
+}
+}
 .message:focus-within .message-actions,
 .message[data-last] .message-actions {
   opacity: 1;
@@ -1008,11 +1015,13 @@
   border: 1px solid var(--hairline-strong);
   color: var(--ink);
 }
-
+@media (hover: hover) and (pointer: fine) {
 .approval-deny:hover {
   border-color: var(--clay);
   color: var(--clay);
 }
+}
+
 
 /* Hold to confirm: a gilt wash fills from the left at an even pace, so
    how long is left can be read; let go and it drains back. */

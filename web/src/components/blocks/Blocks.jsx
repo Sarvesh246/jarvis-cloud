@@ -22,6 +22,7 @@ import {
   timelineText,
 } from "../../lib/structured.js";
 import { blockKey, readChecklist, saveChecklist, visibleRows, numberSeries } from "../../lib/intelligent-ui.js";
+import { TableScroll } from "./TableScroll.jsx";
 import { NumberExplorer } from "./LocalTools.jsx";
 import { SourceIcon } from "./SourceIcon.jsx";
 import { Highlighted } from "./Highlighted.jsx";
@@ -662,8 +663,8 @@ function TableBlock({ node, "data-src": src }) {
       {view === "chart" && plan && visible.length > 0 ? (
         <Chart columns={data.columns} rows={visible.map(i => data.rows[i])} plan={plan} />
       ) : (
-        <div className="table-scroll" tabIndex={0} role="region" aria-label="Table, scrolls sideways">
-          <table>
+        <TableScroll>
+          <table style={{ "--table-min-width": `${Math.min(38, data.columns.length * 7 + (enhance ? 3.5 : 0))}rem` }}>
             <thead>
               <tr>
                 {enhance && <th scope="col"><span className="sr-only">Compare</span></th>}
@@ -701,7 +702,7 @@ function TableBlock({ node, "data-src": src }) {
               ))}
             </tbody>
           </table>
-        </div>
+        </TableScroll>
       )}
       {enhance && visible.length === 0 && <p className="local-note">No matching rows. Reset the view to see the full table.</p>}
       {enhance && visible.length > 0 && <NumberExplorer columns={data.columns} rows={visible.map(i => data.rows[i])} />}
@@ -798,7 +799,7 @@ function Checklist({ storageKey, defaults, tasks, items, original, ordered, src,
   }
   return <div className="local-checklist" data-src={src}>
     <div className="local-checklist-bar">
-      <button className="block-tool" aria-pressed={active} onClick={() => setActive(v => !v)}>{active ? "Show original list" : "Use as checklist"}</button>
+      <button className="block-tool" onClick={() => setActive(v => !v)}>{active ? "Show original list" : "Use as checklist"}</button>
       {active && <><span className="local-note" role="status">{completed} / {items.length} done</span><button className="block-tool" onClick={() => update(defaults)}>Reset checks</button></>}
     </div>
     {active ? <>

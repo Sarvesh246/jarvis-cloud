@@ -47,14 +47,18 @@
   color: var(--gilt);
   transition: transform var(--dur-2) var(--ease);
 }
-
+@media (hover: hover) and (pointer: fine) {
 .rail-new:hover:not(:disabled) {
   color: var(--gilt-ink);
 }
+}
 
+@media (hover: hover) and (pointer: fine) {
 .rail-new-conversation:hover:not(:disabled) svg {
   transform: rotate(90deg);
 }
+}
+
 
 .rail-new:disabled {
   opacity: 0.45;
@@ -177,10 +181,12 @@
   color: var(--muted);
   transition: color var(--dur-2) var(--ease);
 }
-
+@media (hover: hover) and (pointer: fine) {
 .rail-row:hover .rail-link {
   color: var(--ink);
 }
+}
+
 
 .rail-row[data-active="true"] .rail-link {
   color: var(--ink);
@@ -222,21 +228,28 @@
     color var(--dur-1) var(--ease),
     background var(--dur-1) var(--ease);
 }
-
-.rail-row:hover .rail-act,
+@media (hover: hover) and (pointer: fine) {
+.rail-row:hover .rail-act {
+  opacity: 1;
+}
+}
 .rail-row:focus-within .rail-act,
 .rail-act:focus-visible {
   opacity: 1;
 }
-
+@media (hover: hover) and (pointer: fine) {
 .rail-act:hover:not(:disabled) {
   background: var(--gilt-wash);
   color: var(--ink);
 }
+}
 
+@media (hover: hover) and (pointer: fine) {
 .rail-delete:hover:not(:disabled) {
   color: var(--clay);
 }
+}
+
 
 .rail-search {
   display: flex;
@@ -283,11 +296,13 @@
   height: 1.75rem;
   border-radius: 50%;
 }
-
+@media (hover: hover) and (pointer: fine) {
 .rail-search-clear:hover {
   background: var(--gilt-wash);
   color: var(--ink);
 }
+}
+
 
 /* Conversations or the things made in them: two views of one index */
 .rail-views {
@@ -311,10 +326,12 @@
     color var(--dur-1) var(--ease),
     border-color var(--dur-2) var(--ease);
 }
-
+@media (hover: hover) and (pointer: fine) {
 .rail-view:hover {
   color: var(--ink);
 }
+}
+
 
 .rail-view[aria-selected="true"] {
   color: var(--ink);
@@ -349,10 +366,12 @@
   text-align: left;
   transition: background var(--dur-1) var(--ease);
 }
-
+@media (hover: hover) and (pointer: fine) {
 .work-row:hover:not(:disabled) {
   background: var(--gilt-wash);
 }
+}
+
 
 /* Made in the conversation that's open: its title takes the gilt ink */
 .work-row[data-active] .work-title {

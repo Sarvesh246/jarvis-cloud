@@ -157,7 +157,7 @@ form>.work-action-bar { position:sticky; bottom:0; z-index:1; background:var(--c
 .work-action-note { flex-basis:100%; }
 .work-retired>p { padding-left:var(--s-4); border-left:2px solid var(--clay); line-height:1.6; color:var(--ink-soft); }
 @media(hover:hover) and (pointer:fine) {
-  .workroom button:hover:not(:disabled) { background:var(--gilt-wash); }
+  .workroom button:hover:not(:disabled) { border-color:var(--gilt); color:var(--ink); }
   .workroom .work-primary:hover:not(:disabled) { background:var(--gilt-ink); color:var(--on-gilt); }
   .workroom :is(.work-entry,.work-own):hover:not(:disabled) { background:transparent; }
   .workroom .work-entry:hover strong { color:var(--gilt-ink); }

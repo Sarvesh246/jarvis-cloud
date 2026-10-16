@@ -95,10 +95,12 @@
   opacity: 0;
   pointer-events: none;
 }
-
+@media (hover: hover) and (pointer: fine) {
 .settings-option:hover {
   border-color: var(--gilt);
 }
+}
+
 
 .settings-option:has(input:checked) {
   border-color: var(--gilt);

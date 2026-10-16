@@ -53,10 +53,12 @@
   border-radius: var(--r-sm);
   transition: color var(--dur-1) var(--ease);
 }
-
+@media (hover: hover) and (pointer: fine) {
 .doc-contents-list button:hover {
   color: var(--ink-soft);
 }
+}
+
 
 .doc-contents-list button[aria-current] {
   color: var(--ink);

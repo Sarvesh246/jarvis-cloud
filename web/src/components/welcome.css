@@ -154,18 +154,28 @@
     opacity var(--dur-2) var(--ease),
     transform var(--dur-2) var(--ease);
 }
-
-.starters button:hover,
+@media (hover: hover) and (pointer: fine) {
+.starters button:hover {
+  padding-left: var(--s-3);
+}
+}
 .starters button:focus-visible {
   padding-left: var(--s-3);
 }
-
-.starters button:hover .starter-title,
+@media (hover: hover) and (pointer: fine) {
+.starters button:hover .starter-title {
+  color: var(--gilt-ink);
+}
+}
 .starters button:focus-visible .starter-title {
   color: var(--gilt-ink);
 }
-
-.starters button:hover svg,
+@media (hover: hover) and (pointer: fine) {
+.starters button:hover svg {
+  opacity: 1;
+  transform: none;
+}
+}
 .starters button:focus-visible svg {
   opacity: 1;
   transform: none;
