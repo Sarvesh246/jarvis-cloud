@@ -34,7 +34,7 @@ import { mergePlan, readPlan } from "./lib/plan.js";
 import { classifyError } from "./lib/errors.js";
 import { JOIN_WINDOW, continueRequest, joinOnto, retryRequest } from "./lib/continuation.js";
 import { PHONE } from "./lib/use-phone.js";
-import { DESKTOP, desktopSignIn, desktopSignOut, desktopNotification, cancelDesktopSignIn } from "./lib/desktop.js";
+import { DESKTOP, desktopSignIn, desktopSignOut, desktopGuest, desktopLeaveGuest, desktopNotification, cancelDesktopSignIn } from "./lib/desktop.js";
 import { readDesktopHandoff } from "./lib/desktop-handoff.js";
 import { DesktopHandoff } from "./components/DesktopHandoff.jsx";
 import {
@@ -1847,7 +1847,8 @@ export function App() {
   async function continueAsGuest() {
     setError("");
     try {
-      await request("/api/login", { guest: true });
+      if (DESKTOP) await desktopGuest();
+      else await request("/api/login", { guest: true });
       await loadSession();
     } catch (err) {
       setError(err.message);
@@ -1856,7 +1857,8 @@ export function App() {
 
   async function logout() {
     try {
-      if (DESKTOP) await desktopSignOut();
+      if (DESKTOP && guest) desktopLeaveGuest();
+      else if (DESKTOP) await desktopSignOut();
       else await request("/api/logout", {});
       try {
         localStorage.removeItem(LAST_USER_KEY);

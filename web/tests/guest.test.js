@@ -83,3 +83,17 @@ test("a guest's reply is started on the relay with a toolless prompt under a gue
   assert.match(system, /guest/i);
   assert.doesNotMatch(system, /terminal|workspace|saved work record/i);
 });
+
+test("a guest bearer (the desktop app) is a guest, skips CSRF only once verified, and is never the owner", async () => {
+  const { sameOrigin } = await import("../server/security.js");
+  const token = await signGuest(cfg);
+  const req = { headers: { authorization: `Bearer ${token}`, "content-type": "application/json" } };
+  assert.throws(() => sameOrigin(req, cfg), /origin/);
+  const user = await authorizeAny(req, cfg);
+  assert.equal(user.guest, true);
+  assert.doesNotThrow(() => sameOrigin(req, cfg));
+  await assert.rejects(authorize(req, cfg), /Sign in/);
+  const owner = await signSession({ sub: "g1", email: "owner@gmail.com", name: "Owner" }, cfg, "vaelo-desktop");
+  assert.equal(await guestUser({ headers: { authorization: `Bearer ${owner}` } }, cfg), null);
+  assert.equal(await guestUser({ headers: { authorization: `Bearer ${token}x` } }, cfg), null);
+});

@@ -5,7 +5,7 @@ import { save } from "@tauri-apps/plugin-dialog";
 import { writeFile } from "@tauri-apps/plugin-fs";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { isPermissionGranted, requestPermission, sendNotification } from "@tauri-apps/plugin-notification";
-import { createDesktopFetch } from "./desktop-transport.js";
+import { createDesktopFetch, CLOUD_ORIGIN } from "./desktop-transport.js";
 
 export const DESKTOP = isTauri();
 export const STORE_BUILD = import.meta.env?.VITE_VAELO_STORE === "1";
@@ -39,6 +39,29 @@ export async function desktopSignIn() {
   token = null;
   await invoke("begin_sign_in");
   token = await invoke("session_token");
+}
+
+/* A guest has no saved sign-in: the token lives in memory only, so closing the
+   app ends the session and nothing touches the system credential store. */
+export async function desktopGuest() {
+  let response;
+  try {
+    response = await nativeFetch(`${CLOUD_ORIGIN}/api/login`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ guest: true, desktop: true }),
+      connectTimeout: 30_000, maxRedirections: 0,
+    });
+  } catch {
+    throw new Error("Could not reach Vaelo. Check your internet connection.");
+  }
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || typeof data.token !== "string")
+    throw new Error(data.error || "Guest mode isn't available right now.");
+  token = data.token;
+}
+
+export function desktopLeaveGuest() {
+  token = null;
 }
 
 export async function desktopSignOut() {

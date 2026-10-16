@@ -147,8 +147,13 @@ export function guestCookie(value, cfg, maxAge = guestDuration) {
   return cookie(cookieNames(cfg).guest, value, cfg, maxAge);
 }
 
+/* The desktop app has no cookies: it holds the guest token in memory and sends
+   it as a bearer, which (as for the owner's desktop token) is what lets the
+   request skip the browser-only origin and CSRF checks once verified. */
 export async function guestUser(req, cfg) {
-  const token = cookies(req)[cookieNames(cfg).guest];
+  const header = req.headers?.authorization;
+  const desktop = typeof header === "string" && header.startsWith("Bearer ");
+  const token = desktop ? header.slice(7) : cookies(req)[cookieNames(cfg).guest];
   if (!token) return null;
   try {
     const { payload } = await jwtVerify(token, sessionKey(cfg), {
@@ -157,6 +162,7 @@ export async function guestUser(req, cfg) {
       algorithms: ["HS256"],
     });
     if (typeof payload.sub !== "string" || !/^guest:[a-f0-9-]{36}$/.test(payload.sub)) return null;
+    if (desktop) req[desktopAuth] = true;
     return { sub: payload.sub, email: "", name: "Guest", guest: true };
   } catch {
     return null;
