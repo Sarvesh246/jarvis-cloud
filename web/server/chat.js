@@ -311,7 +311,6 @@ async function writeChunk(res, chunk, signal) {
   });
 }
 
-
 /* Pass the relay's numbered frames through untouched, until the run ends,
    the page leaves, or this function's time is nearly up. Only whole frames
    go out: a network chunk can end partway through one, and a heartbeat or

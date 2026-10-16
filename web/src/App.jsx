@@ -2015,6 +2015,10 @@ export function App() {
       }
       setChats([]);
       setActiveId(null);
+      drafts.current.clear();
+      setDraft("");
+      setAttachments([]);
+      imageData.current.clear();
       setSession(null);
       setWorkroomOpen(false);
       setWorkDraft(null);
