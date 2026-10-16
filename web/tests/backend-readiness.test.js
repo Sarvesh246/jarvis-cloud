@@ -36,3 +36,20 @@ test("an unavailable service has a bounded wait", async () => {
     request: async () => assert.fail("expired deadline must not make a request"),
   }), /still starting/);
 });
+
+test("cold-start error response bodies are cancelled before probing again", async () => {
+  let cancelled = 0;
+  let probes = 0;
+  await waitForBackend("https://cleanup.example", {
+    pause: async () => {},
+    request: async (url) => {
+      if (!url.endsWith("/health")) return new Response("Loading");
+      if (++probes === 3) return Response.json({ status: "ok" });
+      return new Response(new ReadableStream({
+        start(controller) { controller.enqueue(new TextEncoder().encode("Edge error")); },
+        cancel() { cancelled++; },
+      }), { status: 502 });
+    },
+  });
+  assert.equal(cancelled, 2);
+});

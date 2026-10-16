@@ -195,6 +195,16 @@ class RelayTests(unittest.TestCase):
         connection.endheaders()
         self.assertEqual(connection.getresponse().status, 400)
 
+    def test_non_object_run_requests_are_refused_without_starting_a_reply(self):
+        hermes, relay, port = self.boot([])
+        for body in ([], ["message"], "text", 42, True):
+            with self.subTest(body=body):
+                status, response = self.call(port, "POST", "/vaelo/runs", body)
+                self.assertEqual(status, 400)
+                self.assertEqual(json.loads(response), {"error": "invalid run"})
+        self.assertEqual(relay.runs, {})
+        self.assertEqual(hermes.requests, [])
+
     def test_guest_replies_go_to_the_provider_with_no_tools_and_stay_off_hermes(self):
         guest = "web:guest:" + "a" * 8 + "-" + "b" * 4 + "-" + "c" * 4 + "-" + "d" * 4 + "-" + "e" * 12
         hermes, relay, port = self.boot([])

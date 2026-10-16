@@ -709,6 +709,8 @@ def make_handler(relay):
 
         def start(self, owner):
             body = json.loads(self.body())
+            if not isinstance(body, dict):
+                return self.send_json(400, {"error": "invalid run"})
             run_id = str(body.get("id", ""))
             messages = body.get("messages")
             if (

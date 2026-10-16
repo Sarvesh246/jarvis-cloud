@@ -81,6 +81,7 @@ export async function waitForBackend(backend, {
         noteHealthy(base, request);
         return;
       }
+      if (!response.ok) await response.body?.cancel();
     } catch {
       signal?.throwIfAborted();
     }
