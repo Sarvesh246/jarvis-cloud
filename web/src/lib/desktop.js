@@ -35,6 +35,12 @@ export function installDesktopTransport() {
   });
 }
 
+/* Matches the native title bar to Vaelo's paper. Cosmetic, so a failure
+   (an older Windows, another platform) simply leaves the system bar. */
+export function desktopTitleBar(dark, caption, text) {
+  if (DESKTOP) invoke("title_bar", { dark, caption, text }).catch(() => {});
+}
+
 export async function desktopSignIn() {
   token = null;
   await invoke("begin_sign_in");

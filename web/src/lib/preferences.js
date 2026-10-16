@@ -3,7 +3,7 @@
    defaults come back. public/prefs.js applies the same attributes before the
    first paint, so a chosen theme never flashes the other one. */
 
-import { DESKTOP } from "./desktop.js";
+import { DESKTOP, desktopTitleBar } from "./desktop.js";
 export const PREFS_KEY = "vaelo-preferences";
 
 export const DEFAULTS = {
@@ -47,6 +47,16 @@ export function savePrefs(prefs) {
 }
 
 const BARS = { light: "#f7f2ea", dark: "#16110f" };
+/* The window title on the desktop app, in the muted ink of each paper */
+const BAR_INK = { light: "#5f524a", dark: "#bcac9a" };
+const systemDark = typeof matchMedia === "undefined" ? null : matchMedia("(prefers-color-scheme: dark)");
+let lastPrefs = null;
+systemDark?.addEventListener?.("change", () => lastPrefs?.theme === "system" && paintTitleBar(lastPrefs));
+
+function paintTitleBar(prefs) {
+  const scheme = prefs.theme === "system" ? (systemDark?.matches ? "dark" : "light") : prefs.theme;
+  desktopTitleBar(scheme === "dark", BARS[scheme], BAR_INK[scheme]);
+}
 
 export function applyPrefs(prefs, root = document.documentElement) {
   const set = (name, value, fallback) => {
@@ -61,6 +71,10 @@ export function applyPrefs(prefs, root = document.documentElement) {
   for (const meta of document.querySelectorAll('meta[name="theme-color"]')) {
     const scheme = meta.media.includes("dark") ? "dark" : "light";
     meta.content = BARS[prefs.theme === "system" ? scheme : prefs.theme];
+  }
+  if (DESKTOP) {
+    lastPrefs = prefs;
+    paintTitleBar(prefs);
   }
 }
 

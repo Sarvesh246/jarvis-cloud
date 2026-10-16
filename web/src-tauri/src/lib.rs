@@ -80,6 +80,49 @@ fn store_notification(title: String, body: String) -> Result<(), String> {
     }
 }
 
+fn rgb(hex: &str) -> Option<u32> {
+    let hex = hex.strip_prefix('#').filter(|h| h.len() == 6)?;
+    let value = u32::from_str_radix(hex, 16).ok()?;
+    // COLORREF is 0x00BBGGRR.
+    Some(((value & 0xff) << 16) | (value & 0xff00) | (value >> 16))
+}
+
+/* Paints the native Windows title bar in Vaelo's own paper and ink, so the
+   bar reads as part of the app while keeping Snap Layouts, resizing and the
+   system buttons. Windows 10 ignores these attributes and keeps its bar. */
+#[tauri::command]
+fn title_bar(window: tauri::WebviewWindow, dark: bool, caption: String, text: String) -> Result<(), String> {
+    let (caption, text) = rgb(&caption).zip(rgb(&text)).ok_or("Invalid title bar color.")?;
+    let _ = window.set_theme(Some(if dark { tauri::Theme::Dark } else { tauri::Theme::Light }));
+    #[cfg(windows)]
+    {
+        use windows::Win32::Graphics::Dwm::{
+            DwmSetWindowAttribute, DWMWA_BORDER_COLOR, DWMWA_CAPTION_COLOR, DWMWA_TEXT_COLOR,
+        };
+        let hwnd = window.hwnd().map_err(|_| "Vaelo could not reach its window.")?;
+        for (attribute, color) in [(DWMWA_CAPTION_COLOR, caption), (DWMWA_BORDER_COLOR, caption), (DWMWA_TEXT_COLOR, text)] {
+            unsafe {
+                let _ = DwmSetWindowAttribute(hwnd, attribute, (&color as *const u32).cast(), 4);
+            }
+        }
+    }
+    #[cfg(not(windows))]
+    let _ = (caption, text);
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn title_bar_colors_become_colorref_and_reject_anything_else() {
+        assert_eq!(super::rgb("#16110f"), Some(0x000f1116));
+        assert_eq!(super::rgb("#f7f2ea"), Some(0x00eaf2f7));
+        assert_eq!(super::rgb("16110f"), None);
+        assert_eq!(super::rgb("#fff"), None);
+        assert_eq!(super::rgb("#zzzzzz"), None);
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -104,6 +147,7 @@ pub fn run() {
             clear_session,
             cancel_sign_in,
             store_notification,
+            title_bar,
             sign_in::begin_sign_in
         ])
         .run(tauri::generate_context!())
