@@ -354,6 +354,10 @@ def public_ip(text):
         if ip in TEREDO:
             return False
         embedded = ip.ipv4_mapped or ip.sixtofour
+        # Deprecated IPv4-compatible (::a.b.c.d) and IPv4-translated (::ffff:0:a.b.c.d)
+        # forms carry an IPv4 address too.
+        if embedded is None and (int(ip) >> 32) in (0, 0xFFFF0000):
+            embedded = ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF)
         if embedded is None and any(ip in net for net in NAT64):
             embedded = ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF)
         if embedded is not None:

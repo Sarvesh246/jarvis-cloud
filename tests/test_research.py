@@ -197,6 +197,9 @@ class ResearchTests(unittest.TestCase):
 
     def test_direct_reads_never_reach_private_addresses(self):
         mod = self.module
+        for address in ("::7f00:1", "::ffff:0:7f00:1", "::a00:5"):
+            self.assertFalse(mod.public_ip(address), address)
+        self.assertTrue(mod.public_ip("::ffff:0:808:808"))
         for url in ("http://127.0.0.1/admin", "http://169.254.169.254/latest/meta-data", "http://10.0.0.5/", "file:///etc/passwd"):
             self.assertFalse(mod.public_host(url), url)
         with self.assertRaises(ValueError):
