@@ -379,6 +379,24 @@ class RelayTests(unittest.TestCase):
         _, frames = self.events(port)
         self.assertEqual([name for _, name, _ in frames][-1], "jarvis.stopped")
 
+    def test_a_stop_that_arrives_before_its_start_still_stops_the_run(self):
+        hermes, relay, port = self.boot([[chunk("Never sent.", "stop"), "data: [DONE]"]])
+        # Someone else's stop for the same id changes nothing for this owner.
+        self.call(port, "POST", f"/vaelo/runs/{RUN}/stop", owner="web:someone-else")
+        status, _ = self.call(port, "POST", f"/vaelo/runs/{RUN}/stop")
+        self.assertEqual(status, 200)
+        self.start(port)
+        run = self.finished(relay)
+        self.assertEqual(run.outcome, "stopped")
+        self.assertEqual(hermes.requests, [])
+        _, frames = self.events(port)
+        self.assertEqual([name for _, name, _ in frames], ["jarvis.stopped"])
+        # The early stop is used up: starting the id again later runs normally.
+        other, relay2, port2 = self.boot([[chunk("Hello.", "stop"), "data: [DONE]"]])
+        self.call(port2, "POST", f"/vaelo/runs/{RUN}/stop", owner="web:someone-else")
+        self.start(port2)
+        self.assertEqual(self.finished(relay2).outcome, "complete")
+
     def test_a_run_without_an_answer_is_asked_once_more(self):
         hermes, relay, port = self.boot(
             [
