@@ -174,3 +174,41 @@ test("unauthenticated chat is rejected before any upstream request", async () =>
     globalThis.fetch = previousFetch;
   }
 });
+
+test("signing out ends that kind of session everywhere, even a copied token", async () => {
+  const { Revocations } = await import("../server/revocation.js");
+  const rows = new Map();
+  const store = {
+    async get(path) {
+      return rows.has(path) ? { statusCode: 200, stream: new Response(rows.get(path)).body } : null;
+    },
+    async put(path, text) { rows.set(path, text); },
+  };
+  const here = new Revocations(store, { enabled: () => true });
+  const elsewhere = new Revocations(store, { enabled: () => true }); // another function instance
+  const issued = Math.floor(Date.now() / 1000) - 60;
+  const old = (audience) => new SignJWT({ email: user.email, name: user.name })
+    .setProtectedHeader({ alg: "HS256" }).setSubject(user.sub).setIssuer(cfg.origin)
+    .setAudience(audience).setIssuedAt(issued).setExpirationTime("1h")
+    .sign(new TextEncoder().encode(cfg.secret));
+  const web = await old("jarvis-web");
+  const desktop = { headers: { authorization: `Bearer ${await old("vaelo-desktop")}` } };
+  const live = { ...cfg, revocations: elsewhere };
+  assert.deepEqual(await sessionUser(request(web), live), user);
+
+  await here.revoke(user.sub, "jarvis-web");
+  assert.equal(await sessionUser(request(web), { ...cfg, revocations: here }), null);
+  assert.equal(await sessionUser(request(web), { ...cfg, revocations: new Revocations(store, { enabled: () => true }) }), null);
+  // The desktop app keeps its own session; signing in again works at once.
+  assert.deepEqual(await sessionUser(desktop, { ...cfg, revocations: here }), user);
+  assert.deepEqual(await sessionUser(request(await signSession(user, cfg)), { ...cfg, revocations: here }), user);
+});
+
+test("a session is refused, not trusted, when its sign-out record can't be read", async () => {
+  const { Revocations } = await import("../server/revocation.js");
+  const broken = new Revocations({ async get() { throw new Error("database down"); } }, { enabled: () => true });
+  const token = await signSession(user, cfg);
+  assert.equal(await sessionUser(request(token), { ...cfg, revocations: broken }), null);
+  const off = new Revocations({ async get() { throw new Error("never read"); } }, { enabled: () => false });
+  assert.deepEqual(await sessionUser(request(token), { ...cfg, revocations: off }), user);
+});

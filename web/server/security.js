@@ -1,5 +1,6 @@
 import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { SignJWT, jwtVerify, createRemoteJWKSet } from "jose";
+import { revocations } from "./revocation.js";
 
 const googleKeys = createRemoteJWKSet(
   new URL("https://www.googleapis.com/oauth2/v3/certs"),
@@ -102,19 +103,32 @@ export async function signSession(user, cfg, audience = "jarvis-web") {
     .sign(sessionKey(cfg));
 }
 
+/* Which kind of session a request carries: the desktop app's bearer or the
+   browser's cookie. Each has its own audience and its own sign-out epoch. */
+export function sessionAudience(req) {
+  const bearer = req.headers.authorization;
+  return typeof bearer === "string" && bearer.startsWith("Bearer ")
+    ? "vaelo-desktop"
+    : "jarvis-web";
+}
+
 export async function sessionUser(req, cfg) {
   delete req[desktopAuth];
-  const bearer = req.headers.authorization;
-  const desktop = typeof bearer === "string" && bearer.startsWith("Bearer ");
-  const token = desktop ? bearer.slice(7) : cookies(req)[cookieNames(cfg).session];
+  const audience = sessionAudience(req);
+  const desktop = audience === "vaelo-desktop";
+  const token = desktop
+    ? req.headers.authorization.slice(7)
+    : cookies(req)[cookieNames(cfg).session];
   if (!token) return null;
   try {
     const { payload } = await jwtVerify(token, sessionKey(cfg), {
       issuer: cfg.origin,
-      audience: desktop ? "vaelo-desktop" : "jarvis-web",
+      audience,
       algorithms: ["HS256"],
     });
     if (!payload.sub || !cfg.email || payload.email !== cfg.email) return null;
+    const signedOut = await (cfg.revocations || revocations).epoch(payload.sub, audience);
+    if ((payload.iat || 0) < signedOut) return null;
     if (desktop) req[desktopAuth] = true;
     return {
       sub: payload.sub,

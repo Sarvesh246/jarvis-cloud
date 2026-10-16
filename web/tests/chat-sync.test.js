@@ -5,6 +5,7 @@ import { ChatStore, accountPath } from "../server/chat-store.js";
 import { ChatSync, liveReply, mergeChats, readSyncCache } from "../src/lib/chat-sync.js";
 import handler from "../api/chats.js";
 import { settings, signSession, cookieNames } from "../server/security.js";
+import { revocations } from "../server/revocation.js";
 
 function memoryBlob() {
   const files = new Map();
@@ -150,6 +151,8 @@ test("signed-in sync writes still require same-origin CSRF protection", async ()
   const previous = { ...process.env };
   Object.assign(process.env, { APP_ORIGIN: "https://test.example", ALLOWED_EMAIL: "owner@example.com",
     SESSION_SECRET: "s".repeat(64), DATABASE_URL: "postgres://unused" });
+  const realStorage = revocations.storage;
+  revocations.storage = { async get() { return null; } }; // never signed out
   try {
     const cfg = settings();
     const token = await signSession({ sub: "owner", email: cfg.email, name: "Owner" }, cfg);
@@ -158,6 +161,7 @@ test("signed-in sync writes still require same-origin CSRF protection", async ()
       cookie: `${cookieNames(cfg).session}=${token}`, "content-type": "application/json" }, body: {} }, res);
     assert.equal(res.statusCode, 403);
   } finally {
+    revocations.storage = realStorage;
     for (const key of ["APP_ORIGIN", "ALLOWED_EMAIL", "SESSION_SECRET", "DATABASE_URL"])
       if (previous[key] === undefined) delete process.env[key]; else process.env[key] = previous[key];
   }
