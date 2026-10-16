@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import { LIMITS, chatInput, clipReply as serverClip, feedInput, followFeed, notifyFeed, resumeInput, streamChat } from "../server/chat.js";
 import { probeBackend } from "../server/backend-readiness.js";
+import { readEvents } from "../src/stream.js";
 import { clipReply, fitHistory, wireMessage } from "../src/lib/attachments.js";
 
 const conversationId = "123e4567-e89b-12d3-a456-426614174000";
@@ -187,6 +188,31 @@ test("a relay connection that breaks mid-reply sends the page back for the rest"
   await streamChat(req, res, cfg, user, input, request);
   assert.match(res.chunks.join(""), /Partial/);
   assert.equal(events().at(-1).name, "jarvis.resume");
+});
+
+test("a relay connection cut partway through a frame never sends half of it", async () => {
+  const { req, res } = fakeExchange();
+  const whole = 'id: 0\ndata: {"choices":[{"delta":{"content":"Kept"}}]}\n\n';
+  const half = 'id: 1\ndata: {"choices":[{"delta":{"con';
+  const { request } = fakeRelay({
+    events: () =>
+      new Response(
+        new ReadableStream({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode(whole + half));
+            setTimeout(() => controller.error(new Error("connection reset")), 5);
+          },
+        }),
+      ),
+  });
+  await streamChat(req, res, cfg, user, { runId, after: -1 }, request);
+  const seen = [];
+  await readEvents(new Response(res.chunks.join("")).body, (name, data, id) => seen.push({ name, id }));
+  // The half frame is left for the next request, which asks after frame 0.
+  assert.deepEqual(seen, [
+    { name: "message", id: "0" },
+    { name: "jarvis.resume", id: undefined },
+  ]);
 });
 
 test("resuming takes a run id and a position, nothing else", () => {

@@ -428,8 +428,15 @@ function Edit({ initial, onSave, onCancel }) {
         aria-label="Edit your message"
         onChange={(event) => setValue(event.target.value)}
         onKeyDown={(event) => {
-          if (event.key === "Escape") onCancel();
-          if (event.key === "Enter" && !event.shiftKey) {
+          // Enter that confirms an input method's candidate belongs to it.
+          if (event.nativeEvent.isComposing || event.keyCode === 229) return;
+          if (event.key === "Escape") {
+            event.preventDefault();
+            onCancel();
+          }
+          /* As in the composer: on a touch screen return is a new line, and
+             Send is the button. */
+          if (event.key === "Enter" && !event.shiftKey && !matchMedia("(pointer: coarse)").matches) {
             event.preventDefault();
             if (value.trim()) onSave(value.trim());
           }
@@ -583,6 +590,16 @@ const ERROR_ACTION = {
 function MessageView({ message, fresh, busy, live, streaming, phase, isLast, edited, onAction }) {
   const [copied, copy] = useCopy();
   const [editing, setEditing] = useState(false);
+  const editButton = useRef(null);
+  const leftEditing = useRef(false);
+  /* Leaving the editor returns focus to Edit, not to the top of the page. */
+  useEffect(() => {
+    if (editing) leftEditing.current = true;
+    else if (leftEditing.current) {
+      leftEditing.current = false;
+      editButton.current?.focus();
+    }
+  }, [editing]);
   const mine = message.role === "user";
   const waiting = live && !message.content;
   const versions = message.versions?.length > 1 ? message.versions : null;
@@ -757,7 +774,7 @@ function MessageView({ message, fresh, busy, live, streaming, phase, isLast, edi
               </button>
             )}
             {mine && !busy && (
-              <button className="text-button" onClick={() => setEditing(true)}>
+              <button ref={editButton} className="text-button" onClick={() => setEditing(true)}>
                 <PencilSimple size={15} />
                 Edit
               </button>

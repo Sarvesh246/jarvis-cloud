@@ -708,6 +708,7 @@ export const Composer = forwardRef(function Composer(
             event.key === "Enter" &&
             !event.shiftKey &&
             !event.nativeEvent.isComposing &&
+            event.keyCode !== 229 &&
             !matchMedia("(pointer: coarse)").matches
           ) {
             event.preventDefault();
