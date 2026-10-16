@@ -65,12 +65,19 @@ function trimLink(href) {
    escapes and character references undone, as the rendered link has them,
    so a source and its inline mark always agree on the address. */
 const ENTITIES = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'" };
+function numericReference(name) {
+  const point = Number(name[1].toLowerCase() === "x" ? `0${name.slice(1)}` : name.slice(1));
+  // Model output is untrusted. Invalid Unicode references decode to the
+  // replacement character, as Markdown does, instead of throwing in render.
+  return point > 0 && point <= 0x10ffff && !(point >= 0xd800 && point <= 0xdfff)
+    ? String.fromCodePoint(point) : "\ufffd";
+}
 function readDestination(href) {
   return href
     .replace(/\\([!-/:-@[-`{-~])/g, "$1")
     .replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (entity, name) =>
       name[0] === "#"
-        ? String.fromCodePoint(Number(name[1].toLowerCase() === "x" ? `0${name.slice(1)}` : name.slice(1)))
+        ? numericReference(name)
         : ENTITIES[name.toLowerCase()] ?? entity,
     );
 }

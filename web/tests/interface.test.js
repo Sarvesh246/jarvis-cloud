@@ -484,3 +484,14 @@ test("a busy reply keeps saying something new: still-lines, the next step, the n
   const long = thinkingPreview("word ".repeat(100), 40);
   assert.ok(long.startsWith("…") && long.length <= 41);
 });
+
+test("malformed numeric character references in source URLs cannot crash a reply", () => {
+  for (const entity of ["&#1114112;", "&#x110000;", "&#999999999999999999999999999999999999999999999;", "&#xD800;", "&#0;"]) {
+    const [source] = collectSources(`A source [Read](https://example.com/${entity}/page).`);
+    assert.ok(source, entity);
+    assert.equal(new URL(source.url).pathname, "/%EF%BF%BD/page", entity);
+  }
+  const [valid] = collectSources("[Read](https://example.com/&#x1F4DA;?a=1&amp;b=2)");
+  assert.equal(new URL(valid.url).pathname, "/%F0%9F%93%9A");
+  assert.equal(new URL(valid.url).search, "?a=1&b=2");
+});
