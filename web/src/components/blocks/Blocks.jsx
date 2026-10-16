@@ -131,14 +131,11 @@ function CodeBlock({ children, node, "data-src": src }) {
   }
   if (STRUCTURED.has(language)) {
     const source = textOf(children);
+    const settled = fenceClosed(content, node?.position?.start?.offset, node?.position?.end?.offset);
     return language === "metrics" ? (
-      <Metrics
-        source={source}
-        src={src}
-        settled={fenceClosed(content, node?.position?.start?.offset, node?.position?.end?.offset)}
-      />
+      <Metrics source={source} src={src} settled={settled} />
     ) : (
-      <Timeline source={source} src={src} />
+      <Timeline source={source} src={src} settled={settled} />
     );
   }
   return (
@@ -236,13 +233,16 @@ function Metrics({ source, src, settled }) {
   /* A figure set down while you watch turns into place once its block is
      complete; one already on the page when it opens simply stands there. */
   const [arriving] = useState(!settled);
-  if (!data.items.length)
+  /* Lines that aren't figures may be half-arrived ones while the block
+     streams; once it is finished they are part of what was said. */
+  const extra = settled ? data.extra : [];
+  if (!data.items.length && !(settled && (extra.length || data.notes.length)))
     return (
       <p className="block-pending" data-src={src}>
         Laying out figures…
       </p>
     );
-  if (presentation === "minimal")
+  if (presentation === "minimal" || !data.items.length)
     return (
       <pre className="block-plain" data-src={src}>
         {metricsText(data)}
@@ -285,7 +285,7 @@ function Metrics({ source, src, settled }) {
           ))}
         </dl>
       )}
-      {data.notes.map((note, i) => (
+      {[...data.notes, ...extra].map((note, i) => (
         <p key={i} className="metrics-note">
           {note}
         </p>
@@ -294,11 +294,13 @@ function Metrics({ source, src, settled }) {
   );
 }
 
-function Timeline({ source, src }) {
+function Timeline({ source, src, settled }) {
   const { presentation } = useContext(BlockContext);
   const data = useMemo(() => parseTimeline(source), [source]);
   const [done, copy] = useCopy();
-  if (!data.events.length)
+  /* A finished line without a date still belongs in the sequence */
+  const events = settled ? data.rows : data.events;
+  if (!events.length)
     return (
       <p className="block-pending" data-src={src}>
         Laying out the timeline…
@@ -327,7 +329,7 @@ function Timeline({ source, src }) {
         </span>
       </figcaption>
       <ol className="timeline-list">
-        {data.events.map((event, i) => (
+        {events.map((event, i) => (
           <li key={i}>
             <span className="timeline-when">{event.when}</span>
             <span className="timeline-what">
