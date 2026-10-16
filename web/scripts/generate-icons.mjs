@@ -22,8 +22,13 @@ const SAFE_ZONE = 0.8;
 
 async function darkTokens() {
   const css = await readFile(`${root}src/design/tokens.css`, "utf8");
-  const block = css.match(/:root\[data-theme="dark"\]\s*\{([^}]*--canvas[^}]*)\}/)[1];
-  const token = (name) => block.match(new RegExp(`--${name}:\\s*(#[0-9a-f]{6})`, "i"))[1];
+  const block = css.match(/:root\[data-theme="dark"\]\s*\{([^}]*--canvas[^}]*)\}/)?.[1];
+  if (!block) throw new Error("tokens.css: no dark-theme block with --canvas");
+  const token = (name) => {
+    const value = block.match(new RegExp(`--${name}:\\s*(#[0-9a-f]{6})`, "i"))?.[1];
+    if (!value) throw new Error(`tokens.css: missing --${name} in the dark theme`);
+    return value;
+  };
   return { tile: token("canvas"), mark: token("gilt") };
 }
 
