@@ -1847,7 +1847,7 @@ export function App() {
   async function continueAsGuest() {
     setError("");
     try {
-      await request("/api/guest", {});
+      await request("/api/login", { guest: true });
       await loadSession();
     } catch (err) {
       setError(err.message);
