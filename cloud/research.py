@@ -19,7 +19,16 @@ import os
 import re
 import socket
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
-from urllib.request import HTTPRedirectHandler, Request, build_opener, urlopen
+from http.client import HTTPConnection, HTTPSConnection
+from urllib.request import (
+    HTTPHandler,
+    HTTPRedirectHandler,
+    HTTPSHandler,
+    ProxyHandler,
+    Request,
+    build_opener,
+    urlopen,
+)
 
 from agent.web_search_provider import WebSearchProvider
 
@@ -290,6 +299,29 @@ def focus(text, query, limit=PAGE_CHARS):
     return "\n\n".join(out)[:limit]
 
 
+NAT64 = (ipaddress.ip_network("64:ff9b::/96"), ipaddress.ip_network("64:ff9b:1::/48"))
+TEREDO = ipaddress.ip_network("2001::/32")
+
+
+def public_ip(text):
+    """True for a public address. IPv6 forms that carry an IPv4 address (mapped, NAT64,
+    6to4) are judged by the address they carry, since a NAT64 gateway turns
+    64:ff9b::7f00:1 into 127.0.0.1 even though ipaddress calls it global."""
+    try:
+        ip = ipaddress.ip_address(str(text).split("%")[0])
+    except ValueError:
+        return False
+    if ip.version == 6:
+        if ip in TEREDO:
+            return False
+        embedded = ip.ipv4_mapped or ip.sixtofour
+        if embedded is None and any(ip in net for net in NAT64):
+            embedded = ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF)
+        if embedded is not None:
+            return embedded.is_global
+    return ip.is_global
+
+
 def public_host(url):
     """True only when every address the host resolves to is on the public internet."""
     try:
@@ -299,11 +331,42 @@ def public_host(url):
         infos = socket.getaddrinfo(
             parts.hostname, parts.port or (443 if parts.scheme == "https" else 80)
         )
-        return bool(infos) and all(
-            ipaddress.ip_address(info[4][0].split("%")[0]).is_global for info in infos
-        )
+        return bool(infos) and all(public_ip(info[4][0]) for info in infos)
     except (OSError, ValueError):
         return False
+
+
+def check_peer(sock):
+    """public_host resolved the name once; the connection resolves it again, so a
+    rebinding DNS server could answer differently the second time. Judge the address
+    actually connected to instead of trusting the earlier lookup."""
+    if not public_ip(sock.getpeername()[0]):
+        sock.close()
+        raise ValueError("Connected to a non-public address")
+
+
+class PublicHTTPConnection(HTTPConnection):
+    def connect(self):
+        super().connect()
+        check_peer(self.sock)
+
+
+class PublicHTTPSConnection(HTTPSConnection):
+    def connect(self):
+        super().connect()
+        check_peer(self.sock)
+
+
+class PublicHTTP(HTTPHandler):
+    def http_open(self, req):
+        return self.do_open(PublicHTTPConnection, req)
+
+
+class PublicHTTPS(HTTPSHandler):
+    def https_open(self, req):
+        return self.do_open(
+            PublicHTTPSConnection, req, context=self._context
+        )
 
 
 class PublicRedirects(HTTPRedirectHandler):
@@ -401,7 +464,10 @@ def fetch_page(url):
     """The last resort when every provider fails: read the page directly, public hosts only."""
     if not public_host(url):
         raise ValueError("Not a public address")
-    opener = build_opener(PublicRedirects())
+    # No proxies: a proxy would be the peer we check, not the page's host.
+    opener = build_opener(
+        ProxyHandler({}), PublicHTTP(), PublicHTTPS(), PublicRedirects()
+    )
     req = Request(
         url,
         headers={

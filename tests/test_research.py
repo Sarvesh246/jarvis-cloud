@@ -151,6 +151,45 @@ class ResearchTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             mod.fetch_page("http://127.0.0.1/")
 
+    def test_ipv6_forms_carrying_a_private_ipv4_address_are_private(self):
+        mod = self.module
+        for address in ("64:ff9b::7f00:1", "64:ff9b::a9fe:a9fe", "64:ff9b:1::a00:5",
+                        "::ffff:10.0.0.1", "2002:7f00:1::1", "2001:0:4136:e378::1"):
+            self.assertFalse(mod.public_ip(address), address)
+        for address in ("8.8.8.8", "64:ff9b::808:808", "2606:4700::1111"):
+            self.assertTrue(mod.public_ip(address), address)
+
+    def test_a_host_rebound_to_a_private_address_after_the_check_is_refused(self):
+        # public_host saw a public address; the connection's own lookup landed on loopback.
+        mod = self.module
+        closed = []
+        sock = types.SimpleNamespace(getpeername=lambda: ("127.0.0.1", 80), close=lambda: closed.append(True))
+        def connect(self):
+            self.sock = sock
+        for cls, base in ((mod.PublicHTTPConnection, mod.HTTPConnection),
+                          (mod.PublicHTTPSConnection, mod.HTTPSConnection)):
+            closed.clear()
+            with patch.object(base, "connect", connect):
+                with self.assertRaises(ValueError):
+                    cls("rebind.example").connect()
+            self.assertEqual(closed, [True])
+        public = types.SimpleNamespace(getpeername=lambda: ("93.184.216.34", 80), close=lambda: None)
+        with patch.object(mod.HTTPConnection, "connect", lambda self: setattr(self, "sock", public)):
+            mod.PublicHTTPConnection("example.com").connect()
+
+    def test_direct_reads_use_the_peer_checking_connections_without_proxies(self):
+        mod = self.module
+        built = []
+        real = mod.build_opener
+        with patch.object(mod, "public_host", return_value=True), \
+             patch.object(mod, "build_opener", side_effect=lambda *h: built.extend(h) or real(*h)), \
+             patch.object(mod.HTTPConnection, "connect", lambda self: setattr(self, "sock", types.SimpleNamespace(
+                 getpeername=lambda: ("127.0.0.1", 80), close=lambda: None))):
+            with self.assertRaises(Exception):
+                mod.fetch_page("http://rebind.example/")
+        self.assertTrue(any(isinstance(h, mod.PublicHTTP) for h in built))
+        self.assertTrue(any(isinstance(h, mod.ProxyHandler) for h in built))
+
     def test_pages_are_read_at_the_same_time(self):
         mod = self.module
         import threading
