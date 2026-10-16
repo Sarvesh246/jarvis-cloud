@@ -25,8 +25,8 @@ title bar.
 
 A few workspaces include a check that code works out from details you enter, such as
 whether a refund has fully arrived or who owes whom. The model never computes those.
-Workspaces and their document text live privately in the same Vercel Blob store as
-conversations. Very long documents are shortened from the middle so a chat stays within
+Workspaces and their document text live privately in the same Postgres key/value store as
+conversations, configured with `DATABASE_URL` (or `POSTGRES_URL`). Very long documents are shortened from the middle so a chat stays within
 its context; the Workroom says when that will happen.
 
 Gotcha: saved records from before workspaces are upgraded on read. The handful whose
@@ -85,4 +85,4 @@ On a phone, add the site to your home screen and it runs as an app: its own icon
 
 From `web`, run `npm ci`, `npm test` and `npm run build`. For a full local preview including API routes, use `vercel dev` with the server environment variables from `.env.example`. `npm run dev` starts only the interface.
 
-Google's Web application client must allow the website's origin under Authorized JavaScript origins, and `https://vaelochat.vercel.app/` (trailing slash included) under Authorized redirect URIs. The redirect URI is for the fallback sign-in: when Safari content blockers or tracking protection hide Google's in-page button, Vaelo signs in through Google's own page instead and receives the same kind of ID token. No Google API scopes or client secret are needed for sign-in. Conversations are saved in this browser, scoped to the signed-in account; this is not cross-device storage. Render memory remains temporary.
+Google's Web application client must allow the website's origin under Authorized JavaScript origins, and `https://vaelochat.vercel.app/` (trailing slash included) under Authorized redirect URIs. The redirect URI is for the fallback sign-in: when Safari content blockers or tracking protection hide Google's in-page button, Vaelo signs in through Google's own page instead and receives the same kind of ID token. No Google API scopes or client secret are needed for sign-in. Signed-in conversations sync privately across devices through the website's Postgres store, with an account-scoped browser backup for offline reading. Without database configuration, cloud sync is unavailable and local changes stay on the device. Guest conversations stay in the current browser tab. Unsent composer drafts survive conversation switches in the open app, but are not saved across reloads. Render's relay memory remains temporary.
