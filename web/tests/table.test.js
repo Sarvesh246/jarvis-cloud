@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chartable, isBlank, isDateColumn, isNumericColumn, isSectionRow, tableRowOrder, visibleTableRows, sortRows, toCSV, toDate, toNumber } from "../src/lib/table.js";
+import { chartable, isBlank, isDateColumn, isNumericColumn, isSectionRow, tableRowOrder, visibleTableRows, tableView, sortRows, toCSV, toDate, toNumber } from "../src/lib/table.js";
 import { safeChartPlan } from "../src/lib/adaptive-ui.js";
 
 const firsts = (rows) => rows.map((row) => row[0]);
@@ -27,6 +27,24 @@ test("filtering and selection retain only the relevant category dividers", () =>
 test("category labels do not stop numeric table data from being charted", () => {
   assert.deepEqual(safeChartPlan(["Category", "Phone A", "Phone B"], grouped), { label: 0, values: [1, 2] });
   assert.match(toCSV(["Category", "A", "B"], grouped), /Display,,/);
+});
+
+test("table and chart views share sorted data and count data rows rather than headings", () => {
+  const view = tableView(grouped, { column: 1, direction: "desc" });
+  assert.deepEqual(view.indices, [0, 2, 1, 3, 4, 5]);
+  assert.deepEqual(view.rows.map(row => row[0]), ["Display", "Brightness", "Size", "Processor & Memory", "RAM", "Cores"]);
+  assert.equal(view.count, 4);
+  assert.equal(view.total, 4);
+  assert.deepEqual(grouped[1], ["Size", "6.1", "6.9"], "view transformations preserve the source for exports");
+});
+
+test("multiword filters match across category and values regardless of word order", () => {
+  assert.deepEqual(tableView(grouped, { query: "1000 DISPLAY" }).indices, [0, 2]);
+  const selected = tableView(grouped, { query: "Memory", selected: [4], onlySelected: true });
+  assert.deepEqual(selected.indices, [3, 4]);
+  assert.equal(selected.count, 1);
+  assert.equal(selected.total, 4);
+  assert.equal(tableView(grouped, { query: "nothing" }).count, 0);
 });
 
 test("text columns sort the way people read them", () => {

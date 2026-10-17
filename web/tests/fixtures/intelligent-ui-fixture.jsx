@@ -67,6 +67,7 @@ function Fixture() {
       <button onClick={() => setLive(v => !v)}>Toggle streaming</button>
       <button onClick={() => setNarrow(v => !v)}>Toggle narrow</button>
       <button onClick={() => document.documentElement.dataset.theme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'}>Toggle theme</button>
+      {workspace && <button onClick={() => setWorkspace({ kind: 'table', source: 'fixture-second-table', title: 'Another table', columns: ['Item', 'Value'], rows: [['First', '1'], ['Second', '2']] })}>Switch workspace table</button>}
     </div>
     <PresentationContext.Provider value={minimal ? 'minimal' : 'adaptive'}>
       <div className="prose"><Rendered content={content + `\n\n### Grouped comparison\n\n| Category | Phone A | Phone B |\n| --- | --- | --- |\n` + ["Display", "Processor & Memory", "Camera"].map((section, group) =>

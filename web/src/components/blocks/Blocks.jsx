@@ -12,7 +12,7 @@ import {
   Table,
 } from "@phosphor-icons/react";
 import { collectSources, domainOf, kindLabel, parseUrl, sourceKey } from "../../lib/sources.js";
-import { cellText, isNumericColumn, isSectionRow, tableRowOrder, visibleTableRows, toCSV, toNumber, toTSV } from "../../lib/table.js";
+import { cellText, isNumericColumn, isSectionRow, tableView, toCSV, toNumber, toTSV } from "../../lib/table.js";
 import {
   STRUCTURED,
   fenceClosed,
@@ -574,13 +574,14 @@ function TableBlock({ node, "data-src": src }) {
   const [selected, setSelected] = useState([]);
   const [onlySelected, setOnlySelected] = useState(false);
   const enhance = presentation !== "minimal" && !live && interactive && data.rows.length >= 2 && data.rows.length <= 200 && data.columns.length <= 20;
-  const visible = useMemo(() => enhance ? visibleTableRows(data.rows, query, selected, onlySelected) : data.rows.map((_, i) => i), [data, enhance, query, selected, onlySelected]);
-  const visibleSet = new Set(visible);
+  const displayed = useMemo(() => tableView(data.rows, {
+    ...(enhance && { query, selected, onlySelected }), ...sort,
+  }), [data, enhance, query, selected, onlySelected, sort]);
+  const visible = displayed.indices;
+  const rowNumbers = new Map();
+  data.rows.forEach((row, i) => { if (!isSectionRow(row)) rowNumbers.set(i, rowNumbers.size + 1); });
   const numeric = data.columns.map((_, i) => isNumericColumn(data.rows, i));
   const plan = presentation === "minimal" || live ? null : safeChartPlan(data.columns, data.rows);
-  const order = useMemo(() => {
-    return tableRowOrder(data.rows, sort.column, sort.direction);
-  }, [data, sort]);
 
   /* Numbers sort largest first, words A to Z; a third press restores the
      order Vaelo wrote. */
@@ -600,7 +601,7 @@ function TableBlock({ node, "data-src": src }) {
       <figcaption className="block-bar">
         <span className="label">Table</span>
         <span className="block-count">
-          {data.rows.length} {data.rows.length === 1 ? "row" : "rows"}
+          {displayed.total} {displayed.total === 1 ? "row" : "rows"}
         </span>
         <span className="block-tools">
           {plan && (
@@ -645,7 +646,8 @@ function TableBlock({ node, "data-src": src }) {
             onClick={() =>
               open({
                 kind: "table",
-                title: `Table · ${data.rows.length} ${data.rows.length === 1 ? "row" : "rows"}`,
+                title: `Table · ${displayed.total} ${displayed.total === 1 ? "row" : "rows"}`,
+                source: blockKey("table", node.position?.start?.offset, toTSV(data.columns, data.rows)),
                 columns: data.columns,
                 rows: data.rows.map((row) => row.map(cellText)),
               })
@@ -661,10 +663,10 @@ function TableBlock({ node, "data-src": src }) {
           <button className="block-tool" aria-pressed={onlySelected} disabled={!selected.length && !onlySelected} onClick={() => setOnlySelected(v => !v)}>Compare selected ({selected.length})</button>
           <button className="block-tool" onClick={() => { setQuery(""); setSelected([]); setOnlySelected(false); setSort({ column: null, direction: "asc" }); }}>Reset view</button>
         </div>
-        <p className="local-note" role="status">{visible.length} of {data.rows.length} rows · Controls run locally. Copy and CSV keep the original table.</p>
+        <p className="local-note" role="status">{displayed.count} of {displayed.total} rows · Controls run locally. Copy and CSV keep the original table.</p>
       </div>}
       {view === "chart" && plan && visible.length > 0 ? (
-        <Chart columns={data.columns} rows={visible.map(i => data.rows[i])} plan={plan} />
+        <Chart columns={data.columns} rows={displayed.rows} plan={plan} />
       ) : (
         <TableScroll>
           <table style={{ "--table-min-width": `${Math.min(38, data.columns.length * 7 + (enhance ? 3.5 : 0))}rem` }}>
@@ -693,13 +695,13 @@ function TableBlock({ node, "data-src": src }) {
               </tr>
             </thead>
             <tbody>
-              {order.filter(r => visibleSet.has(r)).map((r) => isSectionRow(data.rows[r]) ? (
+              {visible.map((r) => isSectionRow(data.rows[r]) ? (
                 <tr key={r} className="table-section">
                   <th scope="rowgroup" colSpan={data.columns.length + (enhance ? 1 : 0)}>{inline(data.cells[r][0], 0)}</th>
                 </tr>
               ) : (
                 <tr key={r}>
-                  {enhance && <td><input type="checkbox" aria-label={`Compare row ${r + 1}: ${data.rows[r][0]}`} checked={selected.includes(r)} onChange={e => setSelected(items => e.target.checked ? [...items, r] : items.filter(i => i !== r))} /></td>}
+                  {enhance && <td><input type="checkbox" aria-label={`Compare row ${rowNumbers.get(r)}: ${data.rows[r][0]}`} checked={selected.includes(r)} onChange={e => setSelected(items => e.target.checked ? [...items, r] : items.filter(i => i !== r))} /></td>}
                   {data.cells[r].map((cell, i) => (
                     <td key={i} data-numeric={numeric[i] || undefined}>
                       {inline(cell, i)}
@@ -712,7 +714,7 @@ function TableBlock({ node, "data-src": src }) {
         </TableScroll>
       )}
       {enhance && visible.length === 0 && <p className="local-note">No matching rows. Reset the view to see the full table.</p>}
-      {enhance && visible.length > 0 && <NumberExplorer defaultOpen={suggested.explore} columns={data.columns} rows={visible.map(i => data.rows[i]).filter(row => !isSectionRow(row))} />}
+      {enhance && visible.length > 0 && <NumberExplorer defaultOpen={suggested.explore} columns={data.columns} rows={displayed.rows.filter(row => !isSectionRow(row))} />}
     </figure>
   );
 }

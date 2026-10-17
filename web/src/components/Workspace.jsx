@@ -14,7 +14,7 @@ import { Rendered, download, looksLikeSvg, useCopy, useSources } from "./blocks/
 import { SourceIcon } from "./blocks/SourceIcon.jsx";
 import { Highlighted } from "./blocks/Highlighted.jsx";
 import { SOURCE_KINDS, kindLabel } from "../lib/sources.js";
-import { isNumericColumn, isSectionRow, tableRowOrder, visibleTableRows, toCSV, toTSV } from "../lib/table.js";
+import { isNumericColumn, isSectionRow, tableView, toCSV, toTSV } from "../lib/table.js";
 import { currentContent, docTitle } from "../lib/library.js";
 import { DocumentWork } from "./DocumentWork.jsx";
 import "./workspace.css";
@@ -160,10 +160,8 @@ function TableView({ item }) {
     () => item.columns.map((_, i) => isNumericColumn(item.rows, i)),
     [item],
   );
-  const shown = useMemo(() => {
-    const visible = new Set(visibleTableRows(item.rows, query));
-    return tableRowOrder(item.rows, sort.column, sort.direction).filter(i => visible.has(i)).map(i => item.rows[i]);
-  }, [item, query, sort]);
+  const displayed = useMemo(() => tableView(item.rows, { query, ...sort }), [item, query, sort]);
+  const shown = displayed.rows;
 
   function toggle(column) {
     const first = numeric[column] ? "desc" : "asc";
@@ -192,7 +190,7 @@ function TableView({ item }) {
           }}
         />
         <span className="ws-filter-count" aria-live="polite">
-          {query ? `${shown.length} of ${item.rows.length}` : `${item.rows.length} rows`}
+          {query ? `${displayed.count} of ${displayed.total}` : `${displayed.total} rows`}
         </span>
       </label>
       <TableScroll className="ws-grid table-block" wrapClassName="ws-grid-wrap" label="Table">
@@ -428,7 +426,7 @@ export function Workspace({
             onWorkChange={(next) => onWorkChange(item.messageId, next)}
           />
         )}
-        {item.kind === "table" && <TableView item={item} />}
+        {item.kind === "table" && <TableView key={`${item.messageId || ""}:${item.source || JSON.stringify([item.columns, item.rows])}`} item={item} />}
       </div>
     </aside>
   );

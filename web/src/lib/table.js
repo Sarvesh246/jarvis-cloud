@@ -29,18 +29,30 @@ export function tableRowOrder(rows, column, direction = "asc") {
 
 export function visibleTableRows(rows, query = "", selected = [], onlySelected = false) {
   const needle = query.trim().toLocaleLowerCase().slice(0, 200);
+  const words = needle.split(/\s+/).filter(Boolean);
   if (!needle && !onlySelected) return rows.map((_, i) => i);
   const visible = [];
   let section = null;
   rows.forEach((row, i) => {
     if (isSectionRow(row)) { section = i; return; }
     const text = [...(section === null ? [] : rows[section]), ...row].map(cellText).join(" ").toLocaleLowerCase();
-    if ((!onlySelected || selected.includes(i)) && text.includes(needle)) {
+    if ((!onlySelected || selected.includes(i)) && words.every(word => text.includes(word))) {
       if (section !== null && !visible.includes(section)) visible.push(section);
       visible.push(i);
     }
   });
   return visible;
+}
+
+export function tableView(rows, { query = "", selected = [], onlySelected = false, column = null, direction = "asc" } = {}) {
+  const visible = new Set(visibleTableRows(rows, query, selected, onlySelected));
+  const indices = tableRowOrder(rows, column, direction).filter(i => visible.has(i));
+  return {
+    indices,
+    rows: indices.map(i => rows[i]),
+    count: indices.filter(i => !isSectionRow(rows[i])).length,
+    total: rows.filter(row => !isSectionRow(row)).length,
+  };
 }
 
 /* Cells that say "nothing here" in words. They sort with the blanks and
