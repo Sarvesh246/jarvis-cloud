@@ -17,6 +17,7 @@ export function CommandPalette({
   const [query, setQuery] = useState(""),
     [selected, setSelected] = useState(0);
   const results = useMemo(() => {
+    if (!open) return [];
     const needle = query.trim().toLowerCase();
     const commands = actions.filter((a) =>
       a.label.toLowerCase().includes(needle),
@@ -44,7 +45,7 @@ export function CommandPalette({
           run: () => onOpenWork(item),
         })),
     ].slice(0, 40);
-  }, [query, chats, actions, onSelect, onOpenWork]);
+  }, [open, query, chats, actions, onSelect, onOpenWork]);
   useEffect(() => {
     const el = dialog.current;
     if (open && !el.open) {
