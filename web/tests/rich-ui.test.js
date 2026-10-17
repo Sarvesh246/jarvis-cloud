@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -152,4 +153,18 @@ test("ordinary requests keep the original prompt budget; rich formats are opt-in
     ]),
     "",
   );
+});
+
+
+test('production policy permits HTTPS previews while preserving execution boundaries', () => {
+  const config = JSON.parse(readFileSync(new URL('../vercel.json', import.meta.url), 'utf8'));
+  const csp = config.headers.flatMap(rule => rule.headers).find(header => header.key === 'Content-Security-Policy').value;
+  const directives = new Map(csp.split(';').map(part => { const [name, ...values] = part.trim().split(/\s+/); return [name, values]; }));
+  assert.ok(directives.get('img-src').includes('https:'));
+  assert.ok(directives.get('connect-src').includes('https:'));
+  assert.deepEqual(directives.get('script-src'), ["'self'", 'https://accounts.google.com/gsi/client']);
+  assert.deepEqual(directives.get('frame-src'), ['https://accounts.google.com']);
+  assert.deepEqual(directives.get('object-src'), ["'none'"]);
+  assert.deepEqual(directives.get('form-action'), ["'self'"]);
+  assert.ok(!directives.get('script-src').includes("'unsafe-eval'"));
 });
