@@ -103,3 +103,6 @@
 .notice[data-tone="brass"] {
   background: var(--gilt-wash);
 }
+
+.toast-region { display: grid; gap: .5rem; width: min(32rem, calc(100vw - 2rem)); max-height: 55dvh; overflow-y: auto; }
+.toast { flex-shrink: 0; }

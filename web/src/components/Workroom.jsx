@@ -1,3 +1,4 @@
+import { spotlight } from './blocks/RichUI.jsx';
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { X, Plus, Trash, DownloadSimple, UploadSimple, ArrowClockwise, ArrowLeft, ArrowRight, ChatCircle, Calculator, FolderOpen, FileText, ClipboardText, Sparkle, Check as Tick } from '@phosphor-icons/react';
 import { WORKSPACES, AUDIENCES, getWorkspace } from '../../shared/workspaces.js';
@@ -34,10 +35,13 @@ function CheckField({ field, value, onChange }) {
   if (typed && field.kind === 'money') { const found = parseMoney(typed); heard = found ? { ok: true, text: `Got it: ${formatMoney(found.amount, found.symbol)}` } : { ok: false, text: 'Vaelo can’t see an amount yet. Try something like “$40”.' }; }
   if (typed && field.kind === 'date') { const found = parseDate(typed); heard = found ? { ok: true, text: `Got it: ${formatDate(found)}` } : { ok: false, text: 'Vaelo can’t read that date yet. Try “30 Oct” or “next Friday”.' }; }
   const box = field.kind === 'lines' || field.kind === 'paste';
-  const common = { id, value, onChange: e => onChange(e.target.value), 'aria-describedby': `${id}-hint${heard ? ` ${id}-heard` : ''}`, 'aria-required': field.required || undefined };
+  const [touched, setTouched] = useState(false);
+  const invalid = touched && field.required && !String(value || '').trim();
+  const common = { id, value, onBlur: () => setTouched(true), 'aria-invalid': invalid || undefined, onChange: e => onChange(e.target.value), 'aria-describedby': `${id}-hint${heard ? ` ${id}-heard` : ''}`, 'aria-required': field.required || undefined };
   return <div className="work-field">
     <label htmlFor={id}>{field.label}{!field.required && <span className="work-required">If you like</span>}</label>
     {box ? <textarea {...common} rows={field.kind === 'paste' ? 6 : 4} /> : <input {...common} type="text" autoComplete="off" />}
+    {invalid && <p className="work-help" role="alert">Enter {field.label.toLowerCase()} before running this check.</p>}
     <p id={`${id}-hint`} className="work-help">{field.hint}</p>
     {heard && <p id={`${id}-heard`} className="work-heard" data-ok={heard.ok || undefined}>{heard.text}</p>}
   </div>;
@@ -309,7 +313,7 @@ export function Workroom({ open, onClose, session, onStart, initialDraft = null,
             </button>}
             {grouped.map(([group,items])=><section className="work-group" key={group.id} aria-labelledby={`work-group-${group.id}`}>
               <header><h4 id={`work-group-${group.id}`}>{group.label}</h4><p>{group.line}</p></header>
-              <ul className="work-entries">{items.map(item=><li key={item.id}><button className="work-entry" onClick={()=>navigate(()=>create(item))}>
+              <ul className="work-entries">{items.map(item=><li key={item.id}><button className="work-entry rich-spotlight" onPointerMove={spotlight} onClick={()=>navigate(()=>create(item))}>
                 <span className="work-entry-text"><strong>{item.title}</strong><span>{item.summary}</span>
                   <span className="work-entry-meta">{item.slots.some(s=>s.required)?`You’ll need: ${item.slots.filter(s=>s.required).map(s=>s.label.toLowerCase()).join(', ')}`:'Files are up to you'}{item.check?<> · <em>Can work it out for you</em></>:null}</span></span>
                 <ArrowRight size={18} weight="light" aria-hidden="true" />
@@ -324,6 +328,11 @@ export function Workroom({ open, onClose, session, onStart, initialDraft = null,
         </section>
       </> : <section className="work-task" aria-label={workspace?.title || 'Workspace'}>
         <button className="work-back" disabled={mutationBusy} onClick={panel==='setup'||workspace?.retired?leaveTask:()=>setPanel('setup')}><ArrowLeft size={17} />{panel==='setup'||workspace?.retired?(view==='saved'?'Saved':'All workspaces'):'Back'}</button>
+        {!workspace?.retired && <nav className="work-stepper" aria-label="Workspace stages">
+          <button disabled={mutationBusy} aria-current={panel === 'setup' ? 'step' : undefined} onClick={() => setPanel('setup')}>1 · Files and setup</button>
+          {check && <button disabled={mutationBusy || !canCheck} aria-current={panel === 'check' ? 'step' : undefined} onClick={() => setPanel('check')}>2 · Check inputs</button>}
+          {check && <button disabled={!saved?.output || mutationBusy} aria-current={panel === 'result' ? 'step' : undefined} onClick={() => setPanel('result')}>3 · Result</button>}
+        </nav>}
         {workspace?.retired ? <section className="work-retired">
           <header className="work-detail-head"><p>Old tool</p><h3 ref={taskHeading} tabIndex={-1}>{draft.title}</h3></header>
           <p>This was made with a tool Vaelo doesn’t have any more. You can save a backup copy of it, or delete it.</p>

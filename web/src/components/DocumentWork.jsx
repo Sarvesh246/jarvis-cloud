@@ -1,3 +1,5 @@
+import { ReadingProgress } from "./UITools.jsx";
+import { CodeCompare } from "./blocks/RichUI.jsx";
 import React, { useEffect, useRef, useState } from "react";
 import {
   ArrowBendUpLeft,
@@ -186,6 +188,7 @@ export function DocumentWork({ message, work, onWorkChange, onOpen, onReveal, ca
   const original = work?.versions?.[0]?.content ?? message?.content ?? "";
   const sources = useSources(content);
   const [editing, setEditing] = useState(false);
+  const [comparing, setComparing] = useState(false);
   const [draft, setDraft] = useState(content);
   const [range, setRange] = useState(null);
   const article = useRef(null);
@@ -227,6 +230,7 @@ export function DocumentWork({ message, work, onWorkChange, onOpen, onReveal, ca
   useEffect(() => {
     setRange(null);
     setEditing(false);
+    setComparing(false);
   }, [message?.id, at]);
 
   useEffect(() => {
@@ -276,6 +280,7 @@ export function DocumentWork({ message, work, onWorkChange, onOpen, onReveal, ca
           <span className="doc-byline">Select a passage to revise it, or edit it yourself.</span>
         )}
         <span className="doc-tools">
+          {!editing && at > 0 && content.length <= 8000 && versions[at - 1]?.content?.length <= 8000 && <button className="block-tool" aria-pressed={comparing} onClick={() => setComparing(v => !v)}>{comparing ? "Read document" : "Compare versions"}</button>}
           {!editing && message && onReveal && (
             <button className="block-tool" onClick={onReveal} data-tip="Show this reply in its conversation">
               <ArrowBendUpLeft size={15} /> <span>In conversation</span>
@@ -296,7 +301,7 @@ export function DocumentWork({ message, work, onWorkChange, onOpen, onReveal, ca
         </span>
       </div>
 
-      {editing ? (
+      {comparing && !editing && at > 0 ? <CodeCompare before={versions[at - 1].content} after={content} stateKey={message?.id} /> : editing ? (
         <form
           className="doc-edit"
           onSubmit={(event) => {
@@ -333,12 +338,15 @@ export function DocumentWork({ message, work, onWorkChange, onOpen, onReveal, ca
           </div>
         </form>
       ) : (
+        <>
+        <ReadingProgress target={article} content={content} />
         <div className="doc-page">
           <article className="ws-document prose" ref={article}>
             <Rendered content={content} sources={sources} onOpen={onOpen} mapped />
           </article>
           <Contents article={article} content={content} />
         </div>
+        </>
       )}
 
       {!editing && range && (

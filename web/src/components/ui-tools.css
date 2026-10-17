@@ -1,0 +1,233 @@
+.command-dialog,
+.ui-tools-dialog {
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--hairline-strong);
+  border-radius: 16px;
+  padding: 1.3rem;
+  width: min(40rem, calc(100vw - 2rem));
+  max-height: min(80dvh, 48rem);
+  overflow-y: auto;
+}
+.command-dialog::backdrop,
+.ui-tools-dialog::backdrop {
+  background: #16110f66;
+  backdrop-filter: blur(4px);
+}
+.command-dialog h2,
+.ui-tools-dialog h2 {
+  margin: 0 auto 0 0;
+  font-size: 1.25rem;
+}
+.command-dialog input,
+.ui-tools-dialog input {
+  width: 100%;
+  background: transparent;
+  color: inherit;
+  border: 1px solid var(--hairline-strong);
+  border-radius: 8px;
+  padding: 0.8rem;
+  margin: 0.5rem 0;
+}
+.command-results {
+  display: grid;
+  gap: 0.3rem;
+  max-height: 55dvh;
+  overflow: auto;
+}
+.command-results button {
+  display: flex;
+  text-align: left;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 0.7rem;
+  color: inherit;
+  min-height: 44px;
+}
+.command-results button span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.command-results button small {
+  opacity: 0.65;
+  flex-shrink: 0;
+}
+.command-results button[data-selected],
+.command-results button:hover {
+  background: #ae89531a;
+  border-color: #ae895344;
+}
+.ui-guide dt {
+  font-weight: 600;
+  margin-top: 1rem;
+}
+.ui-guide dd {
+  margin: 0.3rem 0;
+  line-height: 1.6;
+  font-size: 0.9rem;
+}
+.header-find {
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+  margin-left: auto;
+  min-height: 40px;
+  padding: 0.5rem;
+}
+.activity-island {
+  border: 1px solid var(--hairline-strong);
+  border-radius: 16px;
+  padding: 0.35rem 0.6rem;
+  margin-block: 0.5rem;
+  background: #ae89530b;
+}
+.activity-island > button {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  text-align: left;
+}
+.reading-progress {
+  position: sticky;
+  top: 0;
+  width: 100%;
+  height: 3px;
+  accent-color: var(--accent);
+  z-index: 2;
+  display: block;
+}
+.pin-reorder {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.3rem;
+}
+.pin-reorder button {
+  color: inherit;
+  background: transparent;
+  border: 0;
+  min-width: 32px;
+  min-height: 32px;
+  font-size: 0.75rem;
+}
+.pin-reorder [draggable] {
+  cursor: grab;
+}
+.work-stepper {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.5rem 0 1rem;
+}
+.work-stepper button {
+  min-height: 38px;
+  border: 1px solid var(--hairline-strong);
+  border-radius: 8px;
+  padding: 0.4rem 0.7rem;
+  color: inherit;
+  background: transparent;
+}
+.work-stepper [aria-current="step"] {
+  background: #ae895322;
+  border-color: currentColor;
+}
+.kinetic-greeting {
+  font-variation-settings: "wght" 400;
+  transition: font-variation-settings 180ms ease;
+}
+.kinetic-greeting:hover {
+  font-variation-settings: "wght" 550;
+}
+.work-demo-frame {
+  padding: 0.6rem;
+  border: 1px solid var(--hairline-strong);
+  border-radius: 12px;
+}
+.work-demo-frame > summary {
+  cursor: pointer;
+  min-height: 34px;
+}
+.work-demo-frame .browser-chrome {
+  background: #ae895318;
+  border-radius: 6px 6px 0 0;
+  padding: 0.5rem;
+  font-size: 0.8rem;
+}
+@media (max-width: 600px) {
+  .command-results button {
+    flex-wrap: wrap;
+    gap: 0.2rem;
+  }
+  .header-find kbd {
+    display: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .kinetic-greeting {
+    transition: none;
+  }
+}
+:root[data-motion="reduce"] .kinetic-greeting {
+  transition: none;
+}
+
+.ui-live-badge {
+  font-size: 0.8rem;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--hairline);
+  border-radius: 6px;
+  width: fit-content;
+}
+.ui-tour-device {
+  margin: auto;
+  border: 1px solid var(--hairline-strong);
+  border-radius: 10px;
+  padding: 0.65rem;
+  transition: max-width 160ms ease;
+  max-width: 100%;
+}
+.ui-tour-device[data-device="phone"] {
+  max-width: 260px;
+  border-width: 4px;
+  border-radius: 22px;
+}
+.ui-tour-device h3 {
+  margin: 1rem 0;
+}
+.ui-tour-features {
+  display: grid;
+  gap: 0.5rem;
+}
+.ui-tour-features article {
+  padding: 0.6rem;
+  background: var(--gilt-wash);
+  border-radius: 8px;
+}
+.ui-tour-features p {
+  font-size: 0.85rem;
+  margin: 0.25rem 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ui-tour-device {
+    transition: none;
+  }
+}
+:root[data-motion="reduce"] .ui-tour-device {
+  transition: none;
+}
+
+.pin-arrange {
+  float: right;
+  font: inherit;
+  font-size: 0.65rem;
+  letter-spacing: normal;
+  text-transform: none;
+  color: var(--muted);
+  border: 0;
+  background: transparent;
+  min-height: 28px;
+  padding-inline: 0.5rem;
+}

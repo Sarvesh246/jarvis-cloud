@@ -311,11 +311,13 @@ export function Workspace({
     const up = () => {
       removeEventListener("pointermove", move);
       removeEventListener("pointerup", up);
+      removeEventListener("pointercancel", up);
       document.body.classList.remove("resizing");
     };
     document.body.classList.add("resizing");
     addEventListener("pointermove", move);
     addEventListener("pointerup", up);
+    addEventListener("pointercancel", up, { once: true });
   }
 
   const titles = {
@@ -359,6 +361,9 @@ export function Workspace({
         tabIndex={0}
         onPointerDown={startResize}
         onKeyDown={(event) => {
+          if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) event.preventDefault();
+          if (event.key === "Home") setWidth(MIN);
+          if (event.key === "End") setWidth(MAX);
           if (event.key === "ArrowLeft") setWidth((w) => Math.min(MAX, w + 32));
           if (event.key === "ArrowRight") setWidth((w) => Math.max(MIN, w - 32));
         }}

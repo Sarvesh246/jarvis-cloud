@@ -1,3 +1,5 @@
+import { SeriesChart } from "./SeriesChart.jsx";
+import { stackedSeries } from "../../lib/rich-ui.js";
 import React, { useId, useMemo, useState } from 'react';
 import { chartData, compactNumber, lineGeometry, temporalColumn } from '../../lib/charts.js';
 
@@ -9,18 +11,21 @@ export function Chart({ columns, rows, plan }) {
   const [chosenKind, setKind] = useState(null);
   const kind = canLine ? chosenKind || 'line' : 'bar';
   const [expanded, setExpanded] = useState(false);
+  const stacked = useMemo(() => stackedSeries(columns, rows, plan.values, plan.label), [columns, rows, plan.values, plan.label]);
+  const [stackedView, setStackedView] = useState(false);
   const shown = expanded ? data.points : data.points.slice(0, 12);
   return <div className="chart">
     <div className="chart-controls">
       {plan.values.length > 1 && <label className="chart-column">Measure <select aria-label="Column to chart" value={column} onChange={e => setColumn(Number(e.target.value))}>
         {plan.values.map(i => <option key={i} value={i}>{columns[i]}</option>)}
       </select></label>}
+      {stacked && <button className="block-tool" aria-pressed={stackedView} onClick={() => setStackedView(v => !v)}>{stackedView ? "Single series" : "Stacked breakdown"}</button>}
       {canLine && <div className="chart-pick" role="group" aria-label="Chart type">
         {['line', 'bar'].map(type => <button key={type} className="block-tool" aria-pressed={kind === type} onClick={() => setKind(type)}>{type === 'line' ? 'Line' : 'Bars'}</button>)}
       </div>}
     </div>
     <p className="chart-summary">{data.summary}</p>
-    {data.finite.length > 0 && (kind === 'line' ? <LineChart key={column} points={data.points} label={columns[column]} /> : <>
+    {stackedView && stacked ? <SeriesChart data={stacked} /> : data.finite.length > 0 && (kind === 'line' ? <LineChart key={column} points={data.points} label={columns[column]} /> : <>
       <p className="chart-scale">{data.signed ? 'Negative values extend left of zero; positive values extend right.' : 'Bars start at zero.'} Scale uses all {data.points.length} rows, including those below.</p>
       <div className="chart-viewport" role="region" aria-label={`${columns[column]} bar chart`} tabIndex={0}>
         <ol className="chart-bars">

@@ -44,7 +44,7 @@ const GROUPS = [
   },
 ];
 
-export function Settings({ open, prefs, onChange, onClose }) {
+export function Settings({ open, prefs, onChange, onClose, onTools }) {
   const dialog = useRef(null);
   const [problem, setProblem] = useState("");
   const support = notifySupport();
@@ -142,6 +142,7 @@ export function Settings({ open, prefs, onChange, onClose }) {
         </fieldset>
 
         {DESKTOP && (STORE_BUILD ? <p className="settings-note">Updates are delivered by Microsoft Store.</p> : <DesktopUpdates />)}
+        {onTools && <button className="text-button" onClick={onTools}>QR link and interface guide</button>}
         <p className="settings-foot">Kept on this device only.</p>
       </div>
     </dialog>

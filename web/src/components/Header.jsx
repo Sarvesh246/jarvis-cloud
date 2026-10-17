@@ -6,7 +6,7 @@ import "./header.css";
 /* The header only names the conversation. What Vaelo is doing is shown
    where it is happening: in the reply itself. Its one action keeps a
    conversation that went well as a workspace to reuse. */
-export function Header({ title, canRename, onRename, onOpenRail, onToggleRail, onSaveAsWorkspace }) {
+export function Header({ title, canRename, onRename, onOpenRail, onToggleRail, onSaveAsWorkspace, onFind }) {
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(title);
   const input = useRef(null);
@@ -104,6 +104,7 @@ export function Header({ title, canRename, onRename, onOpenRail, onToggleRail, o
           </button>
         )}
       </div>
+      {onFind && <button className="block-tool header-find" onClick={onFind} aria-label="Find actions, conversations and saved outputs">Find <kbd>⌘/Ctrl ⇧ P</kbd></button>}
       {onSaveAsWorkspace && (
         <button
           className="icon-button header-save-work"

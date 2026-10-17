@@ -89,10 +89,10 @@ function Slip({ toast, onDismiss }) {
   );
 }
 
-export function Toast({ toast, onDismiss }) {
+export function Toast({ toast, toasts, onDismiss }) {
   return (
     <div className="toast-region" role="status" aria-live="polite">
-      {toast && <Slip key={toast.id} toast={toast} onDismiss={onDismiss} />}
+      {(toasts || (toast ? [toast] : [])).map(item => <Slip key={item.id} toast={item} onDismiss={() => onDismiss(item.id)} />)}
     </div>
   );
 }

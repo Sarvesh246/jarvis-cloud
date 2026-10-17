@@ -13,6 +13,8 @@ import { requestForReply } from "./lib/adaptive-ui.js";
 import { chatTitle, displayChatTitle } from './lib/titles.js';
 import { liveReply, readSyncCache } from "./lib/chat-sync.js";
 import { useChatSync } from "./lib/use-chat-sync.js";
+import { CommandPalette } from "./components/CommandPalette.jsx";
+import { UITools, useInterfaceKeys } from "./components/UITools.jsx";
 import { Rail } from "./components/Rail.jsx";
 import { Header } from "./components/Header.jsx";
 import { Welcome } from "./components/Welcome.jsx";
@@ -397,7 +399,10 @@ export function App() {
   const phone = usePhone();
   const [collapsed, setCollapsed] = useState(readCollapsed);
   const [storageIssue, setStorageIssue] = useState(false);
-  const [toast, setToast] = useState(null);
+  const [toast, setToast] = useState([]);
+  const [commandOpen, setCommandOpen] = useState(false);
+  const [uiToolsOpen, setUIToolsOpen] = useState(false);
+  useInterfaceKeys();
   const [away, setAway] = useState(false);
   const [workspace, setWorkspace] = useState(null);
   const [quote, setQuote] = useState(null);
@@ -478,7 +483,7 @@ export function App() {
 
   function showToast(next) {
     /* The toast keeps its own time, pausing while it is being read */
-    setToast({ id: crypto.randomUUID(), ...next });
+    setToast(current => [...current, { id: crypto.randomUUID(), ...next }].slice(-6));
   }
 
   /* A fresh launch opens on a new conversation, reusing an empty one rather
@@ -785,8 +790,12 @@ export function App() {
 
   useEffect(() => {
     function onKey(event) {
+      if (event.defaultPrevented || event.isComposing) return;
       const typing = /^(INPUT|TEXTAREA)$/.test(document.activeElement?.tagName);
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+      if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === "p") {
+        event.preventDefault();
+        if (!document.querySelector("dialog[open]")) setCommandOpen(true);
+      } else if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k" && !document.querySelector("dialog[open]")) {
         event.preventDefault();
         if (!busy) newChat();
       } else if (event.key === "Escape" && menu && phone && !document.querySelector("dialog[open]")) {
@@ -795,9 +804,9 @@ export function App() {
       } else if (event.key === "Escape" && busy && !event.defaultPrevented && !document.querySelector("dialog[open]")) {
         // Esc closes an open dialog first; it stops the reply only from the conversation itself.
         stopReply();
-      } else if (event.key === "Escape" && workspace) {
+      } else if (event.key === "Escape" && workspace && !document.querySelector("dialog[open]")) {
         setWorkspace(null);
-      } else if (event.key === "/" && !typing && session?.user) {
+      } else if (event.key === "/" && !typing && session?.user && !document.querySelector("dialog[open]")) {
         event.preventDefault();
         textarea.current?.focus();
       }
@@ -2155,6 +2164,7 @@ export function App() {
           }}
         >
           <Header
+            onFind={() => setCommandOpen(true)}
             title={displayChatTitle(active)}
             canRename={messages.length > 0 && !busy}
             onRename={renameChat}
@@ -2349,10 +2359,20 @@ export function App() {
           {announcement.text}
           {announcement.id % 2 ? "​" : ""}
         </p>
-        <Toast toast={toast} onDismiss={() => setToast(null)} />
+        <Toast toasts={toast} onDismiss={id => setToast(current => current.filter(item => item.id !== id))} />
+        <CommandPalette open={commandOpen} onClose={() => setCommandOpen(false)} chats={chats} onSelect={selectChat} onOpenWork={openWork} actions={[
+          ...(!busy ? [{ id: "new", label: "New conversation", run: newChat }] : []),
+          { id: "settings", label: "Settings and appearance", run: () => setSettingsOpen(true) },
+          ...(!guest ? [{ id: "workroom", label: "Open Workroom", run: () => { setWorkDraft(null); setWorkroomOpen(true); } }] : []),
+          { id: "tools", label: "QR link and interface guide", run: () => setUIToolsOpen(true) },
+          { id: "adaptive", label: "Use Adaptive replies", run: () => setPrefs(p => ({ ...p, presentation: "adaptive" })) },
+          { id: "minimal", label: "Use Minimal replies", run: () => setPrefs(p => ({ ...p, presentation: "minimal" })) },
+        ]} />
+        <UITools open={uiToolsOpen} onClose={() => setUIToolsOpen(false)} />
         <Tips />
         <Settings
           open={settingsOpen}
+          onTools={() => { setSettingsOpen(false); setUIToolsOpen(true); }}
           prefs={prefs}
           onChange={(patch) => setPrefs((current) => ({ ...current, ...patch }))}
           onClose={() => setSettingsOpen(false)}

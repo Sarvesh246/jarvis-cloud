@@ -25,6 +25,7 @@ import { blockKey, readChecklist, saveChecklist } from "../../lib/intelligent-ui
 import { inferListPresentation, sectionContext, tablePresentation, wantsPlainReply, safeChartPlan } from "../../lib/adaptive-ui.js";
 import { TableScroll } from "./TableScroll.jsx";
 import { Chart } from "./Chart.jsx";
+import { RichUI, StepPlayer } from "./RichUI.jsx";
 import { NumberExplorer } from "./LocalTools.jsx";
 import { SourceIcon } from "./SourceIcon.jsx";
 import { Highlighted } from "./Highlighted.jsx";
@@ -120,8 +121,12 @@ function languageOf(children) {
    In a mapped document each block carries where it sits in the Markdown
    (data-src), so a selection can be traced back to the words behind it. */
 function CodeBlock({ children, node, "data-src": src }) {
-  const { content, open, live } = useContext(BlockContext);
+  const { content, open, live, presentation, stateKey } = useContext(BlockContext);
   const language = languageOf(children);
+  if (language === "vaelo-ui") {
+    const settled = fenceClosed(content, node?.position?.start?.offset, node?.position?.end?.offset);
+    return <div data-src={src}><RichUI key={blockKey(stateKey || "temporary", node?.position?.start?.offset, textOf(children))} source={textOf(children)} enabled={settled && !live && presentation !== "minimal"} stateKey={stateKey} /></div>;
+  }
   if (language === "vaelo-work") {
     const proposal = readWorkProposal(textOf(children));
     const complete = fenceClosed(content, node?.position?.start?.offset, node?.position?.end?.offset);
@@ -771,6 +776,7 @@ function InferredList({ inferred, original, src }) {
 
 function Checklist({ storageKey, defaults, tasks, autoActive, items, original, ordered, src, start }) {
   const [active, setActive] = useState(tasks || autoActive);
+  const [stepView, setStepView] = useState(false);
   const [values, setValues] = useState(() => storageKey ? readChecklist(storageKey, defaults) : defaults);
   const [saved, setSaved] = useState(true);
   const Tag = ordered ? "ol" : "ul";
@@ -782,9 +788,10 @@ function Checklist({ storageKey, defaults, tasks, autoActive, items, original, o
   return <div className="local-checklist" data-src={src}>
     <div className="local-checklist-bar">
       <button className="block-tool" onClick={() => setActive(v => !v)}>{active ? "Show original list" : "Use as checklist"}</button>
+      {ordered && <button className="block-tool" aria-pressed={stepView} onClick={() => setStepView(v => !v)}>{stepView ? "Leave step view" : "Step through"}</button>}
       {active && <><span className="local-note" role="status">{completed} / {items.length} done</span><button className="block-tool" onClick={() => update(defaults)}>Reset checks</button></>}
     </div>
-    {active ? <>
+    {stepView ? <StepPlayer items={items} render={item => item.children.filter(n => n.tagName !== "input").map((n, j) => inline(n, j))} /> : active ? <>
       <progress max={items.length} value={completed} aria-label="Checklist progress" />
       <ul className="local-check-items">{items.map((item, i) => <li key={i}>
         <label><input type="checkbox" checked={values[i]} onChange={e => update(values.map((v, j) => j === i ? e.target.checked : v))} />

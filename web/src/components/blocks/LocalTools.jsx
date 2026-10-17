@@ -19,6 +19,7 @@ export function NumberExplorer({ columns, rows, defaultOpen = false }) {
         {available.map(i => <option key={i} value={i}>{columns[i]}</option>)}
       </select></label>
       <label>Multiply by <input type="number" min="-1000000" max="1000000" step="any" value={factor} onChange={e => setFactor(e.target.value)} /></label>
+      <label>Adjust factor <input type="range" min="0" max="5" step="0.05" value={Math.max(0, Math.min(5, Number(factor) || 0))} aria-valuetext={`${factor || 0} times the original amounts`} onChange={e => setFactor(e.target.value)} /></label>
       <button className="block-tool" onClick={() => setFactor('1')}>Reset factor</button>
     </div>
     {!series ? <p role="status">Enter a finite factor between −1,000,000 and 1,000,000.</p> : <>

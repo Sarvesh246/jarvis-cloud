@@ -22,6 +22,7 @@ import { AttachmentList } from "./Message.jsx";
 import { MESSAGE_LIMIT } from "../lib/attachments.js";
 import { usePhone } from "../lib/use-phone.js";
 import "./composer.css";
+import { ActivityIsland } from "./UITools.jsx";
 import { DESKTOP } from "../lib/desktop.js";
 import { DesktopRecognition } from "../lib/dictation.js";
 
@@ -681,6 +682,7 @@ export const Composer = forwardRef(function Composer(
         send();
       }}
     >
+      {(dictation.listening || dictation.processing || reading) && <ActivityIsland title={dictation.listening ? "Recording your voice" : dictation.processing ? "Transcribing your recording" : "Reading attachments"}><p>{dictation.listening ? "Use the microphone button to stop recording. Your words appear in the message field." : dictation.processing ? "The recording is being transcribed. You can send once the text is ready." : `${attachments.filter(file => file.state === "reading").length} attachment(s) being read. See the file previews below.`}</p></ActivityIsland>}
       <AttachmentList items={attachments} onRemove={onRemoveFile} />
       <textarea
         dir="auto"

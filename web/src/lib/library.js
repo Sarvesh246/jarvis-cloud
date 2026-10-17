@@ -42,7 +42,7 @@ export function parseFences(content = "") {
   for (const block of markdownFences(content)) {
     if (!block.closed) continue;
     const language = block.language;
-    if (STRUCTURED.has(language) || language === "vaelo-work") continue;
+    if (STRUCTURED.has(language) || ["vaelo-work", "vaelo-ui"].includes(language)) continue;
     const source = block.source;
     fences.push({ language, source, lines: source.split("\n").length });
   }

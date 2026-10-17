@@ -1,3 +1,4 @@
+import { movePinned } from "../lib/rich-ui.js";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Code,
@@ -232,7 +233,16 @@ export function Rail({
     chats.filter((chat) => chat.messages.length),
     query,
   );
-  const groups = groupChats(chats);
+  const orderKey = `vaelo-pin-order:${user?.sub || 'guest'}`;
+  const [pinOrder, setPinOrder] = useState([]);
+  const [arranging, setArranging] = useState(false);
+  const dragPin = useRef(null);
+  useEffect(() => { try { const ids = JSON.parse(localStorage.getItem(orderKey) || '[]'); setPinOrder(Array.isArray(ids) ? ids.filter(x => typeof x === 'string').slice(0, 500) : []); } catch { setPinOrder([]); } }, [orderKey]);
+  const groups = groupChats(chats).map(group => group.label !== 'Pinned' ? group : { ...group, items: [...group.items].sort((a, b) => { const ai = pinOrder.indexOf(a.id), bi = pinOrder.indexOf(b.id); return (ai < 0 ? 10000 : ai) - (bi < 0 ? 10000 : bi); }) });
+  const pinned = groups.find(g => g.label === 'Pinned')?.items.map(c => c.id) || [];
+  function saveOrder(ids, focusId) { setPinOrder(ids); if (focusId) requestAnimationFrame(() => [...(aside.current?.querySelectorAll('[data-pin-id]') || [])].find(el => el.dataset.pinId === focusId)?.focus()); try { localStorage.setItem(orderKey, JSON.stringify(ids)); } catch {} }
+  function dropPin(event, id) { event.preventDefault(); const from = dragPin.current; dragPin.current = null; if (!from || from === id || !pinned.includes(from)) return; const ids = pinned.filter(x => x !== from); ids.splice(ids.indexOf(id), 0, from); saveOrder(ids); }
+
   const pristine = chats.length === 1 && !chats[0].messages.length;
 
   /* On a phone the rail is a drawer: closed, it is out of the tab order
@@ -370,8 +380,14 @@ export function Rail({
         ) : (
           groups.map((group) => (
             <section key={group.label}>
-              <h2 className="label">{group.label}</h2>
-              {group.items.map((chat) => (
+              <h2 className="label">{group.label}{group.label === 'Pinned' && group.items.length > 1 && <button className="pin-arrange" aria-pressed={arranging} onClick={() => setArranging(v => !v)}>{arranging ? 'Done' : 'Reorder'}</button>}</h2>
+              {group.items.map((chat, index) => (
+                <div key={chat.id} onDragOver={event => { if (dragPin.current) event.preventDefault(); }} onDrop={event => dropPin(event, chat.id)}>
+                {group.label === 'Pinned' && arranging && <div className="pin-reorder">
+                  <button data-pin-id={chat.id} draggable aria-label={`Drag to reorder ${chat.title}`} onDragStart={event => { dragPin.current = chat.id; event.dataTransfer.setData('text/plain', chat.id); }} onDragEnd={() => { dragPin.current = null; }}>↕</button>
+                  <button aria-label={`Move ${chat.title} up`} disabled={index === 0} onClick={() => saveOrder(movePinned(pinned, chat.id, -1), chat.id)}>Move up</button>
+                  <button aria-label={`Move ${chat.title} down`} disabled={index === group.items.length - 1} onClick={() => saveOrder(movePinned(pinned, chat.id, 1), chat.id)}>Move down</button>
+                </div>}
                 <Row
                   key={chat.id}
                   chat={chat}
@@ -383,6 +399,7 @@ export function Rail({
                   onDelete={onDelete}
                   onPin={onPin}
                 />
+                </div>
               ))}
             </section>
           ))

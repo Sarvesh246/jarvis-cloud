@@ -30,7 +30,7 @@ export function Welcome({ name, phase, onPick }) {
   return (
     <section className="welcome" aria-label="Start a conversation">
       <Mark size={64} state={phase} />
-      <h1>
+      <h1 className="kinetic-greeting">
         {greeting()}
         {who ? (
           <>
