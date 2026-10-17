@@ -14,6 +14,7 @@ export const RICH_TYPES = new Set([
   "model",
   "integrations",
 ]);
+const RICH_ALIASES = { bento: 'overview', 'bento-grid': 'overview', summary: 'overview', 'widget-stack': 'widgets', 'file-tree': 'files', 'image-gallery': 'gallery', 'image-comparison': 'image-compare', 'code-comparison': 'code-compare', diff: 'code-compare', network: 'graph', 'qr-code': 'qr', 'model-viewer': 'model' };
 export function safeMedia(value, kind = "image") {
   if (typeof value !== "string" || value.length > 4096) return null;
   try {
@@ -28,7 +29,12 @@ export function safeMedia(value, kind = "image") {
 export function parseRichUI(source) {
   if (typeof source !== "string" || source.length > 60000) return null;
   try {
-    const data = JSON.parse(source);
+    let data = JSON.parse(source);
+    if (data && typeof data === 'object' && !Array.isArray(data)) {
+      const type = data.type || data.component;
+      if (typeof type === 'string') data = { ...data, type: RICH_ALIASES[type.toLowerCase()] || type.toLowerCase() };
+      if (['overview', 'widgets', 'integrations'].includes(data.type) && Array.isArray(data.items)) data = { ...data, items: data.items.map(item => item && typeof item === 'object' ? { ...item, value: typeof item.value === 'number' && Number.isFinite(item.value) ? String(item.value) : item.value } : item) };
+    }
     if (!data || Array.isArray(data) || !RICH_TYPES.has(data.type)) return null;
     const text = (v) => typeof v === "string" && v.length <= 8000;
     const items = (key = "items", max = 40) =>
@@ -187,4 +193,30 @@ export function stackedSeries(columns, rows, values, label) {
     max: Math.max(1, ...totals),
     columns: values.map((index) => columns[index]),
   };
+}
+
+
+// Recognize only validated UI payloads in data fences; executable language fences stay code.
+export function richPayload(source, language = '', request = '') {
+  if (wantsSourceReply(request)) return null;
+  if (!richLanguage(language)) return null;
+  return parseRichUI(source);
+}
+function richLanguage(language) {
+  return ['', 'json', 'application/json', 'vaelo-ui', 'ui', ...RICH_TYPES, ...Object.keys(RICH_ALIASES)].includes(language.toLowerCase());
+}
+export function pendingRichPayload(source, language = '', request = '') {
+  if (wantsSourceReply(request) || !richLanguage(language)) return false;
+  if (language === 'vaelo-ui') return true;
+  const type = source.slice(0, 1000).match(/^\s*\{[\s\S]*?"(?:type|component)"\s*:\s*"([\w-]+)"/i)?.[1]?.toLowerCase();
+  return !!type && (RICH_TYPES.has(type) || Object.hasOwn(RICH_ALIASES, type));
+}
+export function wantsSourceReply(request = '') {
+  return /\b(?:raw (?:json|code)|json only|code only|(?:show|return|output|give) (?:(?:me|the|only|just) ){0,3}(?:json|source code)|(?:respond|reply|answer|return|output) (?:only )?(?:with|as|in) (?:(?:valid|raw|only) )?json|(?:example|sample) json|json schema)\b/i.test(request);
+}
+export function reorderAt(ids, id, target, after = false) {
+  if (id === target || !ids.includes(id) || !ids.includes(target)) return ids;
+  const next = ids.filter(value => value !== id);
+  next.splice(next.indexOf(target) + (after ? 1 : 0), 0, id);
+  return next.every((value, i) => value === ids[i]) ? ids : next;
 }

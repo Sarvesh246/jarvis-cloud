@@ -34,9 +34,7 @@ export function StepPlayer({ items, render = (x) => x }) {
           ))}
         </ol>
       ) : (
-        <div className="rich-step" aria-live="polite">
-          {render(items[current])}
-        </div>
+        <MotionContent identity={current} className="rich-step"><div aria-live="polite">{render(items[current])}</div></MotionContent>
       )}
       <div className="rich-toolbar">
         <button
@@ -62,77 +60,38 @@ export function StepPlayer({ items, render = (x) => x }) {
 }
 
 function Overview({ data }) {
-  const [view, setView] = useState(data.type === "widgets" ? "stack" : "grid");
+  const stacked = data.type === 'widgets';
   const stack = useRef(null);
   const [card, setCard] = useState(0);
-  return (
-    <>
-      <div className="rich-toolbar" role="group" aria-label="Summary layout">
-        {["grid", "stack"].map((x) => (
-          <button
-            key={x}
-            className="block-tool"
-            aria-pressed={view === x}
-            onClick={() => setView(x)}
-          >
-            {x === "grid" ? "Overview" : "Widget stack"}
-          </button>
-        ))}
-      </div>
-      <dl
-        ref={stack}
-        tabIndex={view === "stack" ? 0 : undefined}
-        aria-label="Overview cards"
-        onScroll={(e) => {
-          const width =
-            e.currentTarget.firstElementChild?.getBoundingClientRect().width;
-          if (width)
-            setCard(
-              Math.min(
-                data.items.length - 1,
-                Math.round(e.currentTarget.scrollLeft / (width + 10)),
-              ),
-            );
-        }}
-        className={`rich-overview ${view === "stack" ? "rich-widget-stack" : ""}`}
-      >
-        {data.items.map((x, i) => (
-          <div key={i} className="rich-spotlight" onPointerMove={spotlight}>
-            <dt>{x.label}</dt>
-            <dd>
-              {x.value}
-              {x.detail && <span className="rich-card-detail">{x.detail}</span>}
-            </dd>
-          </div>
-        ))}
-      </dl>
-      {view === "stack" && (
-        <div className="rich-toolbar" role="group" aria-label="Choose a widget">
-          {data.items.map((item, i) => (
-            <button
-              key={i}
-              className="block-tool"
-              aria-pressed={card === i}
-              aria-label={`Show widget ${i + 1}: ${item.label}`}
-              onClick={() => {
-                setCard(i);
-                const child = stack.current?.children[i];
-                if (child)
-                  stack.current.scrollTo({
-                    left:
-                      child.offsetLeft -
-                      stack.current.firstElementChild.offsetLeft,
-                    behavior: "instant",
-                  });
-              }}
-            >
-              {i + 1}
-            </button>
-          ))}
-        </div>
-      )}
-    </>
-  );
+  const items = useMemo(() => {
+    const total = data.items.findIndex(item => /^(?:grand total|total|overall|sum)$/i.test(item.label.trim()));
+    return total > 0 && !stacked ? [data.items[total], ...data.items.filter((_, i) => i !== total)] : data.items;
+  }, [data.items, stacked]);
+  function choose(index) {
+    setCard(index);
+    const child = stack.current?.children[index];
+    if (child) stack.current.scrollTo({ left: child.offsetLeft - stack.current.firstElementChild.offsetLeft, behavior: reducedMotion() ? 'instant' : 'smooth' });
+  }
+  return <>
+    <dl ref={stack} style={{'--overview-columns': Math.min(3, Math.max(1, items.length - 1))}} tabIndex={stacked ? 0 : undefined} aria-label={stacked ? 'Supporting details' : 'Overview cards'}
+      onScroll={event => { const child = event.currentTarget.firstElementChild; if (child) setCard(Math.min(items.length - 1, Math.max(0, Math.round(event.currentTarget.scrollLeft / (child.getBoundingClientRect().width + 12))))); }}
+      className={`rich-overview ${stacked ? 'rich-widget-stack' : ''}`}>
+      {items.map((item, i) => <div key={i} className="rich-spotlight" data-lead={!stacked && i === 0 || undefined}><dt>{item.label}</dt><dd>{item.value}{item.detail && <span className="rich-card-detail">{item.detail}</span>}</dd></div>)}
+    </dl>
+    {stacked && items.length > 1 && <div className="rich-stack-nav"><button className="block-tool" disabled={card === 0} onClick={() => choose(card - 1)} aria-label="Previous detail">←</button><span aria-live="polite">{card + 1} of {items.length}</span><button className="block-tool" disabled={card === items.length - 1} onClick={() => choose(card + 1)} aria-label="Next detail">→</button></div>}
+  </>;
+}
+export function reducedMotion() {
+  return typeof document !== 'undefined' && (document.documentElement.dataset.motion === 'reduce' || matchMedia('(prefers-reduced-motion: reduce)').matches);
+}
+function MotionContent({ identity, children, className = '' }) {
+  const element = useRef(null);
+  useEffect(() => {
+    if (!element.current || reducedMotion()) return;
+    const animation = element.current.animate([{ opacity: 0, transform: 'translateY(5px)' }, { opacity: 1, transform: 'translateY(0)' }], { duration: 220, easing: 'cubic-bezier(.2,.75,.25,1)' });
+    return () => animation.cancel();
+  }, [identity]);
+  return <div ref={element} className={className}>{children}</div>;
 }
 export function spotlight(event) {
   if (event.pointerType !== "mouse") return;
@@ -238,7 +197,7 @@ function Graph({ data }) {
           </button>
         ))}
       </div>
-      <ul className="rich-edges">
+      <details className="rich-graph-details"><summary>View connections</summary><ul className="rich-edges">
         {data.edges
           .filter((e) => !focus || e.from === focus || e.to === focus)
           .map((e, i) => (
@@ -247,7 +206,7 @@ function Graph({ data }) {
               {e.label && `: ${e.label}`}
             </li>
           ))}
-      </ul>
+      </ul></details>
     </>
   );
 }
@@ -300,7 +259,7 @@ function LensImage({ image }) {
         )}
       </div>
       <figcaption>{image.alt}</figcaption>
-      <label>
+      <details className="rich-inspect"><summary>Inspect image</summary><label>
         Magnification{" "}
         <input
           aria-label={`Magnification: ${image.alt}`}
@@ -311,7 +270,7 @@ function LensImage({ image }) {
           value={zoom}
           onChange={(e) => setZoom(Number(e.target.value))}
         />
-      </label>
+      </label></details>
     </figure>
   );
 }
@@ -663,17 +622,16 @@ function Receipt({ data }) {
     </div>
   );
 }
-export function RichUI({ source, enabled, stateKey }) {
+export function RichUI({ source, enabled, stateKey, pending = false }) {
   const data = useMemo(() => parseRichUI(source), [source]);
   const [original, setOriginal] = useState(false);
+  if (pending) return <div className="rich-pending" role="status" aria-busy="true"><span aria-hidden="true" />Preparing this view…</div>;
   if (!data || !enabled) return <pre className="block-plain">{source}</pre>;
   return (
-    <section className="rich-block" aria-label={data.title || data.type}>
-      <header className="rich-toolbar">
-        <strong>{data.title || data.type.replaceAll("-", " ")}</strong>
-        <button className="block-tool" onClick={() => setOriginal(!original)}>
-          {original ? "Show interactive view" : "Show original data"}
-        </button>
+    <section className="rich-block" data-kind={data.type} aria-label={data.title || data.type}>
+      <header className="rich-toolbar rich-head">
+        <strong>{data.title || ({ overview: 'Overview', widgets: 'Details', 'code-compare': 'Code changes', 'image-compare': 'Image comparison', graph: 'Relationships', files: 'Files', gallery: 'Images', receipt: 'Cost summary', steps: 'Step by step', qr: 'Open on another device', model: '3D preview', integrations: 'Connections' }[data.type])}</strong>
+        <details className="rich-options" onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) event.currentTarget.open = false; }} onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); event.currentTarget.open = false; event.currentTarget.querySelector('summary').focus(); } }}><summary aria-label="View options">•••</summary><div><button className="block-tool" onClick={event => { setOriginal(!original); event.currentTarget.closest('details').open = false; }}>{original ? 'Show visual' : 'View original data'}</button></div></details>
       </header>
       {original ? (
         <pre className="block-plain">{source}</pre>

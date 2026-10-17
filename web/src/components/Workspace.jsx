@@ -17,6 +17,7 @@ import { SOURCE_KINDS, kindLabel } from "../lib/sources.js";
 import { isNumericColumn, isSectionRow, tableView, toCSV, toTSV } from "../lib/table.js";
 import { currentContent, docTitle } from "../lib/library.js";
 import { DocumentWork } from "./DocumentWork.jsx";
+import { requestForReply } from "../lib/adaptive-ui.js";
 import "./workspace.css";
 
 /* The workspace opens beside the conversation only when something deserves
@@ -423,6 +424,7 @@ export function Workspace({
           <DocumentWork
             key={item.messageId}
             message={message}
+            requestText={requestForReply(messages, messages.indexOf(message))}
             work={work}
             canRevise={canRevise}
             onOpen={onOpen}

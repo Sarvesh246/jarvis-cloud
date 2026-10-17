@@ -17,6 +17,8 @@ import { Rail } from "../../src/components/Rail.jsx";
 import { Chart } from "../../src/components/blocks/Chart.jsx";
 import { DEFAULTS, applyPrefs } from "../../src/lib/preferences.js";
 
+import "../../src/design/refinements.css";
+
 const imageA =
   "https://upload.wikimedia.org/wikipedia/commons/a/a9/Example.jpg";
 const imageB =
@@ -26,7 +28,7 @@ const samples = {
     type: "overview",
     title: "Trip overview",
     items: [
-      { label: "Days", value: "4", detail: "Your supplied itinerary" },
+      { label: "Total", value: "$715", detail: "Hotel, food and travel" },
       { label: "Hotel", value: "$480" },
       { label: "Food", value: "$160" },
       { label: "Travel", value: "$75" },
@@ -144,6 +146,7 @@ const chats = [
 ];
 function Fixture() {
   const [kind, setKind] = useState("overview"),
+    [format, setFormat] = useState('json'),
     [minimal, setMinimal] = useState(false),
     [live, setLive] = useState(false),
     [narrow, setNarrow] = useState(false),
@@ -155,8 +158,8 @@ function Fixture() {
     [result, setResult] = useState(""),
     [prefs, setPrefs] = useState(DEFAULTS);
   useInterfaceKeys();
-  const content =
-    "~~~vaelo-ui\n" + JSON.stringify(samples[kind], null, 2) + "\n~~~";
+  const json = JSON.stringify(samples[kind], null, 2);
+  const content = format === 'bare' ? json : `~~~${format === 'unlabeled' ? '' : format}\n${json}${live ? '' : '\n~~~'}`;
   return (
     <main
       style={{ maxWidth: narrow ? 350 : 960, padding: "1rem", margin: "auto" }}
@@ -172,6 +175,7 @@ function Fixture() {
             ))}
           </select>
         </label>
+        <label>Response format <select value={format} onChange={e => setFormat(e.target.value)}>{['json','vaelo-ui','unlabeled','bare'].map(x => <option key={x}>{x}</option>)}</select></label>
         <button onClick={() => setMinimal((v) => !v)}>Toggle minimal</button>
         <button onClick={() => setLive((v) => !v)}>Toggle streaming</button>
         <button onClick={() => setNarrow((v) => !v)}>Toggle narrow</button>

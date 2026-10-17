@@ -25,6 +25,7 @@ import { blockKey, readChecklist, saveChecklist } from "../../lib/intelligent-ui
 import { inferListPresentation, sectionContext, tablePresentation, wantsPlainReply, safeChartPlan } from "../../lib/adaptive-ui.js";
 import { TableScroll } from "./TableScroll.jsx";
 import { Chart } from "./Chart.jsx";
+import { richPayload, pendingRichPayload, wantsSourceReply } from "../../lib/rich-ui.js";
 import { RichUI, StepPlayer } from "./RichUI.jsx";
 import { NumberExplorer } from "./LocalTools.jsx";
 import { SourceIcon } from "./SourceIcon.jsx";
@@ -114,18 +115,21 @@ const FOLD_AT = 24;
 
 function languageOf(children) {
   const code = Array.isArray(children) ? children[0] : children;
-  return (code?.props?.className || "").match(/language-([\w+-]+)/)?.[1]?.toLowerCase() || "";
+  return (code?.props?.className || "").match(/language-([\w+/-]+)/)?.[1]?.toLowerCase() || "";
 }
 
 /* A fenced block is either code, or one of the shapes Vaelo can answer in.
    In a mapped document each block carries where it sits in the Markdown
    (data-src), so a selection can be traced back to the words behind it. */
 function CodeBlock({ children, node, "data-src": src }) {
-  const { content, open, live, presentation, stateKey } = useContext(BlockContext);
+  const { content, open, live, presentation, stateKey, requestText } = useContext(BlockContext);
   const language = languageOf(children);
-  if (language === "vaelo-ui") {
-    const settled = fenceClosed(content, node?.position?.start?.offset, node?.position?.end?.offset);
-    return <div data-src={src}><RichUI key={blockKey(stateKey || "temporary", node?.position?.start?.offset, textOf(children))} source={textOf(children)} enabled={settled && !live && presentation !== "minimal"} stateKey={stateKey} /></div>;
+  const source = textOf(children);
+  const payload = richPayload(source, language, requestText);
+  const settled = fenceClosed(content, node?.position?.start?.offset, node?.position?.end?.offset);
+  const pending = live && !settled && pendingRichPayload(source, language, requestText);
+  if (payload || pending || (language === "vaelo-ui" && !wantsSourceReply(requestText))) {
+    return <div data-src={src}><RichUI key={blockKey(stateKey || "temporary", node?.position?.start?.offset, textOf(children))} source={textOf(children)} enabled={settled && presentation !== "minimal"} pending={live && !settled && presentation !== 'minimal'} stateKey={stateKey} /></div>;
   }
   if (language === "vaelo-work") {
     const proposal = readWorkProposal(textOf(children));
@@ -533,6 +537,7 @@ function TableBlock({ node, "data-src": src }) {
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState([]);
   const [onlySelected, setOnlySelected] = useState(false);
+  const [toolsOpen, setToolsOpen] = useState(false);
   const enhance = presentation !== "minimal" && !live && interactive && data.rows.length >= 2 && data.rows.length <= 200 && data.columns.length <= 20;
   const displayed = useMemo(() => tableView(data.rows, {
     ...(enhance && { query, selected, onlySelected }), ...sort,
@@ -617,22 +622,23 @@ function TableBlock({ node, "data-src": src }) {
           </button>
         </span>
       </figcaption>
-      {enhance && <div className="local-table-tools">
+      {enhance && <details className="local-table-tools" onToggle={event => setToolsOpen(event.currentTarget.open)}>
+        <summary>Filter and compare{query || onlySelected ? ` · ${displayed.count} of ${displayed.total} rows` : ''}</summary>
         <div className="local-controls">
           <label>Filter rows <input type="search" maxLength={200} value={query} onChange={e => setQuery(e.target.value)} placeholder="Find in this table" /></label>
           <button className="block-tool" aria-pressed={onlySelected} disabled={!selected.length && !onlySelected} onClick={() => setOnlySelected(v => !v)}>Compare selected ({selected.length})</button>
           <button className="block-tool" onClick={() => { setQuery(""); setSelected([]); setOnlySelected(false); setSort({ column: null, direction: "asc" }); }}>Reset view</button>
         </div>
-        <p className="local-note" role="status">{displayed.count} of {displayed.total} rows · Controls run locally. Copy and CSV keep the original table.</p>
-      </div>}
+        <p className="local-note" role="status">{displayed.count} of {displayed.total} rows · Copy and CSV include the original table.</p>
+      </details>}
       {view === "chart" && plan && visible.length > 0 ? (
         <Chart columns={data.columns} rows={displayed.rows} plan={plan} />
       ) : (
         <TableScroll>
-          <table style={{ "--table-min-width": `${Math.min(38, data.columns.length * 7 + (enhance ? 3.5 : 0))}rem` }}>
+          <table style={{ "--table-min-width": `${Math.min(38, data.columns.length * 7 + (enhance && toolsOpen ? 3.5 : 0))}rem` }}>
             <thead>
               <tr>
-                {enhance && <th scope="col"><span className="sr-only">Compare</span></th>}
+                {enhance && toolsOpen && <th scope="col"><span className="sr-only">Compare</span></th>}
                 {data.heads.map((head, i) => (
                   <th
                     key={i}
@@ -657,11 +663,11 @@ function TableBlock({ node, "data-src": src }) {
             <tbody>
               {visible.map((r) => isSectionRow(data.rows[r]) ? (
                 <tr key={r} className="table-section">
-                  <th scope="rowgroup" colSpan={data.columns.length + (enhance ? 1 : 0)}>{inline(data.cells[r][0], 0)}</th>
+                  <th scope="rowgroup" colSpan={data.columns.length + (enhance && toolsOpen ? 1 : 0)}>{inline(data.cells[r][0], 0)}</th>
                 </tr>
               ) : (
                 <tr key={r}>
-                  {enhance && <td><input type="checkbox" aria-label={`Compare row ${rowNumbers.get(r)}: ${data.rows[r][0]}`} checked={selected.includes(r)} onChange={e => setSelected(items => e.target.checked ? [...items, r] : items.filter(i => i !== r))} /></td>}
+                  {enhance && toolsOpen && <td><input type="checkbox" aria-label={`Compare row ${rowNumbers.get(r)}: ${data.rows[r][0]}`} checked={selected.includes(r)} onChange={e => setSelected(items => e.target.checked ? [...items, r] : items.filter(i => i !== r))} /></td>}
                   {data.cells[r].map((cell, i) => (
                     <td key={i} data-numeric={numeric[i] || undefined}>
                       {inline(cell, i)}
@@ -803,7 +809,15 @@ function Checklist({ storageKey, defaults, tasks, autoActive, items, original, o
   </div>;
 }
 
+function RichParagraph({ node, children, "data-src": src, ...props }) {
+  const { presentation, stateKey, requestText, live, content } = useContext(BlockContext);
+  const source = content.slice(node.position?.start?.offset, node.position?.end?.offset).trim();
+  if (presentation !== 'minimal' && !live && source.startsWith('{') && richPayload(source, '', requestText)) return <div data-src={src}><RichUI source={source} enabled stateKey={stateKey} /></div>;
+  return <p {...props} data-src={src}>{children}</p>;
+}
+
 const components = {
+  p: RichParagraph,
   a: ({ href, children }) => <SourceLink href={href}>{children}</SourceLink>,
   img: ImageRef,
   pre: CodeBlock,
@@ -881,6 +895,7 @@ export function Rendered({ content, sources, onOpen, mapped = false, live = fals
       content,
       live,
       stateKey,
+      requestText,
       interactive: !mapped && !wantsPlainReply(requestText),
       automatic: !mapped && presentation !== "minimal" && !live,
     }),

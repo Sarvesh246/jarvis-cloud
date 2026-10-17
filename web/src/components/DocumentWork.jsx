@@ -183,7 +183,7 @@ function Revise({ source, range, disabled, onRevise, onAccept, onClear }) {
   );
 }
 
-export function DocumentWork({ message, work, onWorkChange, onOpen, onReveal, canRevise, onRevise }) {
+export function DocumentWork({ message, work, onWorkChange, onOpen, onReveal, canRevise, onRevise, requestText = '' }) {
   const content = currentContent(work, message?.content ?? "");
   const original = work?.versions?.[0]?.content ?? message?.content ?? "";
   const sources = useSources(content);
@@ -342,7 +342,7 @@ export function DocumentWork({ message, work, onWorkChange, onOpen, onReveal, ca
         <ReadingProgress target={article} content={content} />
         <div className="doc-page">
           <article className="ws-document prose" ref={article}>
-            <Rendered content={content} sources={sources} onOpen={onOpen} mapped />
+            <Rendered content={content} sources={sources} onOpen={onOpen} requestText={requestText} mapped />
           </article>
           <Contents article={article} content={content} />
         </div>

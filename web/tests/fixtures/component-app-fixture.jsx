@@ -20,7 +20,7 @@ const data = {
   ],
 };
 const content =
-  "## Your weekend\n\nHere are your supplied costs.\n\n~~~vaelo-ui\n" +
+  "## Your weekend\n\nHere are your supplied costs.\n\n~~~\n" +
   JSON.stringify(data) +
   "\n~~~\n\n### Before leaving\n1. Confirm your booking.\n2. Pack your essentials.\n3. Check the departure time.\n\n### Costs\n| Item | Cost |\n|---|---:|\n| Hotel | $480 |\n| Food | $160 |\n| Travel | $75 |";
 if (!sessionStorage.getItem("component-fixture-seeded")) {

@@ -1,3 +1,7 @@
+@import "@fontsource-variable/source-serif-4/standard.css";
+@import "@fontsource-variable/source-serif-4/standard-italic.css";
+@import "@fontsource-variable/source-sans-3/wght.css";
+
 *,
 *::before,
 *::after {

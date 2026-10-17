@@ -1,16 +1,18 @@
 /* Vaelo design tokens. Everything downstream reads from here; nothing else
    should hard-code a color, radius, space, duration or shadow.
 
-   Language: correspondence. Paper, ink and gilt hairlines. One serif voice,
-   with italic as the emotional register. */
+   Language: correspondence. Paper, ink and gilt hairlines, with a display
+   voice, a reading serif and a clear interface face. */
 
 :root {
   color-scheme: light dark;
 
-  /* One family. Newsreader's optical sizing gives display sizes a finer cut
-     and reading sizes a sturdier one, so a single face can do every job. */
+  /* Newsreader carries the identity; Source Serif and Source Sans carry
+     sustained reading and dense controls. All are self-hosted. */
   --font-voice: "Newsreader Variable", "Newsreader", "Iowan Old Style",
     Georgia, serif;
+  --font-read: "Source Serif 4 Variable", "Iowan Old Style", Georgia, serif;
+  --font-ui: "Source Sans 3 Variable", "Segoe UI", system-ui, sans-serif;
   --font-mono: ui-monospace, "Cascadia Code", Consolas, monospace;
 
   /* Nothing functional goes under 14px; a fine serif needs the room. */

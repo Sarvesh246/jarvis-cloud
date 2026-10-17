@@ -51,6 +51,7 @@ import {
   wireMessage,
 } from "./lib/attachments.js";
 import "./shell.css";
+import "./design/refinements.css";
 
 const freshChat = () => ({
   id: crypto.randomUUID(),

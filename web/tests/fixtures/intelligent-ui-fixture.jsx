@@ -10,6 +10,8 @@ import { Workspace } from '../../src/components/Workspace.jsx';
 import { DEFAULTS } from '../../src/lib/preferences.js';
 import { Rendered, PresentationContext } from '../../src/components/blocks/Blocks.jsx';
 
+import "../../src/design/refinements.css";
+
 const content = `## A clearer view of your week
 
 Three options, compared using the same figures. Try filtering, selecting rows, or changing the chart view.

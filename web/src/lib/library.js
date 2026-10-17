@@ -1,3 +1,4 @@
+import { richPayload, wantsSourceReply } from "./rich-ui.js";
 /* Durable work: the documents, code and tables Vaelo has made, kept apart
    from the conversations that produced them so the final version is never
    something you have to scroll back to find.
@@ -37,13 +38,14 @@ export function docTitle(content = "", fallback = "Untitled document") {
   return line.length > 64 ? `${line.slice(0, 62).replace(/\s+\S*$/, "")}…` : line;
 }
 
-export function parseFences(content = "") {
+export function parseFences(content = "", requestText = '') {
   const fences = [];
   for (const block of markdownFences(content)) {
     if (!block.closed) continue;
     const language = block.language;
-    if (STRUCTURED.has(language) || ["vaelo-work", "vaelo-ui"].includes(language)) continue;
+    if (STRUCTURED.has(language) || language === 'vaelo-work' || (language === 'vaelo-ui' && !wantsSourceReply(requestText))) continue;
     const source = block.source;
+    if (richPayload(source, language, requestText)) continue;
     fences.push({ language, source, lines: source.split("\n").length });
   }
   return fences;
@@ -102,7 +104,7 @@ export function collectWork(chats) {
     const works = chat.works || {};
     const seen = new Set();
     const messages = [...chat.messages].reverse();
-    for (const message of messages) {
+    for (const [index, message] of messages.entries()) {
       if (message.role !== "assistant" || !message.content) continue;
       const work = works[message.id];
       if (work || isLongReply(message.content)) {
@@ -119,7 +121,9 @@ export function collectWork(chats) {
           item: { kind: "document", messageId: message.id },
         });
       }
-      parseFences(message.content).forEach((fence, i) => {
+      const previous = messages[index + 1];
+      const requestText = previous?.role === 'user' ? previous.text ?? previous.content ?? '' : '';
+      parseFences(message.content, requestText).forEach((fence, i) => {
         if (fence.lines < CODE_LINES && !["html", "svg"].includes(fence.language)) return;
         items.push({
           id: `${chat.id}:${message.id}:code:${i}`,

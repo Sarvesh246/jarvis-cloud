@@ -7,10 +7,40 @@ import {
   fileTree,
   movePinned,
   stackedSeries,
+  richPayload, pendingRichPayload, wantsSourceReply, reorderAt,
 } from "../src/lib/rich-ui.js";
 import { richGuidanceFor } from "../shared/rich-ui-guidance.js";
+import { parseFences } from '../src/lib/library.js';
 
 const parse = (data) => parseRichUI(JSON.stringify(data));
+test('data fences tolerate model labels without intercepting requested source or executable code', () => {
+  const payload = JSON.stringify({type:'overview',items:[{label:'Hotel',value:'$480'}]});
+  for (const language of ['', 'json', 'application/json', 'ui', 'vaelo-ui', 'overview', 'bento']) assert.ok(richPayload(payload, language));
+  for (const language of ['javascript', 'jsx', 'python', 'html']) assert.equal(richPayload(payload, language), null);
+  for (const request of ['Return only JSON.', 'Respond with JSON.', 'Reply in valid JSON.', 'Show me the JSON.', 'Use raw JSON.', 'Give me source code.', 'Show example JSON.', 'JSON schema']) {
+    assert.ok(wantsSourceReply(request), request);
+    assert.equal(richPayload(payload, 'json', request), null);
+    assert.equal(pendingRichPayload(payload, 'json', request), false);
+  }
+  for (const request of ['Show a bento overview.', 'Show a QR code.', 'Compare this source code.']) assert.equal(wantsSourceReply(request), false);
+  assert.ok(pendingRichPayload('{"type":"overview","items":[', 'json'));
+  assert.equal(pendingRichPayload('{"type":"unknown","items":[', 'json'), false);
+  assert.equal(pendingRichPayload('{"type":"overview","items":[', 'javascript'), false);
+  assert.deepEqual(parse({type:'Bento',items:[{label:'Days',value:4}]}), {type:'overview',items:[{label:'Days',value:'4'}]});
+  assert.equal(parse({component:'qr-code',url:'https://react.dev/'}).type, 'qr');
+  const content = `~~~json\n${payload}\n~~~`;
+  assert.deepEqual(parseFences(content), []);
+  assert.equal(parseFences(content, 'Return only JSON.').length, 1);
+});
+test('pointer ordering inserts on either side, preserving identity and avoiding redundant updates', () => {
+  const ids = ['a','b','c'];
+  assert.deepEqual(reorderAt(ids,'a','c',true), ['b','c','a']);
+  assert.deepEqual(reorderAt(ids,'c','a'), ['c','a','b']);
+  assert.strictEqual(reorderAt(ids,'a','b'), ids);
+  assert.strictEqual(reorderAt(ids,'a','a'), ids);
+  assert.strictEqual(reorderAt(ids,'missing','a'), ids);
+  assert.deepEqual(ids, ['a','b','c']);
+});
 test("rich blocks validate every supported shape and preserve supplied facts", () => {
   const examples = [
     ...["overview", "widgets", "integrations"].map((type) => ({

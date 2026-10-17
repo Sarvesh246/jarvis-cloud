@@ -7,6 +7,8 @@ import '../../src/design/base.css';
 import '../../src/components/message.css';
 import { PresentationContext, Rendered } from '../../src/components/blocks/Blocks.jsx';
 
+import "../../src/design/refinements.css";
+
 const samples = [
   ['Packing', 'Help me pack for a weekend away.', '## Packing list\n- Water bottle\n- A warm layer\n- Phone charger'],
   ['Timeline', 'Plan a relaxed Saturday morning.', '## Saturday morning\n- 9 AM: Breakfast — Take your time.\n- 10:30 AM: Walk — Visit the park.\n- 12 PM: Lunch — Try the market.'],

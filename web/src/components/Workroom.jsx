@@ -39,9 +39,9 @@ function CheckField({ field, value, onChange }) {
   const invalid = touched && field.required && !String(value || '').trim();
   const common = { id, value, onBlur: () => setTouched(true), 'aria-invalid': invalid || undefined, onChange: e => onChange(e.target.value), 'aria-describedby': `${id}-hint${heard ? ` ${id}-heard` : ''}`, 'aria-required': field.required || undefined };
   return <div className="work-field">
-    <label htmlFor={id}>{field.label}{!field.required && <span className="work-required">If you like</span>}</label>
+    <label htmlFor={id}>{field.label}{!field.required && <span className="work-required">Optional</span>}</label>
     {box ? <textarea {...common} rows={field.kind === 'paste' ? 6 : 4} /> : <input {...common} type="text" autoComplete="off" />}
-    {invalid && <p className="work-help" role="alert">Enter {field.label.toLowerCase()} before running this check.</p>}
+    {invalid && <p className="work-help" role="alert">This answer is needed to run the check.</p>}
     <p id={`${id}-hint`} className="work-help">{field.hint}</p>
     {heard && <p id={`${id}-heard`} className="work-heard" data-ok={heard.ok || undefined}>{heard.text}</p>}
   </div>;
@@ -61,25 +61,25 @@ function DocumentSlot({ slot, docs, disabled, onFiles, onPaste, onRemove, onPrev
     onDragOver={e => { if (disabled) return; e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)} onDrop={drop}>
     <div className="work-slot-head">
       <h5 id={`${id}-label`}>{slot.label}</h5>
-      <span className="work-slot-need">{filled ? <><Tick size={15} aria-hidden="true" /> Added</> : slot.required ? 'Needed' : 'If you have it'}</span>
+      <span className="work-slot-need">{filled ? <><Tick size={15} aria-hidden="true" /> Added</> : slot.required ? 'Recommended' : 'Optional'}</span>
     </div>
     {slot.hint && <p className="work-help">{slot.hint}</p>}
     {docs.map(doc => <div className="work-doc" key={doc.id}>
       <FileText size={20} weight="light" aria-hidden="true" />
       <span className="work-doc-name"><strong>{doc.name}</strong><span>{documentSize(doc.chars ?? doc.text?.length ?? 0)}{typeof doc.text === 'string' ? ' · not saved yet' : ''}</span></span>
-      <button type="button" className="work-text-button" aria-expanded={preview?.id === doc.id} onClick={() => onPreview(doc)}>{preview?.id === doc.id ? 'Hide' : 'Look'}</button>
+      <button type="button" className="work-text-button" aria-expanded={preview?.id === doc.id} onClick={() => onPreview(doc)}>{preview?.id === doc.id ? 'Hide preview' : 'Preview'}</button>
       <button type="button" className="icon-button" disabled={disabled} aria-label={`Remove ${doc.name}`} onClick={() => onRemove(doc.id)}><Trash size={18} weight="light" /></button>
       {preview?.id === doc.id && <pre className="work-doc-preview" tabIndex={0}>{preview.text ?? 'You’re offline, so this file can’t be shown right now.'}</pre>}
     </div>)}
     {(!filled || extra) && !pasting && <div className="work-slot-actions">
-      <button type="button" disabled={disabled} onClick={() => input.current?.click()}><UploadSimple size={17} weight="light" />{filled ? 'Add another' : 'Choose a file'}</button>
-      <button type="button" disabled={disabled} onClick={() => { setPasting(true); setName(extra ? '' : slot.label); }}><ClipboardText size={17} weight="light" />Paste words</button>
+      <button type="button" disabled={disabled} onClick={() => input.current?.click()}><UploadSimple size={17} weight="light" />{filled ? 'Add another' : 'Add file'}</button>
+      <button type="button" disabled={disabled} onClick={() => { setPasting(true); setName(extra ? '' : slot.label); }}><ClipboardText size={17} weight="light" />Paste text</button>
       <span className="work-slot-drop" aria-hidden="true">or drop a file here</span>
     </div>}
     {filled && !extra && !pasting && <button type="button" className="work-text-button" disabled={disabled} onClick={() => input.current?.click()}>Swap for another file</button>}
     {pasting && <div className="work-paste">
-      <label>Paste the words here<textarea rows={6} value={text} autoFocus onChange={e => setText(e.target.value)} /></label>
-      <label>Call it<input value={name} maxLength={160} placeholder={slot.label} onChange={e => setName(e.target.value)} /></label>
+      <label>Paste your text<textarea rows={6} value={text} autoFocus onChange={e => setText(e.target.value)} /></label>
+      <label>Name<input value={name} maxLength={160} placeholder={slot.label} onChange={e => setName(e.target.value)} /></label>
       <div className="work-inline-actions">
         <button type="button" className="work-primary" disabled={!text.trim()} onClick={() => { onPaste({ name: name.trim() || slot.label, text: text.replace(/\r\n/g, '\n') }, slot.id); setPasting(false); setText(''); }}>Add</button>
         <button type="button" onClick={() => { setPasting(false); setText(''); }}>Cancel</button>
@@ -112,7 +112,6 @@ export function Workroom({ open, onClose, session, onStart, initialDraft = null,
   const overview = saved?.output ? resultOverview(saved.output) : null;
   const plan = draft && workspace && !workspace.retired ? contextPlan({ brief: custom ? draft.brief || '' : workspace.brief, notes: draft.notes || '', documents: draft.documents || [] }) : null;
   const extraSlot = { id: 'extra', label: custom ? 'Files it should always have' : 'Anything else', hint: custom ? 'Notes, examples or anything Vaelo should read every time.' : 'Any other file that would help.' };
-  const neededMissing = workspace?.slots?.filter(s => s.required && !draft.documents.some(d => d.slot === s.id)) || [];
   const answers = check && draft?.check ? answersFor(check, draft.check.input) : null;
   const canCheck = Boolean(check && (!check.needsSource || answers?.source));
 
@@ -257,12 +256,13 @@ export function Workroom({ open, onClose, session, onStart, initialDraft = null,
   const starters = custom ? (draft?.starters || []).filter(Boolean) : workspace?.starters || [];
   const canAct = Boolean(sub) && !offline && !mutationBusy && !conflict;
   const busyText = {loading:'Getting your work…',save:'Saving…',start:'Getting things ready…',run:'Working it out…',delete:'Deleting…',export:'Making your backup…'}[busy];
+  const renderSlot = slot => <DocumentSlot key={slot.id} slot={slot} docs={draft.documents.filter(doc=>doc.slot===slot.id)} disabled={mutationBusy} onFiles={addFiles} onPaste={addPasted} preview={preview} onPreview={togglePreview} onRemove={id=>{edit({...draft,documents:draft.documents.filter(doc=>doc.id!==id)});if(preview?.id===id)setPreview(null);}} />;
   const fillPrompt = check ? `Please fill in “${check.title}” for me from my files and notes.` : '';
 
   return <dialog ref={dialog} className="workroom" aria-labelledby="workroom-title" aria-describedby="workroom-description"
     onClose={onClose} onCancel={e=>{e.preventDefault();onClose();}}>
     <header className="workroom-head">
-      <div><h2 id="workroom-title">Workroom</h2><p id="workroom-description">Pick a task, add your files, and start.</p></div>
+      <div><h2 id="workroom-title">Workroom</h2><p id="workroom-description">{draft ? 'Your files, instructions and results for this task.' : 'Choose a task. Add your context. Get help.'}</p></div>
       <button className="icon-button" aria-label="Close the Workroom" onClick={onClose}><X size={22} /></button>
     </header>
     <div className="workroom-notices" aria-live="polite">
@@ -285,8 +285,8 @@ export function Workroom({ open, onClose, session, onStart, initialDraft = null,
       {!draft ? <>
         <div className="work-home-nav">
           <div className="work-tabs" role="group" aria-label="Choose what to see">
-            <button aria-pressed={view==='catalogue'} onClick={()=>{setView('catalogue');setQuery('');}}>Workspaces</button>
-            <button aria-pressed={view==='saved'} onClick={()=>{setView('saved');setQuery('');}}>Saved <span>{records.length}</span></button>
+            <button aria-pressed={view==='catalogue'} onClick={()=>{setView('catalogue');setQuery('');}}>Tasks</button>
+            <button aria-pressed={view==='saved'} onClick={()=>{setView('saved');setQuery('');}}>Saved work <span>{records.length}</span></button>
           </div>
           <details className="work-file-menu"><summary>Backup</summary><div>
             <button onClick={()=>exportRecords(records,'vaelo-backup')} disabled={!records.length||mutationBusy}><DownloadSimple size={17} />Save a backup file</button>
@@ -298,8 +298,8 @@ export function Workroom({ open, onClose, session, onStart, initialDraft = null,
           <div className="work-inline-actions">{imports.map((item,i)=><button key={i} onClick={()=>navigate(()=>{setDraft({...item,id:crypto.randomUUID()});setBase(null);setPanel('setup');setImports(imports.filter((_,j)=>j!==i));})}>{item.title}</button>)}<button onClick={()=>setImports([])}>Never mind</button></div>
         </section>}
         <section className="work-browser" aria-label={view==='catalogue'?'Workspaces':'Saved work'}>
-          <div className="work-browser-head"><div><h3>{view==='catalogue'?'What are you working on?':'Pick up where you left off.'}</h3>
-            <p>{view==='catalogue'?'Each one already knows the job. Add your files and start.':'Your files and answers are kept together.'}</p></div>
+          <div className="work-browser-head"><div><h3>{view==='catalogue'?'What do you need help with?':'Pick up where you left off.'}</h3>
+            <p>{view==='catalogue'?'Choose a starting point, then add the details that matter.':'Your files and answers are kept together.'}</p></div>
             <label className="work-search"><span className="sr-only">{view==='catalogue'?'Search workspaces':'Search saved work'}</span>
               <input type="search" value={query} onChange={e=>setQuery(e.target.value)} placeholder={view==='catalogue'?'Search, like “refund” or “essay”':'Search your saved work'} /></label>
           </div>
@@ -309,7 +309,7 @@ export function Workroom({ open, onClose, session, onStart, initialDraft = null,
               {AUDIENCES.map(item=><button key={item.id} aria-pressed={audience===item.id} onClick={()=>setAudience(item.id)}>{item.label}</button>)}
             </div>
             {audience==='all'&&!query.trim()&&<button className="work-own" onClick={()=>navigate(()=>create({id:CUSTOM_WORKSPACE}))}>
-              <Sparkle size={22} weight="light" aria-hidden="true" /><span><strong>Make your own</strong><span>Tell Vaelo what to do once, add your files, and use it again and again.</span></span><ArrowRight size={18} aria-hidden="true" />
+              <Sparkle size={22} weight="light" aria-hidden="true" /><span><strong>Create a reusable task</strong><span>Save your instructions and files for something you do often.</span></span><ArrowRight size={18} aria-hidden="true" />
             </button>}
             {grouped.map(([group,items])=><section className="work-group" key={group.id} aria-labelledby={`work-group-${group.id}`}>
               <header><h4 id={`work-group-${group.id}`}>{group.label}</h4><p>{group.line}</p></header>
@@ -327,11 +327,11 @@ export function Workroom({ open, onClose, session, onStart, initialDraft = null,
             <p>{records.length?'Try a different word.':'Pick a workspace, add your files and save it. Next time, everything is ready.'}</p><button className="work-primary" onClick={()=>{setView('catalogue');setQuery('');}}>See workspaces <ArrowRight size={17} /></button></div>}
         </section>
       </> : <section className="work-task" aria-label={workspace?.title || 'Workspace'}>
-        <button className="work-back" disabled={mutationBusy} onClick={panel==='setup'||workspace?.retired?leaveTask:()=>setPanel('setup')}><ArrowLeft size={17} />{panel==='setup'||workspace?.retired?(view==='saved'?'Saved':'All workspaces'):'Back'}</button>
+        <button className="work-back" disabled={mutationBusy} onClick={panel==='setup'||workspace?.retired?leaveTask:()=>setPanel('setup')}><ArrowLeft size={17} />{panel==='setup'||workspace?.retired?(view==='saved'?'Saved':'All tasks'):'Back'}</button>
         {!workspace?.retired && <nav className="work-stepper" aria-label="Workspace stages">
-          <button disabled={mutationBusy} aria-current={panel === 'setup' ? 'step' : undefined} onClick={() => setPanel('setup')}>1 · Files and setup</button>
-          {check && <button disabled={mutationBusy || !canCheck} aria-current={panel === 'check' ? 'step' : undefined} onClick={() => setPanel('check')}>2 · Check inputs</button>}
-          {check && <button disabled={!saved?.output || mutationBusy} aria-current={panel === 'result' ? 'step' : undefined} onClick={() => setPanel('result')}>3 · Result</button>}
+          <button disabled={mutationBusy} aria-current={panel === 'setup' ? 'step' : undefined} onClick={() => setPanel('setup')}>Files & notes</button>
+          {check && <button disabled={mutationBusy || !canCheck} aria-current={panel === 'check' ? 'step' : undefined} onClick={() => setPanel('check')}>Run a check</button>}
+          {check && <button disabled={!saved?.output || mutationBusy} aria-current={panel === 'result' ? 'step' : undefined} onClick={() => setPanel('result')}>Result</button>}
         </nav>}
         {workspace?.retired ? <section className="work-retired">
           <header className="work-detail-head"><p>Old tool</p><h3 ref={taskHeading} tabIndex={-1}>{draft.title}</h3></header>
@@ -354,46 +354,45 @@ export function Workroom({ open, onClose, session, onStart, initialDraft = null,
                   <p className="work-help">Vaelo does this every time you start a chat from here.</p></div>
               </>}
               <section className="work-docs" aria-labelledby="work-docs-title">
-                <h4 id="work-docs-title">Your files</h4>
-                <p className="work-help">Add them once. Vaelo keeps them here for next time. Files with words work best, or paste the words in.</p>
-                {(workspace?.slots||[]).map(slot=><DocumentSlot key={slot.id} slot={slot} docs={draft.documents.filter(d=>d.slot===slot.id)} disabled={mutationBusy}
-                  onFiles={addFiles} onPaste={addPasted} preview={preview} onPreview={togglePreview}
-                  onRemove={id=>{edit({...draft,documents:draft.documents.filter(d=>d.id!==id)});if(preview?.id===id)setPreview(null);}} />)}
+                <h4 id="work-docs-title">Files for this task</h4>
+                <p className="work-help">Add a document or paste text. You can save this task to reuse the same files later.</p>
+                {(workspace?.slots||[]).filter(slot=>slot.required).map(renderSlot)}
+                {(workspace?.slots||[]).some(slot=>!slot.required)&&<details className="work-optional-files" open={draft.documents.some(doc=>(workspace?.slots||[]).some(slot=>!slot.required&&slot.id===doc.slot))||undefined}><summary>Additional files <span>Optional</span></summary>{(workspace?.slots||[]).filter(slot=>!slot.required).map(renderSlot)}</details>}
                 {custom&&<DocumentSlot slot={extraSlot} docs={draft.documents} disabled={mutationBusy} onFiles={addFiles} onPaste={addPasted} preview={preview} onPreview={togglePreview}
                   onRemove={id=>{edit({...draft,documents:draft.documents.filter(d=>d.id!==id)});if(preview?.id===id)setPreview(null);}} />}
               </section>
-              <details className="work-more" open={Boolean(draft.notes) || draft.documents.some(d=>d.slot==='extra'&&!custom) || undefined}>
-                <summary>More options</summary>
+                <div className="work-field"><label htmlFor="work-notes">Additional context (optional)</label>
+                  <textarea id="work-notes" rows={2} maxLength={WORK_LIMITS.notes} value={draft.notes||''} placeholder="Like: “It’s due on Friday” or “Keep it short.”" onChange={e=>edit({...draft,notes:e.target.value})} disabled={mutationBusy} /></div>
+              <details className="work-more" open={draft.documents.some(d=>d.slot==='extra'&&!custom) || undefined}>
+                <summary>Task settings</summary>
                 {!custom&&<DocumentSlot slot={extraSlot} docs={draft.documents.filter(d=>d.slot==='extra'||!(workspace?.slots||[]).some(s=>s.id===d.slot))} disabled={mutationBusy}
                   onFiles={addFiles} onPaste={addPasted} preview={preview} onPreview={togglePreview}
                   onRemove={id=>{edit({...draft,documents:draft.documents.filter(d=>d.id!==id)});if(preview?.id===id)setPreview(null);}} />}
-                <div className="work-field"><label htmlFor="work-notes">Anything Vaelo should know?</label>
-                  <textarea id="work-notes" rows={3} maxLength={WORK_LIMITS.notes} value={draft.notes||''} placeholder="Like: “It’s due on Friday” or “Keep it short.”" onChange={e=>edit({...draft,notes:e.target.value})} disabled={mutationBusy} /></div>
                 {custom&&<fieldset className="work-fields"><legend>Questions you ask a lot</legend>
                   <p className="work-help">They turn into buttons, so you can ask with one tap.</p>
                   {(draft.starters||[]).map((item,i)=><div className="work-starter-edit" key={i}><input aria-label={`Question ${i+1}`} maxLength={WORK_LIMITS.starterChars} value={item} placeholder="Like “Check this week’s homework”" onChange={e=>edit({...draft,starters:draft.starters.map((s,j)=>j===i?e.target.value:s)})} />
                     <button type="button" className="icon-button" aria-label={`Remove question ${i+1}`} onClick={()=>edit({...draft,starters:draft.starters.filter((_,j)=>j!==i)})}><Trash size={18} weight="light" /></button></div>)}
                   {(draft.starters||[]).length<WORK_LIMITS.starters&&<button type="button" className="work-text-button" onClick={()=>edit({...draft,starters:[...(draft.starters||[]),'']})}><Plus size={17} />Add a question</button>}
                 </fieldset>}
-                {custom&&<div className="work-field"><label htmlFor="work-check">Something Vaelo can work out for you</label><select id="work-check" value={draft.check?.id||''} onChange={e=>{const c=getCheck(e.target.value);edit({...draft,check:c?{id:c.id,input:answersFor(c)}:null});}}>
+                {custom&&<div className="work-field"><label htmlFor="work-check">Add a structured check (optional)</label><select id="work-check" value={draft.check?.id||''} onChange={e=>{const c=getCheck(e.target.value);edit({...draft,check:c?{id:c.id,input:answersFor(c)}:null});}}>
                   <option value="">Nothing extra</option>{CHECKS.filter(c=>!c.needsSource).map(c=><option key={c.id} value={c.id}>{c.title}</option>)}</select></div>}
                 {!custom&&<div className="work-field"><label htmlFor="work-title">Name</label><input id="work-title" maxLength={160} value={draft.title} onChange={e=>edit({...draft,title:e.target.value})} disabled={mutationBusy} /></div>}
-                <div className="work-field"><label htmlFor="work-scope">Keep it with</label><select id="work-scope" value={draft.scope} onChange={e=>edit({...draft,scope:e.target.value})} disabled={mutationBusy}>{SCOPES.map(([value,name])=><option key={value} value={value}>{name}</option>)}</select>
+                <div className="work-field"><label htmlFor="work-scope">Organize under</label><select id="work-scope" value={draft.scope} onChange={e=>edit({...draft,scope:e.target.value})} disabled={mutationBusy}>{SCOPES.map(([value,name])=><option key={value} value={value}>{name}</option>)}</select>
                   <p className="work-help">Only you see this. Vaelo uses it only in chats you start from here.</p></div>
-                {!custom&&<div className="work-brief"><h5>What Vaelo already knows</h5><p>{workspace.brief}</p></div>}
+                {!custom&&<div className="work-brief"><h5>Task instructions</h5><p>{workspace.brief}</p></div>}
                 {base&&<div className="work-manage"><div className="work-inline-actions"><button type="button" disabled={mutationBusy} onClick={()=>exportRecords([saved||draft],draft.title)}><DownloadSimple size={17} />Save a backup copy</button>
                   {!confirmDelete&&<button type="button" disabled={mutationBusy||offline||conflict} onClick={()=>setConfirmDelete(true)}><Trash size={17} />Delete</button>}</div>
                   {confirmDelete&&<div className="work-delete"><p>Delete this, with its files and answers? You can’t undo this.</p><button type="button" disabled={mutationBusy||offline} onClick={()=>mutate('delete')}>Yes, delete it</button><button type="button" onClick={()=>setConfirmDelete(false)}>Keep it</button></div>}</div>}
               </details>
             </div>
             <aside className="work-setup-aside">
-              {starters.length>0&&<section className="work-starters" aria-labelledby="work-starters-title"><h4 id="work-starters-title">Ask straight away</h4>
+              {starters.length>0&&<section className="work-starters" aria-labelledby="work-starters-title"><h4 id="work-starters-title">Start with a question</h4>
                 <div className="work-chips">{starters.map(item=><button type="button" key={item} disabled={!canAct} onClick={()=>mutate('start',{prompt:item})}>{item}</button>)}</div></section>}
               {check&&<section className="work-check-card" aria-labelledby="work-check-title"><Calculator size={22} weight="light" aria-hidden="true" />
                 <div><h4 id="work-check-title">{check.title}</h4><p>{check.description}</p>
                   {canCheck ? <div className="work-inline-actions">
-                    <button type="button" onClick={()=>setPanel(saved?.output&&!dirty?'result':'check')}>{saved?.output?'See the answer':'Work it out'}</button>
-                    {check.needsSource?null:<button type="button" className="work-text-button" disabled={!canAct} onClick={()=>mutate('start',{prompt:fillPrompt})}>Let Vaelo fill it in</button>}
+                    <button type="button" onClick={()=>setPanel(saved?.output&&!dirty?'result':'check')}>{saved?.output?'View result':'Enter details'}</button>
+                    {check.needsSource?null:<button type="button" className="work-text-button" disabled={!canAct} onClick={()=>mutate('start',{prompt:fillPrompt})}>Draft from my files</button>}
                   </div> : <p className="work-help">To check a document, open it in a chat and tap Verify.</p>}</div>
               </section>}
               {plan&&draft.documents.length>0&&<p className="work-context" data-trimmed={plan.trimmed||undefined}>{plan.trimmed
@@ -401,9 +400,8 @@ export function Workroom({ open, onClose, session, onStart, initialDraft = null,
                 : 'Vaelo reads all of your files every time you ask something.'}</p>}
             </aside>
             <div className="work-action-bar">
-              <button className="work-primary" type="submit" disabled={!canAct}><ChatCircle size={18} />{busy==='start'?'Getting ready…':'Start a chat'}</button>
-              <span className="work-save-state">{dirty||!base?<button type="button" className="work-text-button" disabled={!canAct} onClick={()=>mutate('save')}>Save for later</button>:'Saved'}</span>
-              {neededMissing.length>0&&<p className="work-help work-action-note">Tip: add {neededMissing.map(s=>s.label.toLowerCase()).join(' and ')} for the best help.</p>}
+              <button className="work-primary" type="submit" disabled={!canAct}><ChatCircle size={18} />{busy==='start'?'Opening your conversation…':'Chat about this'}</button>
+              <span className="work-save-state">{dirty||!base?<button type="button" className="work-text-button" disabled={!canAct} onClick={()=>mutate('save')}>Save task</button>:'Saved'}</span>
             </div>
           </form>
         </> : panel==='check' && check ? <form className="work-check" onSubmit={e=>{e.preventDefault();mutate('run');}}>
@@ -411,8 +409,8 @@ export function Workroom({ open, onClose, session, onStart, initialDraft = null,
           <fieldset disabled={mutationBusy} className="work-editor">
             {check.fields.map(item=><CheckField key={item.id} field={item} value={answers[item.id]||''} onChange={value=>setAnswer(item.id,value)} />)}
           </fieldset>
-          <div className="work-action-bar"><button className="work-primary" type="submit" disabled={!canAct}><Calculator size={18} />{busy==='run'?'Working it out…':'Work it out'}</button>
-            {!check.needsSource&&<button type="button" className="work-text-button" disabled={!canAct} onClick={()=>mutate('start',{prompt:fillPrompt})}>Let Vaelo fill it in from my files</button>}</div>
+          <div className="work-action-bar"><button className="work-primary" type="submit" disabled={!canAct}><Calculator size={18} />{busy==='run'?'Checking…':'Run check'}</button>
+            {!check.needsSource&&<button type="button" className="work-text-button" disabled={!canAct} onClick={()=>mutate('start',{prompt:fillPrompt})}>Draft these answers in a chat</button>}</div>
         </form> : panel==='result' && saved?.output ? <section className="work-output" aria-label="The answer">
           <p className="work-result-kicker">{check?.title}</p>
           <h3 ref={resultHeading} tabIndex={-1}>{overview.title}</h3>

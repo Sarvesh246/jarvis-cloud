@@ -1,3 +1,4 @@
+import { usePinnedReorder } from "../lib/use-pinned-reorder.js";
 import { movePinned } from "../lib/rich-ui.js";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -174,6 +175,7 @@ function Row({ chat, active, busy, excerpt, openId, setOpenId, onSelect, onDelet
         }}
       >
         <button
+          title={chat.pinned ? "Drag to reorder this chat" : undefined}
           className="rail-link"
           disabled={busy}
           aria-current={active ? "page" : undefined}
@@ -236,12 +238,10 @@ export function Rail({
   const orderKey = `vaelo-pin-order:${user?.sub || 'guest'}`;
   const [pinOrder, setPinOrder] = useState([]);
   const [arranging, setArranging] = useState(false);
-  const dragPin = useRef(null);
   useEffect(() => { try { const ids = JSON.parse(localStorage.getItem(orderKey) || '[]'); setPinOrder(Array.isArray(ids) ? ids.filter(x => typeof x === 'string').slice(0, 500) : []); } catch { setPinOrder([]); } }, [orderKey]);
   const groups = groupChats(chats).map(group => group.label !== 'Pinned' ? group : { ...group, items: [...group.items].sort((a, b) => { const ai = pinOrder.indexOf(a.id), bi = pinOrder.indexOf(b.id); return (ai < 0 ? 10000 : ai) - (bi < 0 ? 10000 : bi); }) });
   const pinned = groups.find(g => g.label === 'Pinned')?.items.map(c => c.id) || [];
   function saveOrder(ids, focusId) { setPinOrder(ids); if (focusId) requestAnimationFrame(() => [...(aside.current?.querySelectorAll('[data-pin-id]') || [])].find(el => el.dataset.pinId === focusId)?.focus()); try { localStorage.setItem(orderKey, JSON.stringify(ids)); } catch {} }
-  function dropPin(event, id) { event.preventDefault(); const from = dragPin.current; dragPin.current = null; if (!from || from === id || !pinned.includes(from)) return; const ids = pinned.filter(x => x !== from); ids.splice(ids.indexOf(id), 0, from); saveOrder(ids); }
 
   const pristine = chats.length === 1 && !chats[0].messages.length;
 
@@ -250,6 +250,7 @@ export function Rail({
      again, focus goes back to the button that opens it, unless choosing
      something in it already moved focus on. */
   const aside = useRef(null);
+  const reorder = usePinnedReorder({ aside, ids: pinned, setOrder: setPinOrder, saveOrder, chats, disabled: busy || !!query || view !== 'chats' });
   const close = useRef(null);
   const wasOpen = useRef(open);
   useEffect(() => {
@@ -270,6 +271,7 @@ export function Rail({
       data-open={open}
       data-collapsed={collapsed}
       aria-label="Conversations"
+      {...reorder.handlers}
       inert={phone && !open ? true : undefined}
     >
       <div className="rail-head">
@@ -381,10 +383,11 @@ export function Rail({
           groups.map((group) => (
             <section key={group.label}>
               <h2 className="label">{group.label}{group.label === 'Pinned' && group.items.length > 1 && <button className="pin-arrange" aria-pressed={arranging} onClick={() => setArranging(v => !v)}>{arranging ? 'Done' : 'Reorder'}</button>}</h2>
+              {group.label === 'Pinned' && group.items.length > 1 && <p className="pin-hint">Drag a chat to reorder<span> · hold to drag on touch</span></p>}
               {group.items.map((chat, index) => (
-                <div key={chat.id} onDragOver={event => { if (dragPin.current) event.preventDefault(); }} onDrop={event => dropPin(event, chat.id)}>
+                <div key={chat.id} className="pin-row" data-pin-row={group.label === 'Pinned' ? chat.id : undefined} data-moving={reorder.drag?.id === chat.id || undefined}>
                 {group.label === 'Pinned' && arranging && <div className="pin-reorder">
-                  <button data-pin-id={chat.id} draggable aria-label={`Drag to reorder ${chat.title}`} onDragStart={event => { dragPin.current = chat.id; event.dataTransfer.setData('text/plain', chat.id); }} onDragEnd={() => { dragPin.current = null; }}>↕</button>
+                  <button data-pin-id={chat.id} aria-label={`Drag to reorder ${chat.title}`}>↕</button>
                   <button aria-label={`Move ${chat.title} up`} disabled={index === 0} onClick={() => saveOrder(movePinned(pinned, chat.id, -1), chat.id)}>Move up</button>
                   <button aria-label={`Move ${chat.title} down`} disabled={index === group.items.length - 1} onClick={() => saveOrder(movePinned(pinned, chat.id, 1), chat.id)}>Move down</button>
                 </div>}
@@ -406,6 +409,8 @@ export function Rail({
         )}
       </nav>
 
+      <p className="sr-only" role="status" aria-live="polite">{reorder.announcement}</p>
+      {reorder.drag && <div className="pin-drag-ghost" aria-hidden="true" style={{left:Math.max(8, Math.min(window.innerWidth - 250, reorder.drag.x + 14)),top:Math.min(window.innerHeight - 70, reorder.drag.y + 14)}}>⠿ <span>{reorder.drag.title}</span></div>}
       <div className="rail-foot">
         {!user.guest && (
           <button className="rail-new rail-workroom" onClick={onWorkroom} aria-haspopup="dialog" aria-expanded={workroomOpen}>
