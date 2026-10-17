@@ -55,6 +55,7 @@ const CASES = [
   ["the docker build doesn't work after upgrading node", "debugging", "deep"],
   // math
   ["2+2", "math", "quick"],
+  ["What is 19% of 80? Reply with just the number.", "explicit", "quick"],
   ["(14 * 3) / 7", "math", "quick"],
   ["what is 15% of 80", "math", "quick"],
   ["solve x^2 - 5x + 6 = 0", "math", "deep"],

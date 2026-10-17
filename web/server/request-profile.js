@@ -68,6 +68,7 @@ const EXPLICIT = [
   [/\b(?:no|without|avoid)\s+(?:bullets?|bullet points|lists?|tables?|headings?)\b|\bin (?:prose|paragraphs?|full sentences)\b|\bparagraph form\b/, "prose"],
   [/\b(?:bullet(?:ed)?\s*(?:points?|list)|in bullets|as (?:a )?(?:list|bullets))\b/, "a bulleted list"],
   [/\b(?:as|in|into|to)\s+(?:valid\s+)?(?:json|csv|yaml|xml|html|latex|markdown)\b/, "the named data format"],
+  [/\b(?:just|only)\s+(?:the\s+)?(?:number|numeric result|final answer|answer|result)\b|\b(?:answer|result|number)\s+only\b|\b(?:no|without)\s+(?:explanation|working|steps)\b/, "the final answer only"],
   [/\b(?:one|1|single|two|2|three|3|a few)[- ](?:word|sentence|line|paragraph)s?\b|\b(?:tl;?dr|in short|short answer|keep it (?:short|brief)|briefly|in a nutshell)\b/, "the length they asked for"],
   [/\b(?:just|only) (?:the )?code\b|\bcode only\b/, "code only"],
 ];

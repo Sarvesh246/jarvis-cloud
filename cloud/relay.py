@@ -356,11 +356,12 @@ class Relay:
 
     def open_guest(self, run, messages, body=None):
         """Ask the model provider directly, with no tools, in the same streamed shape."""
+        route = fast_route(os.environ)
         key = os.environ.get("OPENROUTER_API_KEY", "")
-        if not key:
+        if route is None:
             return None, {"message": "Guest mode is not available right now.", "status": 503}
         payload = {
-            "model": "openrouter/free",
+            "model": route["model"],
             "messages": messages,
             "stream": True,
             "max_tokens": GUEST_MAX_TOKENS,
@@ -368,27 +369,37 @@ class Relay:
         reasoning = direct_reasoning(body or {})
         if reasoning:
             payload["reasoning"] = reasoning
-        connection = self.guest_connect()
-        run.connection = connection
-        run.upstream_requests += 1
-        try:
-            connection.request(
-                "POST",
-                "/api/v1/chat/completions",
-                body=json.dumps(payload).encode(),
-                headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-            )
-            response = connection.getresponse()
-        except OSError:
-            connection.close()
+        routes = [route]
+        if route["name"] == "router" and key:
+            routes.append({"name": "openrouter", "model": "openrouter/free", "key": key,
+                           "path": "/api/v1/chat/completions", "headers": {}})
+        status = None
+        for target in routes:
             if run.stopped:
                 return None, None
-            return None, {"message": "Vaelo is temporarily unavailable. Please try again.", "status": 503}
-        if response.status == 200:
-            return response, None
-        response.read(64 * 1024)
-        connection.close()
-        if response.status == 429:
+            payload["model"] = target["model"]
+            connection = (self.fast_connect(target["host"], target["port"])
+                          if target["name"] == "router" else self.guest_connect())
+            run.connection = connection
+            run.upstream_requests += 1
+            try:
+                connection.request(
+                    "POST", target["path"], body=json.dumps(payload).encode(),
+                    headers={"Authorization": f"Bearer {target['key']}",
+                             "Content-Type": "application/json", **target["headers"]},
+                )
+                response = connection.getresponse()
+                if response.status == 200:
+                    run.route = target["name"]
+                    return response, None
+                status = response.status
+                response.read(64 * 1024)
+            except (OSError, http.client.HTTPException):
+                pass
+            connection.close()
+        if run.stopped:
+            return None, None
+        if status == 429:
             return None, {"message": GUEST_BUSY, "status": 429}
         return None, {"message": "Vaelo is temporarily unavailable. Please try again.", "status": 503}
 

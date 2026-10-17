@@ -255,6 +255,40 @@ class RelayTests(unittest.TestCase):
         self.assertNotIn("tools", sent["body"])
         self.assertEqual(relay.guest_active, 0)
 
+    def test_guests_use_the_configured_router_without_tools_or_host_access(self):
+        hermes, relay, port = self.boot([])
+        provider, _ = self.fast_provider(relay, [[chunk("No code was executed.", "stop"), "data: [DONE]"]])
+        with mock.patch.dict("os.environ", {"FREELLMAPI_URL": "https://router.example",
+                "FREELLMAPI_API_KEY": "router-key"}, clear=True):
+            self.start(port, owner="web:guest:test")
+            run = self.finished(relay)
+        self.assertEqual(run.outcome, "complete")
+        self.assertEqual(run.route, "router")
+        self.assertEqual(hermes.requests, [])
+        sent = provider.requests[0]
+        self.assertEqual(sent["body"]["model"], "auto")
+        self.assertEqual(sent["headers"]["X-FreeLLM-Task-Type"], "chat")
+        self.assertEqual(sent["body"]["max_tokens"], relay_module.GUEST_MAX_TOKENS)
+        self.assertNotIn("tools", sent["body"])
+
+    def test_guest_router_failure_falls_back_to_openrouter_without_hermes(self):
+        hermes, relay, port = self.boot([])
+        router, _ = self.fast_provider(relay, [503])
+        provider = FakeHermes([[chunk("Hello.", "stop"), "data: [DONE]"]])
+        self.addCleanup(provider.close)
+        relay.guest_connect = lambda: http.client.HTTPConnection("127.0.0.1", provider.server.server_port, timeout=10)
+        with mock.patch.dict("os.environ", {"FREELLMAPI_URL": "https://router.example",
+                "FREELLMAPI_API_KEY": "router-key", "OPENROUTER_API_KEY": "or-key"}, clear=True):
+            self.start(port, owner="web:guest:test")
+            run = self.finished(relay)
+        self.assertEqual(run.outcome, "complete")
+        self.assertEqual(run.route, "openrouter")
+        self.assertEqual(len(router.requests), 1)
+        self.assertEqual(hermes.requests, [])
+        self.assertEqual(provider.requests[0]["body"]["model"], "openrouter/free")
+        self.assertEqual(provider.requests[0]["headers"]["Authorization"], "Bearer or-key")
+        self.assertNotIn("tools", provider.requests[0]["body"])
+
     def start_fast(self, port, fast="You are Vaelo, briefly.", effort="minimal"):
         return self.call(port, "POST", "/vaelo/runs", {
             "id": RUN,
