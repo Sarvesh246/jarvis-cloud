@@ -1,4 +1,5 @@
 import http.client
+import io
 import importlib.util
 import json
 from pathlib import Path
@@ -113,6 +114,35 @@ class RelayTests(unittest.TestCase):
         for server in self.servers:
             server.shutdown()
             server.server_close()
+
+    def test_corrupt_answer_chunks_trigger_recovery_instead_of_false_success(self):
+        hermes, relay, port = self.boot([
+            [chunk("The answer is "), 'data: {"choices":broken}', "data: [DONE]"],
+            [chunk("42.", "stop"), "data: [DONE]"],
+        ])
+        self.start(port)
+        run = self.finished(relay)
+        _, frames = self.events(port)
+        output = json.dumps(frames)
+        self.assertEqual(len(hermes.requests), 2)
+        self.assertIn("jarvis.continue", output)
+        self.assertNotIn("broken", output)
+        self.assertEqual(run.outcome, "complete")
+
+    def test_unfinished_stream_frames_are_bounded_before_parsing(self):
+        _, relay, _ = self.boot([])
+        for raw in [b"data: " + b"x" * 200, b"data: x\n" * 30]:
+            with self.subTest(raw=raw[:20]), mock.patch.object(relay_module, "FRAME_BYTES", 128):
+                run = relay_module.Run(RUN, OWNER)
+                run.connection = mock.Mock()
+                seen = {"content": "", "answer": "", "tools": [], "approval": False}
+                response = io.BytesIO(raw)
+                relay.relay(run, response, seen)
+                self.assertTrue(seen["dropped"])
+                self.assertFalse(seen["finished"])
+                self.assertEqual(run.frames, [])
+                self.assertLessEqual(response.tell(), 136, "read stops near the frame budget")
+                run.connection.close.assert_called_once()
 
     def boot(self, scripts):
         hermes = FakeHermes(scripts)

@@ -37,11 +37,7 @@
   },
   "platform_toolsets": {
     "api_server": [
-      "file",
-      "terminal",
       "web",
-      "memory",
-      "session_search",
       "todo"
     ]
   },
@@ -50,7 +46,7 @@
     "cwd": "/opt/data/workspace",
     "timeout": 120
   },
-  "memory": { "memory_enabled": true, "user_profile_enabled": true },
+  "memory": { "memory_enabled": false, "user_profile_enabled": false },
   "compression": { "enabled": true },
   "auxiliary": {
     "background_review": { "enabled": false },

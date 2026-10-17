@@ -53,6 +53,9 @@ KEEPALIVE_SECONDS = 10
 # A device listening for changes is let go after this long and simply asks again.
 FEED_SECONDS = 270
 BODY_LIMIT = 8 * 1024 * 1024
+# Bound incomplete frames before JSON parsing or Run.emit's retained-output
+# limit. A provider must not grow a single unfinished line/frame indefinitely.
+FRAME_BYTES = 512 * 1024
 # A run that ended without an answer, or was cut off mid-answer, is tried again (up to three
 # attempts in all) while this much time is left.
 RECOVERY_MIN_SECONDS = 60
@@ -559,18 +562,21 @@ class Relay:
         usage = {"prompt_tokens": 0, "completion_tokens": 0, "cached_tokens": 0}
         seen["usage"] = usage
         seen["usage_reported"] = False
-        lines = []
+        lines, frame_bytes = [], 0
         try:
-            for raw in iter(response.readline, b""):
+            for raw in iter(lambda: response.readline(FRAME_BYTES + 1), b""):
                 if run.stopped:
                     break
+                frame_bytes += len(raw)
+                if frame_bytes > FRAME_BYTES:
+                    raise ValueError("Upstream stream frame exceeded its limit")
                 line = raw.decode("utf-8", "replace").rstrip("\r\n")
                 if line:
                     lines.append(line)
                     continue
                 if lines:
                     self.inspect(run, "\n".join(lines), seen)
-                lines = []
+                lines, frame_bytes = [], 0
             if lines and not run.stopped:
                 self.inspect(run, "\n".join(lines), seen)
         except (OSError, http.client.HTTPException, ValueError):
@@ -600,10 +606,12 @@ class Relay:
         try:
             payload = json.loads(text)
         except ValueError:
-            run.emit(frame)
+            # Dropping a corrupt content chunk and later accepting [DONE]
+            # would turn a damaged answer into a false success.
+            seen["failed"] = True
             return
         if not isinstance(payload, dict):
-            run.emit(frame)
+            seen["failed"] = True
             return
         reported = payload.get("usage")
         if isinstance(reported, dict):

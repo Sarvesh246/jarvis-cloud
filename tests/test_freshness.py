@@ -6,6 +6,45 @@ from cloud.freshness import source_context
 
 
 class FreshnessTests(unittest.TestCase):
+    def test_each_subject_lookup_keeps_the_actual_question_and_region(self):
+        search = mock.Mock(return_value={"success": False})
+        query = "Is Python 3.14 affected by this security advisory in October 2026?"
+        source_context(query, search)
+        self.assertIn("security advisory in October 2026", search.call_args.args[0])
+        self.assertEqual(search.call_args.args[0].lower().count("python 3.14"), 1)
+        self.assertNotIn("official specifications", search.call_args.args[0])
+
+    def test_four_requested_models_all_receive_a_lookup(self):
+        search = mock.Mock(return_value={"success": False})
+        query = "Compare iPhone 15 Pro, Pixel 10, Galaxy S26 Ultra and OnePlus 16 prices in India"
+        source_context(query, search)
+        self.assertEqual(search.call_count, 4)
+        for call in search.call_args_list:
+            self.assertIn("prices in India", call.args[0])
+            self.assertEqual(sum(name in call.args[0].lower() for name in
+                ["iphone 15 pro", "pixel 10", "galaxy s26 ultra", "oneplus 16"]), 1)
+
+    def test_shorthand_comparisons_do_not_pollute_individual_searches(self):
+        search = mock.Mock(return_value={"success": False})
+        source_context("iPhone 15 Pro vs 18 Pro Max prices in India", search)
+        queries = [call.args[0].lower() for call in search.call_args_list]
+        self.assertEqual(len(queries), 2)
+        self.assertNotIn("18 pro max", queries[0])
+        self.assertNotIn("15 pro", queries[1])
+        self.assertTrue(all("prices in india" in query for query in queries))
+
+    def test_malformed_result_for_one_subject_does_not_erase_healthy_evidence(self):
+        def search(query, limit):
+            if query.startswith("iphone 18"):
+                return {"success": True, "data": {"web": None}}
+            return {"success": True, "data": {"web": [{
+                "url": "https://apple.com/15", "title": "iPhone 15 Pro specifications",
+                "description": "iPhone 15 Pro technical information",
+            }]}}
+        context = source_context("iPhone 15 Pro vs iPhone 18 Pro Max", search)["content"]
+        self.assertEqual(len(json.loads(context.split("\n")[-1])), 1)
+        self.assertIn('Subjects without matching evidence: ["iphone 18 pro max"]', context)
+
     def test_retrieval_supplies_bounded_evidence_and_preserves_exact_subjects(self):
         search = mock.Mock(return_value={"success": True, "data": {"web": [{
             "url": f"https://example.com/release/{i}", "title": "Official release",
@@ -48,7 +87,7 @@ class FreshnessTests(unittest.TestCase):
 
     def test_comparison_searches_each_exact_model_and_rejects_the_wrong_pair(self):
         def search(query, limit):
-            if query == "iphone 15 pro official specifications":
+            if query.startswith("iphone 15 pro official sources:"):
                 return {"success": True, "data": {"web": [
                     {"url": "https://other.example/compare", "title": "OnePlus 16 vs iPhone 15 Pro", "description": "OnePlus 16 has 16GB RAM. iPhone 15 Pro has 8GB."},
                     {"url": "https://support.apple.com/15", "title": "iPhone 15 Pro - Technical Specifications", "description": "iPhone 15 Pro has A17 Pro."},
@@ -67,7 +106,7 @@ class FreshnessTests(unittest.TestCase):
 
     def test_one_failed_subject_does_not_discard_other_evidence_or_invent_coverage(self):
         def search(query, limit):
-            if "18" in query:
+            if query.startswith("iphone 18"):
                 raise OSError("private provider error")
             return {"success": True, "data": {"web": [
                 {"url": "https://apple.com/15", "title": "iPhone 15 Pro specifications"}
@@ -79,7 +118,7 @@ class FreshnessTests(unittest.TestCase):
 
     def test_source_budget_reserves_coverage_for_both_models_and_removes_duplicates(self):
         def search(query, limit):
-            number = "15" if "15" in query else "18"
+            number = "15" if query.startswith("iphone 15") else "18"
             variant = "pro" if number == "15" else "pro max"
             return {"success": True, "data": {"web": [
                 {"url": f"https://apple.com/{number}/{i}", "title": f"iPhone {number} {variant} specs"}

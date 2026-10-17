@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import { readEvents } from "../src/stream.js";
-import { REPLY_FORMAT_GUIDANCE, streamChat } from "../server/chat.js";
+import { REPLY_FORMAT_GUIDANCE, RESPONSE_STANDARDS, streamChat } from "../server/chat.js";
 
 test("SSE parser preserves split UTF-8, tool events and content across chunk boundaries", async () => {
   const text =
@@ -61,6 +61,9 @@ test("proxy fixes the model, scopes memory and never places the backend key in t
   const context = JSON.parse(sent.options.body).messages[0].content;
   assert.match(context, /"display_name":"Maya"/);
   const fastPrompt = JSON.parse(sent.options.body).fast;
+  assert.ok(context.includes(RESPONSE_STANDARDS));
+  assert.ok(fastPrompt.includes(RESPONSE_STANDARDS));
+  assert.ok(fastPrompt.length <= 8000, "direct prompt fits the relay limit");
   assert.ok(fastPrompt.indexOf(REPLY_FORMAT_GUIDANCE) >= 0);
   assert.ok(fastPrompt.indexOf('"display_name":"Maya"') >
     fastPrompt.indexOf(REPLY_FORMAT_GUIDANCE) + REPLY_FORMAT_GUIDANCE.length);

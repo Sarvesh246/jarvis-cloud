@@ -73,3 +73,42 @@ test("the proxy passes automatic retrieval to the relay in concise mode", async 
   assert.equal(sent.fast, undefined);
   assert.match(sent.messages.at(-1).content, /concise style/);
 });
+
+test("explicit web checks and consequential advice receive evidence even without 'latest'", () => {
+  for (const text of ["Search the web for why leaves turn red", "Look up the capital of Australia",
+    "Find sources for this claim about dinosaurs", "Can I take ibuprofen while pregnant?",
+    "How much insulin should I take?", "Can my landlord evict me without notice in Illinois?",
+    "Should I invest in this stock for retirement?", "Convert 100 USD to EUR"])
+    assert.ok(freshnessQuery(text), text);
+  for (const text of ["Explain what a mortgage is", "Explain how insulin works",
+    "Convert 100 USD to EUR using a rate of 0.9", "Convert 100 USD to EUR given 1 USD = 0.9 EUR",
+    "Convert 100 cm to inches", "Could you translate: today's stock prices are up",
+    "Don’t browse. Can I take ibuprofen while pregnant?"])
+    assert.equal(freshnessQuery(text), null, text);
+});
+
+test("comparison context survives several follow-ups without crossing a topic change", () => {
+  const previous = [question, "Which has the better camera?", "What about battery life?"];
+  const query = freshnessQuery("Which costs less in India?", previous);
+  assert.match(query, /iPhone 15 Pro/);
+  assert.match(query, /iPhone 18 Pro Max/);
+  assert.match(query, /costs less in India/);
+  assert.equal(freshnessQuery("Which is better?", [question, "Explain photosynthesis"]), null);
+  assert.equal(freshnessQuery("What about price?", ["Compare iPhone 15 and 18 without browsing"]), null);
+  assert.ok(freshnessQuery("Search the web for the price now", ["Compare iPhone 15 and 18 without browsing"]));
+  const bounded = freshnessQuery("Which costs less in India?", [question + " x".repeat(400)]);
+  assert.ok(bounded.length <= 600);
+  assert.match(bounded, /costs less in India\?$/);
+});
+
+test("multi-turn evidence queries exclude attachment payloads and assistant assertions", () => {
+  const input = chatInput({ conversationId, messages: [
+    { role: "user", content: question + "\n\nAttached file: private.txt\nprivate data" },
+    { role: "assistant", content: "unverified assertion" },
+    { role: "user", content: "Which has the better camera?" },
+    { role: "assistant", content: "another unverified assertion" },
+    { role: "user", content: "What about price?" },
+  ] });
+  assert.match(input.freshness, /iPhone 18 Pro Max/);
+  assert.doesNotMatch(input.freshness, /private data|unverified assertion/);
+});

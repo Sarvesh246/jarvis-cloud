@@ -3,6 +3,7 @@
 from datetime import datetime, timezone
 from concurrent.futures import ThreadPoolExecutor
 import json
+import re
 try:
     from source_quality import subjects, relevant_sources, comparison_source, source_scope
 except ModuleNotFoundError:
@@ -23,11 +24,24 @@ def source_context(query, search=None, extract=None):
             extract = provider.extract_one
         # Separate identities avoid a broad comparison query returning a page
         # about only one requested subject and an unrelated competitor.
-        queries = [f"{name} official specifications" for name in requested[:3]] if requested else [query]
+        # Retain the actual question: a model name alone must not turn a recall,
+        # price, regional-availability or release question into a specs lookup.
+        focus = query
+        for name in sorted(requested, key=len, reverse=True):
+            pattern = r"\b" + r"[\s-]*".join(re.escape(part) for part in name.split()) + r"\b"
+            focus = re.sub(pattern, " ", focus, flags=re.I)
+            # Also remove the explicitly connected shorthand in "iPhone 15
+            # Pro vs 18 Pro Max", without removing unrelated price/year digits.
+            short = r"[\s-]*".join(re.escape(part) for part in name.split()[1:])
+            focus = re.sub(r"(?:\b(?:vs\.?|versus|and|or)|[/,])\s*" + short + r"\b", " ", focus, flags=re.I)
+        focus = re.sub(r"\b(?:compare|versus|vs|and|or)\b", " ", focus, flags=re.I)
+        focus = " ".join(focus.split())
+        queries = [f"{name} official sources: {focus}" for name in requested] if requested else [query]
         def lookup(text):
             try:
                 result = search(text, limit=6)
-                return result.get("data", {}).get("web", []) if result.get("success") else []
+                rows = result.get("data", {}).get("web", []) if result.get("success") else []
+                return rows[:6] if isinstance(rows, list) else []
             except Exception:
                 return []
         if len(queries) == 1:
@@ -39,7 +53,7 @@ def source_context(query, search=None, extract=None):
             {"url": hit["url"], "title": str(hit.get("title", ""))[:300],
              "description": str(hit.get("description", ""))[:1500],
              "published": str(hit.get("published", ""))[:40]}
-            for hit in hits[:18] if isinstance(hit, dict)
+            for hit in hits[:24] if isinstance(hit, dict)
             and isinstance(hit.get("url"), str) and len(hit["url"]) <= 2048
             and hit["url"].startswith(("https://", "http://"))
         ]

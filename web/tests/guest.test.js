@@ -10,7 +10,7 @@ import {
   authorizeAny,
   cookieNames,
 } from "../server/security.js";
-import { chatInput, guestInput, streamChat } from "../server/chat.js";
+import { chatInput, guestInput, RESPONSE_STANDARDS, streamChat } from "../server/chat.js";
 
 const cfg = settings({
   APP_ORIGIN: "https://vaelo.example",
@@ -81,6 +81,7 @@ test("a guest's reply is started on the relay with a toolless prompt under a gue
   assert.equal(run.options.headers["X-Hermes-Session-Key"], `web:${user.sub}`);
   const system = JSON.parse(run.options.body).messages[0].content;
   assert.match(system, /guest/i);
+  assert.ok(system.includes(RESPONSE_STANDARDS));
   assert.doesNotMatch(system, /terminal|workspace|saved work record/i);
 });
 

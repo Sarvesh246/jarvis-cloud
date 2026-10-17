@@ -17,6 +17,13 @@ spec.loader.exec_module(bootstrap)
 
 
 class BootstrapTests(unittest.TestCase):
+    def test_multi_user_cloud_has_no_shared_memory_or_host_access_tools(self):
+        for environ in [{}, {"FREELLMAPI_URL": "https://router.example", "FREELLMAPI_API_KEY": "test"}]:
+            cfg = bootstrap.configuration(environ)
+            self.assertEqual(set(cfg["platform_toolsets"]["api_server"]), {"web", "todo"})
+            self.assertFalse(cfg["memory"]["memory_enabled"])
+            self.assertFalse(cfg["memory"]["user_profile_enabled"])
+
     def test_installed_research_plugin_loads_its_packaged_source_checks(self):
         interface = types.ModuleType("agent.web_search_provider")
         interface.WebSearchProvider = object
