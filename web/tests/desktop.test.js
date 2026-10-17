@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { readFileSync } from 'node:fs';
 import { DesktopAuth } from "../server/desktop-auth.js";
 import { signSession, sessionUser, sameOrigin, settings, cookieNames } from "../server/security.js";
 import { createDesktopAuthHandler } from "../api/desktop-auth.js";
@@ -13,6 +14,25 @@ import transcribeHandler from "../api/transcribe.js";
 const cfg = settings({ APP_ORIGIN: "https://vaelo.example", SESSION_SECRET: "s".repeat(64), ALLOWED_EMAIL: "owner@example.com" });
 const user = { sub: "owner", email: cfg.email, name: "Owner" };
 const proof = "v".repeat(43);
+test('desktop packages share the web build and permit rich media without remote scripts or native API access', () => {
+  const read = path => readFileSync(new URL(path, import.meta.url), 'utf8');
+  const config = JSON.parse(read('../src-tauri/tauri.conf.json'));
+  assert.equal(config.build.frontendDist, '../dist');
+  assert.equal(config.build.beforeBuildCommand, 'npm run build');
+  const csp = new Map(config.app.security.csp.split(';').map(rule => { const [name,...values] = rule.trim().split(/\s+/); return [name,values]; }));
+  assert.ok(csp.get('img-src').includes('https:'));
+  assert.ok(csp.get('connect-src').includes('https:'));
+  assert.deepEqual(csp.get('script-src'), ["'self'"]);
+  assert.deepEqual(csp.get('frame-src'), ["'self'"]);
+  assert.deepEqual(csp.get('object-src'), ["'none'"]);
+  assert.deepEqual(csp.get('form-action'), ["'none'"]);
+  const capability = JSON.parse(read('../src-tauri/capabilities/desktop.json'));
+  assert.equal(capability.remote, undefined);
+  assert.deepEqual(capability.permissions.find(p => p.identifier === 'http:default').allow, [{url:`${CLOUD_ORIGIN}/api/*`}]);
+  assert.match(read('../src-tauri/Cargo.toml'), new RegExp(`version = "${config.version.replaceAll('.', '\\.')}"`));
+  assert.ok(read('../src-tauri/Cargo.lock').includes(`name = "vaelo-desktop"\nversion = "${config.version}"`) || read('../src-tauri/Cargo.lock').includes(`name = "vaelo-desktop"\r\nversion = "${config.version}"`));
+  assert.ok(read('../desktop/Package.appxmanifest').includes(`Version="${config.version}.0"`));
+});
 const challenge = createHash("sha256").update(proof).digest("base64url");
 function storage() {
   const entries = new Map(); let version = 0;

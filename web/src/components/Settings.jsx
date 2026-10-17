@@ -141,7 +141,7 @@ export function Settings({ open, prefs, onChange, onClose, onTools }) {
           )}
         </fieldset>
 
-        {DESKTOP && (STORE_BUILD ? <p className="settings-note">Updates are delivered by Microsoft Store.</p> : <DesktopUpdates />)}
+        {DESKTOP && <DesktopUpdates store={STORE_BUILD} />}
         {onTools && <button className="text-button" onClick={onTools}>QR link and interface guide</button>}
         <p className="settings-foot">Kept on this device only.</p>
       </div>

@@ -74,6 +74,13 @@ The updater verification public key is checked in. Its private key belongs in th
 losing the key prevents existing installations from trusting future updates.
 Settings provides an explicit check, download, and restart flow.
 
+The desktop interface is bundled, so deploying the website alone does not update
+installed apps. For a desktop release, merge the current website changes, advance
+the version in `tauri.conf.json`, `Cargo.toml`, `Cargo.lock` and the Store manifest,
+then push the matching `desktop-vX.Y.Z` tag. Verify the published `latest.json`
+and installer assets. Installed GitHub copies update through Settings; Store
+copies receive versions accepted and distributed by Microsoft Store.
+
 Apple notarization additionally needs `APPLE_CERTIFICATE` (base64 P12),
 `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`, `APPLE_ID`, `APPLE_PASSWORD`
 (app-specific password), and `APPLE_TEAM_ID`. Without these the workflow uses
