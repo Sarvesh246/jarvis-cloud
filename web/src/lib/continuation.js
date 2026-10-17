@@ -5,18 +5,22 @@
 
 import { clipReply, fitHistory } from './attachments.js';
 import { CONTEXT_POLICY } from '../../shared/context-policy.js';
+import { markdownFences } from './markdown-fences.js';
 
 export const CONTINUE_NOTE =
   "[Vaelo request: your reply above was cut off partway. Continue it from exactly where it stops: don't repeat anything already written, don't start over, and don't mention the interruption. Use more tool calls only if the rest truly depends on them.]";
 
 /* Enough of the continuation to recognise a repeated opening before any of
    it is shown. */
-export const JOIN_WINDOW = 160;
+export const JOIN_WINDOW = 400;
 
 /* Models told to continue often restate the last few words first. Whatever
    of `next` repeats the end of `text` is dropped, so the reader sees the
    sentence carry on rather than stutter. */
 export function joinOnto(text, next) {
+  // Repeated tokens and indentation in source code can be intentional. Never
+  // turn a new code line into a suffix of the preceding line by guessing.
+  if (markdownFences(text).at(-1)?.closed === false) return next;
   const end = text.trimEnd();
   if (!end || !next) return next;
   const lead = next.length - next.trimStart().length;

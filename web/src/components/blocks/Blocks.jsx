@@ -88,6 +88,8 @@ export function textOf(node) {
 function hastText(node) {
   if (!node) return "";
   if (node.type === "text") return node.value;
+  if (node.tagName === "img") return node.properties?.alt || "";
+  if (node.tagName === "br") return "\n";
   return (node.children || []).map(hastText).join("");
 }
 
@@ -471,6 +473,8 @@ function inline(node, key) {
       return <code key={key}>{kids}</code>;
     case "br":
       return <br key={key} />;
+    case "img":
+      return <ImageRef key={key} src={node.properties?.src} alt={node.properties?.alt} />;
     case "a":
       return (
         <SourceLink key={key} href={node.properties?.href}>

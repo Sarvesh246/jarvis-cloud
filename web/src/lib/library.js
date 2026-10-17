@@ -8,7 +8,8 @@
    first version is always the reply as Vaelo wrote it. */
 
 import { cellText } from "./table.js";
-import { STRUCTURED } from "./structured.js";
+import { STRUCTURED, plainLine } from "./structured.js";
+import { markdownFences, withoutFencedCode } from "./markdown-fences.js";
 
 /* The same test the transcript uses to offer "Open" on a reply */
 export function isLongReply(content = "") {
@@ -17,13 +18,11 @@ export function isLongReply(content = "") {
 
 /* A "# comment" in a code block isn't a heading. */
 export function withoutCode(content = "") {
-  return String(content).replace(/```[\s\S]*?(```|$)/g, "").replace(/~~~[\s\S]*?(~~~|$)/g, "");
+  return withoutFencedCode(String(content));
 }
 
 function plain(text) {
-  return String(text)
-    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
-    .replace(/[*_`~]/g, "")
+  return plainLine(text)
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -32,7 +31,7 @@ function plain(text) {
 export function docTitle(content = "", fallback = "Untitled document") {
   const heading = withoutCode(content).match(/^#{1,3}\s+(.+)$/m)?.[1];
   if (heading) return plain(heading).slice(0, 80);
-  const outside = content.replace(/```[\s\S]*?(```|$)/g, "");
+  const outside = withoutCode(content);
   const line = outside.split("\n").map(plain).find((text) => text.length > 3);
   if (!line) return fallback;
   return line.length > 64 ? `${line.slice(0, 62).replace(/\s+\S*$/, "")}…` : line;
@@ -40,30 +39,36 @@ export function docTitle(content = "", fallback = "Untitled document") {
 
 export function parseFences(content = "") {
   const fences = [];
-  const pattern = /^```([\w+-]*)[^\n]*\n([\s\S]*?)^```\s*$/gm;
-  for (const match of content.matchAll(pattern)) {
-    const language = match[1].toLowerCase();
+  for (const block of markdownFences(content)) {
+    if (!block.closed) continue;
+    const language = block.language;
     if (STRUCTURED.has(language) || language === "vaelo-work") continue;
-    const source = match[2].replace(/\n$/, "");
+    const source = block.source;
     fences.push({ language, source, lines: source.split("\n").length });
   }
   return fences;
 }
 
 function cells(line) {
-  return line
-    .trim()
-    .replace(/^\|/, "")
-    .replace(/\|$/, "")
-    .split(/(?<!\\)\|/)
-    .map((cell) => cellText(plain(cell.replace(/\\\|/g, "|"))));
+  const text = line.trim();
+  const parts = [];
+  let cell = '', slashes = 0;
+  for (const char of text) {
+    if (char === '|' && slashes % 2 === 0) { parts.push(cell); cell = ''; }
+    else cell += char;
+    slashes = char === '\\' ? slashes + 1 : 0;
+  }
+  parts.push(cell);
+  if (text.startsWith('|')) parts.shift();
+  if (text.endsWith('|') && parts.at(-1) === '') parts.pop();
+  return parts.map(cell => cellText(plain(cell.replace(/\\\|/g, '|'))));
 }
 
 const DIVIDER = /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?\s*$/;
 
 /* GitHub-style Markdown tables, outside code fences */
 export function parseTables(content = "") {
-  const lines = content.replace(/```[\s\S]*?(```|$)/g, "").split("\n");
+  const lines = withoutCode(content).split("\n");
   const tables = [];
   for (let i = 0; i < lines.length - 1; i += 1) {
     if (!lines[i].includes("|") || !DIVIDER.test(lines[i + 1])) continue;

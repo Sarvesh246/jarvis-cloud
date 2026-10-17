@@ -12,6 +12,8 @@ test("code and URLs preserve their exact punctuation", () => {
   const text = '```js\nconst q = "?My!Name";\n```\n`a?My:b` [link](https://example.com/?My=1) https://example.com/?My=1\n    x?My:y\nWhat?Next';
   assert.equal(normalizeReplySpacing(text), text.replace("What?Next", "What? Next"));
   assert.equal(normalizeReplySpacing('~~~text\nWhat?Next\n~~~'), '~~~text\nWhat?Next\n~~~');
+  assert.equal(normalizeReplySpacing('Code: ``a`?My``. Really?Yes.'), 'Code: ``a`?My``. Really? Yes.');
+  assert.equal(normalizeReplySpacing('Code: ``first line\na`?My``. Really?Yes.'), 'Code: ``first line\na`?My``. Really? Yes.');
 });
 
 test("normal token fragments, decimals and existing whitespace are unchanged", () => {

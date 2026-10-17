@@ -614,7 +614,7 @@ class Relay:
                 frame_bytes += len(raw)
                 if frame_bytes > FRAME_BYTES:
                     raise ValueError("Upstream stream frame exceeded its limit")
-                line = raw.decode("utf-8", "replace").rstrip("\r\n")
+                line = raw.decode("utf-8").rstrip("\r\n")
                 if line:
                     lines.append(line)
                     continue
@@ -628,8 +628,7 @@ class Relay:
         except (OSError, http.client.HTTPException, ValueError):
             seen["dropped"] = True
         finally:
-            if seen["repetitive"]:
-                response.close()  # release the provider/agent slot before a fresh request
+            response.close()  # release the provider/agent slot before a fresh request
             run.connection.close()
             if seen["usage_reported"]:
                 run.usage_reports += 1
@@ -683,12 +682,23 @@ class Relay:
             if label and label not in seen["tools"] and len(seen["tools"]) < 12:
                 seen["tools"].append(label)
         choices = payload.get("choices")
+        if choices is not None and (not isinstance(choices, list)
+                                    or (choices and not isinstance(choices[0], dict))):
+            seen["failed"] = True
+            return
         choice = (
             choices[0]
             if isinstance(choices, list) and choices and isinstance(choices[0], dict)
             else {}
         )
         delta = choice.get("delta") if isinstance(choice.get("delta"), dict) else {}
+        if choice.get("delta") is not None and not isinstance(choice["delta"], dict):
+            seen["failed"] = True
+            return
+        if any(delta.get(key) is not None and not isinstance(delta[key], str)
+               for key in ("content", "reasoning_content", "reasoning")):
+            seen["failed"] = True
+            return
         content = delta.get("content")
         if isinstance(content, str) and seen["repetition_guard"].feed(content):
             seen["repetitive"] = True

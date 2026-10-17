@@ -1785,6 +1785,7 @@ export function App() {
           message: err.message,
           status: err.status,
           partial: hasAnswer(received),
+          code: err.code,
         });
         if (problem.kind === "interrupted")
           updateMessage({ interrupted: true, note: problem.text });

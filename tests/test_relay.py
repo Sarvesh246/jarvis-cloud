@@ -230,6 +230,37 @@ class RelayTests(unittest.TestCase):
         self.assertNotIn("broken", output)
         self.assertEqual(run.outcome, "complete")
 
+    def test_non_text_deltas_cannot_leak_object_strings_into_the_answer(self):
+        malformed = [
+            {"choices": [{"delta": {"content": {"text": "bad"}}}]},
+            {"choices": [{"delta": {"reasoning_content": ["bad"]}}]},
+            {"choices": [{"delta": "bad"}]},
+            {"choices": {"delta": {"content": "bad"}}},
+        ]
+        for payload in malformed:
+            with self.subTest(payload=payload):
+                hermes, relay, port = self.boot([
+                    ["data: " + json.dumps(payload), "data: [DONE]"],
+                    [chunk("A valid answer.", "stop"), "data: [DONE]"],
+                ])
+                self.start(port)
+                run = self.finished(relay)
+                _, frames = self.events(port)
+                self.assertEqual(run.outcome, "complete")
+                self.assertEqual(len(hermes.requests), 2)
+                self.assertNotIn("bad", json.dumps(frames))
+
+    def test_invalid_utf8_is_not_silently_replaced_inside_an_answer(self):
+        _, relay, _ = self.boot([])
+        response = io.BytesIO(b'data: {"choices":[{"delta":{"content":"bad\xff"}}]}\n\n')
+        run = relay_module.Run(RUN, OWNER)
+        run.connection = mock.Mock()
+        seen = {"content": "", "answer": "", "tools": [], "approval": False}
+        relay.relay(run, response, seen)
+        self.assertTrue(seen["dropped"])
+        self.assertEqual(run.frames, [])
+        self.assertTrue(response.closed)
+
     def test_unfinished_stream_frames_are_bounded_before_parsing(self):
         _, relay, _ = self.boot([])
         for raw in [b"data: " + b"x" * 200, b"data: x\n" * 30]:
@@ -237,12 +268,21 @@ class RelayTests(unittest.TestCase):
                 run = relay_module.Run(RUN, OWNER)
                 run.connection = mock.Mock()
                 seen = {"content": "", "answer": "", "tools": [], "approval": False}
-                response = io.BytesIO(raw)
+                class TrackedResponse(io.BytesIO):
+                    bytes_read = 0
+
+                    def readline(self, size=-1):
+                        line = super().readline(size)
+                        self.bytes_read += len(line)
+                        return line
+
+                response = TrackedResponse(raw)
                 relay.relay(run, response, seen)
                 self.assertTrue(seen["dropped"])
                 self.assertFalse(seen["finished"])
                 self.assertEqual(run.frames, [])
-                self.assertLessEqual(response.tell(), 136, "read stops near the frame budget")
+                self.assertLessEqual(response.bytes_read, 136, "read stops near the frame budget")
+                self.assertTrue(response.closed)
                 run.connection.close.assert_called_once()
 
     def boot(self, scripts):

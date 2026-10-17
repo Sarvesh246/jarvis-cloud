@@ -3,6 +3,8 @@
    interface owns how they look. Parsing is line by line and forgiving, so a
    block that is still streaming in shows whatever has arrived so far. */
 
+import { markdownFences } from './markdown-fences.js';
+
 const DELTA = /\s*\(([+\-−–↑↓▲▼][^()]*|[^()]*%)\)\s*$/;
 
 function direction(delta) {
@@ -135,8 +137,6 @@ export const STRUCTURED = new Set(["metrics", "timeline"]);
    finished one. Without positions, a block counts as finished. */
 export function fenceClosed(markdown, start, end) {
   if (start == null || end == null || !markdown) return true;
-  const lines = markdown.slice(start, end).trimEnd().split("\n");
-  const fence = lines[0].match(/^\s*(`{3,}|~{3,})/)?.[1];
-  if (!fence) return true;
-  return lines.length > 1 && lines[lines.length - 1].trim().startsWith(fence);
+  const block = markdownFences(markdown.slice(start, end))[0];
+  return block ? block.closed : true;
 }

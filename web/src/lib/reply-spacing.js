@@ -1,30 +1,35 @@
 // Repair joined prose sentences without inserting spaces between token chunks.
 // Code and link destinations are literal: changing their punctuation can break them.
+import { inlineCodeSpans, markdownFences } from './markdown-fences.js';
+
 export function normalizeReplySpacing(value) {
   if (typeof value !== "string" || !/[?!][A-Z]/.test(value)) return value;
-  let fence = null;
-  return value.split("\n").map((line) => {
-    const marker = line.match(/^ {0,3}(`{3,}|~{3,})/);
-    if (fence) {
-      if (marker && marker[1][0] === fence[0] && marker[1].length >= fence.length &&
-          !line.slice(marker[0].length).trim()) fence = null;
-      return line;
-    }
-    if (marker) {
-      fence = marker[1];
-      return line;
-    }
+  const repair = text => text.split('\n').map(line => {
     if (/^(?: {4}|\t)/.test(line)) return line;
     // Bare addresses and paths (www.site.com/a?Q=1, file.py?Foo) are literal too.
-    const literal = /`+[^`]*(?:`+|$)|https?:\/\/[^\s<>]+|\]\([^\n)]*\)|<[^>\n]*>|[^\s?!]*[./][^\s?!]*[?!]\S*/g;
-    let output = "", at = 0;
-    const prose = (text) => text.replace(/([?!])(?=[A-Z])/g, "$1 ");
+    const literal = /https?:\/\/[^\s<>]+|\]\([^\n)]*\)|<[^>\n]*>|[^\s?!]*[./][^\s?!]*[?!]\S*/g;
+    let output = '', at = 0;
+    const prose = part => part.replace(/([?!])(?=[A-Z])/g, '$1 ');
     for (const match of line.matchAll(literal)) {
       output += prose(line.slice(at, match.index)) + match[0];
       at = match.index + match[0].length;
     }
     return output + prose(line.slice(at));
-  }).join("\n");
+  }).join('\n');
+  const outsideCode = text => {
+    let output = '', at = 0;
+    for (const [start, end] of inlineCodeSpans(text, true)) {
+      output += repair(text.slice(at, start)) + text.slice(start, end);
+      at = end;
+    }
+    return output + repair(text.slice(at));
+  };
+  let output = '', at = 0;
+  for (const block of markdownFences(value)) {
+    output += outsideCode(value.slice(at, block.start)) + value.slice(block.start, block.end);
+    at = block.end;
+  }
+  return output + outsideCode(value.slice(at));
 }
 
 export function normalizeSavedReplySpacing(chat) {

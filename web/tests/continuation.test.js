@@ -21,6 +21,12 @@ test("a clean continuation is kept whole", () => {
   assert.equal(joinOnto("", "Fresh start."), "Fresh start.");
 });
 
+test('code continuations preserve repeated statements and their indentation', () => {
+  const text = '```python\n    return total';
+  const next = '\n    return total + 1\n```';
+  assert.equal(joinOnto(text, next), next);
+});
+
 test("a cut-off reply is carried on as the assistant's own words", () => {
   const request = {
     conversationId: "c",

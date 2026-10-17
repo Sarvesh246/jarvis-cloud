@@ -10,8 +10,10 @@ export const ERROR_ACTIONS = {
   unknown: "retry",
 };
 
-export function classifyError({ name = "", message = "", status = 0, partial = false } = {}) {
+export function classifyError({ name = "", message = "", status = 0, partial = false, code = "" } = {}) {
   const text = String(message || "");
+  if (code === "repetitive_output")
+    return { kind: "unknown", text: text || "The model kept repeating itself. Retry for a fresh answer." };
   if (name === "TypeError" && /fetch|network|load failed/i.test(text))
     return {
       kind: "offline",

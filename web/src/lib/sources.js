@@ -2,6 +2,8 @@
    each source keeps its type visible: a social post, a news report and a
    reference page should never look like interchangeable chips. */
 
+import { withoutFencedCode, withoutInlineCode } from './markdown-fences.js';
+
 const KINDS = [
   { kind: "social", label: "Social", hosts: /(^|\.)(x\.com|twitter\.com|reddit\.com|threads\.net|bsky\.app|mastodon\.|facebook\.com|instagram\.com|linkedin\.com|tiktok\.com)$/ },
   { kind: "video", label: "Video", hosts: /(^|\.)(youtube\.com|youtu\.be|vimeo\.com|twitch\.tv)$/ },
@@ -94,7 +96,7 @@ function trimBare(href) {
 }
 
 export function collectSources(markdown = "") {
-  const text = String(markdown).replace(/```[\s\S]*?(```|$)/g, "").replace(/`[^`\n]*`/g, "");
+  const text = withoutInlineCode(withoutFencedCode(String(markdown)));
   const found = new Map();
   const add = (href, title, context) => {
     const url = parseUrl(href);

@@ -82,20 +82,23 @@ export function toNumber(value) {
   if (suffix === "k") n *= 1e3;
   if (suffix === "m") n *= 1e6;
   if (suffix === "b") n *= 1e9;
-  return negative ? -n : n;
+  return Number.isFinite(n) ? (negative ? -n : n) : NaN;
 }
 
 const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
 const MONTH = "(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sept?(?:ember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\\.?";
 const WEEKDAY = "(?:(?:mon|tue|wed|thu|fri|sat|sun)[a-z]*\\.?,?\\s+)?";
-const ISO_DATE = /^(\d{4})[-/](\d{1,2})(?:[-/](\d{1,2}))?(?:[T\s]+(\d{1,2}):(\d{2})(?::\d{2}(?:\.\d+)?)?\s*(?:z|utc|[+-]\d{2}:?\d{2})?)?$/i;
+const ISO_DATE = /^(\d{4})[-/](\d{1,2})(?:[-/](\d{1,2}))?(?:[T\s]+(\d{1,2}):(\d{2})(?::(\d{2})(\.\d+)?)?\s*(z|utc|[+-]\d{2}:?\d{2})?)?$/i;
 const MONTH_FIRST = new RegExp(`^${WEEKDAY}${MONTH}\\s+(?:(\\d{1,2})(?:st|nd|rd|th)?,?\\s+)?(\\d{4})$`, "i");
 const DAY_FIRST = new RegExp(`^${WEEKDAY}(\\d{1,2})(?:st|nd|rd|th)?\\s+${MONTH},?\\s+(\\d{4})$`, "i");
 const QUARTER = /^(?:q([1-4])\s*(\d{4})|(\d{4})\s*q([1-4]))$/i;
 
-function dateAt(year, month, day = 1, hour = 0, minute = 0) {
-  if (month < 1 || month > 12 || day < 1 || day > 31 || hour > 23 || minute > 59) return NaN;
-  return Date.UTC(year, month - 1, day, hour, minute);
+function dateAt(year, month, day = 1, hour = 0, minute = 0, second = 0, millis = 0) {
+  if (month < 1 || month > 12 || day < 1 || day > 31 || hour > 23 || minute > 59 || second > 59) return NaN;
+  const date = new Date(0);
+  date.setUTCFullYear(year, month - 1, day);
+  date.setUTCHours(hour, minute, second, millis);
+  return date.getUTCMonth() === month - 1 && date.getUTCDate() === day ? date.getTime() : NaN;
 }
 
 const monthNumber = (name) => MONTHS.indexOf(name.slice(0, 3).toLowerCase()) + 1;
@@ -106,8 +109,14 @@ const monthNumber = (name) => MONTHS.indexOf(name.slice(0, 3).toLowerCase()) + 1
 export function toDate(value) {
   const text = cellText(value);
   let match = text.match(ISO_DATE);
-  if (match)
-    return dateAt(+match[1], +match[2], match[3] ? +match[3] : 1, +(match[4] || 0), +(match[5] || 0));
+  if (match) {
+    const date = dateAt(+match[1], +match[2], match[3] ? +match[3] : 1,
+      +(match[4] || 0), +(match[5] || 0), +(match[6] || 0), Math.floor(Number(match[7] || 0) * 1000));
+    const zone = match[8]?.match(/^([+-])(\d{2}):?(\d{2})$/);
+    if (!zone) return date;
+    if (+zone[2] > 23 || +zone[3] > 59) return NaN;
+    return date - (zone[1] === '+' ? 1 : -1) * (+zone[2] * 60 + +zone[3]) * 60000;
+  }
   if ((match = text.match(MONTH_FIRST))) return dateAt(+match[3], monthNumber(match[1]), match[2] ? +match[2] : 1);
   if ((match = text.match(DAY_FIRST))) return dateAt(+match[3], monthNumber(match[2]), +match[1]);
   if ((match = text.match(QUARTER))) {
@@ -159,10 +168,15 @@ export function sortRows(rows, column, direction = "asc") {
     .map(([, row]) => row);
 }
 
-function csvCell(value) {
+function spreadsheetText(value) {
   let text = cellText(value);
   // A spreadsheet would run "=…", "+…", "-…" or "@…" as a formula.
   if (/^[=+\-@]/.test(text) && Number.isNaN(toNumber(text))) text = `'${text}`;
+  return text;
+}
+
+function csvCell(value) {
+  const text = spreadsheetText(value);
   return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
@@ -172,7 +186,7 @@ export function toCSV(columns, rows) {
 
 export function toTSV(columns, rows) {
   return [columns, ...rows]
-    .map((row) => row.map((cell) => cellText(cell).replace(/\t/g, " ")).join("\t"))
+    .map((row) => row.map(spreadsheetText).join("\t"))
     .join("\n");
 }
 
