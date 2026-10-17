@@ -303,6 +303,97 @@ class RelayTests(unittest.TestCase):
         self.assertEqual(len(provider.requests), 1)
         self.assertEqual(len(hermes.requests), 1)
 
+    def test_a_partial_fast_answer_continues_without_agent_overhead(self):
+        hermes, relay, port = self.boot([])
+        provider, _ = self.fast_provider(relay, [
+            [chunk("First half ")],
+            [chunk("second half.", "stop"), "data: [DONE]"],
+        ])
+        with mock.patch.dict("os.environ", {"OPENROUTER_API_KEY": "key", "FREELLMAPI_URL": ""}):
+            self.start_fast(port)
+            run = self.finished(relay)
+        self.assertEqual(run.outcome, "complete")
+        self.assertEqual(len(provider.requests), 2)
+        self.assertEqual(hermes.requests, [])
+        messages = provider.requests[1]["body"]["messages"]
+        self.assertEqual(messages[-2], {"role": "assistant", "content": "First half "})
+        self.assertIn("Continue it from exactly where it stops", messages[-1]["content"])
+        self.assertNotIn("tools", provider.requests[1]["body"])
+
+    def test_a_failed_direct_continuation_still_falls_back_to_hermes(self):
+        hermes, relay, port = self.boot([[chunk("finished.", "stop")]])
+        provider, _ = self.fast_provider(relay, [[chunk("Started ")], 503])
+        with mock.patch.dict("os.environ", {"OPENROUTER_API_KEY": "key", "FREELLMAPI_URL": ""}):
+            self.start_fast(port)
+            run = self.finished(relay)
+        self.assertEqual(run.outcome, "complete")
+        self.assertEqual(len(provider.requests), 2)
+        self.assertEqual(len(hermes.requests), 1)
+        self.assertEqual(hermes.requests[0]["body"]["messages"][0]["content"], "full prompt")
+
+    def test_an_empty_direct_continuation_escalates_to_hermes(self):
+        hermes, relay, port = self.boot([[chunk("finished.", "stop")]])
+        provider, _ = self.fast_provider(relay, [[chunk("Started ")], [chunk("", "stop")]])
+        with mock.patch.dict("os.environ", {"OPENROUTER_API_KEY": "key", "FREELLMAPI_URL": ""}):
+            self.start_fast(port)
+            run = self.finished(relay)
+        self.assertEqual(run.outcome, "complete")
+        self.assertEqual(len(provider.requests), 2)
+        self.assertEqual(len(hermes.requests), 1)
+
+    def test_length_finish_is_continued_even_when_done_arrives(self):
+        hermes, relay, port = self.boot([
+            [chunk("Partial ", "length"), "data: [DONE]"],
+            [chunk("complete.", "stop"), "data: [DONE]"],
+        ])
+        self.start(port)
+        self.assertEqual(self.finished(relay).outcome, "complete")
+        self.assertEqual(len(hermes.requests), 2)
+        self.assertEqual(hermes.requests[1]["body"]["messages"][-2]["content"], "Partial ")
+
+    def test_exhausted_length_continuations_are_not_false_success(self):
+        _, relay, port = self.boot([[chunk("Partial ", "length"), "data: [DONE]"]] * 3)
+        self.start(port)
+        self.assertEqual(self.finished(relay).outcome, "error")
+
+    def test_a_completed_answer_with_a_late_socket_error_is_not_regenerated(self):
+        _, relay, port = self.boot([])
+        run = relay_module.Run(RUN, OWNER)
+        response = mock.Mock()
+        response.readline.side_effect = [
+            (chunk("Complete answer.", "stop") + "\n").encode(), b"\n", OSError("closed"),
+        ]
+        with mock.patch.object(relay, "open", return_value=(response, None)) as opened:
+            run.connection = mock.Mock()
+            relay.execute(run, {"messages": [{"role": "user", "content": "hello"}]})
+        self.assertEqual(run.outcome, "complete")
+        self.assertEqual(opened.call_count, 1)
+
+    def test_usage_is_counted_once_per_attempt_and_summed_across_recovery(self):
+        usage = 'data: {"choices":[],"usage":{"prompt_tokens":100,"completion_tokens":20,"prompt_tokens_details":{"cached_tokens":80}}}'
+        hermes, relay, port = self.boot([
+            [chunk("Partial "), usage, usage],
+            [chunk("finished.", "stop"), usage, "data: [DONE]"],
+        ])
+        reports = []
+        relay.report = reports.append
+        self.start(port)
+        run = self.finished(relay)
+        self.assertEqual((run.prompt_tokens, run.completion_tokens, run.cached_tokens), (200, 40, 160))
+        self.assertEqual((run.usage_reports, run.upstream_requests), (2, 2))
+        self.assertEqual(len(hermes.requests), 2)
+
+    def test_reposting_a_failed_generated_run_replays_without_model_calls(self):
+        empty = [chunk("", "stop"), "data: [DONE]"]
+        hermes, relay, port = self.boot([empty] * 3)
+        self.start(port)
+        original = self.finished(relay)
+        self.assertEqual(original.outcome, "error")
+        self.assertEqual(len(hermes.requests), 3)
+        self.start(port)
+        self.assertIs(self.finished(relay), original)
+        self.assertEqual(len(hermes.requests), 3)
+
     def test_a_malformed_fast_prompt_is_ignored_and_hermes_answers(self):
         for fast in (42, "", "x" * (relay_module.FAST_SYSTEM_CHARS + 1)):
             with self.subTest(fast=type(fast).__name__):

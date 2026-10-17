@@ -176,6 +176,10 @@ class Run:
         # so a slow reply can be told apart: waiting on a provider, thinking, or writing.
         self.route = None
         self.first_thought = self.first_answer = None
+        self.model_started = False
+        self.upstream_requests = 0
+        self.usage_reports = 0
+        self.prompt_tokens = self.completion_tokens = self.cached_tokens = 0
 
     def emit(self, frame, optional=False, reserved=False):
         """Number and keep one SSE frame (without its trailing blank line). Relayed frames
@@ -325,6 +329,7 @@ class Relay:
             payload["reasoning"] = reasoning
         connection = self.fast_connect(route["host"], route["port"])
         run.connection = connection
+        run.upstream_requests += 1
         try:
             connection.request(
                 "POST", route["path"], body=json.dumps(payload).encode(),
@@ -358,6 +363,7 @@ class Relay:
             payload["reasoning"] = reasoning
         connection = self.guest_connect()
         run.connection = connection
+        run.upstream_requests += 1
         try:
             connection.request(
                 "POST",
@@ -417,8 +423,10 @@ class Relay:
                 return None
             # A lost start response can be retried after the answer finished.
             # Keep its numbered frames rather than running tools a second time.
-            # Failed starts (including a busy cloud) may still be retried.
-            if existing is not None and (not existing.done or existing.outcome in ("complete", "stopped")):
+            # Only failures before an accepted generation (including a busy cloud)
+            # may restart under this id. An explicit user retry has a new id.
+            if existing is not None and (not existing.done or existing.model_started
+                                         or existing.outcome in ("complete", "stopped")):
                 return existing
             run = self.runs[run_id] = Run(run_id, owner)
             stopped_at = self.early_stops.pop((owner, run_id), None)
@@ -453,8 +461,9 @@ class Relay:
         if run.owner.startswith(GUEST_OWNER):
             run.route = "guest"
             return self.open_guest(run, messages, body)
-        # Only a first attempt goes fast: a recovery or continuation needs Hermes's full turn.
-        if body.get("fast") and not recovering:
+        # Continuing text from a successful direct route needs no agent/tool bootstrap.
+        # Empty replies still escalate to Hermes, as do direct-route failures.
+        if body.get("fast") and (not recovering or body.get("continue_fast")):
             response = self.open_fast(run, messages, body)
             if response is not None:
                 return response, None
@@ -470,6 +479,7 @@ class Relay:
                 self.host, self.port, timeout=UPSTREAM_SILENCE_SECONDS
             )
             run.connection = connection
+            run.upstream_requests += 1
             try:
                 connection.request(
                     "POST",
@@ -540,7 +550,11 @@ class Relay:
         """Keep Hermes's frames as they are, reading only enough to know whether an answer
         arrived and how the attempt ended. Failure frames are held back, so a recovery or a
         continuation can still take their place."""
-        seen.update(finished=False, failed=False, dropped=False, held=None)
+        seen.update(finished=False, failed=False, dropped=False, held=None, truncated=False,
+                    attempt_answer=False)
+        usage = {"prompt_tokens": 0, "completion_tokens": 0, "cached_tokens": 0}
+        seen["usage"] = usage
+        seen["usage_reported"] = False
         lines = []
         try:
             for raw in iter(response.readline, b""):
@@ -559,6 +573,10 @@ class Relay:
             seen["dropped"] = True
         finally:
             run.connection.close()
+            if seen["usage_reported"]:
+                run.usage_reports += 1
+                for key, value in usage.items():
+                    setattr(run, key, getattr(run, key) + value)
         return seen
 
     def inspect(self, run, frame, seen):
@@ -583,6 +601,19 @@ class Relay:
         if not isinstance(payload, dict):
             run.emit(frame)
             return
+        reported = payload.get("usage")
+        if isinstance(reported, dict):
+            details = reported.get("prompt_tokens_details")
+            values = {
+                "prompt_tokens": reported.get("prompt_tokens"),
+                "completion_tokens": reported.get("completion_tokens"),
+                "cached_tokens": details.get("cached_tokens") if isinstance(details, dict) else None,
+            }
+            for key, value in values.items():
+                if type(value) is int and value >= 0:
+                    seen["usage_reported"] = True
+                    # Some streams repeat cumulative usage in several chunks.
+                    seen["usage"][key] = max(seen["usage"][key], value)
         if name == "approval.request":
             seen["approval"] = True
         if name == "hermes.tool.progress" and payload.get("status") != "completed":
@@ -604,6 +635,8 @@ class Relay:
         elif (delta.get("reasoning_content") or delta.get("reasoning")) and run.first_thought is None:
             run.first_thought = self.clock()
         if isinstance(content, str):
+            if content.strip():
+                seen["attempt_answer"] = True
             # A short prefix tells an empty reply from a real one; the answer itself is kept
             # (bounded) so a cut-off reply can be continued from where it stopped.
             seen["content"] = (seen["content"] + content).lstrip()[:64]
@@ -611,6 +644,7 @@ class Relay:
         finish = choice.get("finish_reason")
         if finish in ("stop", "length"):
             seen["finished"] = True
+            seen["truncated"] = finish == "length"
         if finish == "error" or (payload.get("error") and finish != "length"):
             seen["failed"] = True
             seen["held"] = frame
@@ -653,8 +687,10 @@ class Relay:
                     return run.finish("error")
                 if response is None:
                     return run.finish("stopped")
+                run.model_started = True
                 self.relay(run, response, seen)
-                cut_off = seen["dropped"] or seen["failed"] or not seen["finished"]
+                cut_off = (seen["failed"] or not seen["finished"] or seen["truncated"]
+                           or not seen["attempt_answer"])
                 left = RUN_LIMIT_SECONDS - (self.clock() - started)
                 if run.stopped or seen["approval"] or (answered(seen) and not cut_off) \
                         or attempt == ATTEMPTS - 1 or left < RECOVERY_MIN_SECONDS:
@@ -662,6 +698,8 @@ class Relay:
                 if answered(seen):
                     run.event("jarvis.continue", {})
                     request = continuation(messages, seen["answer"])
+                    body = {**body, "continue_fast": seen["attempt_answer"]
+                            and run.route in ("router", "openrouter")}
                 else:
                     run.event("jarvis.retry", {"message": "Writing up what Vaelo found"})
                     seen.update(content="", answer="")
@@ -686,7 +724,8 @@ class Relay:
                 else:
                     run.event("jarvis.error", {"code": "no_answer", "message": NO_ANSWER})
                 return run.finish("error")
-            if not seen["approval"] and (seen["dropped"] or not seen["finished"] or seen["failed"]):
+            if not seen["approval"] and (not seen["finished"] or seen["failed"] or seen["truncated"]
+                                        or not seen["attempt_answer"]):
                 run.event("jarvis.error", {"message": "Vaelo’s server stopped before the answer finished. What arrived is kept; please retry or continue."})
                 return run.finish("error")
             run.event("jarvis.complete", {"ok": True})
@@ -711,7 +750,10 @@ class Relay:
         self.report(
             f"vaelo run {run.id[:8]} route={run.route or '-'} effort={effort or 'default'} "
             f"first_thought={since(run.first_thought)} first_answer={since(run.first_answer)} "
-            f"total={self.clock() - started:.1f}s outcome={run.outcome}"
+            f"total={self.clock() - started:.1f}s outcome={run.outcome} "
+            f"upstream_requests={run.upstream_requests} usage_reports={run.usage_reports} "
+            f"reported_prompt_tokens={run.prompt_tokens} reported_completion_tokens={run.completion_tokens} "
+            f"reported_cached_tokens={run.cached_tokens}"
         )
 
     def time_out(self, run):

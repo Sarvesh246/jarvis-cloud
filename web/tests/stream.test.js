@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import { readEvents } from "../src/stream.js";
-import { streamChat } from "../server/chat.js";
+import { REPLY_FORMAT_GUIDANCE, streamChat } from "../server/chat.js";
 
 test("SSE parser preserves split UTF-8, tool events and content across chunk boundaries", async () => {
   const text =
@@ -42,6 +42,7 @@ test("proxy fixes the model, scopes memory and never places the backend key in t
       conversationId: "c5ec5f03-1fd1-4f38-83df-b664bf78f998",
       runId: "0d9e8f7a-6b5c-4d3e-8f1a-2b3c4d5e6f70",
       messages: [{ role: "user", content: "Hello" }],
+      fast: true,
     },
     async (url, options) => {
       if (url.endsWith("/health")) return Response.json({ status: "ok" });
@@ -59,6 +60,10 @@ test("proxy fixes the model, scopes memory and never places the backend key in t
   assert.equal(JSON.parse(sent.options.body).id, "0d9e8f7a-6b5c-4d3e-8f1a-2b3c4d5e6f70");
   const context = JSON.parse(sent.options.body).messages[0].content;
   assert.match(context, /"display_name":"Maya"/);
+  const fastPrompt = JSON.parse(sent.options.body).fast;
+  assert.ok(fastPrompt.indexOf(REPLY_FORMAT_GUIDANCE) >= 0);
+  assert.ok(fastPrompt.indexOf('"display_name":"Maya"') >
+    fastPrompt.indexOf(REPLY_FORMAT_GUIDANCE) + REPLY_FORMAT_GUIDANCE.length);
   assert.doesNotMatch(context, /owner@gmail\.com/);
   assert.match(output.join(""), /jarvis.complete/);
   assert.doesNotMatch(output.join(""), /private-test-key/);

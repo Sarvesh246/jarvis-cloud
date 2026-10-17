@@ -1458,6 +1458,7 @@ export function App() {
       if (name === "jarvis.complete") {
         completed = true;
         releaseHeld();
+        updateMessage({ truncated: false });
       }
       /* The answer was cut off and Vaelo is carrying it on: what follows
          joins the words already written. */
