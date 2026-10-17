@@ -69,7 +69,9 @@ function Fixture() {
       <button onClick={() => document.documentElement.dataset.theme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'}>Toggle theme</button>
     </div>
     <PresentationContext.Provider value={minimal ? 'minimal' : 'adaptive'}>
-      <div className="prose"><Rendered content={content} sources={[]} onOpen={setWorkspace} stateKey="intelligent-ui-fixture" live={live} /></div>
+      <div className="prose"><Rendered content={content + `\n\n### Grouped comparison\n\n| Category | Phone A | Phone B |\n| --- | --- | --- |\n` + ["Display", "Processor & Memory", "Camera"].map((section, group) =>
+        `| **${section}** | | |\n` + Array.from({ length: 12 }, (_, i) => `| ${section} measure ${i + 1} | ${10 + group * 20 + i} | ${20 + group * 20 + i} |`).join("\n")
+      ).join("\n")} sources={[]} onOpen={setWorkspace} stateKey="intelligent-ui-fixture" live={live} /></div>
     </PresentationContext.Provider>
     <Settings open={settings} prefs={prefs} onChange={patch => setPrefs(p => ({ ...p, ...patch }))} onClose={() => setSettings(false)} />
     {workspace && <div style={{position:'fixed',right:0,top:0,zIndex:10}}><Workspace item={workspace} messages={[]} works={{}} canRevise={false} onClose={() => setWorkspace(null)} onOpen={setWorkspace} /></div>}

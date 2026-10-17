@@ -1,8 +1,33 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chartable, isBlank, isDateColumn, isNumericColumn, sortRows, toCSV, toDate, toNumber } from "../src/lib/table.js";
+import { chartable, isBlank, isDateColumn, isNumericColumn, isSectionRow, tableRowOrder, visibleTableRows, sortRows, toCSV, toDate, toNumber } from "../src/lib/table.js";
+import { safeChartPlan } from "../src/lib/adaptive-ui.js";
 
 const firsts = (rows) => rows.map((row) => row[0]);
+
+const grouped = [["Display", "", ""], ["Size", "6.1", "6.9"], ["Brightness", "1000", "2000"],
+  ["Processor & Memory", "", ""], ["RAM", "8", "12"], ["Cores", "6", "8"]];
+
+test("category dividers remain attached to their sorted data rows", () => {
+  assert.deepEqual(tableRowOrder(grouped, 1, "desc"), [0, 2, 1, 3, 4, 5]);
+  assert.deepEqual(tableRowOrder(grouped, null), [0, 1, 2, 3, 4, 5]);
+  assert.ok(isSectionRow(grouped[0]));
+  for (const row of [["RAM", "—", "N/A"], ["Size", "6.1", ""], ["2026", "", ""], ["Only column"]])
+    assert.equal(isSectionRow(row), false);
+});
+
+test("filtering and selection retain only the relevant category dividers", () => {
+  assert.deepEqual(visibleTableRows(grouped, "RAM"), [3, 4]);
+  assert.deepEqual(visibleTableRows(grouped, "Display"), [0, 1, 2]);
+  assert.deepEqual(visibleTableRows(grouped, "", [2, 5], true), [0, 2, 3, 5]);
+  assert.deepEqual(visibleTableRows(grouped, "missing"), []);
+  assert.deepEqual(visibleTableRows(grouped, "", [], true), []);
+});
+
+test("category labels do not stop numeric table data from being charted", () => {
+  assert.deepEqual(safeChartPlan(["Category", "Phone A", "Phone B"], grouped), { label: 0, values: [1, 2] });
+  assert.match(toCSV(["Category", "A", "B"], grouped), /Display,,/);
+});
 
 test("text columns sort the way people read them", () => {
   const rows = [["Item 10"], ["item 2"], ["Item 1"], ["Émile"], ["Emma"]];

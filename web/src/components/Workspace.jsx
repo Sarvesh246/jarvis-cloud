@@ -14,7 +14,7 @@ import { Rendered, download, looksLikeSvg, useCopy, useSources } from "./blocks/
 import { SourceIcon } from "./blocks/SourceIcon.jsx";
 import { Highlighted } from "./blocks/Highlighted.jsx";
 import { SOURCE_KINDS, kindLabel } from "../lib/sources.js";
-import { isNumericColumn, sortRows, toCSV, toTSV } from "../lib/table.js";
+import { isNumericColumn, isSectionRow, tableRowOrder, visibleTableRows, toCSV, toTSV } from "../lib/table.js";
 import { currentContent, docTitle } from "../lib/library.js";
 import { DocumentWork } from "./DocumentWork.jsx";
 import "./workspace.css";
@@ -161,12 +161,8 @@ function TableView({ item }) {
     [item],
   );
   const shown = useMemo(() => {
-    const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
-    const matching = item.rows.filter((row) => {
-      const text = row.join(" ").toLowerCase();
-      return words.every((word) => text.includes(word));
-    });
-    return sortRows(matching, sort.column, sort.direction);
+    const visible = new Set(visibleTableRows(item.rows, query));
+    return tableRowOrder(item.rows, sort.column, sort.direction).filter(i => visible.has(i)).map(i => item.rows[i]);
   }, [item, query, sort]);
 
   function toggle(column) {
@@ -225,7 +221,9 @@ function TableView({ item }) {
             </tr>
           </thead>
           <tbody>
-            {shown.map((row, r) => (
+            {shown.map((row, r) => isSectionRow(row) ? (
+              <tr key={r} className="table-section"><th scope="rowgroup" colSpan={item.columns.length}>{row[0]}</th></tr>
+            ) : (
               <tr key={r}>
                 {row.map((cell, i) => (
                   <td key={i} data-numeric={numeric[i] || undefined}>

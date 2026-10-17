@@ -5,6 +5,44 @@ export function cellText(value) {
   return String(value ?? "").replace(/\s+/g, " ").trim();
 }
 
+// Markdown uses a label followed by empty cells for an in-table category.
+// Explicit missing values (dashes, N/A) remain ordinary data cells.
+export function isSectionRow(row) {
+  return row.length > 1 && Boolean(cellText(row[0])) && Number.isNaN(toNumber(row[0])) &&
+    row.slice(1).every(value => !cellText(value));
+}
+
+export function tableRowOrder(rows, column, direction = "asc") {
+  const order = [];
+  let group = [];
+  const flush = () => {
+    order.push(...sortRows(group.map(i => [...rows[i], i]), column, direction).map(row => row.at(-1)));
+    group = [];
+  };
+  rows.forEach((row, i) => {
+    if (isSectionRow(row)) { flush(); order.push(i); }
+    else group.push(i);
+  });
+  flush();
+  return order;
+}
+
+export function visibleTableRows(rows, query = "", selected = [], onlySelected = false) {
+  const needle = query.trim().toLocaleLowerCase().slice(0, 200);
+  if (!needle && !onlySelected) return rows.map((_, i) => i);
+  const visible = [];
+  let section = null;
+  rows.forEach((row, i) => {
+    if (isSectionRow(row)) { section = i; return; }
+    const text = [...(section === null ? [] : rows[section]), ...row].map(cellText).join(" ").toLocaleLowerCase();
+    if ((!onlySelected || selected.includes(i)) && text.includes(needle)) {
+      if (section !== null && !visible.includes(section)) visible.push(section);
+      visible.push(i);
+    }
+  });
+  return visible;
+}
+
 /* Cells that say "nothing here" in words. They sort with the blanks and
    don't stop a column of figures or dates from counting as one. */
 const PLACEHOLDER = /^(?:[-–—−?]+|n\/?a|tb[ad]|none|unknown)$/i;

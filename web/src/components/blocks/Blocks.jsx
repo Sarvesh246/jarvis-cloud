@@ -12,7 +12,7 @@ import {
   Table,
 } from "@phosphor-icons/react";
 import { collectSources, domainOf, kindLabel, parseUrl, sourceKey } from "../../lib/sources.js";
-import { cellText, isNumericColumn, sortRows, toCSV, toNumber, toTSV } from "../../lib/table.js";
+import { cellText, isNumericColumn, isSectionRow, tableRowOrder, visibleTableRows, toCSV, toNumber, toTSV } from "../../lib/table.js";
 import {
   STRUCTURED,
   fenceClosed,
@@ -21,7 +21,7 @@ import {
   parseTimeline,
   timelineText,
 } from "../../lib/structured.js";
-import { blockKey, readChecklist, saveChecklist, visibleRows, numberSeries } from "../../lib/intelligent-ui.js";
+import { blockKey, readChecklist, saveChecklist, numberSeries } from "../../lib/intelligent-ui.js";
 import { inferListPresentation, sectionContext, tablePresentation, wantsPlainReply, safeChartPlan } from "../../lib/adaptive-ui.js";
 import { TableScroll } from "./TableScroll.jsx";
 import { NumberExplorer } from "./LocalTools.jsx";
@@ -506,7 +506,7 @@ function Chart({ columns, rows, plan }) {
   // Blank cells have no bar and don't count towards the scale.
   const max = Math.max(0, ...values.filter(Number.isFinite).map(Math.abs)) || 1;
   const signed = values.some(value => value < 0);
-  const unit = numberSeries(rows, column)?.unit || "";
+  const unit = numberSeries(rows.filter(row => !isSectionRow(row)), column)?.unit || "";
   const scaleLabel = `${unit === "%" ? "" : unit}${max.toLocaleString()}${unit === "%" ? "%" : ""}`;
   const labelOf = (row, i) => (plan.label != null ? cellText(row[plan.label]) : `Row ${i + 1}`);
   const rank = (v) => (Number.isFinite(v) ? v : -Infinity);
@@ -533,7 +533,9 @@ function Chart({ columns, rows, plan }) {
       <p className="chart-summary">{summary}</p>
       <p className="chart-scale">{signed ? "Bars extend left (negative) and right (positive) from zero." : "Bars start at zero."} Scale: {scaleLabel} {signed ? "on either side" : "at full width"}.</p>
       <ol className="chart-bars">
-        {rows.map((row, i) => (
+        {rows.map((row, i) => isSectionRow(row) ? (
+          <li key={i} className="chart-section">{cellText(row[0])}</li>
+        ) : (
           <li key={i}>
             <span className="chart-label">{labelOf(row, i)}</span>
             <span className="chart-track" data-signed={signed || undefined} aria-hidden="true">
@@ -572,13 +574,12 @@ function TableBlock({ node, "data-src": src }) {
   const [selected, setSelected] = useState([]);
   const [onlySelected, setOnlySelected] = useState(false);
   const enhance = presentation !== "minimal" && !live && interactive && data.rows.length >= 2 && data.rows.length <= 200 && data.columns.length <= 20;
-  const visible = useMemo(() => enhance ? visibleRows(data.rows, query, selected, onlySelected) : data.rows.map((_, i) => i), [data, enhance, query, selected, onlySelected]);
+  const visible = useMemo(() => enhance ? visibleTableRows(data.rows, query, selected, onlySelected) : data.rows.map((_, i) => i), [data, enhance, query, selected, onlySelected]);
   const visibleSet = new Set(visible);
   const numeric = data.columns.map((_, i) => isNumericColumn(data.rows, i));
   const plan = presentation === "minimal" || live ? null : safeChartPlan(data.columns, data.rows);
   const order = useMemo(() => {
-    const indexed = data.rows.map((row, i) => [...row, i]);
-    return sortRows(indexed, sort.column, sort.direction).map((row) => row.at(-1));
+    return tableRowOrder(data.rows, sort.column, sort.direction);
   }, [data, sort]);
 
   /* Numbers sort largest first, words A to Z; a third press restores the
@@ -692,7 +693,11 @@ function TableBlock({ node, "data-src": src }) {
               </tr>
             </thead>
             <tbody>
-              {order.filter(r => visibleSet.has(r)).map((r) => (
+              {order.filter(r => visibleSet.has(r)).map((r) => isSectionRow(data.rows[r]) ? (
+                <tr key={r} className="table-section">
+                  <th scope="rowgroup" colSpan={data.columns.length + (enhance ? 1 : 0)}>{inline(data.cells[r][0], 0)}</th>
+                </tr>
+              ) : (
                 <tr key={r}>
                   {enhance && <td><input type="checkbox" aria-label={`Compare row ${r + 1}: ${data.rows[r][0]}`} checked={selected.includes(r)} onChange={e => setSelected(items => e.target.checked ? [...items, r] : items.filter(i => i !== r))} /></td>}
                   {data.cells[r].map((cell, i) => (
@@ -707,7 +712,7 @@ function TableBlock({ node, "data-src": src }) {
         </TableScroll>
       )}
       {enhance && visible.length === 0 && <p className="local-note">No matching rows. Reset the view to see the full table.</p>}
-      {enhance && visible.length > 0 && <NumberExplorer defaultOpen={suggested.explore} columns={data.columns} rows={visible.map(i => data.rows[i])} />}
+      {enhance && visible.length > 0 && <NumberExplorer defaultOpen={suggested.explore} columns={data.columns} rows={visible.map(i => data.rows[i]).filter(row => !isSectionRow(row))} />}
     </figure>
   );
 }

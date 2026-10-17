@@ -1,5 +1,5 @@
 import { numberSeries } from './intelligent-ui.js';
-import { chartable } from './table.js';
+import { chartable, isSectionRow } from './table.js';
 import { plainLine, parseMetrics, parseTimeline } from './structured.js';
 
 // These are presentation decisions over existing data, never model requests.
@@ -26,6 +26,7 @@ const ACTION = /^(?:add|arrange|back up|book|bring|buy|call|charge|check|choose|
 const TIME_COLUMN = /\b(?:date|month|week|year|quarter|day|period)\b/i;
 
 export function safeChartPlan(columns, rows) {
+  rows = rows.filter(row => !isSectionRow(row));
   const plan = chartable(columns, rows);
   if (!plan) return null;
   const time = columns.findIndex(header => TIME_COLUMN.test(header));
