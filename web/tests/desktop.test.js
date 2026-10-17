@@ -22,7 +22,9 @@ test('desktop packages share the web build and permit rich media without remote 
   const csp = new Map(config.app.security.csp.split(';').map(rule => { const [name,...values] = rule.trim().split(/\s+/); return [name,values]; }));
   assert.ok(csp.get('img-src').includes('https:'));
   assert.ok(csp.get('connect-src').includes('https:'));
-  assert.deepEqual(csp.get('script-src'), ["'self'"]);
+  assert.ok(csp.get('connect-src').includes('blob:'));
+  assert.deepEqual(csp.get('worker-src'), ["'self'", 'blob:']);
+  assert.deepEqual(csp.get('script-src'), ["'self'", "'wasm-unsafe-eval'"]);
   assert.deepEqual(csp.get('frame-src'), ["'self'"]);
   assert.deepEqual(csp.get('object-src'), ["'none'"]);
   assert.deepEqual(csp.get('form-action'), ["'none'"]);

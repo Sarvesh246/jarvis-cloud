@@ -192,7 +192,9 @@ test('production policy permits HTTPS previews while preserving execution bounda
   const directives = new Map(csp.split(';').map(part => { const [name, ...values] = part.trim().split(/\s+/); return [name, values]; }));
   assert.ok(directives.get('img-src').includes('https:'));
   assert.ok(directives.get('connect-src').includes('https:'));
-  assert.deepEqual(directives.get('script-src'), ["'self'", 'https://accounts.google.com/gsi/client']);
+  assert.ok(directives.get('connect-src').includes('blob:'));
+  assert.deepEqual(directives.get('worker-src'), ["'self'", 'blob:']);
+  assert.deepEqual(directives.get('script-src'), ["'self'", "'wasm-unsafe-eval'", 'https://accounts.google.com/gsi/client']);
   assert.deepEqual(directives.get('frame-src'), ['https://accounts.google.com']);
   assert.deepEqual(directives.get('object-src'), ["'none'"]);
   assert.deepEqual(directives.get('form-action'), ["'self'"]);
