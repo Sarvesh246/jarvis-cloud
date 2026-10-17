@@ -115,6 +115,107 @@ class RelayTests(unittest.TestCase):
             server.shutdown()
             server.server_close()
 
+    def test_repeating_comparison_is_stopped_without_continuing_the_loop(self):
+        row = "| | 249g | 187g |\n"
+        answer = "| Feature | New phone | Current phone |\n|---|---|---|\n" + row * 42
+        # Providers can split a row at any character, or put the whole loop in
+        # one frame, including a token-limit finish that previously continued it.
+        for width in (1, 7, len(answer)):
+            with self.subTest(width=width):
+                pieces = [chunk(answer[i:i + width]) for i in range(0, len(answer), width)]
+                script = [
+                    *pieces, chunk(finish="length"), "data: [DONE]",
+                ]
+                hermes, relay, port = self.boot([script, script])
+                self.start(port)
+                run = self.finished(relay)
+                _, frames = self.events(port)
+                output = json.dumps(frames)
+                self.assertEqual(run.outcome, "error")
+                self.assertIn("repetitive_output", output)
+                self.assertNotIn("jarvis.continue", output)
+                self.assertNotIn("jarvis.complete", output)
+                self.assertEqual(len(hermes.requests), 2)
+                self.assertNotIn("249g", json.dumps(hermes.requests[1]["body"]))
+                visible = "".join(json.loads(data)["choices"][0]["delta"].get("content", "")
+                                  for _, name, data in frames
+                                  if name == "message" and data != "[DONE]")
+                self.assertLess(visible.count(row), 32)
+
+    def test_inline_loop_is_stopped_before_upstream_completion(self):
+        script = [
+            chunk("Here is the comparison. "),
+            *[chunk("The phones weigh 249g and 187g. ") for _ in range(100)],
+        ]
+        hermes, relay, port = self.boot([script, script])
+        self.start(port)
+        run = self.finished(relay)
+        _, frames = self.events(port)
+        self.assertEqual(run.outcome, "error")
+        self.assertIn("repetitive_output", json.dumps(frames))
+        self.assertEqual(len(hermes.requests), 2)
+
+    def test_detected_loop_closes_the_unfinished_upstream_response(self):
+        _, relay, _ = self.boot([])
+        run = relay_module.Run(RUN, OWNER)
+        run.connection = mock.Mock()
+        raw = ((chunk("| | 249g | 187g |\n") + "\n\n") * 100).encode()
+        response = io.BytesIO(raw)
+        seen = {"content": "", "answer": "", "tools": [], "approval": False}
+        relay.relay(run, response, seen)
+        self.assertTrue(seen["repetitive"])
+        self.assertFalse(seen["finished"])
+        self.assertTrue(response.closed)
+        run.connection.close.assert_called_once()
+
+    def test_repetition_recovery_replaces_the_answer_from_clean_context(self):
+        answer = "Here is the concise comparison with each feature listed once."
+        hermes, relay, port = self.boot([
+            [chunk("| | 249g | 187g |\n" * 42, "length"), "data: [DONE]"],
+            [chunk(answer, "stop"), "data: [DONE]"],
+        ])
+        self.start(port)
+        run = self.finished(relay)
+        _, frames = self.events(port)
+        self.assertEqual(run.outcome, "complete")
+        names = [name for _, name, _ in frames]
+        self.assertEqual(names.count("jarvis.retry"), 1)
+        self.assertNotIn("jarvis.continue", names)
+        self.assertNotIn("249g", json.dumps(hermes.requests[1]["body"]))
+        self.assertEqual(hermes.requests[1]["body"]["messages"][:-1],
+                         hermes.requests[0]["body"]["messages"])
+        self.assertIn(answer, json.dumps(frames))
+
+    def test_equal_values_with_distinct_row_labels_are_preserved(self):
+        answer = ("| Feature | A | B |\n|---|---|---|\n" +
+                  "".join(f"| Measurement {i} | 249g | 187g |\n" for i in range(42)) +
+                  "\n" + "Again, " * 3 + "these values match.\n```python\n" +
+                  "\n".join(f"result_{i} = calculate({i})" for i in range(40)) + "\n```")
+        hermes, relay, port = self.boot([[chunk(answer, "stop"), "data: [DONE]"]])
+        self.start(port)
+        run = self.finished(relay)
+        _, frames = self.events(port)
+        self.assertEqual(run.outcome, "complete")
+        self.assertIn(answer, [json.loads(data)["choices"][0]["delta"].get("content")
+                              for _, name, data in frames if name == "message" and data != "[DONE]"])
+        self.assertEqual(len(hermes.requests), 1)
+
+    def test_loop_detection_carries_across_token_limit_continuations(self):
+        row = "| | 249g | 187g |\n"
+        hermes, relay, port = self.boot([
+            [chunk(row * 7, "length"), "data: [DONE]"],
+            [chunk(row * 7, "length"), "data: [DONE]"],
+            [chunk("A fresh comparison.", "stop"), "data: [DONE]"],
+        ])
+        self.start(port)
+        run = self.finished(relay)
+        _, frames = self.events(port)
+        names = [name for _, name, _ in frames]
+        self.assertEqual(run.outcome, "complete")
+        self.assertEqual(names.count("jarvis.continue"), 1)
+        self.assertEqual(names.count("jarvis.retry"), 1)
+        self.assertNotIn("249g", json.dumps(hermes.requests[2]["body"]))
+
     def test_corrupt_answer_chunks_trigger_recovery_instead_of_false_success(self):
         hermes, relay, port = self.boot([
             [chunk("The answer is "), 'data: {"choices":broken}', "data: [DONE]"],

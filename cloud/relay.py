@@ -112,6 +112,38 @@ CONTINUE_NOTE = (
 ANSWER_KEEP = CONTEXT_POLICY["replyChars"]
 
 
+class RepetitionGuard:
+    """Bound work and memory while detecting a sustained, exact output loop.
+
+    Inspect at fixed character intervals, independent of provider chunk boundaries.
+    Eight copies and at least 160 characters avoid treating ordinary emphasis or
+    a few equal table values as a runaway response.
+    """
+
+    def __init__(self, previous=""):
+        self.tail = previous[-4096:]
+        self.unchecked = 0
+
+    def feed(self, content):
+        for offset in range(0, len(content), 32):
+            piece = content[offset:offset + 32]
+            self.tail = (self.tail + piece)[-4096:]
+            self.unchecked += len(piece)
+            if self.unchecked < 32:
+                continue
+            self.unchecked = 0
+            for size in range(4, min(256, len(self.tail) // 8) + 1):
+                copies = max(8, (160 + size - 1) // size)
+                unit = self.tail[-size:]
+                if len(self.tail) < size * copies:
+                    continue
+                if self.tail.endswith(unit * copies):
+                    # Rules, whitespace, and padding alone aren't model prose.
+                    if len({char.lower() for char in unit if char.isalnum()}) >= 3:
+                        return True
+        return False
+
+
 def continuation(messages, answer):
     """The conversation with the partial answer as the assistant's own words, so the model
     carries on mid-thought instead of starting again."""
@@ -569,7 +601,8 @@ class Relay:
         arrived and how the attempt ended. Failure frames are held back, so a recovery or a
         continuation can still take their place."""
         seen.update(finished=False, failed=False, dropped=False, held=None, truncated=False,
-                    attempt_answer=False)
+                    attempt_answer=False, repetitive=False)
+        seen["repetition_guard"] = RepetitionGuard(seen["answer"])
         usage = {"prompt_tokens": 0, "completion_tokens": 0, "cached_tokens": 0}
         seen["usage"] = usage
         seen["usage_reported"] = False
@@ -587,12 +620,16 @@ class Relay:
                     continue
                 if lines:
                     self.inspect(run, "\n".join(lines), seen)
+                    if seen["repetitive"]:
+                        break
                 lines, frame_bytes = [], 0
-            if lines and not run.stopped:
+            if lines and not run.stopped and not seen["repetitive"]:
                 self.inspect(run, "\n".join(lines), seen)
         except (OSError, http.client.HTTPException, ValueError):
             seen["dropped"] = True
         finally:
+            if seen["repetitive"]:
+                response.close()  # release the provider/agent slot before a fresh request
             run.connection.close()
             if seen["usage_reported"]:
                 run.usage_reports += 1
@@ -653,6 +690,9 @@ class Relay:
         )
         delta = choice.get("delta") if isinstance(choice.get("delta"), dict) else {}
         content = delta.get("content")
+        if isinstance(content, str) and seen["repetition_guard"].feed(content):
+            seen["repetitive"] = True
+            return  # do not publish the frame that establishes the loop
         if isinstance(content, str) and content.strip() and run.first_answer is None:
             run.first_answer = self.clock()
         elif (delta.get("reasoning_content") or delta.get("reasoning")) and run.first_thought is None:
@@ -698,6 +738,7 @@ class Relay:
         timer.start()
         seen = {"content": "", "answer": "", "approval": False, "tools": [], "held": None,
                 "finished": False, "failed": False, "dropped": False}
+        repetition_retried = False
         try:
             run.event("jarvis.status", {"message": "Vaelo is working…"})
             query = body.get("freshness")
@@ -721,6 +762,23 @@ class Relay:
                     return run.finish("stopped")
                 run.model_started = True
                 self.relay(run, response, seen)
+                if seen["repetitive"] and not run.stopped:
+                    # Never continue a loop using its own output as context. One
+                    # fresh write-up can recover; a second loop must end the run.
+                    left = RUN_LIMIT_SECONDS - (self.clock() - started)
+                    if (not run.stopped and not repetition_retried and attempt < ATTEMPTS - 1
+                            and left >= RECOVERY_MIN_SECONDS):
+                        repetition_retried = True
+                        run.event("jarvis.retry", {"message": "Restarting a repetitive reply…"})
+                        seen.update(content="", answer="")
+                        request = [*messages, {"role": "user", "content":
+                            "[Vaelo request: the previous generation was discarded because it entered a repetition loop. "
+                            "Answer the original question afresh and concisely. Include each point or table row only once.]"}]
+                        body = {**body, "continue_fast": False}
+                        continue
+                    run.event("jarvis.error", {"code": "repetitive_output", "message":
+                              "The model started repeating itself, so Vaelo stopped this reply. Please retry for a fresh answer."})
+                    return run.finish("error")
                 cut_off = (seen["failed"] or not seen["finished"] or seen["truncated"]
                            or not seen["attempt_answer"])
                 left = RUN_LIMIT_SECONDS - (self.clock() - started)

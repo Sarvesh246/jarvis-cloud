@@ -1471,6 +1471,8 @@ export function App() {
          anything that stood in for an answer so far is set aside. */
       if (name === "jarvis.retry") {
         received = "";
+        joining = false;
+        joinBuffer = "";
         updateMessage({ content: "", truncated: false, live: String(data.message || "").slice(0, 160) });
         setLivePhase("thinking");
         announce("Vaelo is writing up what it found.");
