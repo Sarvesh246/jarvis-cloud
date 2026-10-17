@@ -25,6 +25,36 @@ class ResearchTests(unittest.TestCase):
         fused = self.module.fuse([hits], 5)
         self.assertIn("https://example.com/a", [hit["url"] for hit in fused])
 
+    def test_search_excludes_wrong_pairs_and_keeps_exact_model_scope(self):
+        mod = self.module
+        rows = {"results": [
+            {"url": "https://example.com/wrong", "title": "OnePlus 16 vs iPhone 15 Pro", "highlights": ["OnePlus 16 and iPhone 15 Pro comparison"]},
+            {"url": "https://apple.com/15", "title": "iPhone 15 Pro specifications", "highlights": ["iPhone 15 Pro specs"]},
+            {"url": "https://apple.com/18", "title": "iPhone 18 Pro Max specifications", "highlights": ["iPhone 18 Pro Max specs"]},
+        ]}
+        with patch.dict(mod.os.environ, {"EXA_API_KEY": "k"}, clear=True), patch.object(mod, "post", return_value=rows):
+            result = mod.Research().search("iPhone 15 Pro vs iPhone 18 Pro Max")
+        hits = result["data"]["web"]
+        self.assertEqual([hit["url"] for hit in hits], ["https://apple.com/15", "https://apple.com/18"])
+        self.assertEqual([hit["subjects"] for hit in hits], [["iphone 15 pro"], ["iphone 18 pro max"]])
+
+    def test_only_mismatched_results_return_a_clear_failure(self):
+        mod = self.module
+        rows = {"results": [{"url": "https://example.com/wrong", "title": "iPhone 17 Pro Max specifications", "highlights": ["iPhone 17 Pro Max"]}]}
+        with patch.dict(mod.os.environ, {"EXA_API_KEY": "k"}, clear=True), patch.object(mod, "post", return_value=rows):
+            result = mod.Research().search("iPhone 18 Pro Max specifications")
+        self.assertFalse(result["success"])
+        self.assertIn("do not infer nonexistence", result["error"])
+
+    def test_extracted_page_that_reveals_a_different_comparison_is_rejected(self):
+        research = self.module.Research()
+        url = "https://example.com/compare?id=bad"
+        research.remember("iPhone 15 Pro vs iPhone 18 Pro Max", [{"url": url}])
+        with patch.object(research, "read", return_value=("OnePlus 16 vs iPhone 15 Pro", "OnePlus 16 has 16 GB. iPhone 15 Pro has 8 GB.", "")):
+            page = research.extract_one(url)
+        self.assertEqual(page["content"], "")
+        self.assertIn("different models", page["error"])
+
     def test_search_falls_back_without_exposing_provider_errors(self):
         mod = self.module
         def response(name, path, payload, timeout=None):

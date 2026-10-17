@@ -38,6 +38,13 @@ except ModuleNotFoundError as exc:
     if exc.name not in ("agent", "agent.web_search_provider"):
         raise
     WebSearchProvider = object
+try:
+    from .source_quality import subjects, source_scope, relevant_sources
+except ImportError:
+    try:
+        from source_quality import subjects, source_scope, relevant_sources
+    except ModuleNotFoundError:
+        from cloud.source_quality import subjects, source_scope, relevant_sources
 
 REQUEST_TIMEOUT = 15
 # One page gets this long in all, across every provider tried and the direct read; a socket
@@ -597,7 +604,11 @@ class Research(WebSearchProvider):
                 "success": False,
                 "error": "No configured research provider returned results",
             }
-        results = fuse(rankings, limit)
+        results = relevant_sources(query, fuse(rankings, SEARCH_LIMIT))[:limit]
+        if not results:
+            return {"success": False, "error": "Search results did not identify the exact requested models. Try separate official specifications queries; do not infer nonexistence."}
+        for position, hit in enumerate(results, 1):
+            hit["position"] = position
         self.remember(query, results)
         return {
             "success": True,
@@ -670,6 +681,9 @@ class Research(WebSearchProvider):
                 title, content, published = self.read(name, url, min(REQUEST_TIMEOUT, left))
             except Exception:
                 continue
+            scoped = source_scope({"url": url, "title": title, "content": content}, subjects(query))
+            if scoped is None:
+                return {"url": url, "error": "This page does not identify the exact requested models or compares different models. Use the correct official specifications instead.", "content": ""}
             page = {
                 "url": url,
                 "title": title[:500],
@@ -678,6 +692,9 @@ class Research(WebSearchProvider):
             }
             if published:
                 page["published"] = published
+            if "subjects" in scoped:
+                page["subjects"] = scoped["subjects"]
+                page["evidence_scope"] = scoped["evidence_scope"]
             return page
         return {
             "url": url,

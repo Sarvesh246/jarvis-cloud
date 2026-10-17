@@ -1,5 +1,7 @@
 import importlib.util
 import json
+import sys
+import types
 from pathlib import Path
 import tempfile
 import threading
@@ -15,6 +17,21 @@ spec.loader.exec_module(bootstrap)
 
 
 class BootstrapTests(unittest.TestCase):
+    def test_installed_research_plugin_loads_its_packaged_source_checks(self):
+        interface = types.ModuleType("agent.web_search_provider")
+        interface.WebSearchProvider = object
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            bootstrap.prepare_profile(home, {})
+            plugin = home / "plugins" / "jarvis-cloud-research"
+            spec = importlib.util.spec_from_file_location("test_installed_research", plugin / "__init__.py")
+            module = importlib.util.module_from_spec(spec)
+            with unittest.mock.patch.dict(sys.modules, {"test_installed_research": module,
+                    "agent": types.ModuleType("agent"), "agent.web_search_provider": interface}):
+                spec.loader.exec_module(module)
+                self.assertEqual(module.subjects.__module__, "test_installed_research.source_quality")
+                self.assertEqual(module.subjects("iPhone 15 Pro vs 18 Pro Max"), ["iphone 15 pro", "iphone 18 pro max"])
+
     def test_context_policy_stays_consistent_across_cloud_routes_and_web(self):
         policy = bootstrap.CONTEXT_POLICY
         self.assertEqual(policy["windowTokens"], 128000)

@@ -127,6 +127,7 @@ def prepare_profile(home, environ):
     plugin = home / "plugins" / "jarvis-cloud-research"
     plugin.mkdir(parents=True, exist_ok=True)
     shutil.copy2(HERE / "research.py", plugin / "__init__.py")
+    shutil.copy2(HERE / "source_quality.py", plugin / "source_quality.py")
     shutil.copy2(HERE / "research-plugin.yaml", plugin / "plugin.yaml")
     # An explicit cloud SOUL overrides the image's example personality.
     shutil.copy2(HERE / "SOUL.md", home / "SOUL.md")
