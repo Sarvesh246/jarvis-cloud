@@ -659,6 +659,39 @@ class RelayTests(unittest.TestCase):
         self.assertIn("jarvis.retry", names)
         self.assertEqual(names[-1], "jarvis.complete")
 
+    def test_fresh_sources_are_fetched_before_generation_and_reused_on_recovery(self):
+        hermes, relay, port = self.boot([
+            [chunk("", "stop"), "data: [DONE]"],
+            [chunk("An answer with sources.", "stop"), "data: [DONE]"],
+        ])
+        evidence = {"role": "user", "content": "Live-source context: https://official.example/release"}
+        body = {"id": RUN, "messages": [{"role": "system", "content": "s"},
+                {"role": "user", "content": "Compare phone 15 and phone 18"}],
+                "freshness": "Compare phone 15 and phone 18", "fast": "short prompt"}
+        with mock.patch.object(relay_module, "source_context", return_value=evidence) as lookup:
+            self.assertEqual(self.call(port, "POST", "/vaelo/runs", body)[0], 202)
+            self.assertEqual(self.finished(relay).outcome, "complete")
+            self.call(port, "POST", "/vaelo/runs", body)
+        lookup.assert_called_once_with(body["freshness"])
+        self.assertEqual(len(hermes.requests), 2)
+        first = hermes.requests[0]["body"]["messages"]
+        self.assertEqual(first[:2], body["messages"], "first user and system retain session identity")
+        self.assertEqual(first[-1], evidence)
+        self.assertIn("official.example", hermes.requests[1]["body"]["messages"][-1]["content"])
+
+    def test_stopping_during_source_lookup_prevents_generation(self):
+        _, relay, _ = self.boot([])
+        run = relay_module.Run(RUN, OWNER)
+        def stopped(query):
+            run.stopped = True
+            return {"role": "user", "content": "evidence"}
+        with mock.patch.object(relay_module, "source_context", side_effect=stopped), \
+             mock.patch.object(relay, "open") as opened:
+            relay.execute(run, {"messages": [{"role": "user", "content": "latest phone"}],
+                                "freshness": "latest phone"})
+        self.assertEqual(run.outcome, "stopped")
+        opened.assert_not_called()
+
     def test_a_late_failure_is_held_back_while_the_recovery_runs(self):
         hermes, relay, port = self.boot(
             [

@@ -24,6 +24,10 @@ try:
     from context_policy import CONTEXT_POLICY
 except ModuleNotFoundError:
     from cloud.context_policy import CONTEXT_POLICY
+try:
+    from freshness import source_context
+except ModuleNotFoundError:
+    from cloud.freshness import source_context
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 
@@ -677,6 +681,15 @@ class Relay:
                 "finished": False, "failed": False, "dropped": False}
         try:
             run.event("jarvis.status", {"message": "Vaelo is working…"})
+            query = body.get("freshness")
+            if isinstance(query, str) and query.strip() and len(query) <= 600:
+                run.event("jarvis.status", {"message": "Checking current sources…"})
+                # A separate context message keeps the first user message and
+                # Hermes session identity stable. Reuse this evidence on recovery.
+                messages = [*messages, source_context(query)]
+                body = {**body, "fast": None}
+            if run.stopped:
+                return run.finish("stopped")
             request = messages
             for attempt in range(ATTEMPTS):
                 if guest and attempt > 0 and self.guest_admit(run.owner, retry=True):
@@ -886,7 +899,8 @@ def make_handler(relay):
             run = relay.start(
                 run_id,
                 owner,
-                {"messages": messages, "model_options": body.get("model_options"), "fast": fast},
+                {"messages": messages, "model_options": body.get("model_options"), "fast": fast,
+                 "freshness": body.get("freshness")},
             )
             if run is None:
                 return self.send_json(409, {"error": "run belongs to another session"})

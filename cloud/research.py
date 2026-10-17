@@ -31,7 +31,13 @@ from urllib.request import (
     urlopen,
 )
 
-from agent.web_search_provider import WebSearchProvider
+try:
+    from agent.web_search_provider import WebSearchProvider
+except ModuleNotFoundError as exc:
+    # The relay reuses this bounded HTTP client outside the Hermes process.
+    if exc.name not in ("agent", "agent.web_search_provider"):
+        raise
+    WebSearchProvider = object
 
 REQUEST_TIMEOUT = 15
 # One page gets this long in all, across every provider tried and the direct read; a socket
