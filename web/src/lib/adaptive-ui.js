@@ -1,5 +1,5 @@
 import { numberSeries } from './intelligent-ui.js';
-import { chartable, isSectionRow } from './table.js';
+import { chartable, isSectionRow, isBlank } from './table.js';
 import { plainLine, parseMetrics, parseTimeline } from './structured.js';
 
 // These are presentation decisions over existing data, never model requests.
@@ -31,7 +31,7 @@ export function safeChartPlan(columns, rows) {
   if (!plan) return null;
   const time = columns.findIndex(header => TIME_COLUMN.test(header));
   const label = time >= 0 ? time : plan.label;
-  const values = plan.values.filter(i => i !== label && numberSeries(rows, i));
+  const values = plan.values.filter(i => i !== label && numberSeries(rows.filter(row => !isBlank(row[i])), i));
   return values.length ? { label, values } : null;
 }
 
@@ -72,7 +72,7 @@ export function tablePresentation(columns, rows, context = '') {
   const ingredients = headers.some(h => /\bingredient\b/.test(h)) && headers.some(h => /\b(?:quantity|amount|grams|weight)\b/.test(h));
   const budget = /\b(?:budget|expenses|cost breakdown)\b/i.test(context) && headers.some(h => /\b(?:cost|amount|expense)\b/.test(h));
   result.explore = ingredients || budget;
-  if (result.explore || rows.length > 40 || columns.length > 3 || label < 0) return result;
+  if (result.explore || columns.length > 3 || label < 0) return result;
   const timeSeries = TIME_COLUMN.test(headers[label]);
   const quantitative = headers.some(h => /\b(?:sales|revenue|visitors|visits|count|population|share|percentage|change|growth|signups|sign-ups|votes)\b/.test(h));
   const comparison = /\b(?:compare|comparison|options|plans|products|laptops|pricing)\b/i.test(context);

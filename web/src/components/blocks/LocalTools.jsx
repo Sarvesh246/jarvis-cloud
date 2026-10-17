@@ -8,6 +8,7 @@ export function NumberExplorer({ columns, rows, defaultOpen = false }) {
   const column = available.includes(choice) ? choice : available[0] ?? 0;
   const [factor, setFactor] = useState('1');
   const series = scaleSeries(numberSeries(rows, column), factor);
+  const total = series?.numbers.reduce((sum, value) => sum + value, 0);
   if (!available.length) return null;
   const format = value => `${series?.unit.startsWith('%') ? '' : series?.unit || ''}${value.toLocaleString(undefined, { maximumSignificantDigits: 8 })}${series?.unit.endsWith('%') ? '%' : ''}`;
   return <details className="local-explorer" open={open} onToggle={event => setOpen(event.currentTarget.open)}>
@@ -24,6 +25,7 @@ export function NumberExplorer({ columns, rows, defaultOpen = false }) {
       <dl className="local-numbers" aria-live="polite">
         <div><dt>Lowest × factor</dt><dd>{format(Math.min(...series.numbers))}</dd></div>
         <div><dt>Highest × factor</dt><dd>{format(Math.max(...series.numbers))}</dd></div>
+        {!series.unit.endsWith('%') && Number.isFinite(total) && <div><dt>Total × factor</dt><dd>{format(total)}</dd></div>}
       </dl>
       <ol className="local-results">{series.numbers.map((value, i) => <li key={i}>
         <span>{columns.length > 1 && column !== 0 ? rows[i][0] : `Row ${i + 1}`}</span><output>{format(value)}</output>

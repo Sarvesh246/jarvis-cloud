@@ -201,7 +201,7 @@ function isYearColumn(columns, rows, column) {
 /* A chart is offered only when it would actually say something: one label
    column and at least one numeric column, with a handful of rows. */
 export function chartable(columns, rows) {
-  if (rows.length < 2 || rows.length > 40 || columns.length < 2) return null;
+  if (rows.length < 2 || rows.length > 200 || columns.length < 2) return null;
   const numeric = columns.map((_, i) => i).filter((i) => isNumericColumn(rows, i));
   const years = numeric.filter((i) => isYearColumn(columns, rows, i));
   const values = numeric.filter((i) => !years.includes(i));

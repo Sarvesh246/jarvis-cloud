@@ -42,7 +42,8 @@ test('time series and quantitative categories default to charts; comparisons rem
   assert.equal(tablePresentation(['Plan', 'Price', 'Battery hours', 'Best for'], [['Basic', '$20', '8', 'Travel'], ['Plus', '$30', '12', 'Home']]).view, 'table');
   assert.equal(tablePresentation(['Month', 'Sales'], [['Jan', 'n/a'], ['Feb', '8']]).view, 'table');
   assert.equal(tablePresentation(['Month', 'Sales'], [['Jan', '$8'], ['Feb', '€9']]).view, 'table');
-  assert.equal(tablePresentation(['Month', 'Sales'], Array(41).fill(['Jan', '8'])).view, 'table');
+  assert.equal(tablePresentation(['Month', 'Sales'], Array(200).fill(['Jan', '8'])).view, 'chart');
+  assert.equal(tablePresentation(['Month', 'Sales'], Array(201).fill(['Jan', '8'])).view, 'table');
 });
 
 test('numeric years are labels rather than a second quantitative bar series', () => {

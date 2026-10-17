@@ -1,5 +1,6 @@
 /* The workspace is a facing page: same paper, a fine rule down its spine. */
 .workspace {
+  min-width: 0;
   position: relative;
   display: flex;
   flex-direction: column;
@@ -95,6 +96,7 @@ body.resizing iframe {
 }
 
 .ws-body {
+  min-width: 0;
   padding-bottom: env(safe-area-inset-bottom);
   display: flex;
   flex-direction: column;

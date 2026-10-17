@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { fitTitle } from '../lib/titles.js';
 import { FolderSimplePlus, List, SidebarSimple } from "@phosphor-icons/react";
 import "./header.css";
 
@@ -11,6 +12,29 @@ export function Header({ title, canRename, onRename, onOpenRail, onToggleRail, o
   const input = useRef(null);
   const name = useRef(null);
   const wasEditing = useRef(false);
+  const [fitted, setFitted] = useState(title);
+
+  useLayoutEffect(() => {
+    const element = name.current;
+    if (!element) return;
+    let disposed = false;
+    const measure = () => {
+      if (disposed) return;
+      const style = getComputedStyle(element);
+      const context = document.createElement('canvas').getContext('2d');
+      if (!context) return;
+      context.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+      const width = element.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight) - 2;
+      const spacing = parseFloat(style.letterSpacing) || 0;
+      setFitted(fitTitle(title, text => context.measureText(text).width + Math.max(0, Array.from(text).length - 1) * spacing <= width));
+    };
+    measure();
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
+    observer?.observe(element);
+    window.addEventListener('resize', measure);
+    document.fonts?.ready.then(measure);
+    return () => { disposed = true; observer?.disconnect(); window.removeEventListener('resize', measure); };
+  }, [title, editing]);
 
   useEffect(() => setValue(title), [title]);
   useEffect(() => {
@@ -70,11 +94,13 @@ export function Header({ title, canRename, onRename, onOpenRail, onToggleRail, o
           <button
             ref={name}
             className="header-title"
+            title={title}
+            aria-label={canRename ? `Rename conversation: ${title}` : title}
             disabled={!canRename}
             data-tip={canRename ? "Rename conversation" : undefined}
             onClick={() => setEditing(true)}
           >
-            {title}
+            {fitted}
           </button>
         )}
       </div>

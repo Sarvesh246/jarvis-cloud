@@ -23,6 +23,7 @@
 }
 
 .header-left {
+  flex: 1;
   display: flex;
   align-items: center;
   gap: var(--s-3);
@@ -48,8 +49,10 @@
 }
 
 .header-title {
+  flex: 1;
+  width: 100%;
   overflow: hidden;
-  text-overflow: ellipsis;
+  text-overflow: clip;
   white-space: nowrap;
   text-align: left;
   transition: background var(--dur-1) var(--ease);

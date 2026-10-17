@@ -39,7 +39,9 @@ export function parseMetrics(source) {
     const line = plainLine(raw);
     if (!line) continue;
     if (line.startsWith("#")) {
-      result.title ||= line.replace(/^#+\s*/, "");
+      const heading = line.replace(/^#+\s*/, "");
+      if (!result.title) result.title = heading;
+      else result.extra.push(heading);
       continue;
     }
     if (line.startsWith(">")) {
@@ -82,11 +84,13 @@ export function parseTimeline(source) {
     const line = plainLine(raw.trim().replace(/^(?:[-•]\s*|\*\s+)/, ""));
     if (!line) continue;
     if (line.startsWith("#")) {
-      result.title ||= line.replace(/^#+\s*/, "");
+      const heading = line.replace(/^#+\s*/, "");
+      if (!result.title) result.title = heading;
+      else { result.extra.push(heading); result.rows.push({when: '', what: heading}); }
       continue;
     }
     const at = line.indexOf(": ");
-    const colon = at > 0 && at <= 40;
+    const colon = at > 0 && at <= 160;
     const dashed = colon ? null : line.match(DASHED);
     const when = colon ? line.slice(0, at).trim() : dashed?.[1].trim() || "";
     const rest = colon ? line.slice(at + 2).trim() : dashed?.[2] || "";

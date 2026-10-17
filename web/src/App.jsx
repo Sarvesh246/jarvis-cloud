@@ -10,6 +10,7 @@ import { ArrowDown, FileArrowUp, IconContext, Quotes } from "@phosphor-icons/rea
 import { readEvents } from "./stream.js";
 import { normalizeReplySpacing, normalizeSavedReplySpacing } from "./lib/reply-spacing.js";
 import { requestForReply } from "./lib/adaptive-ui.js";
+import { chatTitle, displayChatTitle } from './lib/titles.js';
 import { liveReply, readSyncCache } from "./lib/chat-sync.js";
 import { useChatSync } from "./lib/use-chat-sync.js";
 import { Rail } from "./components/Rail.jsx";
@@ -1049,7 +1050,7 @@ export function App() {
     const origin = active.id;
     const chat = {
       ...freshChat(),
-      title: `${active.title} · branch`.slice(0, 80),
+      title: chatTitle(`${active.title} · branch`, 80),
       messages: structuredClone(active.messages.slice(0, at + 1)),
     };
     setChats((current) => cap([chat, ...current]));
@@ -1193,7 +1194,7 @@ export function App() {
         const kept = {
           ...structuredClone(active),
           id: crypto.randomUUID(),
-          title: `${active.title} · before edit`.slice(0, 80),
+          title: chatTitle(`${active.title} · before edit`, 80),
           pinned: undefined,
           pinnedAt: undefined,
         };
@@ -1281,7 +1282,7 @@ export function App() {
               ...chat,
               title: chat.messages.length
                 ? chat.title
-                : (messages[0].text || messages[0].attachments?.[0]?.name || messages[0].content).slice(0, 48),
+                : chatTitle(messages[0].text || messages[0].attachments?.[0]?.name || messages[0].content),
               updated: Date.now(),
               messages: [
                 ...messages.map((message) =>
@@ -1317,7 +1318,7 @@ export function App() {
       id,
       title: active.messages.length
         ? active.title
-        : String(messages[0].text || messages[0].content).slice(0, 48),
+        : chatTitle(messages[0].text || messages[0].content),
       start: { conversationId: chatId, runId: id, messages: input,
         ...(lastUser.workContext && {work:{id:lastUser.workContext.id,revision:lastUser.workContext.revision}}) },
     });
@@ -2152,7 +2153,7 @@ export function App() {
           }}
         >
           <Header
-            title={active?.title || "New conversation"}
+            title={displayChatTitle(active)}
             canRename={messages.length > 0 && !busy}
             onRename={renameChat}
             onOpenRail={() => setMenu(true)}

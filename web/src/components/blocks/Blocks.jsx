@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useMemo, useState } from "react";
+import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import Markdown, { defaultUrlTransform } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
@@ -12,7 +12,7 @@ import {
   Table,
 } from "@phosphor-icons/react";
 import { collectSources, domainOf, kindLabel, parseUrl, sourceKey } from "../../lib/sources.js";
-import { cellText, isNumericColumn, isSectionRow, tableView, toCSV, toNumber, toTSV } from "../../lib/table.js";
+import { cellText, isNumericColumn, isSectionRow, tableView, toCSV, toTSV } from "../../lib/table.js";
 import {
   STRUCTURED,
   fenceClosed,
@@ -21,9 +21,10 @@ import {
   parseTimeline,
   timelineText,
 } from "../../lib/structured.js";
-import { blockKey, readChecklist, saveChecklist, numberSeries } from "../../lib/intelligent-ui.js";
+import { blockKey, readChecklist, saveChecklist } from "../../lib/intelligent-ui.js";
 import { inferListPresentation, sectionContext, tablePresentation, wantsPlainReply, safeChartPlan } from "../../lib/adaptive-ui.js";
 import { TableScroll } from "./TableScroll.jsx";
+import { Chart } from "./Chart.jsx";
 import { NumberExplorer } from "./LocalTools.jsx";
 import { SourceIcon } from "./SourceIcon.jsx";
 import { Highlighted } from "./Highlighted.jsx";
@@ -32,6 +33,7 @@ import { readWorkProposal } from "../../lib/work-proposals.js";
 import { getWorkspace } from "../../../shared/workspaces.js";
 import { getCheck } from "../../../shared/checks.js";
 import "./blocks.css";
+import "./output-layout.css";
 import { DESKTOP, copyText, saveDesktopFile } from "../../lib/desktop.js";
 
 /* A reply is rendered as typed blocks: prose, code, tables, sources. Each
@@ -123,8 +125,8 @@ function CodeBlock({ children, node, "data-src": src }) {
   if (language === "vaelo-work") {
     const proposal = readWorkProposal(textOf(children));
     const complete = fenceClosed(content, node?.position?.start?.offset, node?.position?.end?.offset);
-    if (!complete || live) return <p className="work-proposal-note">Filling it in…</p>;
-    if (!proposal) return <p className="work-proposal-note">This didn’t come through properly. Ask Vaelo to fill it in again.</p>;
+    if (live) return <p className="work-proposal-note">Filling it in…</p>;
+    if (!complete || !proposal) return <div className="work-proposal"><p className="work-proposal-note" role="status">This draft is incomplete. Its original text is kept below; ask Vaelo to repair it before saving.</p><pre className="block-plain">{textOf(children)}</pre></div>;
     const workspace = getWorkspace(proposal.workspaceId);
     const check = proposal.check && getCheck(proposal.check.id);
     return <section className="work-proposal">
@@ -155,6 +157,7 @@ function CodeFigure({ language, src, children }) {
   const { open } = useContext(BlockContext);
   const [done, copy] = useCopy();
   const [expanded, setExpanded] = useState(false);
+  const [wrapped, setWrapped] = useState(false);
   const source = textOf(children).replace(/\n$/, "");
   const lines = source.split("\n").length;
   const folds = lines > FOLD_AT + 6;
@@ -163,11 +166,12 @@ function CodeFigure({ language, src, children }) {
   const item = { kind: "code", language, source, title: language ? `${name} snippet` : "Snippet" };
 
   return (
-    <figure className="code" data-src={src} data-folded={folds && !expanded ? true : undefined}>
+    <figure className="code" data-src={src} data-wrapped={wrapped || undefined} data-folded={folds && !expanded ? true : undefined}>
       <figcaption className="block-bar">
         <span className="label">{language || "Code"}</span>
         <span className="block-count">{lines} {lines === 1 ? "line" : "lines"}</span>
         <span className="block-tools">
+          <button className="block-tool" aria-pressed={wrapped} onClick={() => setWrapped(value => !value)}>Wrap lines</button>
           {canPreview && (
             <button
               className="block-tool"
@@ -233,7 +237,7 @@ function Delta({ item }) {
 }
 
 function Metrics({ source, src, settled }) {
-  const { presentation } = useContext(BlockContext);
+  const { presentation, live } = useContext(BlockContext);
   const data = useMemo(() => parseMetrics(source), [source]);
   const [done, copy] = useCopy();
   /* A figure set down while you watch turns into place once its block is
@@ -241,11 +245,12 @@ function Metrics({ source, src, settled }) {
   const [arriving] = useState(!settled);
   /* Lines that aren't figures may be half-arrived ones while the block
      streams; once it is finished they are part of what was said. */
-  const extra = settled ? data.extra : [];
-  if (!data.items.length && !(settled && (extra.length || data.notes.length)))
+  const finished = settled || !live;
+  const extra = finished ? data.extra : [];
+  if (!data.items.length && !(finished && (extra.length || data.notes.length)))
     return (
       <p className="block-pending" data-src={src}>
-        Laying out figures…
+        {live ? 'Laying out figures…' : `${data.title ? `${data.title}: ` : ''}No figures were included in this block.`}
       </p>
     );
   if (presentation === "minimal" || !data.items.length)
@@ -274,7 +279,7 @@ function Metrics({ source, src, settled }) {
       <div className="metrics-lead">
         <span className="metrics-lead-label">{lead.label}</span>
         <span className="metrics-lead-value">
-          {settled ? <Rolling value={lead.value} enter={arriving} /> : lead.value}
+          {settled && lead.value.length <= 18 ? <Rolling value={lead.value} enter={arriving} /> : lead.value}
         </span>
         <Delta item={lead} />
       </div>
@@ -301,15 +306,15 @@ function Metrics({ source, src, settled }) {
 }
 
 function Timeline({ source, src, settled }) {
-  const { presentation } = useContext(BlockContext);
+  const { presentation, live } = useContext(BlockContext);
   const data = useMemo(() => parseTimeline(source), [source]);
   const [done, copy] = useCopy();
   /* A finished line without a date still belongs in the sequence */
-  const events = settled ? data.rows : data.events;
+  const events = settled || !live ? data.rows : data.events;
   if (!events.length)
     return (
       <p className="block-pending" data-src={src}>
-        Laying out the timeline…
+        {live ? 'Laying out the timeline…' : `${data.title ? `${data.title}: ` : ''}No events were included in this block.`}
       </p>
     );
   if (presentation === "minimal")
@@ -501,60 +506,6 @@ function tableData(node) {
     rows: body.map((row) => row.map(hastText)),
     cells: body,
   };
-}
-
-function Chart({ columns, rows, plan }) {
-  const [choice, setColumn] = useState(plan.values[0]);
-  const column = plan.values.includes(choice) ? choice : plan.values[0];
-  const values = rows.map((row) => toNumber(row[column]));
-  // Blank cells have no bar and don't count towards the scale.
-  const max = Math.max(0, ...values.filter(Number.isFinite).map(Math.abs)) || 1;
-  const signed = values.some(value => value < 0);
-  const unit = numberSeries(rows.filter(row => !isSectionRow(row)), column)?.unit || "";
-  const scaleLabel = `${unit === "%" ? "" : unit}${max.toLocaleString()}${unit === "%" ? "%" : ""}`;
-  const labelOf = (row, i) => (plan.label != null ? cellText(row[plan.label]) : `Row ${i + 1}`);
-  const rank = (v) => (Number.isFinite(v) ? v : -Infinity);
-  const order = values.map((v, i) => i).filter((i) => Number.isFinite(values[i]))
-    .sort((a, b) => rank(values[b]) - rank(values[a]));
-  const summary = `${columns[column]}: highest is ${labelOf(rows[order[0]], order[0])} at ${cellText(rows[order[0]][column])}; lowest is ${labelOf(rows[order.at(-1)], order.at(-1))} at ${cellText(rows[order.at(-1)][column])}.`;
-  return (
-    <div className="chart">
-      {plan.values.length > 1 && (
-        <div className="chart-pick" role="group" aria-label="Column to chart">
-          {plan.values.map((i) => (
-            <button
-              key={i}
-              aria-pressed={i === column}
-              className="chip"
-              data-on={i === column || undefined}
-              onClick={() => setColumn(i)}
-            >
-              {columns[i]}
-            </button>
-          ))}
-        </div>
-      )}
-      <p className="chart-summary">{summary}</p>
-      <p className="chart-scale">{signed ? "Bars extend left (negative) and right (positive) from zero." : "Bars start at zero."} Scale: {scaleLabel} {signed ? "on either side" : "at full width"}.</p>
-      <ol className="chart-bars">
-        {rows.map((row, i) => isSectionRow(row) ? (
-          <li key={i} className="chart-section">{cellText(row[0])}</li>
-        ) : (
-          <li key={i}>
-            <span className="chart-label">{labelOf(row, i)}</span>
-            <span className="chart-track" data-signed={signed || undefined} aria-hidden="true">
-              <span
-                className="chart-bar"
-                data-negative={values[i] < 0 || undefined}
-                style={{ "--w": `${Number.isFinite(values[i]) ? (Math.abs(values[i]) / max) * (signed ? 50 : 100) : 0}%` }}
-              />
-            </span>
-            <span className="chart-value">{cellText(row[column])}</span>
-          </li>
-        ))}
-      </ol>
-    </div>
-  );
 }
 
 function TableView(props) {
@@ -749,6 +700,9 @@ function ImageRef({ alt, src }) {
      already in the conversation is simply there. */
   const [reveal] = useState(live);
   const [loaded, setLoaded] = useState(false);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => { setLoaded(false); setFailed(false); }, [src]);
+  if (failed) return <span className="image-ref" role="img" aria-label={alt || 'Image from Vaelo'}>{alt || 'Image from Vaelo'} <span className="local-note">This image could not be displayed.</span></span>;
   if (/^data:image\/(png|jpeg|webp|gif);base64,/.test(src || ""))
     return (
       <span className="image-inline">
@@ -758,6 +712,7 @@ function ImageRef({ alt, src }) {
             alt={alt || "Image from Vaelo"}
             loading="lazy"
             onLoad={() => setLoaded(true)}
+            onError={() => setFailed(true)}
           />
           {reveal && (
             <span className="image-tiles" aria-hidden="true">
