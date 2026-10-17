@@ -54,7 +54,10 @@ jobs:
           if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
             gh release create "$RELEASE_TAG" --draft --title "Vaelo ${RELEASE_TAG#desktop-v}" --notes-file web/desktop/RELEASE.md
           fi
-          echo "id=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG" --jq .id)" >> "$GITHUB_OUTPUT"
+          # The tags endpoint cannot see drafts, so read the id through the release itself.
+          id="$(gh release view "$RELEASE_TAG" --json databaseId --jq .databaseId)"
+          [ -n "$id" ] || { echo "Could not resolve the draft release id" >&2; exit 1; }
+          echo "id=$id" >> "$GITHUB_OUTPUT"
 
   build:
     if: ${{ !cancelled() && needs.validate.result == 'success' && (needs.release.result == 'success' || needs.release.result == 'skipped') }}
@@ -172,5 +175,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name'
+          assets="$(gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name')"
+          echo "$assets"
+          for pattern in 'latest.json' 'x64-setup.exe$' 'arm64-setup.exe$' '.msi$' '.dmg$' '.AppImage$' '.msix$'; do
+            echo "$assets" | grep -q -E "$pattern" || { echo "Release is missing $pattern" >&2; exit 1; }
+          done
           gh release edit "$RELEASE_TAG" --draft=false --latest
