@@ -199,6 +199,55 @@ def answered(seen):
     return bool(text) and text != "(empty)"
 
 
+class ToolOutputGuard:
+    """Hold ambiguous opening frames until tool-call text can be ruled out.
+
+    Text is never executed as a tool. Technical requests may intentionally ask
+    for these examples; ordinary answers must use the actual tool protocol.
+    """
+
+    INTRO = "the function call that best answers"
+    CALL = re.compile(r'"name"\s*:\s*"(?:web_extract|web_search|todo|task_list)"'
+                      r'[\s\S]{0,4096}?"(?:parameters|arguments)"\s*:', re.I)
+
+    def __init__(self, messages):
+        user = next((m.get("content", "") for m in reversed(messages)
+                     if m.get("role") == "user"), "")
+        # Only explicit technical requests exempt examples, never supplied sources.
+        self.clear = isinstance(user, str) and bool(re.search(
+            r'\b(?:json|schema|function|tool[ -]?call|code|api|debug)\b', user, re.I))
+        self.prefix, self.frames, self.size = "", [], 0
+        self.invalid = False
+
+    def feed(self, frame, content=None, final=False):
+        if self.clear:
+            return [frame]
+        if content is None and not self.frames:
+            return [frame]
+        self.frames.append(frame)
+        self.size += len(frame.encode("utf-8"))
+        if isinstance(content, str):
+            self.prefix = (self.prefix + content)[:8192]
+        opening = self.prefix.lstrip().lower().lstrip("*# ")
+        self.invalid = (opening.startswith(self.INTRO) or
+                        bool(self.CALL.search(self.prefix)) and
+                        opening.startswith(("{", "[", "```", "<tool_call>")))
+        if self.invalid:
+            self.frames.clear()
+            return []
+        candidate = (not opening or self.INTRO.startswith(opening) or
+                     opening.startswith("{") or
+                     bool(re.match(r'^\[\s*(?:\{|$)', opening)) or
+                     "```json".startswith(opening) or opening.startswith("```json") or
+                     opening.startswith("```\n") or
+                     "<tool_call>".startswith(opening) or opening.startswith("<tool_call>"))
+        if final or not candidate or len(self.prefix) >= 8192 or self.size >= 65536:
+            self.clear = True
+            frames, self.frames = self.frames, []
+            return frames
+        return []
+
+
 class Run:
     """One reply: its numbered frames, who may read them, and how it ended."""
 
@@ -601,7 +650,8 @@ class Relay:
         arrived and how the attempt ended. Failure frames are held back, so a recovery or a
         continuation can still take their place."""
         seen.update(finished=False, failed=False, dropped=False, held=None, truncated=False,
-                    attempt_answer=False, repetitive=False)
+                    attempt_answer=False, repetitive=False, invalid_output=False)
+        seen["output_guard"] = ToolOutputGuard(seen.get("request", []))
         seen["repetition_guard"] = RepetitionGuard(seen["answer"])
         usage = {"prompt_tokens": 0, "completion_tokens": 0, "cached_tokens": 0}
         seen["usage"] = usage
@@ -620,14 +670,19 @@ class Relay:
                     continue
                 if lines:
                     self.inspect(run, "\n".join(lines), seen)
-                    if seen["repetitive"]:
+                    if seen["repetitive"] or seen["invalid_output"]:
                         break
                 lines, frame_bytes = [], 0
-            if lines and not run.stopped and not seen["repetitive"]:
+            if lines and not run.stopped and not seen["repetitive"] and not seen["invalid_output"]:
                 self.inspect(run, "\n".join(lines), seen)
         except (OSError, http.client.HTTPException, ValueError):
             seen["dropped"] = True
         finally:
+            # Preserve buffered legitimate text even when reading raises mid-stream.
+            if not seen["invalid_output"] and not seen["repetitive"]:
+                for pending in seen["output_guard"].frames:
+                    run.emit(pending)
+                seen["output_guard"].frames.clear()
             response.close()  # release the provider/agent slot before a fresh request
             run.connection.close()
             if seen["usage_reported"]:
@@ -648,7 +703,8 @@ class Relay:
         text = "\n".join(data)
         if text == "[DONE]":
             seen["finished"] = True
-            run.emit(frame)
+            for pending in seen["output_guard"].feed(frame, final=True):
+                run.emit(pending)
             return
         try:
             payload = json.loads(text)
@@ -728,7 +784,9 @@ class Relay:
             and not finish
             and name == "message"
         )
-        run.emit(frame, optional=bool(thinking_only))
+        for pending in seen["output_guard"].feed(frame, content, final=bool(finish)):
+            run.emit(pending, optional=bool(thinking_only))
+        seen["invalid_output"] = seen["output_guard"].invalid
 
     def execute(self, run, body):
         """Run the reply to a written answer. An attempt that ends with nothing written is
@@ -771,7 +829,24 @@ class Relay:
                 if response is None:
                     return run.finish("stopped")
                 run.model_started = True
+                seen["request"] = body["messages"]
                 self.relay(run, response, seen)
+                if seen["invalid_output"] and not run.stopped:
+                    run.event("jarvis.retry", {"message": "Recovering the answer…"})
+                    seen.update(content="", answer="")
+                    left = RUN_LIMIT_SECONDS - (self.clock() - started)
+                    if attempt < ATTEMPTS - 1 and left >= RECOVERY_MIN_SECONDS:
+                        request = [*messages, {"role": "user", "content":
+                            "[Vaelo request: the previous generation printed an internal tool invocation instead of answering. "
+                            "Discard it. Answer the original request using available evidence. If more evidence is needed, "
+                            "invoke available tools through the actual tool-call protocol with plain URL arguments. "
+                            "Never print a proposed function call as the answer or claim an unexecuted call succeeded. "
+                            "If tools or evidence are unavailable, explain what you could not verify.]"}]
+                        body = {**body, "continue_fast": False}
+                        continue
+                    run.event("jarvis.error", {"code": "invalid_output", "message":
+                              "The model could not produce an answer. Please try again."})
+                    return run.finish("error")
                 if seen["repetitive"] and not run.stopped:
                     # Never continue a loop using its own output as context. One
                     # fresh write-up can recover; a second loop must end the run.

@@ -20,6 +20,21 @@ RUN = "123e4567-e89b-12d3-a456-426614174000"
 
 
 class ContextTests(unittest.TestCase):
+    def test_tool_output_guard_preserves_requested_examples_and_normal_json(self):
+        call = '{"name":"web_extract","parameters":{"urls":["https://apple.com"]}}'
+        for prompt, answer in [("Show the tool-call JSON", call),
+                               ("Return a JSON example", '```json\n' + call + '\n```'),
+                               ("Compare these phones", '{"phones": ["A", "B"]}'),
+                               ("Explain the error", 'The function calls are described below.')]:
+            with self.subTest(prompt=prompt, answer=answer):
+                guard = relay_module.ToolOutputGuard([{"role": "user", "content": prompt}])
+                output = []
+                for char in answer:
+                    output.extend(guard.feed(char, char))
+                output.extend(guard.feed("END", final=True))
+                self.assertFalse(guard.invalid)
+                self.assertEqual(''.join(output), answer + "END")
+
     def test_long_continuations_keep_the_same_reply_budget_as_the_web(self):
         text = "beginning\n" + "x" * 80_000 + "\nend"
         messages = [{"role": "user", "content": "Continue the program"}]
@@ -107,6 +122,53 @@ class FakeHermes:
 
 
 class RelayTests(unittest.TestCase):
+    def test_read_failure_keeps_buffered_legitimate_json_for_continuation(self):
+        _, relay, _ = self.boot([])
+        run = relay_module.Run(RUN, OWNER)
+        run.connection = mock.Mock()
+        response = mock.Mock()
+        response.readline.side_effect = [(chunk('{"phones": [') + '\n').encode(), b'\n', OSError("cut")]
+        seen = {"content": "", "answer": "", "tools": [], "approval": False}
+        relay.relay(run, response, seen)
+        self.assertTrue(seen["dropped"])
+        self.assertEqual(len(run.frames), 1)
+        self.assertIn('{\\"phones\\": [', run.frames[0].decode())
+        response.close.assert_called_once()
+
+    def test_printed_tool_call_is_discarded_and_retried_without_continuation(self):
+        bad = ('The function call that best answers the given prompt is:\n'
+               '{"name": "web_extract", "parameters": {"char_limit": 15000, '
+               '"urls": ["[https://www.apple.com/iphone/compare/](https://www.apple.com/iphone/compare/)"]}}')
+        for step in (1, 7, len(bad)):
+            with self.subTest(step=step):
+                hermes, relay, port = self.boot([
+                    [*[chunk(bad[i:i+step]) for i in range(0, len(bad), step)],
+                     chunk(finish="stop"), "data: [DONE]"],
+                    [chunk("Here is the supported comparison.", "stop"), "data: [DONE]"],
+                ])
+                self.start(port, content="Compare iPhone 15 Pro and iPhone 18 Pro Max")
+                run = self.finished(relay)
+                _, frames = self.events(port)
+                self.assertEqual(run.outcome, "complete")
+                self.assertEqual(len(hermes.requests), 2)
+                self.assertNotIn("jarvis.continue", [name for _, name, _ in frames])
+                content = ''.join(json.loads(data)["choices"][0]["delta"].get("content", "")
+                                  for _, name, data in frames if name == "message" and data != "[DONE]")
+                self.assertEqual(content, "Here is the supported comparison.")
+                self.assertNotIn('"role": "assistant"', json.dumps(hermes.requests[1]["body"]))
+
+    def test_repeated_raw_tool_json_fails_without_publishing_or_completing(self):
+        bad = '```json\n{"name": "web_extract", "parameters": {"urls": ["https://apple.com"]}}\n```'
+        hermes, relay, port = self.boot([[chunk(bad, "stop"), "data: [DONE]"]] * 3)
+        self.start(port, content="Compare the phones")
+        run = self.finished(relay)
+        _, frames = self.events(port)
+        self.assertEqual(run.outcome, "error")
+        self.assertEqual(len(hermes.requests), 3)
+        self.assertIn("invalid_output", json.dumps(frames))
+        self.assertNotIn("web_extract", json.dumps(frames))
+        self.assertNotIn("jarvis.complete", [name for _, name, _ in frames])
+
     def setUp(self):
         self.servers = []
 
