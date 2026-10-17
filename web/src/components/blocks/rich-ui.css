@@ -456,3 +456,15 @@ model-viewer {
 }
 
 .work-entry.rich-spotlight:hover { background: radial-gradient(240px circle at var(--pointer-x, 50%) var(--pointer-y, 50%), var(--gilt-wash), transparent); }
+
+/* Relationship graph: labelled pills fitted to their content. */
+.rich-graph { min-width: 0; max-height: 18rem; display: block; margin-inline: auto; color: var(--ink-soft); }
+.rich-graph path { stroke: var(--hairline-strong); stroke-width: 1.5; }
+.rich-graph g[data-lit="true"] .rich-beam { stroke: var(--gilt-ink); stroke-dasharray: none; animation: none; }
+.rich-graph .rich-node { cursor: pointer; transition: opacity var(--dur-1) var(--ease); }
+.rich-graph .rich-node rect { fill: var(--surface); stroke: var(--hairline-strong); stroke-width: 1.25; }
+.rich-graph .rich-node[data-active] rect { fill: var(--gilt-wash); stroke: var(--gilt-ink); stroke-width: 2; }
+.rich-graph .rich-node[data-dim] { opacity: .35; }
+.rich-graph .rich-node text { fill: var(--ink); font: var(--w-ui) 13.5px var(--font-ui); pointer-events: none; }
+.rich-graph .rich-edge-label { fill: var(--muted); font: 11.5px var(--font-ui); paint-order: stroke; stroke: var(--surface); stroke-width: 4px; stroke-linejoin: round; }
+.rich-graph-scroll { padding-block: var(--s-2); }

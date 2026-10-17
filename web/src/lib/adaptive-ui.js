@@ -62,7 +62,20 @@ export function inferListPresentation(lines, { context = '', rich = false } = {}
   return null;
 }
 
-export function tablePresentation(columns, rows, context = '') {
+// What the person asked decides the shape: a comparison stays a table, a trend
+// or a share-of-whole becomes a chart, and an explicit "in a table" always wins.
+const ASKS_TABLE = /\b(?:(?:in|as|into) (?:a |the )?table|table (?:form|format|view))\b/i;
+const ASKS_CHART = /\b(?:chart|graph|plot|visuali[sz]e|visuali[sz]ation|trend(?:s|line)?|over time|growth|history of|how (?:has|have|did).{0,40}(?:changed?|grown?|moved?)|breakdown|distribution|share of|market share|proportion|split (?:by|between)|per (?:month|year|week|quarter)|month by month|year[- ]over[- ]year|by (?:month|year|quarter|week))\b/i;
+const ASKS_COMPARE = /\b(?:compare|comparison|versus|vs|which (?:one|is|should)|better|differences? between|pros and cons|choose between|shortlist|alternatives?|side by side)\b/i;
+export function requestIntent(request = '') {
+  if (typeof request !== 'string' || !request) return null;
+  if (ASKS_TABLE.test(request)) return 'table';
+  if (ASKS_CHART.test(request) && !ASKS_COMPARE.test(request)) return 'chart';
+  if (ASKS_COMPARE.test(request)) return 'table';
+  return null;
+}
+
+export function tablePresentation(columns, rows, context = '', request = '') {
   const result = { view: 'table', explore: false };
   if (rows.length < 2 || rows.length > 200 || columns.length > 20) return result;
   const headers = columns.map(value => String(value).toLowerCase());
@@ -72,7 +85,10 @@ export function tablePresentation(columns, rows, context = '') {
   const ingredients = headers.some(h => /\bingredient\b/.test(h)) && headers.some(h => /\b(?:quantity|amount|grams|weight)\b/.test(h));
   const budget = /\b(?:budget|expenses|cost breakdown)\b/i.test(context) && headers.some(h => /\b(?:cost|amount|expense)\b/.test(h));
   result.explore = ingredients || budget;
-  if (result.explore || columns.length > 3 || label < 0) return result;
+  const intent = requestIntent(request);
+  if (label < 0 || intent === 'table') return result;
+  if (intent === 'chart' && !result.explore) { result.view = 'chart'; return result; }
+  if (result.explore || columns.length > 3) return result;
   const timeSeries = TIME_COLUMN.test(headers[label]);
   const quantitative = headers.some(h => /\b(?:sales|revenue|visitors|visits|count|population|share|percentage|change|growth|signups|sign-ups|votes)\b/.test(h));
   const comparison = /\b(?:compare|comparison|options|plans|products|laptops|pricing)\b/i.test(context);

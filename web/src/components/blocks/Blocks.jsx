@@ -36,6 +36,7 @@ import { getWorkspace } from "../../../shared/workspaces.js";
 import { getCheck } from "../../../shared/checks.js";
 import "./blocks.css";
 import "./output-layout.css";
+import "./output-polish.css";
 import { DESKTOP, copyText, saveDesktopFile } from "../../lib/desktop.js";
 
 /* A reply is rendered as typed blocks: prose, code, tables, sources. Each
@@ -526,11 +527,11 @@ function TableView(props) {
 }
 
 function TableBlock({ node, "data-src": src }) {
-  const { open, presentation, live, interactive, automatic, content } = useContext(BlockContext);
+  const { open, presentation, live, interactive, automatic, content, requestText } = useContext(BlockContext);
   const data = useMemo(() => tableData(node), [node]);
   const [sort, setSort] = useState({ column: null, direction: "asc" });
   const context = useMemo(() => sectionContext(content, node.position?.start?.offset), [content, node.position?.start?.offset]);
-  const suggested = useMemo(() => automatic ? tablePresentation(data.columns, data.rows, context) : { view: "table", explore: false }, [automatic, data, context]);
+  const suggested = useMemo(() => automatic ? tablePresentation(data.columns, data.rows, context, requestText) : { view: "table", explore: false }, [automatic, data, context, requestText]);
   const [chosenView, setView] = useState(null);
   const view = chosenView || suggested.view;
   const [done, copy] = useCopy();

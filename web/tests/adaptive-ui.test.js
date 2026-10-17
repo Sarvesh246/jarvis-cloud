@@ -91,3 +91,16 @@ test('format selection reuses a shorter existing instruction block and does not 
   const source = readFileSync(new URL('../src/lib/adaptive-ui.js', import.meta.url), 'utf8');
   assert.doesNotMatch(source, /\bfetch\s*\(|XMLHttpRequest|WebSocket|\beval\s*\(|new Function/);
 });
+
+test('what was asked decides between chart and table for the same data', async () => {
+  const { requestIntent } = await import('../src/lib/adaptive-ui.js');
+  const rows = [['Basic', '$20'], ['Plus', '$30'], ['Pro', '$45']];
+  assert.equal(requestIntent('Show the trend of sales over time'), 'chart');
+  assert.equal(requestIntent('Compare the plans side by side'), 'table');
+  assert.equal(requestIntent('Put it in a table'), 'table');
+  assert.equal(requestIntent('What is the capital of France?'), null);
+  assert.equal(tablePresentation(['Plan', 'Price'], rows, '', 'Show me a chart of the price breakdown').view, 'chart');
+  assert.equal(tablePresentation(['Plan', 'Price'], rows, '', 'Compare the plans').view, 'table');
+  assert.equal(tablePresentation(['Month', 'Sales'], [['Jan', '120'], ['Feb', '180']], '', 'Give me this in a table').view, 'table');
+  assert.equal(tablePresentation(['Month', 'Sales', 'Cost', 'Profit'], [['Jan', '1', '1', '1'], ['Feb', '2', '1', '1']], '', 'Graph the monthly results').view, 'chart');
+});

@@ -22,7 +22,7 @@ export function temporalColumn(header, points) {
     points.every(point => Number.isFinite(toDate(point.label))));
 }
 
-export function lineGeometry(points) {
+export function lineGeometry(points, box = { left: 72, right: 622, top: 24, bottom: 220 }) {
   // Normalize first: subtracting a large negative from a large positive can
   // overflow even when each individual value is finite.
   const finite = points.filter(point => Number.isFinite(point.value));
@@ -31,8 +31,8 @@ export function lineGeometry(points) {
   const low = Math.min(0, ...finite.map(point => point.value / scale));
   const high = Math.max(0, ...finite.map(point => point.value / scale));
   const span = high - low || 1;
-  const located = points.map((point, i) => ({ ...point, x: 72 + i / Math.max(1, points.length - 1) * 550,
-    y: Number.isFinite(point.value) ? 220 - (point.value / scale - low) / span * 196 : null }));
+  const located = points.map((point, i) => ({ ...point, x: box.left + i / Math.max(1, points.length - 1) * (box.right - box.left),
+    y: Number.isFinite(point.value) ? box.bottom - (point.value / scale - low) / span * (box.bottom - box.top) : null }));
   const paths = [];
   let path = [];
   located.forEach(point => {
@@ -41,7 +41,7 @@ export function lineGeometry(points) {
   });
   if (path.length) paths.push(path.join(' '));
   return { paths, points: located, ticks: Array.from({length: 5}, (_, i) => ({
-    y: 220 - i / 4 * 196, value: (low + i / 4 * span) * scale,
+    y: box.bottom - i / 4 * (box.bottom - box.top), value: (low + i / 4 * span) * scale,
   })) };
 }
 

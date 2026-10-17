@@ -106,106 +106,119 @@ export function spotlight(event) {
   );
 }
 
+// Nodes are labelled pills; layout is a row for short chains and an ellipse for
+// larger graphs, and the viewBox is fitted to what was drawn so nothing floats
+// in empty space.
+const PILL_HEIGHT = 30;
+function pillWidth(label) {
+  return Math.max(64, Math.min(176, label.length * 7.4 + 26));
+}
+function layoutGraph(nodes) {
+  const count = nodes.length;
+  const wide = nodes.map((n) => pillWidth(n.label.length > 22 ? `${n.label.slice(0, 21)}…` : n.label));
+  let positions;
+  if (count <= 3) {
+    const gap = 70;
+    let cursor = 0;
+    positions = nodes.map((_, i) => {
+      const x = cursor + wide[i] / 2;
+      cursor += wide[i] + gap;
+      return { x, y: 0 };
+    });
+  } else {
+    const rx = Math.max(190, count * 24 + Math.max(...wide) / 2);
+    const ry = Math.max(100, count * 11);
+    positions = nodes.map((_, i) => {
+      const angle = (i / count) * Math.PI * 2 - Math.PI / 2;
+      return { x: Math.cos(angle) * rx, y: Math.sin(angle) * ry };
+    });
+  }
+  const points = nodes.map((n, i) => ({
+    ...n,
+    text: n.label.length > 22 ? `${n.label.slice(0, 21)}…` : n.label,
+    w: wide[i],
+    h: PILL_HEIGHT,
+    ...positions[i],
+  }));
+  const pad = 22;
+  const minX = Math.min(...points.map((p) => p.x - p.w / 2)) - pad;
+  const maxX = Math.max(...points.map((p) => p.x + p.w / 2)) + pad;
+  const minY = Math.min(...points.map((p) => p.y - p.h / 2)) - pad;
+  const maxY = Math.max(...points.map((p) => p.y + p.h / 2)) + pad;
+  return { points, view: `${minX} ${minY} ${maxX - minX} ${maxY - minY}`, width: maxX - minX, height: maxY - minY };
+}
+// Where the line from a's centre toward b leaves a's rounded rectangle.
+function edgePoint(a, b) {
+  const dx = b.x - a.x, dy = b.y - a.y;
+  if (!dx && !dy) return { x: a.x, y: a.y };
+  const scale = Math.min((a.w / 2 + 3) / Math.abs(dx || 1e-9), (a.h / 2 + 3) / Math.abs(dy || 1e-9));
+  return { x: a.x + dx * scale, y: a.y + dy * scale };
+}
+
 function Graph({ data }) {
   const [focus, setFocus] = useState(null);
   const arrowId = useId().replaceAll(":", "");
-  const points = data.nodes.map((n, i) => ({
-    ...n,
-    x:
-      310 + Math.cos((i / data.nodes.length) * Math.PI * 2 - Math.PI / 2) * 205,
-    y:
-      220 + Math.sin((i / data.nodes.length) * Math.PI * 2 - Math.PI / 2) * 155,
-  }));
-  const byId = new Map(points.map((n) => [n.id, n]));
+  const layout = useMemo(() => layoutGraph(data.nodes), [data.nodes]);
+  const byId = new Map(layout.points.map((n) => [n.id, n]));
+  const lit = (edge) => !focus || edge.from === focus || edge.to === focus;
   return (
     <>
-      <div
-        className="rich-graph-scroll"
-        role="region"
-        aria-label="Relationship diagram, scroll sideways if needed"
-        tabIndex={0}
-      >
+      <div className="rich-graph-scroll" role="region" aria-label="Relationship diagram" tabIndex={0}>
         <svg
-          viewBox="0 0 620 440"
+          viewBox={layout.view}
           className="rich-graph"
+          style={{ aspectRatio: `${layout.width} / ${layout.height}`, maxWidth: `${Math.round(layout.width * 1.15)}px` }}
           role="img"
-          aria-label={data.title || "Relationship diagram"}
+          aria-label={`${data.title || "Relationship diagram"}: ${data.nodes.length} items, ${data.edges.length} connections`}
         >
           <defs>
-            <marker
-              id={arrowId}
-              viewBox="0 0 10 10"
-              refX="17"
-              refY="5"
-              markerWidth="7"
-              markerHeight="7"
-              orient="auto-start-reverse"
-            >
-              <path
-                d="M 0 0 L 10 5 L 0 10 z"
-                style={{ fill: "currentColor", stroke: "none" }}
-              />
+            <marker id={arrowId} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" style={{ fill: "currentColor", stroke: "none" }} />
             </marker>
           </defs>
           {data.edges.map((edge, i) => {
-            const a = byId.get(edge.from),
-              b = byId.get(edge.to);
+            const a = byId.get(edge.from), b = byId.get(edge.to);
+            const start = edgePoint(a, b), end = edgePoint(b, a);
             return (
-              <g
-                key={i}
-                data-lit={!focus || edge.from === focus || edge.to === focus}
-              >
-                <path
-                  d={`M ${a.x} ${a.y} L ${b.x} ${b.y}`}
-                  className="rich-beam"
-                  markerEnd={`url(#${arrowId})`}
-                />
-                <circle cx={(a.x + b.x) / 2} cy={(a.y + b.y) / 2} r="3" />
+              <g key={i} data-lit={lit(edge)}>
+                <path d={`M ${start.x} ${start.y} L ${end.x} ${end.y}`} className="rich-beam" markerEnd={`url(#${arrowId})`} />
+                {edge.label && (
+                  <text x={(start.x + end.x) / 2} y={(start.y + end.y) / 2 - 6} textAnchor="middle" className="rich-edge-label">
+                    {edge.label.length > 24 ? `${edge.label.slice(0, 23)}…` : edge.label}
+                  </text>
+                )}
               </g>
             );
           })}
-          {points.map((n) => (
-            <g key={n.id}>
-              <circle cx={n.x} cy={n.y} r="8" />
-              <text x={n.x} y={n.y - 16} textAnchor="middle">
-                {n.label.length > 22 ? `${n.label.slice(0, 21)}…` : n.label}
-              </text>
+          {layout.points.map((n) => (
+            <g
+              key={n.id}
+              className="rich-node"
+              data-active={focus === n.id || undefined}
+              data-dim={focus && focus !== n.id && !data.edges.some((e) => (e.from === focus && e.to === n.id) || (e.to === focus && e.from === n.id)) || undefined}
+              onPointerEnter={(event) => event.pointerType === "mouse" && setFocus(n.id)}
+              onPointerLeave={(event) => event.pointerType === "mouse" && setFocus(null)}
+              onClick={() => setFocus((current) => (current === n.id ? null : n.id))}
+            >
+              <rect x={n.x - n.w / 2} y={n.y - n.h / 2} width={n.w} height={n.h} rx={n.h / 2} />
+              <text x={n.x} y={n.y + 5} textAnchor="middle">{n.text}</text>
             </g>
           ))}
         </svg>
       </div>
-      <div
-        className="rich-toolbar"
-        role="group"
-        aria-label="Highlight connections"
-      >
-        <button
-          className="block-tool"
-          onClick={() => setFocus(null)}
-          aria-pressed={!focus}
-        >
-          All connections
-        </button>
+      <div className="rich-toolbar" role="group" aria-label="Highlight connections">
+        <button className="block-tool" onClick={() => setFocus(null)} aria-pressed={!focus}>All connections</button>
         {data.nodes.map((n) => (
-          <button
-            className="block-tool"
-            key={n.id}
-            aria-pressed={focus === n.id}
-            onClick={() => setFocus(n.id)}
-          >
-            {n.label}
-          </button>
+          <button className="block-tool" key={n.id} aria-pressed={focus === n.id} onClick={() => setFocus(n.id)}>{n.label}</button>
         ))}
       </div>
       <details className="rich-graph-details"><summary>View connections</summary><ul className="rich-edges">
-        {data.edges
-          .filter((e) => !focus || e.from === focus || e.to === focus)
-          .map((e, i) => (
-            <li key={i}>
-              {byId.get(e.from).label} → {byId.get(e.to).label}
-              {e.label && `: ${e.label}`}
-            </li>
-          ))}
+        {data.edges.filter(lit).map((e, i) => (
+          <li key={i}>
+            {byId.get(e.from).label} → {byId.get(e.to).label}
+            {e.label && `: ${e.label}`}
+          </li>
+        ))}
       </ul></details>
     </>
   );

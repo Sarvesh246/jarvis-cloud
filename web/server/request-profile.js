@@ -56,7 +56,7 @@ export const SHAPES = {
   practice:
     "reply shape: numbered questions first, then the answers together under an Answers heading",
   figures:
-    "reply shape: a Markdown table for a series or several numbers, or a ```metrics block for two to six headline figures, with sources inline",
+    "reply shape: a Markdown table for a series or several numbers (the period or category in the first column and one plain number with its unit per cell, so it can open as a chart), or a ```metrics block for two to six headline figures, with sources inline",
   explanation:
     "reply shape: clear prose that builds from the core idea with a concrete example or analogy, short headings only if it runs long, a table only if comparing",
   fact: "reply shape: one to three sentences of plain prose, no headings or lists",
