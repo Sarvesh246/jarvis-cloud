@@ -12,6 +12,26 @@ const frame = (data, event = 'message') => `event: ${event}\ndata: ${JSON.string
 const content = (text, finish_reason = null) => ({ choices: [{ delta: { content: text }, finish_reason }] });
 const complete = frame({ ok: true }, 'jarvis.complete');
 
+test('malformed answer fields and damaged UTF-8 cannot become visible output', async () => {
+  const malformed = [
+    { choices: {} }, { choices: [null] }, { choices: [{ delta: [] }] },
+    { choices: [{ delta: { content: { text: 'bad' } } }] },
+    { choices: [{ delta: { reasoning_content: ['bad'] } }] },
+  ];
+  for (const payload of malformed) {
+    let seen = false;
+    await assert.rejects(readEvents(new Response(frame(payload)).body, () => { seen = true; }), /invalid answer/);
+    assert.equal(seen, false);
+  }
+  for (const bytes of [Uint8Array.of(0xff), Uint8Array.of(0xe2, 0x82)]) {
+    await assert.rejects(readEvents(new Response(bytes).body, () => assert.fail('corrupt text must not render')), TypeError);
+  }
+});
+
+test('invalid model output always offers a fresh retry even with a partial draft', () => {
+  assert.equal(classifyError({ code: 'invalid_output', partial: true }).kind, 'unknown');
+});
+
 test('unreadable events are not acknowledged or silently accepted as complete', async () => {
   const seen = [];
   let cancelled = false;

@@ -206,41 +206,70 @@ class ToolOutputGuard:
     for these examples; ordinary answers must use the actual tool protocol.
     """
 
-    INTRO = "the function call that best answers"
-    CALL = re.compile(r'"name"\s*:\s*"(?:web_extract|web_search|todo|task_list)"'
-                      r'[\s\S]{0,4096}?"(?:parameters|arguments)"\s*:', re.I)
+    INTROS = ("the function call that best answers", "the tool call that best answers",
+              "here is the function call:", "here is the tool call:")
+    NAME = re.compile(r'"name"\s*:\s*"(?:web_extract|web_search|todo|task_list)"', re.I)
+    ARGS = re.compile(r'"(?:parameters|arguments)"\s*:', re.I)
+    WRAPPERS = ("<tool_call>", "<function_call>", "<think>", "<analysis>",
+                "</think>", "</analysis>", "<function=", "<|python_tag|>",
+                "<|im_start|>", "<|start_header_id|>", "<|start|>assistant", "[tool_calls]")
+    ACTION = re.compile(r'(?:^|\n)\s*(?:action\s*:\s*(?:web_extract|web_search)\b|'
+                        r'(?:web_extract|web_search)\s*\(\s*[\[{])', re.I)
 
     def __init__(self, messages):
         user = next((m.get("content", "") for m in reversed(messages)
                      if m.get("role") == "user"), "")
         # Only explicit technical requests exempt examples, never supplied sources.
-        self.clear = isinstance(user, str) and bool(re.search(
-            r'\b(?:json|schema|function|tool[ -]?call|code|api|debug)\b', user, re.I))
-        self.prefix, self.frames, self.size = "", [], 0
+        self.examples = isinstance(user, str) and bool(re.search(
+            r'\b(?:schema|tool[ -]?call|function[ -]?call|function calling|tool calling|chatml|protocol tokens|reasoning tags)\b|'
+            r'\b(?:show|explain|debug|example|sample)\b[\s\S]{0,80}\b(?:json|function|api)\b|'
+            r'\b(?:write|create|implement|define|invoke|call)\b[\s\S]{0,80}\bfunction\b|'
+            r'\bjson\s+(?:example|sample)\b|<think>|<tool_call>', user, re.I))
+        self.code_requested = isinstance(user, str) and bool(re.search(
+            r'\b(?:code|program|script|python|javascript|typescript|html|xml|tokenizer|parser)\b', user, re.I))
+        self.clear = self.examples
+        self.prefix, self.window, self.frames, self.size = "", "", [], 0
         self.invalid = False
 
     def feed(self, frame, content=None, final=False):
-        if self.clear:
+        if self.examples:
             return [frame]
         if content is None and not self.frames:
             return [frame]
-        self.frames.append(frame)
-        self.size += len(frame.encode("utf-8"))
+        scan = self.window
         if isinstance(content, str):
+            scan += content
+            self.window = scan[-8192:]
             self.prefix = (self.prefix + content)[:8192]
         opening = self.prefix.lstrip().lower().lstrip("*# ")
-        self.invalid = (opening.startswith(self.INTRO) or
-                        bool(self.CALL.search(self.prefix)) and
-                        opening.startswith(("{", "[", "```", "<tool_call>")))
+        scan = scan.lower()
+        # A requested implementation may itself contain protocol tokens. Keep
+        # its language-tagged code literal; JSON tool invocations still fail.
+        if self.code_requested and re.search(
+                r'(?:^|\n)\s*```(?:python|py|javascript|js|typescript|ts|jsx|tsx|html|xml|bash|sh|sql|cpp|java|rust)\s*\n',
+                self.prefix, re.I):
+            self.examples = True
+            frames, self.frames = self.frames + [frame], []
+            return frames
+        self.invalid = (any(intro in scan and re.search(r'(?:^|\n)\s*[*# ]*' + re.escape(intro), scan)
+                            for intro in self.INTROS) or
+                        any(marker in scan for marker in self.WRAPPERS) or
+                        bool(self.ACTION.search(scan)) or
+                        bool(self.NAME.search(scan)) and bool(self.ARGS.search(scan)) and
+                        bool(re.search(r'(?:^|\n)\s*(?:```(?:json)?\s*)?[\[{]', scan)))
         if self.invalid:
             self.frames.clear()
             return []
-        candidate = (not opening or self.INTRO.startswith(opening) or
+        if self.clear:
+            return [frame]
+        self.frames.append(frame)
+        self.size += len(frame.encode("utf-8"))
+        candidate = (not opening or any(intro.startswith(opening) for intro in self.INTROS) or
                      opening.startswith("{") or
                      bool(re.match(r'^\[\s*(?:\{|$)', opening)) or
                      "```json".startswith(opening) or opening.startswith("```json") or
                      opening.startswith("```\n") or
-                     "<tool_call>".startswith(opening) or opening.startswith("<tool_call>"))
+                     any(marker.startswith(opening) for marker in self.WRAPPERS))
         if final or not candidate or len(self.prefix) >= 8192 or self.size >= 65536:
             self.clear = True
             frames, self.frames = self.frames, []
@@ -751,6 +780,9 @@ class Relay:
         if choice.get("delta") is not None and not isinstance(choice["delta"], dict):
             seen["failed"] = True
             return
+        if delta.get("role") not in (None, "assistant"):
+            seen["invalid_output"] = True
+            return  # tool/system messages are not a user-facing answer
         if any(delta.get(key) is not None and not isinstance(delta[key], str)
                for key in ("content", "reasoning_content", "reasoning")):
             seen["failed"] = True
@@ -759,6 +791,25 @@ class Relay:
         if isinstance(content, str) and seen["repetition_guard"].feed(content):
             seen["repetitive"] = True
             return  # do not publish the frame that establishes the loop
+        finish = choice.get("finish_reason")
+        if finish in ("tool_calls", "function_call"):
+            # A terminal tool request is not an executed lookup or a final answer.
+            seen["invalid_output"] = True
+            return
+        pending_frames = seen["output_guard"].feed(frame, content, final=finish is not None or bool(payload.get("error")))
+        seen["invalid_output"] = seen["output_guard"].invalid
+        if seen["invalid_output"]:
+            return
+        if ((finish is not None and finish not in ("stop", "length")) or
+                (payload.get("error") and finish != "length")):
+            # [DONE] cannot turn cancellation/filtering into success. Also,
+            # never seed continuation with content from a withheld error frame.
+            seen["failed"] = True
+            if finish == "error" or payload.get("error"):
+                seen["held"] = frame
+            for pending in pending_frames[:-1]:
+                run.emit(pending)
+            return
         if isinstance(content, str) and content.strip() and run.first_answer is None:
             run.first_answer = self.clock()
         elif (delta.get("reasoning_content") or delta.get("reasoning")) and run.first_thought is None:
@@ -770,23 +821,17 @@ class Relay:
             # (bounded) so a cut-off reply can be continued from where it stopped.
             seen["content"] = (seen["content"] + content).lstrip()[:64]
             seen["answer"] = (seen["answer"] + content)[-ANSWER_KEEP * 2:]
-        finish = choice.get("finish_reason")
         if finish in ("stop", "length"):
             seen["finished"] = True
             seen["truncated"] = finish == "length"
-        if finish == "error" or (payload.get("error") and finish != "length"):
-            seen["failed"] = True
-            seen["held"] = frame
-            return
         thinking_only = (
             not isinstance(content, str)
             and delta.get("reasoning_content")
             and not finish
             and name == "message"
         )
-        for pending in seen["output_guard"].feed(frame, content, final=bool(finish)):
+        for pending in pending_frames:
             run.emit(pending, optional=bool(thinking_only))
-        seen["invalid_output"] = seen["output_guard"].invalid
 
     def execute(self, run, body):
         """Run the reply to a written answer. An attempt that ends with nothing written is

@@ -20,12 +20,60 @@ RUN = "123e4567-e89b-12d3-a456-426614174000"
 
 
 class ContextTests(unittest.TestCase):
+    def test_internal_output_variants_are_detected_across_chunk_boundaries(self):
+        bad = [
+            '{"parameters":{"urls":[]},"name":"web_extract"}',
+            '[{"function":{"arguments":"{}","name":"web_search"}}]',
+            '<tool_call>{"name":"web_search"}</tool_call>',
+            '<function_call>web_extract()</function_call>',
+            '<think>I need to search first.</think>Answer',
+            'Let me compare them.\n<analysis>Choose web_search</analysis>',
+            '<|im_start|>assistant to=web_search',
+            '[TOOL_CALLS] [{"name":"web_search"}]',
+            'Here is the tool call:\n{"name":"web_extract"}',
+            'Thought: I need current facts.\nAction: web_search\nAction Input: phones',
+            'web_extract({"urls":[]})',
+            '<function=web_extract>{"urls":[]}</function>',
+            'Some context first.\nThe function call that best answers is:\n{}',
+            '```JSON\n{"name":"web_extract","arguments":{}}\n```',
+            '{"name":"web_extract","parameters":{"text":"' + 'x' * 12000 + '"}}',
+        ]
+        for answer in bad:
+            for width in (1, 7, len(answer)):
+                with self.subTest(answer=answer[:60], width=width):
+                    guard = relay_module.ToolOutputGuard([{"role": "user", "content": "Compare the phones"}])
+                    for offset in range(0, len(answer), width):
+                        guard.feed("frame", answer[offset:offset+width])
+                        if guard.invalid:
+                            break
+                    self.assertTrue(guard.invalid)
+
+    def test_normal_prose_code_and_named_entities_do_not_disable_the_guard(self):
+        for prompt in ["Compare the phones as JSON", "Write code to compare phones", "What function does this phone have?"]:
+            guard = relay_module.ToolOutputGuard([{"role": "user", "content": prompt}])
+            guard.feed("frame", '{"name":"web_extract","arguments":{}}', final=True)
+            self.assertTrue(guard.invalid, prompt)
+        for answer in ["The tool calls were unsuccessful, so I could not verify it.",
+                       '```python\nprint("hello")\n```',
+                       '[Apple](https://apple.com) lists the specifications.',
+                       '{"name":"iPhone","parameters":{"weight":187}}']:
+            guard = relay_module.ToolOutputGuard([{"role": "user", "content": "Compare phones"}])
+            output = []
+            for char in answer:
+                output.extend(guard.feed(char, char))
+            output.extend(guard.feed("END", final=True))
+            self.assertFalse(guard.invalid, answer)
+            self.assertEqual(''.join(output), answer + "END")
+
     def test_tool_output_guard_preserves_requested_examples_and_normal_json(self):
         call = '{"name":"web_extract","parameters":{"urls":["https://apple.com"]}}'
         for prompt, answer in [("Show the tool-call JSON", call),
                                ("Return a JSON example", '```json\n' + call + '\n```'),
                                ("Compare these phones", '{"phones": ["A", "B"]}'),
-                               ("Explain the error", 'The function calls are described below.')]:
+                               ("Explain the error", 'The function calls are described below.'),
+                               ("Write a function to add numbers", 'Here is the function call:\nadd(2, 3)'),
+                               ("Explain ChatML", 'ChatML uses tokens such as `<|im_start|>assistant`.'),
+                               ("Write a Python tokenizer", 'Here is the parser.\n```python\ntoken = "<|im_start|>"\n```')]:
             with self.subTest(prompt=prompt, answer=answer):
                 guard = relay_module.ToolOutputGuard([{"role": "user", "content": prompt}])
                 output = []
@@ -122,6 +170,57 @@ class FakeHermes:
 
 
 class RelayTests(unittest.TestCase):
+    def test_error_frame_tool_text_is_discarded_without_poisoning_recovery(self):
+        bad = '{"name":"web_extract","arguments":{}}'
+        hermes, relay, port = self.boot([
+            [chunk(bad, "error", error={"message": "upstream stopped"}), "data: [DONE]"],
+            [chunk("Supported answer.", "stop"), "data: [DONE]"],
+        ])
+        self.start(port)
+        self.assertEqual(self.finished(relay).outcome, "complete")
+        self.assertNotIn(bad, json.dumps(hermes.requests[1]["body"]))
+        self.assertFalse(any(m["role"] == "assistant" for m in hermes.requests[1]["body"]["messages"]))
+        _, frames = self.events(port)
+        self.assertNotIn("web_extract", json.dumps(frames))
+
+    def test_withheld_error_content_is_not_used_as_visible_continuation_context(self):
+        hermes, relay, port = self.boot([
+            [chunk('{"answer": '), chunk('"unpublished"}', "error"), "data: [DONE]"],
+            [chunk('42}', "stop"), "data: [DONE]"],
+        ])
+        self.start(port, content="Give the answer as JSON")
+        self.assertEqual(self.finished(relay).outcome, "complete")
+        assistant = [m["content"] for m in hermes.requests[1]["body"]["messages"] if m["role"] == "assistant"]
+        self.assertEqual(assistant, ['{"answer": '])
+        _, frames = self.events(port)
+        self.assertNotIn("unpublished", json.dumps(frames))
+
+    def test_unsuccessful_finish_reasons_are_not_overridden_by_done(self):
+        for finish in ["cancelled", "content_filter", "unexpected", "", {"bad": "type"}]:
+            with self.subTest(finish=finish):
+                hermes, relay, port = self.boot([
+                    [chunk("The partial answer "), chunk(finish=finish), "data: [DONE]"],
+                    [chunk("is now complete.", "stop"), "data: [DONE]"],
+                ])
+                self.start(port)
+                self.assertEqual(self.finished(relay).outcome, "complete")
+                self.assertEqual(len(hermes.requests), 2)
+
+    def test_native_terminal_tool_calls_require_a_fresh_answer(self):
+        for finish in ["tool_calls", "function_call"]:
+            with self.subTest(finish=finish):
+                hermes, relay, port = self.boot([
+                    [chunk("I will look it up. "), chunk(finish=finish), "data: [DONE]"],
+                    [chunk("The supported answer.", "stop"), "data: [DONE]"],
+                ])
+                self.start(port)
+                self.assertEqual(self.finished(relay).outcome, "complete")
+                _, frames = self.events(port)
+                self.assertIn("jarvis.retry", [name for _, name, _ in frames])
+                self.assertNotIn("jarvis.continue", [name for _, name, _ in frames])
+                self.assertEqual(len(hermes.requests), 2)
+                self.assertFalse(any(m["role"] == "assistant" for m in hermes.requests[1]["body"]["messages"]))
+
     def test_read_failure_keeps_buffered_legitimate_json_for_continuation(self):
         _, relay, _ = self.boot([])
         run = relay_module.Run(RUN, OWNER)
@@ -298,6 +397,8 @@ class RelayTests(unittest.TestCase):
             {"choices": [{"delta": {"reasoning_content": ["bad"]}}]},
             {"choices": [{"delta": "bad"}]},
             {"choices": {"delta": {"content": "bad"}}},
+            {"choices": [{"delta": {"role": "tool", "content": "bad"}}]},
+            {"choices": [{"delta": {"role": "system", "content": "bad"}}]},
         ]
         for payload in malformed:
             with self.subTest(payload=payload):

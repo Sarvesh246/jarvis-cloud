@@ -14,6 +14,8 @@ export function classifyError({ name = "", message = "", status = 0, partial = f
   const text = String(message || "");
   if (code === "repetitive_output")
     return { kind: "unknown", text: text || "The model kept repeating itself. Retry for a fresh answer." };
+  if (code === "invalid_output")
+    return { kind: "unknown", text: text || "The model could not produce an answer. Retry for a fresh answer." };
   if (name === "TypeError" && /fetch|network|load failed/i.test(text))
     return {
       kind: "offline",

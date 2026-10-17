@@ -4,7 +4,7 @@
    from a connection that has gone dead. */
 export async function readEvents(body, onEvent, onBytes) {
   const reader = body.getReader();
-  const decoder = new TextDecoder();
+  const decoder = new TextDecoder("utf-8", { fatal: true });
   let buffer = "";
   let ended = false;
   const frameLimit = 1024 * 1024;
@@ -40,6 +40,14 @@ export async function readEvents(body, onEvent, onBytes) {
       }
       if (!payload || typeof payload !== "object" || Array.isArray(payload))
         throw new Error("The response stream contained an invalid event.");
+      if (payload.choices != null) {
+        if (!Array.isArray(payload.choices) || payload.choices.some(choice =>
+          !choice || typeof choice !== "object" || Array.isArray(choice) ||
+          (choice.delta != null && (typeof choice.delta !== "object" || Array.isArray(choice.delta))) ||
+          ["content", "reasoning_content", "reasoning"].some(key =>
+            choice.delta?.[key] != null && typeof choice.delta[key] !== "string")
+        )) throw new Error("The response stream contained an invalid answer event.");
+      }
       onEvent(name, payload, id);
     }
     if (buffer.length > frameLimit) throw new Error("The response stream frame exceeded its limit.");
