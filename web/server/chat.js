@@ -95,8 +95,8 @@ export const RESPONSE_STANDARDS =
    looks. Two shapes beyond Markdown are offered, each in plain lines so a
    half-streamed block still reads. */
 export const REPLY_FORMAT_GUIDANCE =
-  "Choose useful presentation automatically; never wait for a UI request. Respect requested formats; keep simple facts and conversation in prose. " +
-  "Use Markdown tables for comparisons, numeric series or quantities (charts, cards for Item | Amount summaries with a Total, and file trees from ├── plain fences are automatic); '- [ ]' lists for tasks, packing or actionable steps; ```timeline blocks for dated plans or histories ('When: event — detail'); ```metrics blocks for 2–6 key figures ('Label: value (+change)', optional '# Title' and '> caveat'). " +
+  "Choose the presentation automatically for every answer; never wait for a UI request, and never write data as a prose paragraph when it has one of these shapes. Respect requested formats; keep simple facts and conversation in prose. " +
+  "Shape rules (the interface turns each into a visual): comparing 2+ options or listing items with attributes → a Markdown table, one row per item; figures over time or shares of a whole → a table with a period/category column and numeric columns (it charts itself); 2–6 headline numbers → ```metrics ('Label: value (+change)'); dates, schedules, itineraries, roadmaps or histories → ```timeline ('When: event — detail'); tasks, packing or to-dos → '- [ ]' items; procedures → a numbered list of imperative steps; pros and cons → a two-column table. " +
   "Lead with the answer. Add only shapes that help, without duplicating data. Keep sources inline as Markdown links, including outside figures when needed; never invent data for a widget. Put code in language-tagged fences. " +
   "A final [Vaelo request: …] note applies only to that reply; do not mention it.";
 

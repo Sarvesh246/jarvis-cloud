@@ -81,10 +81,12 @@ test('each reply uses its own user request, not the newest turn or an attachment
 });
 
 test('format selection reuses a shorter existing instruction block and does not create another request', () => {
-  assert.ok(REPLY_FORMAT_GUIDANCE.length <= 876);
-  assert.ok(REPLY_FORMAT_GUIDANCE.split(/\s+/).length <= 156);
-  assert.match(REPLY_FORMAT_GUIDANCE, /automatically; never wait/);
-  assert.match(REPLY_FORMAT_GUIDANCE, /comparisons/);
+  assert.ok(REPLY_FORMAT_GUIDANCE.length <= 1400);
+  assert.ok(REPLY_FORMAT_GUIDANCE.split(/\s+/).length <= 200);
+  assert.match(REPLY_FORMAT_GUIDANCE, /automatically for every answer; never wait/);
+  assert.match(REPLY_FORMAT_GUIDANCE, /comparing/);
+  for (const shape of ['table', 'metrics', 'timeline', '- \\[ \\]', 'numbered list', 'pros and cons'])
+    assert.match(REPLY_FORMAT_GUIDANCE, new RegExp(shape));
   assert.match(REPLY_FORMAT_GUIDANCE, /```timeline/);
   const input = chatInput({ conversationId: '0ef3a063-f0d0-44f7-b9dc-774137b1d86c', messages: [{ role: 'user', content: 'Help me pack for a weekend away.' }] });
   assert.equal(input.messages.length, 1);

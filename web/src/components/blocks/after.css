@@ -2818,7 +2818,7 @@
 .code-line-number {
   left: 8px;
   width: 36px;
-  color: #6f6156;
+  color: #9d8f80;
   line-height: 2.1;
 }
 .code-line button {
@@ -3050,6 +3050,14 @@
   --output-border: var(--hairline);
   --output-rule: var(--hairline);
   --output-header: var(--canvas);
+}
+/* The system's dark mode, when no paper is chosen, needs the same tokens. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .prose.prose {
+    --output-border: var(--hairline);
+    --output-rule: var(--hairline);
+    --output-header: var(--canvas);
+  }
 }
 .prose.prose .local-explorer {
   padding: 0;

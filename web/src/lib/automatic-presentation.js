@@ -8,6 +8,7 @@ import {
 } from "./rich-ui.js";
 import { wantsPlainReply, inferListPresentation, requestIntent } from "./adaptive-ui.js";
 import { explicitRelationshipGraph } from "./output-redesign.js";
+import { headedTimeline, headedComparison, rankedFigures, periodFigures } from "./shape-recovery.js";
 
 // Presentation recovery runs on settled answers from every provider. It only
 // restructures existing data; it never calls a model or executes reply code.
@@ -421,6 +422,11 @@ export function automaticPresentation(content = "", request = "") {
     ].map((m) => m[1]);
     if (paths.length >= 2 && paths.length <= 100)
       return rich({ type: "files", title: "Project layout", paths });
+  }
+  // Whatever the request said, answers shaped like these read better as visuals.
+  for (const recover of [headedTimeline, headedComparison, rankedFigures, periodFigures]) {
+    const shaped = recover(content);
+    if (shaped) return shaped;
   }
   const labeled = pairs(content);
   if (intent === "integrations") {

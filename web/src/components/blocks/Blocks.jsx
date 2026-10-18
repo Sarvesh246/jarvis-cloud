@@ -827,7 +827,7 @@ function LocalList({ node, children, ordered = false, "data-src": src, ...props 
     const simple = n => n.type === "text" || (["p", "strong", "em"].includes(n.tagName) && (n.children || []).every(simple));
     return !(item.children || []).every(simple);
   });
-  const inferred = automatic && !tasks ? inferListPresentation(items.map(hastText), { context: sectionContext(content, node.position?.start?.offset), rich }) : null;
+  const inferred = automatic && !tasks ? inferListPresentation(items.map(hastText), { context: `${sectionContext(content, node.position?.start?.offset)} ${/\b(?:pack|packing|checklist|to-?do|shopping list|prepare|before (?:i|we|you))\b/i.test(requestText) ? "checklist" : ""}`, rich }) : null;
   if (inferred?.kind === "metrics" || inferred?.kind === "timeline") return <InferredList key={key} inferred={inferred} original={<Tag {...props}>{children}</Tag>} src={src} />;
   if (procedural) return <div data-src={src}><StepPlayer items={items} render={item => item.children.filter(n => n.tagName !== 'input').map((n, j) => n.tagName === 'p' ? <p key={j}>{inline(n, j)}</p> : inline(n, j))} /></div>;
   if (!tasks && !inferred) return <Tag {...props} data-src={src}>{children}</Tag>;
