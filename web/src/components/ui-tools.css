@@ -14,6 +14,14 @@
   background: #16110f66;
   backdrop-filter: blur(4px);
 }
+
+.command-dialog[open] { animation: command-in 240ms cubic-bezier(.2,0,0,1) both; }
+.command-dialog[open]::backdrop { animation: fade 240ms ease-out both; }
+.command-dialog[data-closing="true"] { animation: command-out 160ms ease-in both; pointer-events: none; }
+.command-dialog[data-closing="true"]::backdrop { animation: fade-out 160ms ease-in both; }
+@keyframes command-in { from { opacity: 0; transform: translateY(12px) scale(.98); } to { opacity: 1; transform: none; } }
+@keyframes command-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(8px) scale(.99); } }
+@keyframes fade-out { to { opacity: 0; } }
 .command-dialog h2,
 .ui-tools-dialog h2 {
   margin: 0 auto 0 0;

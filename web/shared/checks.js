@@ -38,7 +38,7 @@ const definitions = [
     id: 'group-choice', legacyId: [9, 33], title: 'What works for everyone?',
     description: 'Say what works for each person. Vaelo finds the choice that is fairest to everyone.',
     fields: [
-      field('people', 'lines', 'Who’s in, and what works for them?', 'One person per line, favourite first. Like “Ana: Saturday, Friday”.', true),
+      field('people', 'lines', 'Who’s in, and what works for them?', 'One person per line, favorite first. Like “Ana: Saturday, Friday”.', true),
       field('choices', 'list', 'What are all the choices?', 'Optional. Like “Friday, Saturday, Sunday”. If you leave it empty, Vaelo uses the ones above.'),
       field('helped', 'list', 'Who did more last time?', 'Optional. Their names, like “Ben”. They get an easier pick this time.'),
     ],

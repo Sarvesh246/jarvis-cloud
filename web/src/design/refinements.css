@@ -74,7 +74,7 @@ dialog.workroom { font-family: var(--font-ui); }
 .workroom .work-task { padding-top: .5rem; }
 .workroom .work-detail-head h3 { font-family: var(--font-read); font-size: clamp(1.6rem,3vw,2rem); line-height: 1.3; font-weight: 550; }
 .workroom .work-detail-head > p:last-child { max-width: 60ch; font-size: 1rem; }
-.workroom .work-entries { gap: 12px; grid-template-columns: repeat(auto-fit,minmax(min(100%,20rem),1fr)); }
+.workroom .work-entries { gap: 12px; padding-top: var(--s-3); grid-template-columns: repeat(auto-fit,minmax(min(100%,20rem),1fr)); }
 .workroom .work-entries > li { border: 0; }
 .workroom .work-entries > li:first-child:nth-last-child(odd) { grid-column: auto; }
 .workroom .work-entry { border: 1px solid var(--hairline); border-radius: 12px; padding: 1.15rem; background: var(--surface); transition: border-color 180ms ease,background 180ms ease,transform 180ms ease; }

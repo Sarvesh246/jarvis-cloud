@@ -12,6 +12,7 @@ import {
   PushPinSlash,
   SignOut,
   Trash,
+  User,
   X,
 } from "@phosphor-icons/react";
 import { BrandWordmark } from "./Mark.jsx";
@@ -25,7 +26,7 @@ const WORK_KINDS = { document: "Document", code: "Code", table: "Table" };
 
 /* The things Vaelo has made, newest first, each a way back into the
    workspace and the conversation it came from. */
-function Library({ items, query, activeId, busy, onOpen }) {
+function Library({ items, query, activeId, busy, onOpen, onDelete }) {
   const shown = searchWork(items, query).slice(0, 80);
   if (!items.length)
     return (
@@ -47,7 +48,7 @@ function Library({ items, query, activeId, busy, onOpen }) {
         {shown.map((entry) => {
           const Icon = WORK_ICONS[entry.kind];
           return (
-            <li key={entry.id}>
+            <li key={entry.id} className="library-row">
               <button
                 className="work-row"
                 data-active={entry.chatId === activeId || undefined}
@@ -64,6 +65,9 @@ function Library({ items, query, activeId, busy, onOpen }) {
                     {entry.edited && " · edited"} · {entry.chatTitle}
                   </span>
                 </span>
+              </button>
+              <button className="icon-button library-delete" aria-label={`Delete ${entry.title} from library`} data-tip="Delete from library" onClick={() => onDelete(entry)}>
+                <Trash size={17} />
               </button>
             </li>
           );
@@ -224,6 +228,7 @@ export function Rail({
   onSettings,
   onSignOut,
   onOpenWork,
+  onDeleteWork,
   onWorkroom,
 }) {
   const [query, setQuery] = useState("");
@@ -291,7 +296,6 @@ export function Rail({
       <button className="rail-new rail-new-conversation" onClick={onNew} disabled={busy || pristine}>
         <Plus size={16} />
         <span>New conversation</span>
-        <kbd>Ctrl K</kbd>
       </button>
 
       <label className="rail-search">
@@ -353,7 +357,7 @@ export function Rail({
         aria-label={view === "library" ? "Library" : results ? "Search results" : "Past conversations"}
       >
         {view === "library" ? (
-          <Library items={work} query={query} activeId={activeId} busy={busy} onOpen={onOpenWork} />
+          <Library items={work} query={query} activeId={activeId} busy={busy} onOpen={onOpenWork} onDelete={onDeleteWork} />
         ) : results ? (
           <section>
             <h2 className="label" aria-live="polite">
@@ -422,7 +426,7 @@ export function Rail({
         </p>
         <div className="rail-account">
           <span className="rail-avatar" aria-hidden="true">
-            {user.name?.[0]}
+            <User size={22} weight="duotone" />
           </span>
           <span className="rail-name">{user.name}</span>
           <button

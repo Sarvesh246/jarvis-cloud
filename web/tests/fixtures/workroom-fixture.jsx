@@ -7,6 +7,7 @@ import '../../src/design/base.css';
 import { Workroom } from '../../src/components/Workroom.jsx';
 import { WorkroomIcon } from '../../src/components/WorkroomIcon.jsx';
 import { chatToWorkspace } from '../../src/lib/workroom.js';
+import '../../src/design/refinements.css';
 
 const records=new Map(), texts=new Map(); let conflictOnce=false;
 // Not a real content hash: the fixture only needs a stable key per text.

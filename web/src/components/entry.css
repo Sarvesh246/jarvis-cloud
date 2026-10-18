@@ -121,6 +121,14 @@
   display: none;
 }
 
+/* Keep Google's frame measurable while the immediately usable redirect
+   button takes its place. No layout jump when the frame becomes ready. */
+.google-slot[data-state="loading"] .google-button {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
 .google-placeholder {
   position: absolute;
   top: 0;

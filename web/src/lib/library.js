@@ -177,7 +177,20 @@ export function collectWork(chats) {
       });
     }
   }
-  return items;
+  const removed = new Map(chats.map(chat => [chat.id, new Set(chat.removedWork || [])]));
+  return items.filter(item => !removed.get(item.chatId)?.has(item.id.slice(item.chatId.length + 1)));
+}
+
+// The transcript remains intact; saved removals keep derived artifacts out
+// of both the library and Find after reloads and account sync.
+export function removeLibraryItem(chat, id, at = Date.now()) {
+  const key = id.slice(chat.id.length + 1);
+  return { ...chat, updated: at, removedWork: [...new Set([...(chat.removedWork || []), key])] };
+}
+
+export function restoreLibraryItem(chat, id, at = Date.now()) {
+  const key = id.slice(chat.id.length + 1);
+  return { ...chat, updated: at, removedWork: (chat.removedWork || []).filter(item => item !== key) };
 }
 
 export function searchWork(items, query) {

@@ -14,10 +14,11 @@ export function CommandPalette({
 }) {
   const dialog = useRef(null),
     input = useRef(null);
+  const previousResults = useRef([]);
   const [query, setQuery] = useState(""),
     [selected, setSelected] = useState(0);
   const results = useMemo(() => {
-    if (!open) return [];
+    if (!open) return previousResults.current;
     const needle = query.trim().toLowerCase();
     const commands = actions.filter((a) =>
       a.label.toLowerCase().includes(needle),
@@ -46,14 +47,24 @@ export function CommandPalette({
         })),
     ].slice(0, 40);
   }, [open, query, chats, actions, onSelect, onOpenWork]);
+  useEffect(() => { if (open) previousResults.current = results; }, [open, results]);
   useEffect(() => {
     const el = dialog.current;
+    delete el.dataset.closing;
     if (open && !el.open) {
       setQuery("");
       setSelected(0);
       el.showModal();
       input.current?.focus();
-    } else if (!open && el.open) el.close();
+    } else if (!open && el.open) {
+      const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches || document.documentElement.dataset.motion === "reduce";
+      if (reduced) el.close();
+      else {
+        el.dataset.closing = "true";
+        const timer = setTimeout(() => el.close(), 160);
+        return () => clearTimeout(timer);
+      }
+    }
   }, [open]);
   useEffect(() => setSelected(0), [query]);
   useEffect(() => {
@@ -72,7 +83,7 @@ export function CommandPalette({
       className="command-dialog"
       aria-labelledby="command-title"
       onClose={onClose}
-      onCancel={onClose}
+      onCancel={(event) => { event.preventDefault(); onClose(); }}
       onClick={(e) => {
         if (e.target === dialog.current) onClose();
       }}

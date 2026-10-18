@@ -94,7 +94,7 @@ export function UITools({ open, onClose }) {
           <dl className="ui-guide">
             <dt>Find anything</dt>
             <dd>
-              Use Find in the conversation header or Ctrl/⌘ Shift P. Search
+              Use Find in the conversation header or Ctrl/⌘ K. Search
               conversations, saved outputs and actions.
             </dd>
             <dt>Pinned conversations</dt>

@@ -251,7 +251,7 @@ export function documentContract(answers, resource) {
 const LIMITS = ['Worked out by Vaelo from what you typed. It didn’t look at your bank, accounts or anyone else’s records.', 'Nothing was sent, paid or changed.'];
 const NOTES = {
   refund: 'Only money that has landed counts. Money that is pending or promised isn’t counted yet.',
-  'group-choice': 'The first choice each person lists counts as their favourite.',
+  'group-choice': 'The first choice each person lists counts as their favorite.',
   purchase: 'Prices are the ones you typed. Check them before you buy.',
 };
 

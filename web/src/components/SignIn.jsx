@@ -38,7 +38,7 @@ export function SignIn({
   onCancelSignIn,
   onGuest,
 }) {
-  const own = googleState === "failed" || googleState === "hidden" || googleState === "redirect";
+  const own = googleState !== "ready";
   return (
     <main className="entry">
       <div className="entry-body">
@@ -54,11 +54,6 @@ export function SignIn({
         {configured ? (
           <div className="google-slot" data-state={googleState}>
             <div className="google-button" ref={buttonRef} />
-            {googleState === "loading" && (
-              <span className="google-placeholder" aria-live="polite">
-                Loading Google sign-in…
-              </span>
-            )}
             {own && (
               <button className="google-own" disabled={signingIn} onClick={onGoogleRedirect}>
                 <GoogleG />
@@ -66,7 +61,7 @@ export function SignIn({
               </button>
             )}
             {signingIn && <button className="text-button google-alt" onClick={onCancelSignIn}>Cancel sign-in</button>}
-            {own && googleState !== "redirect" && (
+            {(googleState === "failed" || googleState === "hidden") && (
               <p className="google-why">
                 Google’s own button was blocked on this browser, so this signs you in on
                 Google’s page instead.{" "}

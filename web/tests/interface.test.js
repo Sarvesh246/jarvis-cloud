@@ -13,6 +13,8 @@ import {
   addVersion,
   cleanRevision,
   collectWork,
+  removeLibraryItem,
+  restoreLibraryItem,
   currentContent,
   docTitle,
   parseTables,
@@ -22,6 +24,23 @@ import {
 } from "../src/lib/library.js";
 import { answerApproval, approvalInput, chatInput, guidance, requestNote } from "../server/chat.js";
 import { PLAN_LIMITS, mergePlan, orderPlan, planSummary, readPlan } from "../src/lib/plan.js";
+
+test("library deletion survives storage and copied chats, keeps conversation and other artifacts, and supports Undo", () => {
+  const chat = { id: "chat", title: "Saved work", messages: [{ id: "reply", role: "assistant", content: "# A document\n\n```html\n<p>Hello</p>\n```\n\n| Name | Count |\n|---|---|\n| A | 1 |\n| B | 2 |\n| C | 3 |" }], works: { orphan: addVersion(null, "Original", "Edited", "user") } };
+  const entries = collectWork([chat]);
+  assert.equal(entries.length, 4);
+  for (const entry of entries) {
+    const removed = removeLibraryItem(chat, entry.id, 123);
+    assert.deepEqual(removed.messages, chat.messages);
+    assert.deepEqual(removed.works, chat.works);
+    const saved = JSON.parse(JSON.stringify(removed));
+    assert.deepEqual(collectWork([saved]).map(item => item.id), entries.filter(item => item.id !== entry.id).map(item => item.id));
+    assert.equal(collectWork([{ ...saved, id: "conflict-copy" }]).length, 3);
+    assert.deepEqual(collectWork([restoreLibraryItem(saved, entry.id, 124)]).map(({ updated, ...item }) => item), entries.map(({ updated, ...item }) => item));
+  }
+  const twice = removeLibraryItem(removeLibraryItem(chat, entries[0].id), entries[0].id);
+  assert.equal(twice.removedWork.length, 1);
+});
 
 test("Hermes tool events read as plain activity, including the preview Hermes sends", () => {
   // Hermes sends {tool, label, toolCallId, status}; the label carries the query.

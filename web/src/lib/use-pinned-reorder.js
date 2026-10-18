@@ -28,7 +28,7 @@ export function usePinnedReorder({ aside, ids, setOrder, saveOrder, chats, disab
       if (cancelled) setOrder(item.original);
       else saveOrder(currentIds.current);
       const position = (cancelled ? item.original : currentIds.current).indexOf(item.id) + 1;
-      announce(cancelled ? 'Reordering cancelled.' : `Moved ${item.title} to position ${position} of ${ids.length}.`);
+      announce(cancelled ? 'Reordering canceled.' : `Moved ${item.title} to position ${position} of ${ids.length}.`);
       suppressClick.current = true;
       setTimeout(() => { suppressClick.current = false; }, 350);
       requestAnimationFrame(() => item.element.isConnected && item.element.focus({preventScroll:true}));

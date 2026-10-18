@@ -30,6 +30,7 @@ import { Mark } from "./components/Mark.jsx";
 import { PresentationContext } from "./components/blocks/Blocks.jsx";
 import { applyPrefs, readPrefs, savePrefs } from "./lib/preferences.js";
 import { requestRevision } from "./lib/revise.js";
+import { removeLibraryItem, restoreLibraryItem } from "./lib/library.js";
 import { Toast, Notice } from "./components/Toast.jsx";
 import { Tips } from "./components/Tips.jsx";
 import { Opening, SignIn } from "./components/SignIn.jsx";
@@ -256,7 +257,7 @@ function takeGoogleReturn() {
     return {
       error:
         params.get("error") === "access_denied"
-          ? "Sign-in was cancelled."
+          ? "Sign-in was canceled."
           : "Google couldn’t finish signing you in. Try again.",
     };
   if (!expected || expected.state !== params.get("state") || Date.now() - expected.at > 600000)
@@ -793,12 +794,9 @@ export function App() {
     function onKey(event) {
       if (event.defaultPrevented || event.isComposing) return;
       const typing = /^(INPUT|TEXTAREA)$/.test(document.activeElement?.tagName);
-      if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === "p") {
+      if (session?.user && (event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && event.key.toLowerCase() === "k") {
         event.preventDefault();
         if (!document.querySelector("dialog[open]")) setCommandOpen(true);
-      } else if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k" && !document.querySelector("dialog[open]")) {
-        event.preventDefault();
-        if (!busy) newChat();
       } else if (event.key === "Escape" && menu && phone && !document.querySelector("dialog[open]")) {
         // The phone drawer is in front of everything else, so it closes first.
         setMenu(false);
@@ -977,6 +975,19 @@ export function App() {
     if (entry.chatId !== activeId) selectChat(entry.chatId);
     setMenu(false);
     setWorkspace(entry.item);
+  }
+
+  function deleteWork(entry) {
+    setChats(current => current.map(chat => chat.id === entry.chatId ? removeLibraryItem(chat, entry.id) : chat));
+    pushChat(entry.chatId);
+    showToast({
+      text: "Artifact deleted from the library. Conversation kept.",
+      action: "Undo",
+      onAction: () => {
+        setChats(current => current.map(chat => chat.id === entry.chatId ? restoreLibraryItem(chat, entry.id) : chat));
+        pushChat(entry.chatId);
+      },
+    });
   }
 
   /* A workspace opens in a conversation of its own (or the empty one you're
@@ -2110,13 +2121,14 @@ export function App() {
           swipe.current = null;
         }}
       >
-        {menu && (
-          <button
-            className="scrim"
-            aria-label="Close conversations"
-            onClick={() => setMenu(false)}
-          />
-        )}
+        <button
+          className="scrim"
+          data-open={menu}
+          inert={!menu}
+          tabIndex={-1}
+          aria-label="Close conversations"
+          onClick={() => setMenu(false)}
+        />
         <Rail
           chats={chats}
           activeId={activeId}
@@ -2136,6 +2148,7 @@ export function App() {
           }}
           onSignOut={logout}
           onOpenWork={openWork}
+          onDeleteWork={deleteWork}
           onWorkroom={() => { setMenu(false); setWorkDraft(null); setWorkroomOpen(true); }}
           workroomOpen={workroomOpen}
         />
