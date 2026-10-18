@@ -200,3 +200,13 @@ test('production policy permits HTTPS previews while preserving execution bounda
   assert.deepEqual(directives.get('form-action'), ["'self'"]);
   assert.ok(!directives.get('script-src').includes("'unsafe-eval'"));
 });
+
+test('a drawn grid in a plain fence is recovered as overview cards', async () => {
+  const { gridOverview, parseRichUI } = await import('../src/lib/rich-ui.js');
+  const drawn = '┌───────┬──────┐\n│ Hotel │ $480 │\n├───────┼──────┤\n│ Food  │ $160 │\n│ **Total** │ **$715** │\n└───────┴──────┘';
+  const grid = gridOverview(drawn, '');
+  assert.deepEqual(grid.items.map((x) => x.label), ['Hotel', 'Food', 'Total']);
+  assert.ok(parseRichUI(JSON.stringify(grid)));
+  assert.equal(gridOverview(drawn, 'python'), null);
+  assert.equal(gridOverview('a | b | c | d\n1 | 2 | 3 | 4', ''), null);
+});

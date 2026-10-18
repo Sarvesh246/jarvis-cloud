@@ -16,6 +16,22 @@ const samples = [
   ['Chart', 'Help me understand these monthly sales.', '## Monthly sales\n| Month | Sales |\n| --- | ---: |\n| January | 120 |\n| February | 180 |\n| March | 145 |'],
   ['Comparison', 'Help me choose between these two plans.', '## Compare options\n| Plan | Monthly cost |\n| --- | ---: |\n| Basic | $20 |\n| Plus | $30 |'],
   ['Quantities', 'Help me adjust this recipe.', '## Recipe for four\n| Ingredient | Amount | Unit |\n| --- | ---: | --- |\n| Rice | 300 | g |\n| Beans | 400 | g |'],
+  ['Bento (drawn)', 'Make me a bento overview of my trip costs.', `Here is your bento overview:
+
+\`\`\`
+┌────────┬──────┐
+│ Hotel  │ $480 │
+├────────┼──────┤
+│ Food   │ $160 │
+│ Travel │ $75  │
+│ **Total** │ **$715** │
+└────────┴──────┘
+\`\`\``],
+  ['Bento (table)', 'Give me a bento overview of my trip costs.', `| Item | Cost |
+|---|---|
+| Hotel | $480 |
+| Food | $160 |
+| Total | $715 |`],
   ['Simple answer', 'What is 2 plus 2?', '2 + 2 = 4.'],
   ['Information list', 'What are the benefits?', '## Benefits\n- Lightweight\n- Flexible\n- Durable'],
 ];

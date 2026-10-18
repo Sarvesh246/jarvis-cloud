@@ -220,3 +220,27 @@ export function reorderAt(ids, id, target, after = false) {
   next.splice(next.indexOf(target) + (after ? 1 : 0), 0, id);
   return next.every((value, i) => value === ids[i]) ? ids : next;
 }
+
+// Some models draw a "bento" as an ASCII or box-drawing grid inside a plain
+// fence. A two-or-three column grid of label and value is exactly an overview,
+// so recover it as one instead of showing the drawing as code.
+const GRID_BORDER = /^[\s+\-=_:|─━│┃┌┐└┘├┤┬┴┼═║╔╗╚╝╠╣╦╩╬]*$/;
+export function gridOverview(source, language = '') {
+  if (typeof source !== 'string' || source.length > 4000 || !['', 'text', 'txt', 'plain', 'plaintext', 'ascii'].includes(language.toLowerCase())) return null;
+  const rows = source.split('\n')
+    .filter((line) => /[|│┃║]/.test(line) && !GRID_BORDER.test(line))
+    .map((line) => line.split(/[|│┃║]/).map((cell) => cell.replace(/\*\*|__/g, '').trim()))
+    .map((cells) => cells.slice(cells[0] === '' ? 1 : 0, cells.at(-1) === '' ? -1 : undefined));
+  const cleaned = rows.filter((cells) => cells.length >= 2 && cells.length <= 3 && cells[0] && cells[1]);
+  if (cleaned.length < 2 || cleaned.length > 12 || cleaned.length !== rows.length) return null;
+  const header = !/\d/.test(cleaned[0][1]) && cleaned.slice(1).every((cells) => /\d/.test(cells[1]));
+  const body = header ? cleaned.slice(1) : cleaned;
+  if (body.length < 2) return null;
+  return {
+    type: 'overview',
+    items: body.map(([label, value, detail]) => ({ label, value, ...(detail && { detail }) })),
+  };
+}
+export function wantsOverview(request = '') {
+  return /\b(?:bento|overview cards?|summary cards?|cards? (?:view|layout)|dashboard)\b/i.test(request);
+}
