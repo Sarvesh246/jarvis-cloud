@@ -6,7 +6,7 @@ type Snapshot = {
   checkedAt: string
   cloudAvailable: boolean
   local: { total: number }
-  cloud?: { total: number; input: number; output: number; unreported: number; attempts: number; since: string | null; checkedAt: string }
+  cloud?: { total: number; input: number; output: number; unreported: number; attempts: number; since: string | null; liveSince?: string | null; historicalTokens?: number; checkedAt: string }
 }
 
 export function CombinedUsage() {
@@ -35,6 +35,8 @@ export function CombinedUsage() {
   const cloudFresh = localFresh && data.cloudAvailable && data.cloud && now - Date.parse(data.cloud.checkedAt) < 60_000
   const count = (n: number) => n.toLocaleString()
   const total = data ? data.local.total + (data.cloud?.total ?? 0) : 0
+  const liveSince = data?.cloud?.liveSince || data?.cloud?.since
+  const incompleteMonth = !liveSince || Date.parse(liveSince) > Date.parse(`${month}-01T00:00:00Z`) || Boolean(data?.cloud?.unreported)
   async function refreshNow() {
     setRefreshError(false)
     // Refresh model/analytics queries too; the sync worker updates cloud counts
@@ -58,14 +60,15 @@ export function CombinedUsage() {
           </button>
         </div>
       </div>
-      <div className="mt-2 text-3xl font-semibold tabular-nums">{data && current ? count(total) : '—'} <span className="text-sm font-normal text-muted-foreground">recorded tokens</span></div>
+      {incompleteMonth && <p className="mt-3 text-sm font-medium text-amber-500">Full monthly usage is unavailable. Earlier cloud usage is missing.</p>}
+      <div className="mt-2 text-3xl font-semibold tabular-nums">{data && current ? count(total) : '—'} <span className="text-sm font-normal text-muted-foreground">{incompleteMonth ? 'partial recorded tokens' : 'recorded tokens'}</span></div>
       <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-xs tabular-nums text-muted-foreground">
         <span>Local: {data && current ? count(data.local.total) : '—'}</span>
         <span>VaeloChat: {data?.cloud && current ? count(data.cloud.total) : 'unavailable'}</span>
         <span>{cloudFresh ? 'Updating every 15 seconds' : 'Sync unavailable or stale; showing last recorded counts'}</span>
         {data?.cloud?.checkedAt && <span>Cloud checked: {new Date(data.cloud.checkedAt).toLocaleTimeString()}</span>}
       </div>
-      {data?.cloud && <p className="mt-3 text-xs text-muted-foreground">Cloud input: {count(data.cloud.input)} · output: {count(data.cloud.output)}. {data.cloud.unreported > 0 ? `${count(data.cloud.unreported)} attempts returned incomplete token usage; the total is a lower bound. ` : ''}Cloud tracking {data.cloud.since ? `since ${new Date(data.cloud.since).toLocaleString()}` : 'starts with the next reply'}. Earlier unrecorded cloud usage is excluded.</p>}
+      {data?.cloud && <p className="mt-3 text-xs text-muted-foreground">Cloud input: {count(data.cloud.input)} · output: {count(data.cloud.output)}. {data.cloud.unreported > 0 ? `${count(data.cloud.unreported)} attempts returned incomplete token usage; the total is a lower bound. ` : ''}{Boolean(data.cloud.historicalTokens) && `${count(data.cloud.historicalTokens!)} cloud tokens recovered from older logs. `}Automatic cloud recording {liveSince ? `since ${new Date(liveSince).toLocaleString()}` : 'starts with the next reply'}. Earlier unrecorded cloud usage is excluded.</p>}
       {(isError || !data) && <p className="mt-3 text-xs text-muted-foreground">Waiting for the local usage sync service.</p>}
       {refreshError && <p role="status" className="mt-2 text-xs text-muted-foreground">Refresh failed. The last recorded counts are still shown.</p>}
     </section>

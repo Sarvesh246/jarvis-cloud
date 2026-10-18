@@ -57,11 +57,16 @@ export class UsageStore {
       max(happened_at) AS latest
       FROM usage_events WHERE happened_at >= $1::timestamptz
         AND happened_at < $1::timestamptz + interval '1 month' GROUP BY route`, [month + "-01T00:00:00Z"]);
-    const [coverage] = await this.sql.query("SELECT min(happened_at) AS since FROM usage_events");
+    const [coverage] = await this.sql.query(`SELECT min(happened_at) AS since,
+      min(happened_at) FILTER (WHERE id NOT LIKE 'history-%') AS live_since,
+      COALESCE(sum(input_tokens + output_tokens) FILTER (WHERE id LIKE 'history-%'
+        AND happened_at >= $1::timestamptz AND happened_at < $1::timestamptz + interval '1 month'), 0)::text AS historical_tokens
+      FROM usage_events`, [month + "-01T00:00:00Z"]);
     const routes = rows.map(r => ({ ...r, input: Number(r.input), output: Number(r.output), cached: Number(r.cached) }));
     const sum = key => routes.reduce((n, r) => n + Number(r[key]), 0);
     return { month, input: sum("input"), output: sum("output"), cached: sum("cached"),
       total: sum("input") + sum("output"), attempts: sum("attempts"), unreported: sum("unreported"),
-      since: coverage.since, routes, checkedAt: new Date().toISOString() };
+      since: coverage.since, liveSince: coverage.live_since || null,
+      historicalTokens: Number(coverage.historical_tokens || 0), routes, checkedAt: new Date().toISOString() };
   }
 }

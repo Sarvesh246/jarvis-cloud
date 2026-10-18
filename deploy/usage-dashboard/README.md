@@ -40,3 +40,13 @@ estimates are separate from these observed totals. An interrupted stream may
 have no terminal usage report; such attempts are flagged, never guessed.
 The Render outbox retries delivery during temporary ledger failures, but Render's
 ephemeral disk cannot retain an undelivered event across a container replacement.
+
+`backfill.py` can import the visible text of retained Render logs before the live
+recording cutoff. It defaults to a dry run, keeps rows without counts as gaps,
+uses stable ids for safe retries, and excludes overlapping live attempts. Supply
+the display year and UTC offset used by Render. The October 18 recovery used
+the first live event at `2026-10-18T23:19:13.009Z` as its cutoff; 47 older replies
+provided 525,486 additional reported tokens, with four unknown-token replies.
+The earlier days remain incomplete. The dashboard labels this as a partial
+recorded total and keeps the automatic recording date separate from recovered
+history. No remaining percentage is inferred from incomplete cloud consumption.

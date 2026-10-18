@@ -20,6 +20,8 @@ describe('combined usage', () => {
     expect(html).toContain('Earlier unrecorded cloud usage is excluded')
     expect(html).toContain('>Refresh</button>')
     expect(html).toContain('Cloud checked:')
+    expect(html).toContain('Full monthly usage is unavailable')
+    expect(html).toContain('partial recorded tokens')
   })
   it('retains counts and marks stale data after the sync worker stops', () => {
     vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-10-18T20:05:00Z'))
