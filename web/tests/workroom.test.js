@@ -147,3 +147,24 @@ test('files are sized in pages, and answers keep only the check’s own question
   assert.deepEqual(answersFor(document, { source: { kind: 'vaelo-document' } }).source, { kind: 'vaelo-document' }, 'only Verify’s pick rides along');
   assert.ok(CHECKS.length >= 8 && WORKSPACES.length >= 25);
 });
+
+
+test('projects keep their type, optional instructions and files through drafts, saves and backups', () => {
+  const draft = blankDraft({ id: 'custom', kind: 'project' }, getCheck);
+  draft.title = 'Kitchen renovation';
+  assert.equal(draft.brief, '');
+  assert.equal(draft.check, null);
+  const body = saveBody(draft, null);
+  assert.equal(body.kind, 'project');
+  const saved = { ...body, revision: 'saved-project', documents: [] };
+  assert.equal(draftMatches(saved, draft), true);
+  assert.equal(draftMatches({ ...saved, kind: undefined }, draft), false);
+  const imported = importWork(JSON.stringify(exportWork([saved])), lookups)[0];
+  assert.equal(imported.kind, 'project');
+  assert.equal(imported.brief, '');
+  assert.equal(imported.title, 'Kitchen renovation');
+  const chats = [{ id: 'one', messages: [], workContext: workContextFor(saved) }, { id: 'two', messages: [], workContext: workContextFor(saved) }];
+  const detached = refreshWorkReferences(chats, { id: saved.id, deleted: true });
+  assert.equal(detached.length, 2);
+  assert.ok(detached.every(chat => chat.workContext === undefined));
+});

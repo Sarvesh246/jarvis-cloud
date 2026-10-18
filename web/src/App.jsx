@@ -2393,6 +2393,9 @@ export function App() {
         />
         <Workroom open={workroomOpen} session={session} initialDraft={workDraft}
           onClose={() => {setWorkroomOpen(false);setWorkDraft(null);}}
+          chats={chats}
+          onOpenChat={id => { if (!canLeave(id)) { showToast({text:STAY}); return; } selectChat(id);setWorkroomOpen(false);setWorkDraft(null); }}
+          onAddChat={(id, record) => { setChats(current=>current.map(chat=>chat.id===id?{...chat,updated:Date.now(),workContext:workContextFor(record)}:chat));pushChat(id); }}
           onStart={startWork} onRecordChange={updateSelectedWork} />
       </div>
       </PresentationContext.Provider>

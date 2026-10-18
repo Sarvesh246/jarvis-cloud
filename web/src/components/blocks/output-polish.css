@@ -170,3 +170,20 @@
 
 .auto-cards { margin: var(--s-4) 0; }
 .auto-cards > .block-tool { font-size: var(--t-xs); min-height: 2rem; color: var(--muted); margin-top: var(--s-1); }
+
+/* Desktop output controls; phone layouts keep their existing spacing. */
+@media (min-width: 48rem) and (min-height: 31.3125rem), (min-width: 48rem) and (pointer: fine) {
+  :root .local-checklist > :is(ol, ul) { padding-block-start: var(--s-3); }
+}
+.table-resize-bar { display: flex; align-items: center; gap: var(--s-3); border-top: 1px solid var(--hairline); padding-inline: var(--s-3); }
+.table-resize-handle { flex: 1; min-width: 0; min-height: 36px; display: flex; align-items: center; justify-content: center; gap: var(--s-2); cursor: ns-resize; touch-action: none; user-select: none; color: var(--muted); font: 400 var(--t-xs)/1.4 var(--font-ui); }
+.table-resize-grip { width: 24px; height: 5px; border-block: 1px solid currentColor; opacity: .7; }
+.table-resize-handle:hover, .table-resize-handle:focus-visible, [data-resizing] .table-resize-handle { color: var(--gilt-ink); }
+.table-resize-handle:focus-visible { outline: 2px solid var(--gilt); outline-offset: -2px; }
+[data-resizing] { user-select: none; cursor: ns-resize; }
+.table-difference-toggle { display: flex; align-items: center; gap: var(--s-2); padding: var(--s-2) 0; font-size: var(--t-sm); cursor: pointer; }
+.table-difference-toggle input { accent-color: var(--gilt-ink); }
+.table-block td[data-different] { background: var(--gilt-wash); box-shadow: inset 3px 0 var(--gilt); }
+
+.table-difference-axis { display: flex; align-items: center; gap: var(--s-2); font: 400 var(--t-sm)/1.4 var(--font-ui); }
+.table-difference-axis select { min-height: 36px; padding: var(--s-1) var(--s-2); border: 1px solid var(--hairline-strong); border-radius: var(--r-sm); background: var(--surface); color: var(--ink); font: inherit; }

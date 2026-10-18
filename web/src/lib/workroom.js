@@ -53,7 +53,7 @@ const newId = () => crypto.randomUUID();
 export function blankDraft(workspace, getCheck) {
   const custom = workspace.id === CUSTOM_WORKSPACE;
   const check = workspace.check ? getCheck(workspace.check) : null;
-  return { id: newId(), workspaceId: workspace.id, title: custom ? '' : workspace.title, scope: 'personal', notes: '', documents: [],
+  return { id: newId(), workspaceId: workspace.id, ...(workspace.kind === 'project' && { kind: 'project' }), title: custom ? '' : workspace.title, scope: 'personal', notes: '', documents: [],
     check: check ? { id: check.id, input: blankAnswers(check) } : null, ...(custom && { brief: '', starters: [] }) };
 }
 
@@ -72,6 +72,7 @@ export function proposalDraft(proposal, { getWorkspace, getCheck }) {
 export function saveBody(draft, check) {
   return {
     id: draft.id, workspaceId: draft.workspaceId, title: draft.title.trim(), scope: draft.scope, notes: draft.notes || '',
+    ...(draft.kind === 'project' && { kind: 'project' }),
     documents: (draft.documents || []).map(doc => typeof doc.text === 'string'
       ? { id: doc.id, slot: doc.slot, name: doc.name, text: doc.text } : { id: doc.id, slot: doc.slot, name: doc.name, sha: doc.sha }),
     check: draft.check ? { id: draft.check.id, input: check ? answersFor(check, draft.check.input) : draft.check.input } : null,
@@ -84,6 +85,7 @@ export function draftMatches(record, draft) {
   if (!record || !draft || record.id !== draft.id) return false;
   const same = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
   return record.workspaceId === draft.workspaceId && record.title === draft.title && record.scope === draft.scope
+    && record.kind === draft.kind
     && (record.notes || '') === (draft.notes || '') && same(record.check, draft.check)
     && same((record.documents || []).map(docKey), (draft.documents || []).map(docKey))
     && (record.workspaceId !== CUSTOM_WORKSPACE || ((record.brief || '') === (draft.brief || '') && same(record.starters || [], draft.starters || [])));
@@ -131,6 +133,7 @@ export function importWork(text, { getWorkspace, getCheck }) {
     if (chars > WORK_LIMITS.recordDocumentChars) throw new Error('These backup files are too long together. Split them into separate workspaces before importing.');
     // IDs, outputs and revisions are not imported as trusted saved state.
     return { workspaceId: record.workspaceId, title: clip(record.title, 160) || workspace?.title || 'Imported workspace',
+      ...(custom && record.kind === 'project' && { kind: 'project' }),
       scope: SCOPE_NAMES.includes(record.scope) ? record.scope : 'personal', notes: clip(record.notes, WORK_LIMITS.notes), documents,
       check: custom || workspace?.check === check?.id ? check : null,
       ...(custom && { brief: clip(record.brief, WORK_LIMITS.brief), starters: (Array.isArray(record.starters) ? record.starters : []).filter(s => typeof s === 'string' && s.trim()).slice(0, WORK_LIMITS.starters).map(s => s.slice(0, WORK_LIMITS.starterChars)) }) };

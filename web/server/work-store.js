@@ -91,6 +91,8 @@ export function normalizeWorkRecord(input) {
   const record = upgradeRecord(input);
   checkWorkId(record.id);
   const custom = record.workspaceId === CUSTOM_WORKSPACE;
+  if (record.kind !== undefined && record.kind !== 'project') throw new HttpError(400, "Choose a supported work type.");
+  if (record.kind === 'project' && (!custom || record.check)) throw new HttpError(400, "Projects use their own files and instructions, without a task check.");
   const workspace = custom ? null : getWorkspace(record.workspaceId);
   if (!custom && !workspace) throw new HttpError(400, record.legacy ? "This was made with a tool Vaelo doesn’t have any more. Save a backup copy or delete it." : "That workspace isn’t available any more.");
   if (typeof record.title !== "string" || !record.title.trim() || record.title.length > 160)
@@ -116,6 +118,7 @@ export function normalizeWorkRecord(input) {
   if (workspace) for (const item of documents)
     if (item.slot !== "extra" && !workspace.slots.some(slot => slot.id === item.slot)) throw new HttpError(400, "Invalid document slot.");
   const normalized = { id: record.id, workspaceId: record.workspaceId, title: record.title.trim(), scope,
+    ...(record.kind === 'project' && { kind: 'project' }),
     notes: textField(record.notes, WORK_LIMITS.notes, `Notes are limited to ${WORK_LIMITS.notes.toLocaleString("en-US")} characters.`),
     check, documents, incomingChars: chars };
   if (custom) {
@@ -234,6 +237,13 @@ export class WorkStore {
       const existing = records[normalized.id];
       if (existing?.deleted || (existing?.revision ?? null) !== base)
         throw new HttpError(409, "This was changed on another device.");
+      // Older clients do not send kind; an edit must not turn a project
+      // into a reusable task or attach a task-only check to it.
+      if (existing?.kind === 'project') {
+        if (normalized.workspaceId !== CUSTOM_WORKSPACE || normalized.check)
+          throw new HttpError(400, "Projects use their own files and instructions, without a task check.");
+        normalized.kind = 'project';
+      }
       // A check result stays only while the details it was computed from are unchanged.
       const output = existing && sameCheck(existing.check, normalized.check) ? existing.output ?? null : null;
       const saved = { ...this.resolve(normalized.documents, records, normalized), revision: randomUUID(), updated: this.now(), output };

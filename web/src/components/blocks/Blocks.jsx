@@ -12,7 +12,8 @@ import {
   Table,
 } from "@phosphor-icons/react";
 import { collectSources, domainOf, kindLabel, parseUrl, sourceKey } from "../../lib/sources.js";
-import { cellText, isNumericColumn, isSectionRow, tableView, toCSV, toTSV } from "../../lib/table.js";
+import { cellText, comparisonAxis, differenceCells, isNumericColumn, isSectionRow, tableView, toCSV, toTSV } from "../../lib/table.js";
+import { usePhone } from "../../lib/use-phone.js";
 import {
   STRUCTURED,
   fenceClosed,
@@ -529,6 +530,7 @@ function TableView(props) {
 }
 
 function TableBlock({ node, "data-src": src }) {
+  const phone = usePhone();
   const { open, presentation, live, interactive, automatic, content, requestText, stateKey } = useContext(BlockContext);
   const data = useMemo(() => tableData(node), [node]);
   const [sort, setSort] = useState({ column: null, direction: "asc" });
@@ -542,11 +544,14 @@ function TableBlock({ node, "data-src": src }) {
   const [selected, setSelected] = useState([]);
   const [onlySelected, setOnlySelected] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
+  const [highlight, setHighlight] = useState(false);
+  const [differenceAxis, setDifferenceAxis] = useState(() => comparisonAxis(data.columns));
   const enhance = presentation !== "minimal" && !live && interactive && data.rows.length >= 2 && data.rows.length <= 200 && data.columns.length <= 20;
   const displayed = useMemo(() => tableView(data.rows, {
     ...(enhance && { query, selected, onlySelected }), ...sort,
   }), [data, enhance, query, selected, onlySelected, sort]);
   const visible = displayed.indices;
+  const differences = useMemo(() => highlight && !phone ? differenceCells(data.rows, data.columns, visible, selected, differenceAxis) : new Set(), [highlight, phone, data, visible, selected, differenceAxis]);
   const rowNumbers = new Map();
   data.rows.forEach((row, i) => { if (!isSectionRow(row)) rowNumbers.set(i, rowNumbers.size + 1); });
   const numeric = data.columns.map((_, i) => isNumericColumn(data.rows, i));
@@ -641,14 +646,16 @@ function TableBlock({ node, "data-src": src }) {
         <div className="local-controls">
           <label>Filter rows <input type="search" maxLength={200} value={query} onChange={e => setQuery(e.target.value)} placeholder="Find in this table" /></label>
           <button className="block-tool" aria-pressed={onlySelected} disabled={!selected.length && !onlySelected} onClick={() => setOnlySelected(v => !v)}>Compare selected ({selected.length})</button>
-          <button className="block-tool" onClick={() => { setQuery(""); setSelected([]); setOnlySelected(false); setSort({ column: null, direction: "asc" }); }}>Reset view</button>
+          <button className="block-tool" onClick={() => { setQuery(""); setSelected([]); setOnlySelected(false); setHighlight(false); setDifferenceAxis(comparisonAxis(data.columns)); setSort({ column: null, direction: "asc" }); }}>Reset view</button>
         </div>
+        {!phone && <label className="table-difference-toggle"><input type="checkbox" checked={highlight} onChange={event => setHighlight(event.target.checked)} />Highlight differences</label>}
+        {!phone && highlight && <><label className="table-difference-axis">Compare <select aria-label="Compare differences by" value={differenceAxis} onChange={event=>setDifferenceAxis(event.target.value)}><option value="rows">Rows</option><option value="columns" disabled={data.columns.length < 3}>Value columns</option></select></label><p className="local-note" role="status">{differenceAxis === 'rows' && selected.length < 2 && displayed.count !== 2 ? 'Select at least two rows to highlight their differences.' : `${differences.size} differing cells. Matching values stay plain.`}</p></>}
         <p className="local-note" role="status">{displayed.count} of {displayed.total} rows · Copy and CSV include the original table.</p>
       </details>}
       {view === "chart" && plan && visible.length > 0 ? (
         <Chart columns={data.columns} rows={displayed.rows} plan={plan} />
       ) : (
-        <TableScroll>
+        <TableScroll resizable={!live && data.rows.length > 1}>
           <table style={{ "--table-min-width": `${Math.min(38, data.columns.length * 7 + (enhance && toolsOpen ? 3.5 : 0))}rem` }}>
             <thead>
               <tr>
@@ -683,7 +690,8 @@ function TableBlock({ node, "data-src": src }) {
                 <tr key={r}>
                   {enhance && toolsOpen && <td><input type="checkbox" aria-label={`Compare row ${rowNumbers.get(r)}: ${data.rows[r][0]}`} checked={selected.includes(r)} onChange={e => setSelected(items => e.target.checked ? [...items, r] : items.filter(i => i !== r))} /></td>}
                   {data.cells[r].map((cell, i) => (
-                    <td key={i} data-numeric={numeric[i] || undefined}>
+                    <td key={i} data-numeric={numeric[i] || undefined} data-different={differences.has(`${r}:${i}`) || undefined}>
+                      {differences.has(`${r}:${i}`) && <span className="sr-only">Different: </span>}
                       {inline(cell, i)}
                     </td>
                   ))}

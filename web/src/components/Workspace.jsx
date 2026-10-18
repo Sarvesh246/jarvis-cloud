@@ -194,7 +194,7 @@ function TableView({ item }) {
           {query ? `${displayed.count} of ${displayed.total}` : `${displayed.total} rows`}
         </span>
       </label>
-      <TableScroll className="ws-grid table-block" wrapClassName="ws-grid-wrap" label="Table">
+      <TableScroll resizable={item.rows.length > 1} className="ws-grid table-block" wrapClassName="ws-grid-wrap" label="Table">
         <table style={{ "--table-min-width": `${Math.min(38, item.columns.length * 7)}rem` }}>
           <thead>
             <tr>

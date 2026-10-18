@@ -11,6 +11,7 @@ import { readAttachment } from '../lib/attachments.js';
 import { AUDIENCE_NAMES, matchWorkspaces, resultOverview } from '../lib/workroom-view.js';
 import './workroom.css';
 import { DESKTOP, saveDesktopFile } from '../lib/desktop.js';
+import { usePhone } from '../lib/use-phone.js';
 
 const SCOPES = [['personal', 'Personal'], ['work', 'Work'], ['client', 'A client']];
 const SCOPE_NAME = Object.fromEntries(SCOPES);
@@ -89,7 +90,8 @@ function DocumentSlot({ slot, docs, disabled, onFiles, onPaste, onRemove, onPrev
   </section>;
 }
 
-export function Workroom({ open, onClose, session, onStart, initialDraft = null, onRecordChange }) {
+export function Workroom({ open, onClose, session, onStart, initialDraft = null, onRecordChange, chats = [], onOpenChat, onAddChat }) {
+  const phone = usePhone();
   const dialog = useRef(null), file = useRef(null), account = useRef(null), fetchSequence = useRef(0);
   const scrollArea = useRef(null), taskHeading = useRef(null), resultHeading = useRef(null);
   const sub = session?.user?.sub || null; account.current = sub;
@@ -107,6 +109,10 @@ export function Workroom({ open, onClose, session, onStart, initialDraft = null,
   const offline = !online || session?.offline;
   const mutationBusy = Boolean(busy);
   const custom = draft?.workspaceId === CUSTOM_WORKSPACE;
+  const project = !phone && draft?.kind === 'project';
+  const [addChatId, setAddChatId] = useState('');
+  const projectChats = project ? chats.filter(chat => chat.workContext?.id === draft.id).sort((a,b) => (b.updated || 0) - (a.updated || 0)) : [];
+  const otherChats = project ? chats.filter(chat => chat.messages.length && chat.workContext?.id !== draft.id) : [];
   const matches = useMemo(() => matchWorkspaces(WORKSPACES, query, audience), [query, audience]);
   const grouped = useMemo(() => AUDIENCES.map(item => [item, matches.filter(w => w.audience === item.id)]).filter(([, items]) => items.length), [matches]);
   const overview = saved?.output ? resultOverview(saved.output) : null;
@@ -252,17 +258,22 @@ export function Workroom({ open, onClose, session, onStart, initialDraft = null,
   }
   function leaveTask() { navigate(()=>{setDraft(null);setBase(null);setProblem('');setConfirmDelete(false);setQuery('');setMissing([]);setPreview(null);}); }
 
-  const matchingRecords=records.filter(r=>`${r.title} ${workspaceFor(r)?.title || ''}`.toLowerCase().includes(query.trim().toLowerCase()));
+  const savedTasks = records.filter(record => record.kind !== 'project');
+  const projects = records.filter(record => record.kind === 'project');
+  const matchingRecords=(view === 'projects' && !phone ? projects : savedTasks).filter(r=>`${r.title} ${workspaceFor(r)?.title || ''}`.toLowerCase().includes(query.trim().toLowerCase()));
   const starters = custom ? (draft?.starters || []).filter(Boolean) : workspace?.starters || [];
   const canAct = Boolean(sub) && !offline && !mutationBusy && !conflict;
   const busyText = {loading:'Getting your work…',save:'Saving…',start:'Getting things ready…',run:'Working it out…',delete:'Deleting…',export:'Making your backup…'}[busy];
   const renderSlot = slot => <DocumentSlot key={slot.id} slot={slot} docs={draft.documents.filter(doc=>doc.slot===slot.id)} disabled={mutationBusy} onFiles={addFiles} onPaste={addPasted} preview={preview} onPreview={togglePreview} onRemove={id=>{edit({...draft,documents:draft.documents.filter(doc=>doc.id!==id)});if(preview?.id===id)setPreview(null);}} />;
   const fillPrompt = check ? `Please fill in “${check.title}” for me from my files and notes.` : '';
+  const reusableTask = <button className="work-own" onClick={()=>navigate(()=>create({id:CUSTOM_WORKSPACE}))}>
+    <Sparkle size={22} weight="light" aria-hidden="true" /><span><strong>Create a reusable task</strong><span>Save your instructions and files for something you do often.</span></span><ArrowRight size={18} aria-hidden="true" />
+  </button>;
 
   return <dialog ref={dialog} className="workroom" aria-labelledby="workroom-title" aria-describedby="workroom-description"
     onClose={onClose} onCancel={e=>{e.preventDefault();onClose();}}>
     <header className="workroom-head">
-      <div><h2 id="workroom-title">Workroom</h2><p id="workroom-description">{draft ? 'Your files, instructions and results for this task.' : 'Choose a task. Add your context. Get help.'}</p></div>
+      <div><h2 id="workroom-title">Workroom</h2><p id="workroom-description">{project ? 'Your project’s conversations, files, and context.' : draft ? 'Your files, instructions and results for this task.' : 'Choose a task. Add your context. Get help.'}</p></div>
       <button className="icon-button" aria-label="Close the Workroom" onClick={onClose}><X size={22} /></button>
     </header>
     <div className="workroom-notices" aria-live="polite">
@@ -286,7 +297,8 @@ export function Workroom({ open, onClose, session, onStart, initialDraft = null,
         <div className="work-home-nav">
           <div className="work-tabs" role="group" aria-label="Choose what to see">
             <button aria-pressed={view==='catalogue'} onClick={()=>{setView('catalogue');setQuery('');}}>Tasks</button>
-            <button aria-pressed={view==='saved'} onClick={()=>{setView('saved');setQuery('');}}>Saved work <span>{records.length}</span></button>
+            <button aria-pressed={view==='saved'} onClick={()=>{setView('saved');setQuery('');}}>Saved work <span>{savedTasks.length}</span></button>
+            {!phone && <button aria-pressed={view==='projects'} onClick={()=>{setView('projects');setQuery('');}}>Projects <span>{projects.length}</span></button>}
           </div>
           <details className="work-file-menu"><summary>Backup</summary><div>
             <button onClick={()=>exportRecords(records,'vaelo-backup')} disabled={!records.length||mutationBusy}><DownloadSimple size={17} />Save a backup file</button>
@@ -297,20 +309,20 @@ export function Workroom({ open, onClose, session, onStart, initialDraft = null,
         {imports.length>0&&<section className="work-imports" aria-label="Ready to load"><h3>Ready to load</h3><p>Open one to look at it. Nothing is saved until you save it.</p>
           <div className="work-inline-actions">{imports.map((item,i)=><button key={i} onClick={()=>navigate(()=>{setDraft({...item,id:crypto.randomUUID()});setBase(null);setPanel('setup');setImports(imports.filter((_,j)=>j!==i));})}>{item.title}</button>)}<button onClick={()=>setImports([])}>Never mind</button></div>
         </section>}
-        <section className="work-browser" aria-label={view==='catalogue'?'Workspaces':'Saved work'}>
-          <div className="work-browser-head"><div><h3>{view==='catalogue'?'What do you need help with?':'Pick up where you left off.'}</h3>
-            <p>{view==='catalogue'?'Choose a starting point, then add the details that matter.':'Your files and answers are kept together.'}</p></div>
-            <label className="work-search"><span className="sr-only">{view==='catalogue'?'Search workspaces':'Search saved work'}</span>
-              <input type="search" value={query} onChange={e=>setQuery(e.target.value)} placeholder={view==='catalogue'?'Search, like “refund” or “essay”':'Search your saved work'} /></label>
+        <section className="work-browser" aria-label={view==='catalogue'?'Workspaces':view==='projects'?'Projects':'Saved work'}>
+          <div className="work-browser-head"><div><h3>{view==='catalogue'?'What do you need help with?':view==='projects'?'Your projects':'Pick up where you left off.'}</h3>
+            <p>{view==='catalogue'?'Choose a starting point, then add the details that matter.':view==='projects'?'A home for each ongoing goal.':'Your files and answers are kept together.'}</p></div>
+            <label className="work-search"><span className="sr-only">{view==='catalogue'?'Search workspaces':view==='projects'?'Search projects':'Search saved work'}</span>
+              <input type="search" value={query} onChange={e=>setQuery(e.target.value)} placeholder={view==='catalogue'?'Search, like “refund” or “essay”':view==='projects'?'Search your projects':'Search your saved work'} /></label>
           </div>
           {view==='catalogue'?<>
             <div className="work-categories" role="group" aria-label="Show workspaces for">
               <button aria-pressed={audience==='all'} onClick={()=>setAudience('all')}>Everyone</button>
               {AUDIENCES.map(item=><button key={item.id} aria-pressed={audience===item.id} onClick={()=>setAudience(item.id)}>{item.label}</button>)}
             </div>
-            {audience==='all'&&!query.trim()&&<button className="work-own" onClick={()=>navigate(()=>create({id:CUSTOM_WORKSPACE}))}>
-              <Sparkle size={22} weight="light" aria-hidden="true" /><span><strong>Create a reusable task</strong><span>Save your instructions and files for something you do often.</span></span><ArrowRight size={18} aria-hidden="true" />
-            </button>}
+            {audience==='all'&&!query.trim()&&(phone ? reusableTask : <div className="work-create-options">{reusableTask}<button className="work-own" onClick={()=>navigate(()=>create({id:CUSTOM_WORKSPACE,kind:'project'}))}>
+              <FolderOpen size={22} weight="light" aria-hidden="true" /><span><strong>Create a project</strong><span>Keep a project’s conversations, files, and context together.</span></span><ArrowRight size={18} aria-hidden="true" />
+            </button></div>)}
             {grouped.map(([group,items])=><section className="work-group" key={group.id} aria-labelledby={`work-group-${group.id}`}>
               <header><h4 id={`work-group-${group.id}`}>{group.label}</h4><p>{group.line}</p></header>
               <ul className="work-entries">{items.map(item=><li key={item.id}><button className="work-entry rich-spotlight" onPointerMove={spotlight} onClick={()=>navigate(()=>create(item))}>
@@ -322,13 +334,13 @@ export function Workroom({ open, onClose, session, onStart, initialDraft = null,
             {!grouped.length&&<p className="work-empty">Nothing matches that. Try a shorter word, or make your own.</p>}
           </>:matchingRecords.length?<div className="work-saved-list">{matchingRecords.map(record=>{const w=workspaceFor(record);const n=record.documents?.length||0;return <button className="work-saved-card" key={record.id} onClick={()=>navigate(()=>choose(record))}>
             <FolderOpen size={23} weight="light" aria-hidden="true" /><span><strong>{record.title}</strong>
-              <span>{w?.retired?'Old tool · read only':w?.custom?'Your own':w?.title}{n?` · ${plural(n,'file')}`:''} · {SCOPE_NAME[record.scope]||'Personal'}{record.output?' · Has an answer':''}{record.updated?` · ${new Date(record.updated).toLocaleDateString(undefined,{day:'numeric',month:'short'})}`:''}</span></span><ArrowRight size={18} aria-hidden="true" />
-          </button>;})}</div>:<div className="work-empty"><FolderOpen size={35} weight="light" /><h4>{records.length?'Nothing matches that.':'Your saved work will live here.'}</h4>
-            <p>{records.length?'Try a different word.':'Pick a workspace, add your files and save it. Next time, everything is ready.'}</p><button className="work-primary" onClick={()=>{setView('catalogue');setQuery('');}}>See workspaces <ArrowRight size={17} /></button></div>}
+              <span>{record.kind==='project'?'Project':w?.retired?'Old tool · read only':w?.custom?'Your own':w?.title}{n?` · ${plural(n,'file')}`:''} · {SCOPE_NAME[record.scope]||'Personal'}{record.output?' · Has an answer':''}{record.updated?` · ${new Date(record.updated).toLocaleDateString(undefined,{day:'numeric',month:'short'})}`:''}</span></span><ArrowRight size={18} aria-hidden="true" />
+          </button>;})}</div>:<div className="work-empty"><FolderOpen size={35} weight="light" /><h4>{view==='projects'?(projects.length?'Nothing matches that.':'Your projects will live here.'):records.length?'Nothing matches that.':'Your saved work will live here.'}</h4>
+            <p>{view==='projects'?'Keep related conversations and files together. Instructions are optional.':records.length?'Try a different word.':'Pick a workspace, add your files and save it. Next time, everything is ready.'}</p><button className="work-primary" onClick={()=>{if(view==='projects')create({id:CUSTOM_WORKSPACE,kind:'project'});else {setView('catalogue');setQuery('');}}}>{view==='projects'?'Create a project':'See workspaces'} <ArrowRight size={17} /></button></div>}
         </section>
       </> : <section className="work-task" aria-label={workspace?.title || 'Workspace'}>
-        <button className="work-back" disabled={mutationBusy} onClick={panel==='setup'||workspace?.retired?leaveTask:()=>setPanel('setup')}><ArrowLeft size={17} />{panel==='setup'||workspace?.retired?(view==='saved'?'Saved':'All tasks'):'Back'}</button>
-        {!workspace?.retired && <nav className="work-stepper" aria-label="Workspace stages">
+        <button className="work-back" disabled={mutationBusy} onClick={panel==='setup'||workspace?.retired?leaveTask:()=>setPanel('setup')}><ArrowLeft size={17} />{panel==='setup'||workspace?.retired?(view==='projects'?'Projects':view==='saved'?'Saved':'All tasks'):'Back'}</button>
+        {!workspace?.retired && !project && <nav className="work-stepper" aria-label="Workspace stages">
           <button disabled={mutationBusy} aria-current={panel === 'setup' ? 'step' : undefined} onClick={() => setPanel('setup')}>Files & notes</button>
           {check && <button disabled={mutationBusy || !canCheck} aria-current={panel === 'check' ? 'step' : undefined} onClick={() => setPanel('check')}>Run a check</button>}
           {check && <button disabled={!saved?.output || mutationBusy} aria-current={panel === 'result' ? 'step' : undefined} onClick={() => setPanel('result')}>Result</button>}
@@ -339,7 +351,26 @@ export function Workroom({ open, onClose, session, onStart, initialDraft = null,
           <div className="work-inline-actions"><button disabled={mutationBusy} onClick={()=>exportRecords([saved||draft],draft.title)}><DownloadSimple size={17} />Save a backup copy</button>
             {!confirmDelete?<button disabled={mutationBusy||offline} onClick={()=>setConfirmDelete(true)}><Trash size={17} />Delete</button>
               :<><button disabled={mutationBusy||offline} onClick={()=>mutate('delete')}>Yes, delete it</button><button onClick={()=>setConfirmDelete(false)}>Keep it</button></>}</div>
-        </section> : panel==='setup' ? <>
+        </section> : project ? <>
+          <header className="work-detail-head"><p>Project</p><h3 ref={taskHeading} tabIndex={-1}>{draft.title || 'Create a project'}</h3><p>A place for an ongoing goal, with its conversations and files together.</p></header>
+          <form className="work-setup work-project" onSubmit={event=>{event.preventDefault();mutate('save');}}>
+            <div className="work-setup-main">
+              <div className="work-field"><label htmlFor="project-name">Project name</label><input id="project-name" maxLength={160} required value={draft.title} placeholder="Like “Kitchen renovation”" disabled={mutationBusy} onChange={event=>edit({...draft,title:event.target.value})} /></div>
+              <div className="work-field"><label htmlFor="project-instructions">Instructions (optional)</label><textarea id="project-instructions" rows={3} maxLength={WORK_LIMITS.brief} value={draft.brief || ''} placeholder="What should Vaelo keep in mind for this project?" disabled={mutationBusy} onChange={event=>edit({...draft,brief:event.target.value})} /></div>
+              <div className="work-field"><label htmlFor="project-notes">Project context (optional)</label><textarea id="project-notes" rows={3} maxLength={WORK_LIMITS.notes} value={draft.notes || ''} disabled={mutationBusy} onChange={event=>edit({...draft,notes:event.target.value})} /></div>
+              <DocumentSlot slot={{id:'extra',label:'Project files',hint:'Reference material shared by conversations in this project.'}} docs={draft.documents} disabled={mutationBusy} onFiles={addFiles} onPaste={addPasted} preview={preview} onPreview={togglePreview} onRemove={id=>edit({...draft,documents:draft.documents.filter(doc=>doc.id!==id)})} />
+              {base && <details className="work-more"><summary>Manage project</summary><div className="work-inline-actions"><button type="button" disabled={mutationBusy} onClick={()=>exportRecords([saved],draft.title)}><DownloadSimple size={17} />Save a backup copy</button><button type="button" disabled={!canAct} onClick={()=>setConfirmDelete(true)}><Trash size={17} />Delete project</button></div>
+                {confirmDelete && <div className="work-delete"><p>Delete this project and its shared files? Conversations will be kept outside the project. You can’t undo this.</p><button type="button" disabled={!canAct} onClick={()=>mutate('delete')}>Yes, delete it</button><button type="button" onClick={()=>setConfirmDelete(false)}>Keep it</button></div>}
+              </details>}
+            </div>
+            <aside className="work-setup-aside"><section className="project-conversations" aria-label="Project conversations"><h4>Conversations <span>{projectChats.length}</span></h4>
+              {projectChats.length ? <ul>{projectChats.map(chat=><li key={chat.id}><button type="button" onClick={()=>navigate(()=>onOpenChat?.(chat.id))}><ChatCircle size={17} /><span>{chat.title}</span><ArrowRight size={15} /></button></li>)}</ul> : <p className="work-help">Start a conversation here to keep it with this project.</p>}
+              <button type="button" className="work-primary" disabled={!canAct} onClick={()=>mutate('start')}><Plus size={17} />New conversation</button>
+              {base && onAddChat && otherChats.length > 0 && <div className="work-field project-add-chat"><label htmlFor="project-add-chat">Add an existing conversation</label><select id="project-add-chat" value={addChatId} onChange={event=>setAddChatId(event.target.value)}><option value="">Choose a conversation</option>{otherChats.map(chat=><option key={chat.id} value={chat.id}>{chat.title}{chat.workContext?' (moves from saved work)':''}</option>)}</select><button type="button" disabled={!addChatId || !canAct || dirty} onClick={()=>{onAddChat(addChatId,saved);setAddChatId('');}}>Add to project</button>{dirty && <p className="work-help">Save your changes before adding a conversation.</p>}</div>}
+            </section></aside>
+            <div className="work-action-bar"><button className="work-primary" type="submit" disabled={!canAct || (!dirty && !!base)}>{busy==='save'?'Saving…':base?'Save changes':'Create project'}</button><span className="work-save-state">{base && !dirty ? 'Saved' : 'Name your project; everything else is optional.'}</span></div>
+          </form>
+        </> : panel==='setup' ? <>
           <header className="work-detail-head">
             <p>{custom?'Your own workspace':AUDIENCE_NAMES[workspace?.audience]}</p>
             <h3 ref={taskHeading} tabIndex={-1}>{custom ? draft.title || 'Make your own' : workspace?.title}</h3>

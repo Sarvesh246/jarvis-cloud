@@ -227,3 +227,16 @@ form>.work-action-bar { position:sticky; bottom:0; z-index:1; background:var(--c
 
 /* Headings take focus only so screen readers land on them; there is nothing to click. */
 .workroom [tabindex="-1"]:focus { outline:none; }
+
+/* These controls are rendered only for the desktop Workroom. */
+.work-create-options { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: var(--s-4); }
+.workroom .work-create-options .work-own { margin: 0; height: 100%; min-width: 0; }
+.work-create-options { margin-bottom: var(--s-6); }
+.work-project .work-setup-aside { position: sticky; top: var(--s-5); }
+.project-conversations h4 { display: flex; align-items: center; gap: var(--s-2); margin-top: 0; }
+.project-conversations h4 span { color: var(--muted); font-size: var(--t-xs); }
+.project-conversations ul { list-style: none; padding: 0; margin: 0 0 var(--s-4); }
+.workroom .project-conversations li button { display: flex; width: 100%; justify-content: flex-start; border: 0; border-bottom: 1px solid var(--hairline); border-radius: 0; padding-inline: 0; text-align: left; }
+.project-conversations li button span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.project-conversations li svg { flex: none; color: var(--gilt); }
+.project-add-chat { margin-top: var(--s-5); }

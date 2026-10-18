@@ -222,3 +222,24 @@ test("the real check engine persists results and semantic input errors stay acti
   const invalid = await store.save({ id: "invalid", workspaceId: "split-costs", title: "Trip", check: { id: "cost-split", input: { people: "Ana", spent: "Ana paid $5" } } });
   await assert.rejects(store.run(invalid.id, invalid.revision), error => error.status === 400 && /at least two people/.test(error.message));
 });
+
+
+test('projects persist privately with optional instructions and shared reference files', async () => {
+  const blob = memoryBlob(), store = new WorkStore('project-owner', blob);
+  const first = await store.save({ id: 'project-one', workspaceId: 'custom', kind: 'project', title: 'Kitchen renovation' });
+  assert.equal(first.kind, 'project');
+  assert.equal(first.brief, '');
+  assert.equal(first.check, null);
+  const updated = await store.save({ ...first, brief: 'Keep costs within the supplied budget.', documents: [{ id: 'plan', slot: 'extra', name: 'plan.txt', text: 'Keep the existing cabinets.' }] }, first.revision);
+  assert.equal((await new WorkStore('project-owner', blob).record(first.id)).kind, 'project');
+  const context = await readWorkContext('project-owner', first.id, { storage: blob });
+  assert.equal(context.record.brief, updated.brief);
+  assert.equal(Object.values(context.documents)[0], 'Keep the existing cabinets.');
+  await assert.rejects(new WorkStore('other', blob).record(first.id), status(404));
+  await assert.rejects(store.save({ ...updated, kind: 'unknown' }, updated.revision), status(400));
+  await assert.rejects(store.save({ ...updated, check: { id: 'form', input: {} } }, updated.revision), status(400));
+  const { kind, ...olderClient } = updated;
+  const preserved = await store.save(olderClient, updated.revision);
+  assert.equal(preserved.kind, 'project');
+  await assert.rejects(store.save({ ...olderClient, check: { id: 'form', input: {} } }, preserved.revision), status(400));
+});

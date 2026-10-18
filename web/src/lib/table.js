@@ -209,3 +209,28 @@ export function chartable(columns, rows) {
   const label = columns.findIndex((_, i) => !numeric.includes(i));
   return { label: label >= 0 ? label : years.length ? years[0] : null, values };
 }
+// Compare the supplied values only. The first column names each row and
+// is never a difference in itself; section labels are not observations.
+export function comparisonAxis(columns) {
+  return /^(?:features?|spec(?:ification)?s?|attributes?|categor(?:y|ies)|criteria|criterion|details?|metrics?|aspects?|properties|factors?|capabilit(?:y|ies))\b/i.test(cellText(columns[0] ?? '')) ? 'columns' : 'rows';
+}
+
+export function differenceCells(rows, columns, visible, selected = [], axis = comparisonAxis(columns)) {
+  const result = new Set();
+  const available = visible.filter(index => !isSectionRow(rows[index]));
+  const picked = available.filter(index => selected.includes(index));
+  const normalize = value => cellText(value ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
+  if (picked.length >= 2 || (axis === 'rows' && available.length === 2)) {
+    const comparing = picked.length >= 2 ? picked : available;
+    for (let column = 1; column < columns.length; column++) {
+      if (new Set(comparing.map(row => normalize(rows[row][column]))).size > 1)
+        comparing.forEach(row => result.add(`${row}:${column}`));
+    }
+  } else if (axis === 'columns' && columns.length >= 3) {
+    for (const row of available) {
+      if (new Set(columns.slice(1).map((_, i) => normalize(rows[row][i + 1]))).size > 1)
+        columns.slice(1).forEach((_, i) => result.add(`${row}:${i + 1}`));
+    }
+  }
+  return result;
+}

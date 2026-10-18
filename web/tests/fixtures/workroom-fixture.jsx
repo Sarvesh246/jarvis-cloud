@@ -6,7 +6,7 @@ import '../../src/design/tokens.css';
 import '../../src/design/base.css';
 import { Workroom } from '../../src/components/Workroom.jsx';
 import { WorkroomIcon } from '../../src/components/WorkroomIcon.jsx';
-import { chatToWorkspace } from '../../src/lib/workroom.js';
+import { chatToWorkspace, workContextFor, refreshWorkReferences } from '../../src/lib/workroom.js';
 import '../../src/design/refinements.css';
 
 const records=new Map(), texts=new Map(); let conflictOnce=false;
@@ -44,12 +44,16 @@ const sampleChat={title:'Weekly client report',messages:[
   {role:'assistant',content:'Here you go.'},{role:'user',content:'Always end with next week’s plan.'}]};
 function Fixture(){
   const [open,setOpen]=useState(true),[started,setStarted]=useState(''),[initial,setInitial]=useState(null);
+  const [chats,setChats]=useState([{...sampleChat,id:'sample-project-chat',updated:Date.now()}]);
   return <><main style={{padding:'2rem'}}><h1>Workroom component test fixture</h1><p>Mock account and in-memory API. No production sign-in, check engine, model call or persistence.</p>
     <button onClick={()=>{setInitial(null);setOpen(true);}}><WorkroomIcon open={open} />Open workroom</button>
     <button onClick={()=>{conflictOnce=true;setOpen(true);}}>Make next write conflict</button>
     <button onClick={()=>{const {draft}=chatToWorkspace(sampleChat);setInitial({draft,message:'Your requests became the instructions. Edit anything, then save.'});setOpen(true);}}>Save a sample chat as a workspace</button>
     <p role="status">{started}</p></main>
     <Workroom open={open} onClose={()=>setOpen(false)} initialDraft={initial} session={{user:{sub:'workroom-component-fixture'},csrf:'fixture-only'}}
-      onStart={(record,prompt)=>{setStarted(`Started a conversation with ${record.title} · ${record.documents.length} documents${prompt?` · sent “${prompt}”`:''}`);setOpen(false);}} /></>;
+      chats={chats} onAddChat={(id,record)=>setChats(current=>current.map(chat=>chat.id===id?{...chat,workContext:workContextFor(record)}:chat))}
+      onOpenChat={id=>{setStarted(`Opened conversation ${id}`);setOpen(false);}}
+      onRecordChange={record=>setChats(current=>refreshWorkReferences(current,record))}
+      onStart={(record,prompt)=>{setChats(current=>[{id:crypto.randomUUID(),title:`Conversation ${current.length+1}`,messages:[],workContext:workContextFor(record),updated:Date.now()},...current]);setStarted(`Started a conversation with ${record.title} · ${record.documents.length} documents${prompt?` · sent “${prompt}”`:''}`);setOpen(false);}} /></>;
 }
 createRoot(document.getElementById('root')).render(<Fixture/>);
