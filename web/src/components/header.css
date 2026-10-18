@@ -73,30 +73,61 @@
   outline: none;
 }
 
+.header-more {
+  display: none;
+}
+
+/* On a phone: ☰ on the left, the name centred, ⋯ on the right, and the
+   gilt hairline under it, inset 16px each side. */
 @media (max-width: 47.9375rem), (pointer: coarse) and (max-height: 31.25rem) {
   .header {
-    min-height: calc(3.75rem + var(--ios-edge, 0px));
-    padding: 0 var(--s-3);
+    gap: 4px;
+    min-height: calc(50px + 6px + var(--ios-edge, 0px));
+    padding: 0 8px 6px;
     padding-top: calc(env(safe-area-inset-top) + var(--ios-edge, 0px));
   }
 
   .header::after {
-    left: var(--s-3);
-    right: var(--s-3);
+    left: 16px;
+    right: 16px;
   }
 
-  .header-rail-mobile {
+  .header-left {
+    gap: 0;
+  }
+
+  .header-rail-mobile,
+  .header-more {
     display: inline-grid;
+    flex: none;
+    width: 44px;
+    height: 44px;
+    color: var(--ink-soft);
   }
 
-  .header-rail-desktop {
+  .header-rail-mobile:active,
+  .header-more:active {
+    background: var(--gilt-wash);
+  }
+
+  .header .header-rail-desktop,
+  .header .header-find,
+  .header .header-save-work {
     display: none;
   }
 
   .header-title,
   .header-title-input {
-    font-size: var(--t-md);
-    max-width: 72vw;
+    height: 44px;
+    padding: 0 4px;
+    font-size: 17px;
+    max-width: none;
+    text-align: center;
+  }
+
+  .header-title-input {
+    width: auto;
+    flex: 1;
   }
 }
 

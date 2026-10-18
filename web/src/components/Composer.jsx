@@ -1,26 +1,33 @@
-import React, { forwardRef, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import React, { forwardRef, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   ArrowUp,
+  Binoculars,
+  Camera,
   CaretLeft,
   CaretRight,
   CaretUp,
   Check,
+  FileArrowUp,
   Footprints,
   Globe,
   GraduationCap,
+  ImageSquare,
   MagnifyingGlass,
   Microphone,
   Paperclip,
+  PlusCircle,
   Scales,
   SlidersHorizontal,
   Stop,
+  Toolbox,
   User,
   X,
 } from "@phosphor-icons/react";
 import { AttachmentList } from "./Message.jsx";
+import { Sheet } from "./Sheet.jsx";
 import { MESSAGE_LIMIT } from "../lib/attachments.js";
 import { usePhone } from "../lib/use-phone.js";
+import { buzz } from "../lib/haptics.js";
 import "./composer.css";
 import { ActivityIsland } from "./UITools.jsx";
 import { DESKTOP } from "../lib/desktop.js";
@@ -180,7 +187,18 @@ function useDictation(draft, onChange) {
     }, FINISH_WAIT);
   }
 
-  return { supported: !!Recognition, listening, processing, problem, toggle };
+  /* Put the take away: nothing it heard is kept */
+  function cancel() {
+    clearTimeout(queued.current);
+    queued.current = 0;
+    const take = live.current;
+    live.current = null;
+    setListening(false);
+    setProcessing(false);
+    take?.abort();
+  }
+
+  return { supported: !!Recognition, listening, processing, problem, toggle, cancel };
 }
 
 /* While dictating, five gilt hairlines follow your voice and a clock counts
@@ -190,8 +208,10 @@ function useDictation(draft, onChange) {
    speech service) the lines simply breathe. */
 const IOS = typeof navigator !== "undefined" && /iP(hone|ad|od)/.test(navigator.userAgent);
 const BAR_WEIGHTS = [0.55, 0.85, 1, 0.8, 0.6];
+/* The phone's dictation panel draws nine, tallest in the middle */
+const PHONE_BAR_WEIGHTS = [0.45, 0.62, 0.8, 0.92, 1, 0.9, 0.78, 0.6, 0.48];
 
-function useVoice(listening) {
+function useVoice(listening, weights = BAR_WEIGHTS) {
   const bars = useRef(null);
   const [heard, setHeard] = useState(false);
   const [elapsed, setElapsed] = useState(0);
@@ -232,7 +252,7 @@ function useVoice(listening) {
           for (let i = 2; i < 48; i++) sum += data[i];
           const level = Math.min(1, sum / (46 * 150));
           bars.current?.childNodes.forEach((bar, i) => {
-            bar.style.setProperty("--level", (0.18 + level * BAR_WEIGHTS[i] * 0.82).toFixed(3));
+            bar.style.setProperty("--level", (0.18 + level * (weights[i] ?? 0.6) * 0.82).toFixed(3));
           });
           frame = requestAnimationFrame(draw);
         };
@@ -432,184 +452,91 @@ function ToolsMenu({ options, onOptions, onClose, anchor, guest }) {
 }
 
 /* On a phone the tools rise as a sheet from the bottom edge, in reach of a
-   thumb. It has two pages: what's on (research, the current style) and the
-   styles themselves; the sheet's height eases between them as one page
-   slides in for the other. Drag it down or tap outside to put it away. */
-const CLOSE_AFTER = 80;
-
-function ToolsSheet({ options, onOptions, onClose, guest }) {
-  const [page, setPage] = useState("main");
-  const [height, setHeight] = useState();
-  const [pull, setPull] = useState(0);
-  const [dragging, setDragging] = useState(false);
-  const [leaving, setLeaving] = useState(false);
-  const pages = { main: useRef(null), role: useRef(null), style: useRef(null) };
-  const drag = useRef(null);
-  const close = useRef(onClose);
-  close.current = onClose;
-  const style = STYLES.find((s) => s.id === options.style);
-  const role = ROLES.find((r) => r.id === options.role);
-  const RoleIcon = role?.Icon || User;
-
-  const dismiss = useCallback((refocus) => {
-    setLeaving(true);
-    setTimeout(() => close.current(refocus), 340);
-  }, []);
-
-  useLayoutEffect(() => {
-    setHeight(pages[page].current?.offsetHeight);
-    pages[page].current?.querySelector("button")?.focus({ preventScroll: true });
-  }, [page]);
-
-  useEffect(() => {
-    function keys(event) {
-      if (event.key !== "Escape") return;
-      event.stopPropagation();
-      if (page !== "main") setPage("main");
-      else dismiss(true);
-    }
-    addEventListener("keydown", keys, true);
-    return () => removeEventListener("keydown", keys, true);
-  }, [page, dismiss]);
-
-  const grip = {
-    onPointerDown(event) {
-      drag.current = { y: event.clientY, at: performance.now() };
-      setDragging(true);
-      event.currentTarget.setPointerCapture(event.pointerId);
-    },
-    onPointerMove(event) {
-      if (drag.current) setPull(Math.max(0, event.clientY - drag.current.y));
-    },
-    onPointerUp(event) {
-      if (!drag.current) return;
-      const distance = Math.max(0, event.clientY - drag.current.y);
-      const speed = distance / Math.max(1, performance.now() - drag.current.at);
-      drag.current = null;
-      setDragging(false);
-      if (distance > CLOSE_AFTER || speed > 0.6) dismiss(true);
-      else setPull(0);
-    },
-    onPointerCancel() {
-      drag.current = null;
-      setDragging(false);
-      setPull(0);
-    },
+   thumb: where a file comes from, research, how Vaelo answers, and who it
+   answers as. Everything is on one page. Drag it down or tap outside to put
+   it away. */
+function ToolsSheet({ open, options, onOptions, onClose, guest, onAttach }) {
+  const pick = (patch) => {
+    buzz();
+    onOptions(patch);
   };
-
-  return createPortal(
-    <div className="tools-sheet-layer" data-leaving={leaving || undefined}>
-      <div className="tools-scrim" onClick={() => dismiss(true)} />
-      <div
-        className="tools-sheet"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Tools"
-        data-dragging={dragging || undefined}
-        style={{ "--pull": `${pull}px` }}
-      >
-        <div className="tools-grip" {...grip}>
-          <span aria-hidden="true" />
-        </div>
-        <div className="tools-pages" style={{ height }} data-page={page}>
-          <div className="tools-page" ref={pages.main} inert={page !== "main"}>
-            {!guest && <button
-              role="switch"
-              aria-checked={options.research}
-              className="tools-item"
-              onClick={() => onOptions({ research: !options.research })}
-            >
-              <Globe size={20} />
-              <span className="tools-text">
-                <span>Research with sources</span>
-                <span className="tools-note">Searches the web and cites what it finds.</span>
-              </span>
-              {options.research && <Check size={18} className="tools-check" />}
-            </button>}
-            <button className="tools-item" onClick={() => setPage("role")}>
-              <RoleIcon size={20} />
-              <span className="tools-text">
-                <span>Act as</span>
-                <span className="tools-note">
-                  {role ? `${role.label}. ${role.note}` : "Vaelo as usual. Pick a tutor, skeptic and more."}
-                </span>
-              </span>
-              <CaretRight size={16} className="tools-more" />
-            </button>
-            <button className="tools-item" onClick={() => setPage("style")}>
-              <SlidersHorizontal size={20} />
-              <span className="tools-text">
-                <span>Response style</span>
-                <span className="tools-note">{style?.label}. {style?.note}</span>
-              </span>
-              <CaretRight size={16} className="tools-more" />
-            </button>
-          </div>
-          <div
-            className="tools-page"
-            ref={pages.role}
-            inert={page !== "role"}
-            data-current={page === "role" || undefined}
-          >
-            <button className="tools-back" onClick={() => setPage("main")}>
-              <CaretLeft size={16} /> Act as
-            </button>
-            <div role="radiogroup" aria-label="Act as">
-              {ROLE_CHOICES.map(({ id, label, Icon, note }) => (
-                <button
-                  key={id}
-                  role="radio"
-                  aria-checked={(options.role || "none") === id}
-                  className="tools-item"
-                  onClick={() => {
-                    onOptions({ role: id });
-                    dismiss(true);
-                  }}
-                >
-                  <Icon size={20} />
-                  <span className="tools-text">
-                    <span>{label}</span>
-                    <span className="tools-note">{note}</span>
-                  </span>
-                  {(options.role || "none") === id && <Check size={18} className="tools-check" />}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div
-            className="tools-page"
-            ref={pages.style}
-            inert={page !== "style"}
-            data-current={page === "style" || undefined}
-          >
-            <button className="tools-back" onClick={() => setPage("main")}>
-              <CaretLeft size={16} /> Response style
-            </button>
-            <div role="radiogroup" aria-label="Response style">
-              {STYLES.map((option) => (
-                <button
-                  key={option.id}
-                  role="radio"
-                  aria-checked={options.style === option.id}
-                  className="tools-item"
-                  onClick={() => {
-                    onOptions({ style: option.id });
-                    dismiss(true);
-                  }}
-                >
-                  <span className="tools-radio" aria-hidden="true" />
-                  <span className="tools-text">
-                    <span>{option.label}</span>
-                    <span className="tools-note">{option.note}</span>
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
+  return (
+    <Sheet open={open} onClose={onClose} label="Tools" tall>
+      <div className="sh-attach" data-count={guest ? 1 : 3}>
+        {!guest && (
+          <button type="button" className="sh-tile" onClick={() => onAttach("photos")}>
+            <ImageSquare size={26} />
+            Photos
+          </button>
+        )}
+        {!guest && (
+          <button type="button" className="sh-tile" onClick={() => onAttach("camera")}>
+            <Camera size={26} />
+            Camera
+          </button>
+        )}
+        <button type="button" className="sh-tile" onClick={() => onAttach("files")}>
+          <FileArrowUp size={26} />
+          Files
+        </button>
       </div>
-    </div>,
-    document.body,
+
+      {/* Guests are answered without tools, so there is no research to offer. */}
+      {!guest && (
+        <button
+          type="button"
+          role="switch"
+          aria-checked={options.research}
+          className="sh-row sh-feature"
+          onClick={() => pick({ research: !options.research })}
+        >
+          <Binoculars size={24} />
+          <span className="sh-row-text">
+            <span>Research</span>
+            <span className="sh-row-note">Search wide and cite beside each claim</span>
+          </span>
+          <span className="sh-switch" data-on={options.research || undefined} aria-hidden="true" />
+        </button>
+      )}
+
+      <h3 className="label sh-label">Response style</h3>
+      <div role="radiogroup" aria-label="Response style">
+        {STYLES.map((style) => (
+          <button
+            key={style.id}
+            type="button"
+            role="radio"
+            aria-checked={options.style === style.id}
+            className="sh-row sh-radio-row"
+            onClick={() => onOptions({ style: style.id })}
+          >
+            <span className="sh-row-text">
+              <span>{style.label}</span>
+              <span className="sh-row-note">{style.note}</span>
+            </span>
+            <span className="sh-radio" aria-hidden="true" />
+          </button>
+        ))}
+      </div>
+
+      <h3 className="label sh-label">Act as</h3>
+      <div className="sh-roles" role="radiogroup" aria-label="Act as">
+        {ROLES.map(({ id, label, Icon, note }) => (
+          <button
+            key={id}
+            type="button"
+            role="radio"
+            aria-checked={options.role === id}
+            className="sh-role"
+            onClick={() => pick({ role: options.role === id ? "none" : id })}
+          >
+            <Icon size={24} />
+            <span>{label}</span>
+            <span>{note}</span>
+          </button>
+        ))}
+      </div>
+    </Sheet>
   );
 }
 
@@ -629,20 +556,35 @@ export const Composer = forwardRef(function Composer(
     onOptions,
     onDictating,
     guest = false,
+    workContext,
+    onClearWork,
   },
   textarea,
 ) {
   const [menu, setMenu] = useState(false);
   const phone = usePhone();
   const picker = useRef(null);
+  const photos = useRef(null);
+  const camera = useRef(null);
   const toolsButton = useRef(null);
   const dictation = useDictation(draft, onChange);
-  const voice = useVoice(dictation.listening);
+  const voice = useVoice(dictation.listening, phone ? PHONE_BAR_WEIGHTS : BAR_WEIGHTS);
   const over = length > MESSAGE_LIMIT;
   const reading = attachments.some((file) => file.state === "reading");
   const ready = draft.trim() || attachments.some((file) => file.state === "ready");
   const style = STYLES.find((s) => s.id === options.style);
   const role = ROLES.find((r) => r.id === options.role);
+  /* On a phone, dictation takes the place of the box: what is being said
+     shows large above one row of controls. What was already written stays
+     out of it, and cancelling gives that back. */
+  const panel = phone && dictation.listening;
+  const written = useRef(draft);
+  const spokenFrom = useRef("");
+  written.current = draft;
+  useEffect(() => {
+    if (dictation.listening) spokenFrom.current = written.current;
+  }, [dictation.listening]);
+  const spoken = draft.startsWith(spokenFrom.current) ? draft.slice(spokenFrom.current.length).trim() : draft.trim();
   /* Status that belongs to the message, not the buttons: said on its own
      line so the instrument row never grows or shifts. */
   const note = dictation.problem
@@ -660,8 +602,8 @@ export const Composer = forwardRef(function Composer(
     const el = textarea.current;
     if (!el) return;
     el.style.height = "auto";
-    el.style.height = `${Math.min(el.scrollHeight, 208)}px`;
-  }, [draft, textarea]);
+    el.style.height = `${Math.min(el.scrollHeight, phone ? 132 : 208)}px`;
+  }, [draft, textarea, phone]);
 
   useEffect(() => onDictating?.(dictation.listening), [dictation.listening, onDictating]);
 
@@ -672,9 +614,18 @@ export const Composer = forwardRef(function Composer(
     if (!over && !reading && !offline) onSend();
   }
 
+  const accept = `${guest ? "" : "image/png,image/jpeg,image/webp,image/gif,"}text/*,.md,.markdown,.csv,.tsv,.json,.jsonl,.xml,.yml,.yaml,.toml,.ini,.log,.html,.css,.js,.jsx,.ts,.tsx,.py,.rb,.go,.rs,.java,.kt,.swift,.c,.h,.cpp,.cs,.php,.sh,.ps1,.sql,.svg`;
+  const taken = (event) => {
+    onFiles([...event.target.files]);
+    event.target.value = "";
+    textarea.current?.focus();
+  };
+
   return (
     <form
       className="composer"
+      data-phone={phone || undefined}
+      data-panel={panel || undefined}
       data-listening={dictation.listening || undefined}
       data-busy={busy || undefined}
       onSubmit={(event) => {
@@ -683,186 +634,305 @@ export const Composer = forwardRef(function Composer(
       }}
     >
       {(dictation.listening || dictation.processing || reading) && <ActivityIsland title={dictation.listening ? "Recording your voice" : dictation.processing ? "Transcribing your recording" : "Reading attachments"}><p>{dictation.listening ? "Use the microphone button to stop recording. Your words appear in the message field." : dictation.processing ? "The recording is being transcribed. You can send once the text is ready." : `${attachments.filter(file => file.state === "reading").length} attachment(s) being read. See the file previews below.`}</p></ActivityIsland>}
-      <AttachmentList items={attachments} onRemove={onRemoveFile} />
-      <textarea
-        dir="auto"
-        ref={textarea}
-        value={draft}
-        onChange={(event) => onChange(event.target.value)}
-        onPaste={(event) => {
-          const files = [...(event.clipboardData?.files || [])];
-          if (files.length && !event.clipboardData.getData("text")) {
-            event.preventDefault();
-            onFiles(files);
-          }
-        }}
-        placeholder={
-          dictation.listening
-            ? "Listening…"
-            : role?.placeholder ||
-              (options.research && !guest ? "What should Vaelo look into?" : "Write to Vaelo")
-        }
-        aria-label="Message Vaelo"
-        aria-describedby="composer-status"
-        rows={1}
-        onKeyDown={(event) => {
-          if (
-            event.key === "Enter" &&
-            !event.shiftKey &&
-            !event.nativeEvent.isComposing &&
-            event.keyCode !== 229 &&
-            !matchMedia("(pointer: coarse)").matches
-          ) {
-            event.preventDefault();
-            send();
-          }
-        }}
-      />
-      <p className="composer-note" id="composer-status" aria-live="polite" data-tone={note?.tone}>
-        {note?.text}
-      </p>
-      <div className="composer-bar">
-        <div className="composer-start">
-          <input
-            ref={picker}
-            type="file"
-            multiple
-            hidden
-            accept={`${guest ? "" : "image/png,image/jpeg,image/webp,image/gif,"}text/*,.md,.markdown,.csv,.tsv,.json,.jsonl,.xml,.yml,.yaml,.toml,.ini,.log,.html,.css,.js,.jsx,.ts,.tsx,.py,.rb,.go,.rs,.java,.kt,.swift,.c,.h,.cpp,.cs,.php,.sh,.ps1,.sql,.svg`}
-            onChange={(event) => {
-              onFiles([...event.target.files]);
-              event.target.value = "";
-              textarea.current?.focus();
-            }}
-          />
-          <button
-            type="button"
-            className="icon-button composer-tool"
-            aria-label="Attach images or files"
-            data-tip="Attach images or files (or drop or paste them)"
-            onClick={() => picker.current?.click()}
-          >
-            <Paperclip size={20} />
-          </button>
-          {/* The current way of answering is always in view, one tap from
-              changing; research and style live behind it. */}
-          <span className="tools-anchor" ref={toolsButton}>
+
+      {panel && (
+        <div className="dictation" role="group" aria-label="Dictation">
+          <p className="dictation-text" aria-live="polite">
+            {spoken || "Listening…"}
+          </p>
+          <div className="dictation-row">
             <button
               type="button"
-              className="mode-button"
-              aria-label={`Response style: ${style?.label}. Tools and roles`}
-              data-tip="Response style, roles and research"
-              aria-haspopup="menu"
-              aria-expanded={menu}
-              onClick={() => setMenu((value) => !value)}
+              className="dictation-cancel"
+              aria-label="Cancel dictation"
+              onClick={() => {
+                buzz();
+                dictation.cancel();
+                onChange(spokenFrom.current);
+              }}
             >
-              <SlidersHorizontal size={17} aria-hidden="true" />
-              <span>{style?.label}</span>
-              <CaretUp size={12} aria-hidden="true" className="mode-caret" />
+              <X size={20} />
             </button>
-            {menu && phone && (
-              <ToolsSheet
-                guest={guest}
-                options={options}
-                onOptions={onOptions}
-                onClose={(refocus) => {
-                  setMenu(false);
-                  if (refocus) toolsButton.current?.querySelector("button")?.focus();
-                }}
-              />
-            )}
-            {menu && !phone && (
-              <ToolsMenu
-                guest={guest}
-                options={options}
-                onOptions={onOptions}
-                anchor={toolsButton}
-                onClose={(refocus) => {
-                  setMenu(false);
-                  if (refocus) textarea.current?.focus();
-                }}
-              />
-            )}
-          </span>
-          {/* The note rides along as a tip, so a role chosen a while ago
-              still says what it does without opening the menu. */}
-          {role && (
-            <span className="mode-chip" data-tip={role.note}>
-              <role.Icon size={14} aria-hidden="true" />
-              <span className="mode-chip-text">{role.label}</span>
-              <button
-                type="button"
-                aria-label={`Stop acting as ${role.label.toLowerCase()}`}
-                data-tip={`Stop acting as ${role.label.toLowerCase()}`}
-                onClick={() => onOptions({ role: "none" })}
-              >
-                <X size={12} />
-              </button>
-            </span>
-          )}
-          {options.research && (
-            <span className="mode-chip">
-              <Globe size={14} aria-hidden="true" />
-              <span className="mode-chip-text">Research</span>
-              <button
-                type="button"
-                aria-label="Turn off research"
-                onClick={() => onOptions({ research: false })}
-              >
-                <X size={12} />
-              </button>
-            </span>
-          )}
+            <div className="dictation-live" role="status">
+              <span className="voice-bars" ref={voice.bars} data-heard={voice.heard || undefined} aria-hidden="true">
+                {PHONE_BAR_WEIGHTS.map((_, i) => (
+                  <span key={i} />
+                ))}
+              </span>
+              <span className="voice-time" aria-label="Recording time">
+                {voice.time}
+              </span>
+            </div>
+            <button
+              type="button"
+              className="dictation-done"
+              aria-label="Done"
+              onClick={() => {
+                buzz();
+                dictation.toggle();
+                textarea.current?.focus();
+              }}
+            >
+              <Check size={20} />
+            </button>
+          </div>
         </div>
-        {dictation.listening && (
-          <span className="composer-live" role="status">
-            <span
-              className="voice-bars"
-              ref={voice.bars}
-              data-heard={voice.heard || undefined}
-              aria-hidden="true"
-            >
-              {BAR_WEIGHTS.map((_, i) => (
-                <span key={i} />
-              ))}
-            </span>
-            <span className="composer-live-text">Listening</span>
-            <span className="voice-time" aria-hidden="true">
-              {voice.time}
-            </span>
-          </span>
+      )}
+
+      <div className="composer-main" hidden={panel || undefined}>
+        {phone ? (
+          (options.research || role || workContext || attachments.length > 0) && (
+            <div className="composer-chips">
+              {options.research && !guest && (
+                <span className="mode-chip">
+                  <Binoculars size={15} aria-hidden="true" />
+                  <span className="mode-chip-text">Research</span>
+                  <button type="button" aria-label="Turn off research" onClick={() => onOptions({ research: false })}>
+                    <X size={13} />
+                  </button>
+                </span>
+              )}
+              {role && (
+                <span className="mode-chip">
+                  <role.Icon size={15} aria-hidden="true" />
+                  <span className="mode-chip-text">{role.label}</span>
+                  <button type="button" aria-label={`Stop acting as ${role.label.toLowerCase()}`} onClick={() => onOptions({ role: "none" })}>
+                    <X size={13} />
+                  </button>
+                </span>
+              )}
+              {workContext && (
+                <span className="mode-chip">
+                  <Toolbox size={15} aria-hidden="true" />
+                  <span className="mode-chip-text">{workContext.title}</span>
+                  <button type="button" aria-label="Stop using this workspace" onClick={onClearWork}>
+                    <X size={13} />
+                  </button>
+                </span>
+              )}
+              <AttachmentList items={attachments} onRemove={onRemoveFile} />
+            </div>
+          )
+        ) : (
+          <AttachmentList items={attachments} onRemove={onRemoveFile} />
         )}
-        <div className="composer-end">
-          {!draft && !note && (
-            <span className="composer-hint">Enter to send · Shift+Enter for a new line</span>
+        <textarea
+          dir="auto"
+          ref={textarea}
+          value={draft}
+          onChange={(event) => onChange(event.target.value)}
+          onPaste={(event) => {
+            const files = [...(event.clipboardData?.files || [])];
+            if (files.length && !event.clipboardData.getData("text")) {
+              event.preventDefault();
+              onFiles(files);
+            }
+          }}
+          placeholder={
+            dictation.listening
+              ? "Listening…"
+              : role?.placeholder ||
+                (phone
+                  ? "Ask anything"
+                  : options.research && !guest ? "What should Vaelo look into?" : "Write to Vaelo")
+          }
+          aria-label="Message Vaelo"
+          aria-describedby="composer-status"
+          rows={1}
+          onKeyDown={(event) => {
+            if (
+              event.key === "Enter" &&
+              !event.shiftKey &&
+              !event.nativeEvent.isComposing &&
+              event.keyCode !== 229 &&
+              !matchMedia("(pointer: coarse)").matches
+            ) {
+              event.preventDefault();
+              send();
+            }
+          }}
+        />
+        <p className="composer-note" id="composer-status" aria-live="polite" data-tone={note?.tone}>
+          {note?.text}
+        </p>
+        <div className="composer-bar">
+          <div className="composer-start">
+            {phone ? (
+              <>
+                <button
+                  type="button"
+                  className="icon-button composer-tool composer-plus"
+                  aria-label="Attach files, turn on research, choose a role"
+                  aria-haspopup="dialog"
+                  onClick={() => {
+                    buzz();
+                    setMenu(true);
+                  }}
+                >
+                  <PlusCircle size={22} />
+                </button>
+                <button
+                  type="button"
+                  className="mode-button"
+                  aria-label={`Response style: ${style?.label}. Tools and roles`}
+                  aria-haspopup="dialog"
+                  aria-expanded={menu}
+                  onClick={() => {
+                    buzz();
+                    setMenu(true);
+                  }}
+                >
+                  <span>{style?.label}</span>
+                  <CaretUp size={13} aria-hidden="true" className="mode-caret" />
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  className="icon-button composer-tool"
+                  aria-label="Attach images or files"
+                  data-tip="Attach images or files (or drop or paste them)"
+                  onClick={() => picker.current?.click()}
+                >
+                  <Paperclip size={20} />
+                </button>
+                {/* The current way of answering is always in view, one tap from
+                    changing; research and style live behind it. */}
+                <span className="tools-anchor" ref={toolsButton}>
+                  <button
+                    type="button"
+                    className="mode-button"
+                    aria-label={`Response style: ${style?.label}. Tools and roles`}
+                    data-tip="Response style, roles and research"
+                    aria-haspopup="menu"
+                    aria-expanded={menu}
+                    onClick={() => setMenu((value) => !value)}
+                  >
+                    <SlidersHorizontal size={17} aria-hidden="true" />
+                    <span>{style?.label}</span>
+                    <CaretUp size={12} aria-hidden="true" className="mode-caret" />
+                  </button>
+                  {menu && (
+                    <ToolsMenu
+                      guest={guest}
+                      options={options}
+                      onOptions={onOptions}
+                      anchor={toolsButton}
+                      onClose={(refocus) => {
+                        setMenu(false);
+                        if (refocus) textarea.current?.focus();
+                      }}
+                    />
+                  )}
+                </span>
+                {/* The note rides along as a tip, so a role chosen a while ago
+                    still says what it does without opening the menu. */}
+                {role && (
+                  <span className="mode-chip" data-tip={role.note}>
+                    <role.Icon size={14} aria-hidden="true" />
+                    <span className="mode-chip-text">{role.label}</span>
+                    <button
+                      type="button"
+                      aria-label={`Stop acting as ${role.label.toLowerCase()}`}
+                      data-tip={`Stop acting as ${role.label.toLowerCase()}`}
+                      onClick={() => onOptions({ role: "none" })}
+                    >
+                      <X size={12} />
+                    </button>
+                  </span>
+                )}
+                {options.research && (
+                  <span className="mode-chip">
+                    <Globe size={14} aria-hidden="true" />
+                    <span className="mode-chip-text">Research</span>
+                    <button
+                      type="button"
+                      aria-label="Turn off research"
+                      onClick={() => onOptions({ research: false })}
+                    >
+                      <X size={12} />
+                    </button>
+                  </span>
+                )}
+              </>
+            )}
+          </div>
+          {!phone && dictation.listening && (
+            <span className="composer-live" role="status">
+              <span
+                className="voice-bars"
+                ref={voice.bars}
+                data-heard={voice.heard || undefined}
+                aria-hidden="true"
+              >
+                {BAR_WEIGHTS.map((_, i) => (
+                  <span key={i} />
+                ))}
+              </span>
+              <span className="composer-live-text">Listening</span>
+              <span className="voice-time" aria-hidden="true">
+                {voice.time}
+              </span>
+            </span>
           )}
-          {dictation.supported && !guest && (
+          <div className="composer-end">
+            {!draft && !note && (
+              <span className="composer-hint">Enter to send · Shift+Enter for a new line</span>
+            )}
+            {dictation.supported && !guest && (
+              <button
+                type="button"
+                className="icon-button composer-tool composer-mic"
+                aria-label={dictation.listening ? "Stop dictation" : "Dictate"}
+                aria-pressed={dictation.listening}
+                disabled={dictation.processing}
+                data-tip={dictation.listening ? "Stop dictation" : "Dictate"}
+                onClick={() => {
+                  if (phone) buzz();
+                  dictation.toggle();
+                }}
+              >
+                <Microphone size={20} weight={dictation.listening ? "fill" : undefined} />
+              </button>
+            )}
             <button
-              type="button"
-              className="icon-button composer-tool composer-mic"
-              aria-label={dictation.listening ? "Stop dictation" : "Dictate"}
-              aria-pressed={dictation.listening}
-              disabled={dictation.processing}
-              data-tip={dictation.listening ? "Stop dictation" : "Dictate"}
-              onClick={dictation.toggle}
+              type={busy ? "button" : "submit"}
+              className="send"
+              data-mode={busy ? "stop" : "send"}
+              aria-label={busy ? "Stop" : "Send"}
+              data-tip={busy ? "Stop (Esc)" : "Send"}
+              disabled={!busy && (!ready || over || reading || offline)}
+              onClick={busy ? onStop : undefined}
             >
-              <Microphone size={20} weight={dictation.listening ? "fill" : undefined} />
+              <ArrowUp className="send-arrow" size={20} weight="bold" />
+              <Stop className="send-stop" size={16} weight="fill" />
             </button>
-          )}
-          <button
-            type={busy ? "button" : "submit"}
-            className="send"
-            data-mode={busy ? "stop" : "send"}
-            aria-label={busy ? "Stop" : "Send"}
-            data-tip={busy ? "Stop (Esc)" : "Send"}
-            disabled={!busy && (!ready || over || reading || offline)}
-            onClick={busy ? onStop : undefined}
-          >
-            <ArrowUp className="send-arrow" size={20} weight="bold" />
-            <Stop className="send-stop" size={16} weight="fill" />
-          </button>
+          </div>
         </div>
       </div>
+
+      <input ref={picker} type="file" multiple hidden accept={accept} onChange={taken} />
+      {phone && !guest && (
+        <>
+          <input ref={photos} type="file" multiple hidden accept="image/*" onChange={taken} />
+          <input ref={camera} type="file" hidden accept="image/*" capture="environment" onChange={taken} />
+        </>
+      )}
+      {phone && (
+        <ToolsSheet
+          open={menu}
+          guest={guest}
+          options={options}
+          onOptions={onOptions}
+          onClose={() => setMenu(false)}
+          onAttach={(kind) => {
+            buzz();
+            setMenu(false);
+            (kind === "photos" ? photos : kind === "camera" ? camera : picker).current?.click();
+          }}
+        />
+      )}
     </form>
   );
 });

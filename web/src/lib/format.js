@@ -34,6 +34,33 @@ export function groupChats(chats, now = Date.now()) {
   return groups.filter((group) => group.items.length);
 }
 
+/* The last thing said in a conversation, in plain words, for a list row */
+export function previewOf(chat) {
+  for (let i = chat.messages.length - 1; i >= 0; i -= 1) {
+    const message = chat.messages[i];
+    const raw = String(message.role === "user" ? message.text ?? message.content ?? "" : message.content ?? "");
+    const text = raw
+      .replace(/```[\s\S]*?(```|$)/g, " ")
+      .replace(/\]\([^)]*\)/g, "]")
+      .replace(/[#*_`>[\]|]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (text) return text.slice(0, 120);
+  }
+  return "";
+}
+
+/* When, in the fewest words: a time today, "Yest.", a weekday, then a date */
+export function timeLabel(at, now = Date.now()) {
+  if (!at) return "";
+  const today = new Date(now).setHours(0, 0, 0, 0);
+  const date = new Date(at);
+  if (at >= today) return date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  if (at >= today - DAY) return "Yest.";
+  if (at >= today - 6 * DAY) return date.toLocaleDateString(undefined, { weekday: "short" });
+  return date.toLocaleDateString(undefined, { day: "numeric", month: "short" });
+}
+
 /* Matches titles first, then anything said in the conversation. Returns the
    matching chats with a short excerpt around the first hit in the text. */
 export function searchChats(chats, query) {

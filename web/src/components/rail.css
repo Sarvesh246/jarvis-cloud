@@ -478,35 +478,9 @@
   }
 }
 
+/* On a phone the drawer is RailPhone, placed and moved by shell.css */
 @media (max-width: 47.9375rem), (pointer: coarse) and (max-height: 31.25rem) {
-  .rail {
-    position: fixed;
-    inset: 0 auto 0 0;
-    z-index: 30;
-    width: min(21rem, 88vw);
-    transform: translateX(-102%);
-    box-shadow: none;
-    transition: transform var(--dur-2) var(--ease);
-    padding-top: calc(var(--s-5) + env(safe-area-inset-top));
-    padding-bottom: calc(var(--s-4) + env(safe-area-inset-bottom));
-  }
-
-  .rail[data-open="true"] {
-    transform: none;
-    box-shadow: var(--lift-2);
-  }
-
-  .rail-close {
-    display: inline-grid;
-  }
-
   .rail-new kbd {
     display: none;
-  }
-}
-
-@media (max-width: 47.9375rem) and (display-mode: browser) {
-  .rail {
-    padding-top: calc(var(--s-5) + env(safe-area-inset-top) + 0.875rem);
   }
 }

@@ -1,0 +1,262 @@
+/* The Workroom on a phone is a sheet, not a window. A task opens in it with
+   its stages as a segmented control, its files as dashed slots, and the
+   chat as one gilt pill at the foot. Wider screens keep the dialog. */
+.work-grip,
+.work-head-icon {
+  display: none;
+}
+
+@media (max-width: 47.9375rem), (pointer: coarse) and (max-height: 31.25rem) {
+  dialog.workroom {
+    position: fixed;
+    inset: auto 0 0 0;
+    width: 100%;
+    max-width: none;
+    height: auto;
+    max-height: 90dvh;
+    margin: 0;
+    border: 0;
+    border-radius: 26px 26px 0 0;
+    background: var(--surface);
+    box-shadow: var(--lift-2);
+    transform: translateY(var(--pull, 0px));
+    transition: transform var(--dur-2) var(--ease);
+  }
+
+  dialog.workroom[open] {
+    animation: workroom-up var(--dur-2) var(--ease) backwards;
+  }
+
+  dialog.workroom[data-dragging] {
+    transition: none;
+  }
+
+  @keyframes workroom-up {
+    from {
+      transform: translateY(100%);
+    }
+  }
+
+  .work-grip {
+    display: grid;
+    flex: none;
+    place-items: center;
+    height: 28px;
+    cursor: grab;
+    touch-action: none;
+  }
+
+  .work-grip span {
+    width: 38px;
+    height: 5px;
+    border-radius: 3px;
+    background: var(--hairline-strong);
+  }
+
+  /* A task has its own heading, so the sheet's title steps aside */
+  dialog.workroom[data-task] .workroom-head {
+    display: none;
+  }
+
+  .workroom-head {
+    padding: 0 8px 8px 20px;
+    border-bottom: 0;
+  }
+
+  .workroom h2 {
+    font-size: 28px;
+    font-weight: 300;
+    letter-spacing: -0.01em;
+  }
+
+  .workroom-notices {
+    padding-inline: 20px;
+  }
+
+  .workroom-scroll {
+    padding: 0;
+  }
+
+  .work-task {
+    max-width: none;
+    padding: 0 20px calc(34px + env(safe-area-inset-bottom));
+  }
+
+  .work-browser {
+    padding: 8px 20px calc(34px + env(safe-area-inset-bottom));
+  }
+
+  .work-home-nav {
+    padding: 0 20px;
+  }
+
+  /* Categories wrap onto more rows rather than scroll sideways */
+  .work-categories {
+    flex-wrap: wrap;
+    margin-inline: 0;
+    padding-inline: 0;
+    overflow: visible;
+  }
+
+  .workroom .work-back {
+    min-height: 36px;
+    font-size: 15px;
+  }
+
+  .work-detail-head:has(.work-head-icon) {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: center;
+    column-gap: 12px;
+    margin: 4px 0 14px;
+  }
+
+  .work-head-icon {
+    display: block;
+    color: var(--gilt);
+  }
+
+  .work-detail-head:has(.work-head-icon) > p:first-of-type {
+    display: none;
+  }
+
+  dialog.workroom .work-detail-head h3 {
+    margin: 0;
+    font-family: var(--font-voice);
+    font-size: 28px;
+    font-weight: 300;
+    letter-spacing: -0.01em;
+    line-height: 1.15;
+  }
+
+  .work-detail-head:has(.work-head-icon) > p:last-child {
+    grid-column: 1 / -1;
+    margin: 6px 0 0;
+    font-size: 16px;
+    font-style: italic;
+    line-height: 1.45;
+  }
+
+  /* The stages: a track, and the one you are on lifted onto paper */
+  dialog.workroom .work-stepper {
+    flex-wrap: nowrap;
+    gap: 4px;
+    margin: 0 0 16px;
+    padding: 3px;
+    border-radius: 11px;
+    background: var(--sunken);
+  }
+
+  dialog.workroom .work-stepper button {
+    flex: 1;
+    min-height: 0;
+    height: 38px;
+    padding: 0 4px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    font-size: 15px;
+    font-weight: var(--w-ui);
+    color: var(--muted);
+    white-space: nowrap;
+    transition: all var(--dur-1) var(--ease);
+  }
+
+  dialog.workroom .work-stepper button[aria-current="step"] {
+    background: var(--surface);
+    box-shadow: var(--lift-1);
+    color: var(--ink);
+  }
+
+  /* Files: a dashed place for each, turning gilt once something is in it */
+  .work-slot {
+    margin-bottom: 10px;
+    padding: 14px;
+    border: 1px dashed var(--hairline-strong);
+    border-radius: 14px;
+  }
+
+  .work-slot[data-filled] {
+    border: 1px solid var(--gilt);
+    background: var(--gilt-wash);
+  }
+
+  .work-slot h5 {
+    font-size: 17px;
+  }
+
+  .workroom textarea {
+    border-color: var(--hairline);
+    border-radius: 14px;
+    background: var(--canvas);
+    font-size: 16px;
+  }
+
+  .workroom input:not([type="file"]),
+  .workroom select {
+    min-height: 50px;
+    border-color: var(--hairline-strong);
+    border-radius: 12px;
+    background: var(--canvas);
+    font-size: 19px;
+  }
+
+  .work-field > label {
+    font-size: 15px;
+    font-weight: 400;
+    color: var(--ink-soft);
+  }
+
+  /* The foot: save on the left, chat as the pill that fills the rest */
+  form > .work-action-bar {
+    position: static;
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 10px;
+    margin-top: 20px;
+    padding: 0;
+    border-top: 0;
+    background: none;
+  }
+
+  form > .work-action-bar > .work-save-state {
+    order: -1;
+    flex: none;
+    margin: 0;
+    font-size: 17px;
+  }
+
+  .workroom .work-save-state > .work-text-button {
+    font-size: 17px;
+  }
+
+  form > .work-action-bar > .work-primary {
+    flex: 1;
+    height: 52px;
+    padding: 0 16px;
+    border-radius: 999px;
+    font-size: 18px;
+  }
+
+  form > .work-action-bar > .work-primary:active:not(:disabled) {
+    transform: scale(0.97);
+  }
+
+  /* What a check works out, set large and light */
+  .work-result-kicker {
+    margin: 4px 0 6px;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .work-output > h3 {
+    font-size: 34px;
+    font-weight: 300;
+    letter-spacing: -0.02em;
+    font-variant-numeric: lining-nums tabular-nums;
+  }
+}

@@ -17,6 +17,7 @@ import {
 } from "@phosphor-icons/react";
 import { BrandWordmark } from "./Mark.jsx";
 import { WorkroomIcon } from "./WorkroomIcon.jsx";
+import { PhoneRail } from "./RailPhone.jsx";
 import { groupChats, searchChats } from "../lib/format.js";
 import { collectWork, searchWork } from "../lib/library.js";
 import "./rail.css";
@@ -211,7 +212,13 @@ function Row({ chat, active, busy, excerpt, openId, setOpenId, onSelect, onDelet
   );
 }
 
-export function Rail({
+/* On a phone the index is a drawer of its own design (RailPhone.jsx); on
+   anything wider it is the rail beside the conversation. */
+export function Rail(props) {
+  return props.phone ? <PhoneRail {...props} /> : <WideRail {...props} />;
+}
+
+function WideRail({
   chats,
   activeId,
   busy,

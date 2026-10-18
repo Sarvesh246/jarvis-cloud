@@ -10,6 +10,8 @@ import { readWorkCache, writeWorkCache, requestWork, importWork, draftMatches, b
 import { readAttachment } from '../lib/attachments.js';
 import { AUDIENCE_NAMES, matchWorkspaces, resultOverview } from '../lib/workroom-view.js';
 import './workroom.css';
+import './workroom-sheet.css';
+import { workspaceIcon } from './workspace-icons.js';
 import { DESKTOP, saveDesktopFile } from '../lib/desktop.js';
 import { usePhone } from '../lib/use-phone.js';
 
@@ -148,7 +150,8 @@ export function Workroom({ open, onClose, session, onStart, initialDraft = null,
   useEffect(() => {
     if(!open || !initialDraft?.draft || !sub) return;
     const load=()=>{ setDraft(structuredClone(initialDraft.draft)); setBase(null); setPanel(initialDraft.panel || 'setup'); setConflict(false); setProblem(''); setMissing([]); setPreview(null);
-      setStatus(initialDraft.message || 'Have a look, then save it. Nothing is saved yet.'); };
+      /* A task chosen from the phone's drawer has nothing to explain yet */
+      setStatus(initialDraft.message ?? 'Have a look, then save it. Nothing is saved yet.'); };
     if(dirty) setPending(()=>load); else load();
   }, [open, initialDraft, sub]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -270,8 +273,22 @@ export function Workroom({ open, onClose, session, onStart, initialDraft = null,
     <Sparkle size={22} weight="light" aria-hidden="true" /><span><strong>Create a reusable task</strong><span>Save your instructions and files for something you do often.</span></span><ArrowRight size={18} aria-hidden="true" />
   </button>;
 
-  return <dialog ref={dialog} className="workroom" aria-labelledby="workroom-title" aria-describedby="workroom-description"
-    onClose={onClose} onCancel={e=>{e.preventDefault();onClose();}}>
+  /* On a phone the Workroom is a sheet: its handle drags it down and away,
+     and a tap on the dimmed page behind closes it. */
+  const pull = useRef(null);
+  const releaseGrip = () => { dialog.current?.removeAttribute('data-dragging'); dialog.current?.style.removeProperty('--pull'); };
+  const grip = {
+    onPointerDown(e) { pull.current = { y: e.clientY, dy: 0 }; dialog.current?.setAttribute('data-dragging', ''); try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* a convenience */ } },
+    onPointerMove(e) { const p = pull.current; if (!p) return; p.dy = Math.max(0, e.clientY - p.y); dialog.current?.style.setProperty('--pull', `${p.dy}px`); },
+    onPointerUp() { const p = pull.current; pull.current = null; releaseGrip(); if (p && p.dy > 100) onClose(); },
+    onPointerCancel() { pull.current = null; releaseGrip(); },
+  };
+  const TaskIcon = workspaceIcon(workspace);
+
+  return <dialog ref={dialog} className="workroom" data-task={draft ? '' : undefined} aria-labelledby="workroom-title" aria-describedby="workroom-description"
+    onClose={onClose} onCancel={e=>{e.preventDefault();onClose();}}
+    onClick={e => { if (e.target !== dialog.current) return; const r = dialog.current.getBoundingClientRect(); if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) onClose(); }}>
+    <div className="work-grip" {...grip}><span /></div>
     <header className="workroom-head">
       <div><h2 id="workroom-title">Workroom</h2><p id="workroom-description">{project ? 'Your project’s conversations, files, and context.' : draft ? 'Your files, instructions and results for this task.' : 'Choose a task. Add your context. Get help.'}</p></div>
       <button className="icon-button" aria-label="Close the Workroom" onClick={onClose}><X size={22} /></button>
@@ -372,6 +389,7 @@ export function Workroom({ open, onClose, session, onStart, initialDraft = null,
           </form>
         </> : panel==='setup' ? <>
           <header className="work-detail-head">
+            <TaskIcon className="work-head-icon" size={30} aria-hidden="true" />
             <p>{custom?'Your own workspace':AUDIENCE_NAMES[workspace?.audience]}</p>
             <h3 ref={taskHeading} tabIndex={-1}>{custom ? draft.title || 'Make your own' : workspace?.title}</h3>
             {!custom&&<p>{workspace?.summary}</p>}

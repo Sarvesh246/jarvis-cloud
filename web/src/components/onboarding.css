@@ -1,0 +1,188 @@
+/* Onboarding: three quiet screens on the canvas. Padding 70 / 28 / 40, the
+   words centred vertically, buttons stacked at the foot with the step dots
+   beneath them. */
+.onb {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  padding: calc(env(safe-area-inset-top) + var(--ios-edge, 0px) + 70px) 28px calc(env(safe-area-inset-bottom) + 40px);
+  background: var(--canvas);
+  overflow-y: auto;
+}
+
+@media (max-height: 640px) {
+  .onb {
+    padding-top: calc(env(safe-area-inset-top) + var(--ios-edge, 0px) + 36px);
+    padding-bottom: calc(env(safe-area-inset-bottom) + 24px);
+  }
+}
+
+.onb-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  animation: onb-rise var(--dur-3) var(--ease) both;
+}
+
+@keyframes onb-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+/* Vaelo's mark, 84px; at rest its glow already breathes on a six second cycle */
+.onb-body .mark {
+  align-self: flex-start;
+}
+
+.onb-greeting {
+  margin: 28px 0 0;
+  font-size: 46px;
+  font-weight: 300;
+  line-height: 1.04;
+  letter-spacing: -0.025em;
+  color: var(--ink);
+}
+
+.onb-greeting em {
+  font-weight: 300;
+  color: var(--gilt-ink);
+}
+
+.onb-title {
+  margin: 28px 0 0;
+  font-size: 38px;
+  font-weight: 300;
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+
+.onb-title-bell {
+  margin-top: 24px;
+}
+
+.onb-line {
+  margin: 14px 0 0;
+  font-size: 19px;
+  font-style: italic;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.onb-line-sm {
+  margin: 12px 0 0;
+  font-size: 17px;
+}
+
+.onb-body .sh-steps {
+  margin-top: 18px;
+}
+
+.onb-tile {
+  display: grid;
+  place-items: center;
+  width: 84px;
+  height: 84px;
+  border: 1px solid var(--hairline-strong);
+  border-radius: 20px;
+  background: var(--surface);
+  box-shadow: var(--lift-2);
+}
+
+.onb-bell {
+  color: var(--gilt);
+}
+
+.sh-steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.onb .sh-step {
+  min-height: 54px;
+}
+
+.onb-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.onb-primary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  height: 56px;
+  border-radius: 999px;
+  background: var(--gilt);
+  color: var(--on-gilt);
+  font-size: 18px;
+  transition: transform var(--dur-1) var(--ease), opacity var(--dur-1) var(--ease);
+}
+
+.onb-primary:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.onb-primary:disabled {
+  opacity: 0.6;
+}
+
+.onb-quiet {
+  height: 50px;
+  font-size: 17px;
+  color: var(--gilt-ink);
+  transition: opacity var(--dur-1) var(--ease);
+}
+
+.onb-quiet:active {
+  opacity: 0.6;
+}
+
+.onb-foot {
+  margin: 4px 0 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.onb-note {
+  margin: 16px 0 0;
+  padding: 12px 14px;
+  border-left: 2px solid var(--clay);
+  background: var(--clay-wash);
+  color: var(--ink-soft);
+  font-size: 15px;
+  text-align: left;
+}
+
+.onb-note button {
+  margin-left: 6px;
+  color: var(--gilt-ink);
+  text-decoration: underline;
+}
+
+.onb-dots {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.onb-dots span {
+  width: 6px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--hairline-strong);
+  transition: width var(--dur-2) var(--ease), background var(--dur-2) var(--ease);
+}
+
+.onb-dots span[data-on] {
+  width: 18px;
+  background: var(--gilt);
+}

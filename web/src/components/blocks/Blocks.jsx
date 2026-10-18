@@ -421,8 +421,13 @@ function SourceLink({ href, children }) {
         >
           {bare ? (
             <>
-              <SourceIcon kind={source.kind} size={11} />
-              {source.domain}
+              {/* Wide screens name the site; a phone shows the number the
+                  sources sheet uses (phone.css chooses) */}
+              <span className="cite-site">
+                <SourceIcon kind={source.kind} size={11} />
+                {source.domain}
+              </span>
+              <span className="cite-num">{source.index}</span>
             </>
           ) : (
             source.index

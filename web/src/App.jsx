@@ -34,12 +34,18 @@ import { removeLibraryItem, restoreLibraryItem } from "./lib/library.js";
 import { Toast, Notice } from "./components/Toast.jsx";
 import { Tips } from "./components/Tips.jsx";
 import { Opening, SignIn } from "./components/SignIn.jsx";
+import { Onboarding, onboardingSteps, readOnboarding, writeOnboarding } from "./components/Onboarding.jsx";
+import { ChatMenuSheet, SourcesSheet, transcriptOf } from "./components/PhoneSheets.jsx";
+import { useDrawer } from "./lib/use-drawer.js";
+import { buzz } from "./lib/haptics.js";
+import { blankDraft } from "./lib/workroom.js";
+import { download } from "./components/blocks/Blocks.jsx";
 import { toolInfo } from "./lib/tools.js";
 import { mergePlan, readPlan } from "./lib/plan.js";
 import { classifyError } from "./lib/errors.js";
 import { JOIN_WINDOW, continueRequest, joinOnto, retryRequest } from "./lib/continuation.js";
 import { PHONE, usePhone } from "./lib/use-phone.js";
-import { DESKTOP, desktopSignIn, desktopSignOut, desktopGuest, desktopLeaveGuest, desktopNotification, cancelDesktopSignIn } from "./lib/desktop.js";
+import { DESKTOP, allowNotifications, desktopSignIn, desktopSignOut, desktopGuest, desktopLeaveGuest, desktopNotification, cancelDesktopSignIn } from "./lib/desktop.js";
 import { readDesktopHandoff, markDesktopHandoffStarted } from "./lib/desktop-handoff.js";
 import { DesktopHandoff } from "./components/DesktopHandoff.jsx";
 import {
@@ -53,6 +59,8 @@ import {
 } from "./lib/attachments.js";
 import "./shell.css";
 import "./design/refinements.css";
+import "./drawer.css";
+import "./phone.css";
 
 const freshChat = () => ({
   id: crypto.randomUUID(),
@@ -399,6 +407,31 @@ export function App() {
   const lastReady = useRef(0);
   const [menu, setMenu] = useState(false);
   const phone = usePhone();
+  /* Phone sheets that belong to the app rather than to one control: the
+     conversation's own menu, and the sources behind a reply. */
+  const [sheet, setSheet] = useState(null);
+  const [onboarding, setOnboarding] = useState(readOnboarding);
+  const [shell, setShell] = useState(null);
+  useDrawer({ phone, open: menu, setOpen: setMenu, shell });
+  /* Nothing left to show (already on the home screen, notifications not
+     possible here): the welcome is simply over. */
+  useEffect(() => {
+    if (onboarding && !onboardingSteps(onboarding).length) {
+      writeOnboarding("done");
+      setOnboarding(null);
+    }
+  }, [onboarding]);
+  /* A tap under the finger when a reply starts and again when it finishes */
+  const wasBusy = useRef(false);
+  useEffect(() => {
+    if (phone && wasBusy.current !== busy) buzz();
+    wasBusy.current = busy;
+  }, [busy, phone]);
+  /* Signing in without leaving the page (a guest, Google's own button)
+     carries on into the welcome */
+  useEffect(() => {
+    if (phone && session?.user && !onboarding) setOnboarding(readOnboarding());
+  }, [phone, session?.user, onboarding]);
   const [collapsed, setCollapsed] = useState(readCollapsed);
   const [storageIssue, setStorageIssue] = useState(false);
   const [toast, setToast] = useState([]);
@@ -421,7 +454,6 @@ export function App() {
   const [queuedPrompt, setQueuedPrompt] = useState(null);
   const prefsRef = useRef(prefs);
   prefsRef.current = prefs;
-  const swipe = useRef(null);
   const googleButton = useRef(null);
   const [gsi, setGsi] = useState("loading");
   const [gsiAttempt, setGsiAttempt] = useState(0);
@@ -2007,7 +2039,18 @@ export function App() {
       send({
         text: "Please find a way to do that without anything that needs approval, or tell me exactly what you would need approved and why.",
       }),
-    open: (id, item) => { if (!openWorkProposal(item)) setWorkspace({ ...item, messageId: id }); },
+    open: (id, item) => {
+      /* On a phone the sources behind a reply rise as a sheet */
+      if (item?.kind === "sources" && matchMedia(PHONE).matches) setSheet({ type: "sources", messageId: id, focus: item.focus });
+      else if (!openWorkProposal(item)) setWorkspace({ ...item, messageId: id });
+    },
+    /* "Save to Library" on a short reply keeps it as a document of its own */
+    keep: (id) => {
+      const message = chatsRef.current.find((chat) => chat.id === activeId)?.messages.find((item) => item.id === id);
+      if (!message?.content) return;
+      updateWork(id, { versions: [{ content: message.content, at: Date.now(), by: "vaelo", note: "Saved to the Library" }], current: 0 });
+      showToast({ text: "Saved to your Library." });
+    },
     approve: (id, choice) => answerApproval(id, choice),
   };
   const onAction = useCallback(
@@ -2088,47 +2131,38 @@ export function App() {
 
   if (desktopHandoff) return <DesktopHandoff pending={desktopHandoff} session={session} auto={Boolean(desktopHandoff.started)} onCancel={() => setDesktopHandoff(null)} />;
 
+  /* Right after signing in on a phone: keep Vaelo on the home screen, and
+     say when a reply is ready. Shown once, or again from Settings. */
+  const welcomeSteps = phone && onboarding ? onboardingSteps(onboarding) : [];
+  if (welcomeSteps.length)
+    return (
+      <Onboarding
+        steps={welcomeSteps}
+        replay={onboarding === "replay"}
+        onAllow={async () => {
+          try {
+            if (await allowNotifications()) setPrefs((current) => ({ ...current, notify: true }));
+          } catch {
+            /* the choice is in Settings whenever they want it */
+          }
+        }}
+        onDone={() => {
+          writeOnboarding("done");
+          setOnboarding(null);
+        }}
+      />
+    );
+
   return (
     <IconContext.Provider value={{ weight: "light", size: 20 }}>
       <PresentationContext.Provider value={prefs.presentation}>
       <div
         className="shell"
+        ref={setShell}
         data-collapsed={collapsed}
         data-workspace={workspace ? "open" : undefined}
-        onTouchStart={(event) => {
-          /* Swipe in from the left edge to open the conversations; swipe
-             the open drawer back to close it, as in a native app. */
-          const touch = event.touches[0];
-          if (!matchMedia(PHONE).matches || event.touches.length > 1) return;
-          if (menu || touch.clientX < 28)
-            swipe.current = { x: touch.clientX, y: touch.clientY, open: menu };
-        }}
-        onTouchMove={(event) => {
-          const start = swipe.current;
-          if (!start) return;
-          const touch = event.touches[0];
-          const dx = touch.clientX - start.x;
-          if (Math.abs(touch.clientY - start.y) > 40) swipe.current = null;
-          else if (!start.open && dx > 56) {
-            setMenu(true);
-            swipe.current = null;
-          } else if (start.open && dx < -56) {
-            setMenu(false);
-            swipe.current = null;
-          }
-        }}
-        onTouchEnd={() => {
-          swipe.current = null;
-        }}
+        data-menu={phone ? menu : undefined}
       >
-        <button
-          className="scrim"
-          data-open={menu}
-          inert={!menu}
-          tabIndex={-1}
-          aria-label="Close conversations"
-          onClick={() => setMenu(false)}
-        />
         <Rail
           chats={chats}
           activeId={activeId}
@@ -2150,6 +2184,12 @@ export function App() {
           onOpenWork={openWork}
           onDeleteWork={deleteWork}
           onWorkroom={() => { setMenu(false); setWorkDraft(null); setWorkroomOpen(true); }}
+          onTask={(item) => {
+            /* A tile in the drawer opens that task, ready to fill in */
+            setMenu(false);
+            setWorkDraft({ draft: blankDraft(item, getCheck), panel: "setup", message: "" });
+            setWorkroomOpen(true);
+          }}
           workroomOpen={workroomOpen}
         />
 
@@ -2182,9 +2222,16 @@ export function App() {
             title={displayChatTitle(active)}
             canRename={messages.length > 0 && !busy}
             onRename={renameChat}
-            onOpenRail={() => setMenu(true)}
+            onOpenRail={() => {
+              buzz();
+              setMenu(true);
+            }}
             onToggleRail={toggleRail}
             onSaveAsWorkspace={messages.length > 0 && session?.user && !guest ? saveChatAsWorkspace : undefined}
+            onMenu={() => {
+              if (!messages.length) showToast({ text: "Start writing. This conversation isn’t saved yet." });
+              else setSheet({ type: "menu" });
+            }}
           />
           {syncIssue && <Notice>{syncIssue}</Notice>}
 
@@ -2230,6 +2277,7 @@ export function App() {
                       isLast={last && !mine}
                       edited={(active.works?.[message.id]?.versions?.length || 0) > 1}
                       onAction={onAction}
+                      phone={phone}
                     />
                   );
                 })}
@@ -2327,6 +2375,9 @@ export function App() {
               onOptions={(patch) => setOptions((current) => ({ ...current, ...patch }))}
               onDictating={setDictating}
               guest={guest}
+              workContext={active?.workContext}
+              onClearWork={() => setChats(current => current.map(chat => chat.id === activeId
+                ? {...chat,updated:Date.now(),workContext:undefined} : chat))}
             />
           </div>
 
@@ -2338,6 +2389,20 @@ export function App() {
             </div>
           )}
         </main>
+
+        {/* What is left of the chat while the drawer is open: it dims, a tap
+            brings the chat back, and it can be dragged shut. */}
+        <button
+          className="drawer-cover"
+          type="button"
+          inert={!menu}
+          tabIndex={menu ? 0 : -1}
+          aria-label="Close conversations"
+          onClick={() => {
+            buzz();
+            setMenu(false);
+          }}
+        />
 
         {workspace && (
           <button
@@ -2386,11 +2451,49 @@ export function App() {
         <Tips />
         <Settings
           open={settingsOpen}
+          user={session.user}
           onTools={() => { setSettingsOpen(false); setUIToolsOpen(true); }}
+          onWelcome={() => { setSettingsOpen(false); writeOnboarding("replay"); setOnboarding("replay"); }}
+          onSignOut={() => { setSettingsOpen(false); logout(); }}
           prefs={prefs}
           onChange={(patch) => setPrefs((current) => ({ ...current, ...patch }))}
           onClose={() => setSettingsOpen(false)}
         />
+        {phone && (
+          <>
+            <ChatMenuSheet
+              open={sheet?.type === "menu"}
+              chat={active}
+              guest={guest}
+              busy={busy}
+              onClose={() => setSheet(null)}
+              onPin={() => { togglePin(activeId); setSheet(null); }}
+              onSaveAsWorkspace={() => { setSheet(null); saveChatAsWorkspace(); }}
+              onShare={async () => {
+                setSheet(null);
+                const title = displayChatTitle(active);
+                const text = transcriptOf(active);
+                try {
+                  if (navigator.share) {
+                    await navigator.share({ title, text });
+                    return;
+                  }
+                } catch (err) {
+                  if (err?.name === "AbortError") return;
+                }
+                download(`${title.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").slice(0, 60) || "conversation"}.md`, `# ${title}\n\n${text}\n`, "text/markdown");
+                showToast({ text: "Saved a copy of this conversation." });
+              }}
+              onRemove={() => { setSheet(null); removeChat(activeId); }}
+            />
+            <SourcesSheet
+              open={sheet?.type === "sources"}
+              message={messages.find((item) => item.id === sheet?.messageId)}
+              focus={sheet?.focus}
+              onClose={() => setSheet(null)}
+            />
+          </>
+        )}
         <Workroom open={workroomOpen} session={session} initialDraft={workDraft}
           onClose={() => {setWorkroomOpen(false);setWorkDraft(null);}}
           chats={chats}

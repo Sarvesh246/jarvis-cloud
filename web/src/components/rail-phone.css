@@ -1,0 +1,560 @@
+/* The phone's drawer: conversations, library and Workroom under the chat.
+   Where it sits and how it moves is in shell.css; this is what is inside. */
+.rail.rail-phone {
+  gap: 0;
+  padding: calc(env(safe-area-inset-top) + var(--ios-edge, 0px) + 0.75rem) 18px 0 20px;
+  border-right: 0;
+  background: var(--rail);
+}
+
+@media (display-mode: browser) {
+  .rail.rail-phone {
+    padding-top: calc(env(safe-area-inset-top) + 1.25rem);
+  }
+}
+
+.rp-top {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2px;
+  height: 48px;
+}
+
+.rp-brand {
+  display: inline-flex;
+  flex: 1;
+  align-items: center;
+  min-width: 0;
+}
+
+.rp-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  color: var(--ink-soft);
+  transition: background var(--dur-1) var(--ease), transform var(--dur-1) var(--ease);
+}
+
+.rp-icon:active,
+.rp-icon[aria-pressed="true"] {
+  background: var(--gilt-wash);
+}
+
+.rp-icon:active {
+  transform: scale(0.94);
+}
+
+/* The account: a gilt-edged disc with Vaelo's italic initial and a sage
+   dot that says all is well. The S is nudged so it reads as centred. */
+.rp-avatar {
+  position: relative;
+  flex: none;
+  width: 38px;
+  height: 38px;
+  margin-left: 4px;
+  padding: 2px;
+  border-radius: 50%;
+  background: linear-gradient(145deg, var(--gilt), color-mix(in srgb, var(--gilt) 35%, transparent));
+  box-shadow: var(--lift-1);
+  transition: transform var(--dur-1) var(--ease);
+}
+
+.rp-avatar:active {
+  transform: scale(0.92);
+}
+
+.rp-avatar-disc {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, var(--surface), var(--slip));
+  color: var(--gilt-ink);
+  font-size: 19px;
+  font-style: italic;
+  font-weight: 400;
+  line-height: 1;
+}
+
+.rp-avatar-disc > span {
+  display: block;
+  transform: translate(-0.5px, 1.5px);
+}
+
+.rp-avatar-dot {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--sage);
+  box-shadow: 0 0 0 2px var(--rail);
+}
+
+.rp-new {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  height: 52px;
+  margin-top: 12px;
+  padding: 0 16px;
+  border-radius: 16px;
+  background: var(--gilt);
+  color: var(--on-gilt);
+  font-size: 18px;
+  text-align: left;
+  box-shadow: var(--lift-1);
+  transition: transform var(--dur-1) var(--ease), opacity var(--dur-1) var(--ease);
+}
+
+.rp-new span {
+  flex: 1;
+}
+
+.rp-new:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.rp-new:disabled {
+  opacity: 0.5;
+}
+
+.rp-tabs {
+  display: flex;
+  flex: none;
+  gap: 20px;
+  margin-top: 14px;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.rp-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 44px;
+  margin-bottom: -1px;
+  border-bottom: 1.5px solid transparent;
+  font-size: 16px;
+  font-weight: var(--w-ui);
+  color: var(--muted);
+  transition: color var(--dur-1) var(--ease), border-color var(--dur-1) var(--ease);
+}
+
+.rp-tab[aria-selected="true"] {
+  color: var(--ink);
+  border-color: var(--gilt);
+}
+
+.rp-tab .chip-count {
+  font-size: 13px;
+}
+
+/* The scrolling part. Its sides are bled out to the drawer's edges so rows
+   can slide under the screen edge. */
+.rail-phone .rp-pane {
+  flex: 1;
+  gap: 0;
+  margin: 0 -18px 0 -20px;
+  padding: 0 18px calc(env(safe-area-inset-bottom) + 28px) 20px;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  scrollbar-width: none;
+}
+
+.rail-phone .rp-pane::-webkit-scrollbar {
+  display: none;
+}
+
+.rp-search-wrap {
+  flex: none;
+  overflow: hidden;
+  transition: height var(--dur-2) var(--ease), opacity var(--dur-2) var(--ease);
+}
+
+.rp-search-wrap[data-pulling] {
+  transition: none;
+}
+
+.rp-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 42px;
+  margin: 6px 0;
+  padding: 0 12px;
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--muted);
+}
+
+.rp-search:focus-within {
+  border-color: var(--gilt);
+}
+
+.rp-search input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  outline: none;
+  background: none;
+  font-size: 16px;
+  color: var(--ink);
+}
+
+.rp-search input::placeholder {
+  font-style: italic;
+  color: var(--muted);
+}
+
+.rp-search input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.rail-phone h2.rp-group {
+  margin: 18px 0 4px;
+}
+
+.rp-count:empty {
+  display: none;
+}
+
+.rp-count {
+  margin: 12px 0 0;
+}
+
+/* A conversation: its title and time, its last words beneath, a hairline
+   under. A gilt dot grows beside the one that is open. */
+.rp-row {
+  position: relative;
+  overflow: hidden;
+  border-bottom: 1px solid var(--hairline);
+  touch-action: pan-y;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.rp-row::before {
+  content: none;
+}
+
+.rp-actions {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  visibility: hidden;
+}
+
+.rp-row[data-swiped] .rp-actions,
+.rp-row:has(.rp-face[data-dragging]) .rp-actions {
+  visibility: visible;
+}
+
+.rp-action {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  background: var(--gilt-wash);
+  border-left: 1px solid var(--hairline);
+  font-size: 14px;
+  color: var(--ink-soft);
+}
+
+.rp-action svg {
+  color: var(--gilt);
+}
+
+.rp-action[data-tone="clay"] {
+  background: var(--clay-wash);
+  color: var(--clay);
+}
+
+.rp-action[data-tone="clay"] svg {
+  color: var(--clay);
+}
+
+.rp-face {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 68px;
+  padding: 10px 0;
+  background: var(--rail);
+  transition: transform var(--dur-2) var(--ease);
+  cursor: pointer;
+}
+
+.rp-face[data-dragging] {
+  transition: none;
+}
+
+.rp-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  margin-right: -2px;
+  border-radius: 50%;
+  background: var(--gilt);
+  transform: scale(0);
+  transition: transform var(--dur-2) var(--ease);
+}
+
+.rp-row[data-active] .rp-dot {
+  transform: scale(1);
+}
+
+.rp-row .rp-link {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  min-height: 0;
+  text-align: left;
+  color: var(--ink);
+}
+
+.rp-line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.rp-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 18px;
+  line-height: 1.3;
+  color: var(--ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rp-row[data-active] .rp-title {
+  font-weight: var(--w-strong);
+}
+
+.rp-time {
+  flex: none;
+  font-size: 13px;
+  color: var(--muted);
+  font-variant-numeric: lining-nums;
+}
+
+.rp-excerpt {
+  overflow: hidden;
+  font-size: 15px;
+  line-height: 1.35;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rp-hint {
+  margin: 22px 0 0;
+  font-size: 14px;
+  font-style: italic;
+  color: var(--muted);
+}
+
+.rp-empty {
+  margin: 16px 0;
+  font-size: 16px;
+  font-style: italic;
+  color: var(--muted);
+}
+
+/* Chips wrap rather than scroll sideways */
+.rp-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 14px 0 12px;
+}
+
+.rp-chip {
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--hairline-strong);
+  border-radius: 999px;
+  font-size: 15px;
+  font-weight: var(--w-ui);
+  color: var(--ink-soft);
+  transition: all var(--dur-1) var(--ease);
+}
+
+.rp-chip[aria-pressed="true"] {
+  border-color: var(--gilt);
+  background: var(--gilt-wash);
+  color: var(--gilt-ink);
+}
+
+.rp-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* The library: a small document, its title, where it came from, and when */
+.rp-work .rp-face {
+  padding: 0;
+}
+
+.rp-work .rp-dot {
+  display: none;
+}
+
+.rp-work-link {
+  display: flex;
+  flex: 1;
+  align-items: flex-start;
+  gap: 14px;
+  min-width: 0;
+  padding: 14px 0;
+  text-align: left;
+}
+
+.rp-thumb {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 44px;
+  height: 52px;
+  border: 1px solid var(--hairline-strong);
+  border-radius: 6px;
+  background: var(--surface);
+  box-shadow: var(--lift-1);
+  color: var(--gilt);
+}
+
+.rp-work-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.rp-work-title {
+  font-size: 18px;
+  line-height: 1.25;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.rp-work-link[data-active] .rp-work-title {
+  color: var(--gilt-ink);
+}
+
+.rp-work-meta {
+  font-size: 14px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.rp-work-link .rp-time {
+  padding-top: 3px;
+}
+
+/* Workroom: ready-made workspaces as tiles */
+.rp-intro {
+  margin: 14px 0 0;
+  font-size: 16px;
+  font-style: italic;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.rp-tiles {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.rp-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  min-height: 148px;
+  padding: 14px;
+  border: 1px solid var(--hairline);
+  border-radius: 16px;
+  background: var(--surface);
+  text-align: left;
+  transition: transform var(--dur-1) var(--ease), background var(--dur-1) var(--ease);
+}
+
+.rp-tile:active {
+  transform: scale(0.97);
+  background: var(--gilt-wash);
+}
+
+.rp-tile-icon {
+  color: var(--gilt);
+}
+
+.rp-tile-title {
+  margin-top: 4px;
+  font-size: 18px;
+  line-height: 1.2;
+  color: var(--ink);
+}
+
+.rp-tile-note {
+  display: -webkit-box;
+  font-size: 14px;
+  line-height: 1.35;
+  color: var(--muted);
+  overflow: hidden;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+}
+
+.rp-tile-check {
+  margin-top: auto;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--gilt-ink);
+}
+
+.rp-tile-new {
+  justify-content: center;
+  border: 1px dashed var(--hairline-strong);
+  background: transparent;
+  color: var(--gilt-ink);
+}
+
+.rp-tile-new span {
+  font-size: 17px;
+}
+
+.rp-saved {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  margin-top: 10px;
+  font-size: 15px;
+  color: var(--gilt-ink);
+}

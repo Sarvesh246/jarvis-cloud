@@ -1,0 +1,118 @@
+/* The conversations drawer, pushed from the left. The chat does not get
+   covered: it slides aside and shrinks a little, rounded, leaving a 56px
+   strip of itself showing. One number, --p (0 closed, 1 open), places every
+   piece; a finger scrubs it (lib/use-drawer.js), a tap sets it to 0 or 1 and
+   the transitions carry it the rest of the way.
+
+     drawer  translateX(-(1 - p) * 90px), opacity .25 -> 1
+     chat    translateX(p * (width - 56px)) scale(1 - .08p), radius p * 40px
+     cover   the scrim over the chat, .55 * p
+
+   Beyond a phone there is no drawer and no cover. */
+.drawer-cover {
+  display: none;
+}
+
+@media (max-width: 47.9375rem), (pointer: coarse) and (max-height: 31.25rem) {
+  .shell {
+    position: relative;
+    --p: 0;
+    /* The width of the screen less the 56px strip of chat, but never a
+       sprawling pane on a landscape phone */
+    --drawer-w: min(100% - 56px, 26rem);
+    background: var(--canvas);
+  }
+
+  .shell[data-menu="true"] {
+    --p: 1;
+  }
+
+  .shell > .rail,
+  .shell[data-collapsed="true"] > .rail {
+    position: absolute;
+    inset: 0 auto 0 0;
+    z-index: 1;
+    width: var(--drawer-w);
+    height: 100%;
+    margin-left: 0;
+    visibility: visible;
+    transform: translateX(calc((var(--p) - 1) * 90px));
+    opacity: calc(0.25 + 0.75 * var(--p));
+    transition:
+      transform 560ms var(--ease),
+      opacity 560ms var(--ease);
+  }
+
+  .shell > .stage {
+    position: relative;
+    z-index: 4;
+    flex: 1 1 100%;
+    width: 100%;
+    overflow: hidden;
+    background: var(--canvas);
+    transform-origin: left center;
+    transform: translateX(calc(var(--p) * var(--drawer-w))) scale(calc(1 - 0.08 * var(--p)));
+    border-radius: calc(var(--p) * 40px);
+    box-shadow: -16px 0 50px rgb(0 0 0 / calc(0.08 + 0.14 * var(--p)));
+    transition:
+      transform 560ms var(--ease),
+      border-radius 560ms var(--ease),
+      box-shadow 560ms var(--ease);
+    /* Sideways drags are the drawer's; vertical ones are scrolling */
+    touch-action: pan-y;
+  }
+
+  /* Closed, the chat is simply the page: nothing transformed, nothing to
+     clip, no shadow */
+  .shell:not([data-menu="true"]):not([data-dragging]) > .stage {
+    transform: none;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .shell > .drawer-cover {
+    display: block;
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    padding: 0;
+    border: 0;
+    background: var(--scrim);
+    opacity: calc(var(--p) * 0.55);
+    transform-origin: left center;
+    transform: translateX(calc(var(--p) * var(--drawer-w))) scale(calc(1 - 0.08 * var(--p)));
+    border-radius: calc(var(--p) * 40px);
+    transition:
+      transform 560ms var(--ease),
+      border-radius 560ms var(--ease),
+      opacity 560ms var(--ease);
+    pointer-events: none;
+    touch-action: none;
+    cursor: pointer;
+  }
+
+  .shell[data-menu="true"] > .drawer-cover,
+  .shell[data-dragging] > .drawer-cover {
+    pointer-events: auto;
+  }
+
+  .shell[data-dragging] > .rail,
+  .shell[data-dragging] > .stage,
+  .shell[data-dragging] > .drawer-cover {
+    transition: none;
+  }
+
+  .shell[data-dragging] {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  /* The conversation: horizontal padding 20px, and room under the header */
+  .conversation {
+    touch-action: pan-y;
+  }
+
+  .dock {
+    padding: 6px 12px calc(env(safe-area-inset-bottom) + 6px);
+  }
+}

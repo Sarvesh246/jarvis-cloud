@@ -1,12 +1,14 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { fitTitle } from '../lib/titles.js';
-import { FolderSimplePlus, List, SidebarSimple } from "@phosphor-icons/react";
+import { DotsThreeCircle, FolderSimplePlus, List, SidebarSimple } from "@phosphor-icons/react";
 import "./header.css";
 
 /* The header only names the conversation. What Vaelo is doing is shown
    where it is happening: in the reply itself. Its one action keeps a
-   conversation that went well as a workspace to reuse. */
-export function Header({ title, canRename, onRename, onOpenRail, onToggleRail, onSaveAsWorkspace, onFind }) {
+   conversation that went well as a workspace to reuse. On a phone it is
+   a menu on the left, the name in the middle and the conversation's own
+   options on the right. */
+export function Header({ title, canRename, onRename, onOpenRail, onToggleRail, onSaveAsWorkspace, onFind, onMenu }) {
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(title);
   const input = useRef(null);
@@ -113,6 +115,11 @@ export function Header({ title, canRename, onRename, onOpenRail, onToggleRail, o
           onClick={onSaveAsWorkspace}
         >
           <FolderSimplePlus size={21} />
+        </button>
+      )}
+      {onMenu && (
+        <button className="icon-button header-more" aria-label="Conversation options" aria-haspopup="dialog" onClick={onMenu}>
+          <DotsThreeCircle size={22} />
         </button>
       )}
     </header>

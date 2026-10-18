@@ -1,0 +1,628 @@
+/* The phone's design (option 2a), laid over the components it changes: the
+   conversation, the composer, the welcome and the toast. Loaded last, so it
+   settles any tie with the desktop rules. Desktop is untouched.
+
+   Where something is wholly new (the drawer, sheets, onboarding) its own
+   stylesheet carries it; this file is only the restyling of what already
+   existed. */
+
+/* The composer's box contents sit straight in the form on a wide screen */
+.composer-main {
+  display: contents;
+}
+
+.composer-main[hidden] {
+  display: none;
+}
+
+/* A citation names its site on a wide screen and numbers it on a phone */
+.cite-site {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25em;
+}
+
+.cite-num {
+  display: none;
+}
+
+@media (max-width: 47.9375rem), (pointer: coarse) and (max-height: 31.25rem) {
+  /* ---------- The conversation ---------- */
+  .thread {
+    gap: 0;
+    padding: 4px 20px 16px;
+  }
+
+  .message {
+    display: flex;
+    flex-direction: column;
+    row-gap: 0;
+  }
+
+  .message[data-phone] {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+
+  .message .label {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.16em;
+  }
+
+  /* Yours: a right-aligned column, the label above, the slip beneath */
+  .message[data-role="user"] {
+    align-items: flex-end;
+    gap: 6px;
+    padding: 22px 0 4px;
+  }
+
+  .message[data-role="user"]:not(:first-child) {
+    padding-top: 22px;
+  }
+
+  .message[data-role="user"] .message-label {
+    justify-content: flex-end;
+    margin-top: 0;
+  }
+
+  .message[data-role="user"] .message-body {
+    align-items: flex-end;
+    gap: 6px;
+    width: 100%;
+  }
+
+  .message[data-role="user"] .slip {
+    max-width: 86%;
+    padding: 11px 15px;
+    border-radius: 16px 16px 4px 16px;
+  }
+
+  .message[data-role="user"] .slip[data-editing] {
+    max-width: 100%;
+  }
+
+  .message[data-role="user"] .prose {
+    font-size: 17px;
+    line-height: 1.55;
+  }
+
+  .message[data-role="user"] .attachments {
+    margin: 0;
+    justify-content: flex-end;
+  }
+
+  .message .attachment {
+    min-height: 0;
+    padding: 8px 12px;
+    border-color: var(--hairline);
+    border-radius: 10px;
+    font-size: 14px;
+    color: var(--ink-soft);
+  }
+
+  .message .attachment-meta {
+    display: none;
+  }
+
+  /* Vaelo's: a 24px label row with the mark, then the reply set directly on
+     the page */
+  .message[data-role="assistant"] {
+    padding: 18px 0 6px;
+  }
+
+  .message[data-role="assistant"] .message-label {
+    height: 24px;
+    margin-bottom: 6px;
+    gap: 8px;
+  }
+
+  .message-body {
+    width: 100%;
+  }
+
+  .process {
+    min-height: 0;
+    margin-bottom: 4px;
+  }
+
+  .process[data-live="true"] {
+    min-height: 30px;
+    font-size: 18px;
+    font-style: italic;
+  }
+
+  .process-time {
+    font-size: 14px;
+    font-style: normal;
+  }
+
+  .process-receipt {
+    min-height: 36px;
+    font-size: 15px;
+    white-space: nowrap;
+  }
+
+  .steps {
+    font-size: 15px;
+    color: var(--ink-soft);
+  }
+
+  .message[data-role="assistant"] .prose {
+    font-family: var(--font-read);
+    font-size: 1.125rem;
+    line-height: 1.65;
+    letter-spacing: 0;
+  }
+
+  .prose p,
+  .prose ul,
+  .prose ol,
+  .prose blockquote {
+    margin: 0 0 14px;
+  }
+
+  .prose ul,
+  .prose ol {
+    padding-left: 24px;
+  }
+
+  /* A citation is a small gilt pill; tapping it opens the sources sheet */
+  .message .cite {
+    margin-left: 0.1em;
+  }
+
+  .message .cite-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    min-width: 20px;
+    height: 20px;
+    margin: 0 1px;
+    padding: 0 5px;
+    border: 0;
+    border-radius: 10px;
+    background: var(--gilt-wash);
+    color: var(--gilt-ink);
+    font-family: var(--font-voice);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1;
+    vertical-align: 2px;
+  }
+
+  .message .cite-card {
+    display: none !important;
+  }
+
+  .message .cite-site {
+    display: none;
+  }
+
+  .message .cite-num {
+    display: inline;
+  }
+
+  /* After a reply: its sources, then copy, retry and more as round buttons */
+  .message-actions-phone {
+    flex-wrap: nowrap;
+    gap: 2px;
+    margin: 10px 0 0 -10px;
+    opacity: 1;
+  }
+
+  .message-actions-phone .versions {
+    margin: 0 4px 0 10px;
+  }
+
+  .sources-pill {
+    display: flex;
+    align-items: center;
+    flex: none;
+    gap: 8px;
+    height: 36px;
+    margin: 0 6px 0 10px;
+    padding: 0 12px 0 6px;
+    border: 1px solid var(--hairline);
+    border-radius: 999px;
+    font-size: 14px;
+    color: var(--ink-soft);
+    transition: background var(--dur-1) var(--ease);
+  }
+
+  .sources-pill:active {
+    background: var(--gilt-wash);
+  }
+
+  .sources-pill-dots {
+    display: flex;
+  }
+
+  .sources-pill-dots span {
+    display: grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    margin-right: -6px;
+    border: 1.5px solid var(--canvas);
+    border-radius: 50%;
+    background: var(--sunken);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--gilt-ink);
+  }
+
+  .sources-pill-dots + span {
+    margin-left: 6px;
+  }
+
+  .round-action {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    color: var(--muted);
+    transition: background var(--dur-1) var(--ease), transform var(--dur-1) var(--ease);
+  }
+
+  .round-action:active {
+    background: var(--gilt-wash);
+    transform: scale(0.92);
+  }
+
+  /* A workspace in use is a chip in the composer now; its strip keeps only
+     the ways to start */
+  .selected-work-context {
+    padding: 0 var(--s-3) var(--s-2);
+    border-top: 0;
+  }
+
+  .selected-work-context > span,
+  .selected-work-context > .text-button {
+    display: none;
+  }
+
+  /* ---------- The welcome ---------- */
+  /* 20px of page margin plus the welcome's own 4px */
+  .welcome {
+    margin: 0 auto auto;
+    padding: 48px 24px 24px;
+  }
+
+  .welcome .mark {
+    width: 56px;
+    height: 56px;
+    margin-bottom: 20px;
+  }
+
+  .welcome h1 {
+    font-size: 36px;
+    line-height: 1.08;
+  }
+
+  .welcome-line {
+    margin: 8px 0 24px;
+    font-size: 17px;
+  }
+
+  .starters button {
+    padding: 13px 2px;
+  }
+
+  .starter-title {
+    font-size: 19px;
+  }
+
+  .starter-note {
+    font-size: 15px;
+  }
+
+  .starters svg {
+    opacity: 1;
+  }
+
+  .welcome-foot {
+    font-size: 14px;
+  }
+
+  /* ---------- The composer ---------- */
+  .composer[data-phone] {
+    gap: 0;
+    padding: 8px 8px 2px 14px;
+    border-radius: 22px;
+  }
+
+  .composer[data-phone][data-busy] {
+    border-color: var(--gilt);
+  }
+
+  .composer[data-phone][data-busy]::before {
+    left: 16px;
+    right: 16px;
+  }
+
+  .composer[data-phone][data-panel] {
+    padding: 0;
+    border: 0;
+    background: none;
+    box-shadow: none;
+  }
+
+  .composer[data-phone] textarea {
+    min-height: 28px;
+    max-height: 132px;
+    padding: 6px 4px 2px;
+    font-size: 18px;
+    line-height: 1.45;
+  }
+
+  .composer-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 2px 0 4px;
+  }
+
+  .composer-chips .attachments {
+    display: contents;
+  }
+
+  .composer[data-phone] .mode-chip,
+  .composer[data-phone] .attachment {
+    gap: 6px;
+    height: 30px;
+    min-height: 0;
+    padding: 0 4px 0 10px;
+    border: 1px solid var(--gilt);
+    border-radius: 999px;
+    background: none;
+    font-size: 14px;
+    color: var(--gilt-ink);
+  }
+
+  .composer[data-phone] .mode-chip-text {
+    display: inline;
+    max-width: 11rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .composer[data-phone] .attachment-name {
+    max-width: 11rem;
+  }
+
+  .composer[data-phone] .attachment[data-state="ready"] .attachment-meta,
+  .composer[data-phone] .attachment[data-state="reading"] .attachment-meta {
+    display: none;
+  }
+
+  .composer[data-phone] .attachment svg {
+    color: var(--gilt);
+  }
+
+  .composer[data-phone] .attachment-thumb {
+    width: 20px;
+    height: 20px;
+  }
+
+  .composer[data-phone] .attachment-remove {
+    width: 24px;
+    height: 24px;
+    font-size: 15px;
+  }
+
+  .composer[data-phone] .composer-bar {
+    min-height: 44px;
+    gap: 2px;
+    margin-left: -6px;
+  }
+
+  .composer[data-phone] .composer-start {
+    flex-wrap: nowrap;
+    margin-left: 0;
+    gap: 2px;
+  }
+
+  .composer[data-phone] .composer-tool {
+    width: 40px;
+    height: 40px;
+    color: var(--ink-soft);
+  }
+
+  .composer[data-phone] .composer-tool:active {
+    background: var(--gilt-wash);
+    transform: scale(0.92);
+  }
+
+  .composer[data-phone] .mode-button {
+    gap: 4px;
+    height: 36px;
+    padding: 0 10px;
+    font-size: 16px;
+    font-weight: 480;
+    color: var(--muted);
+  }
+
+  .composer[data-phone] .mode-button:active {
+    background: var(--gilt-wash);
+  }
+
+  .composer[data-phone] .send {
+    width: 38px;
+    height: 38px;
+    margin-left: 0;
+    border: 0;
+    background: var(--gilt);
+    color: var(--on-gilt);
+  }
+
+  .composer[data-phone] .send:disabled {
+    background: var(--sunken);
+    color: var(--muted);
+    opacity: 0.7;
+  }
+
+  .composer[data-phone] .send:active:not(:disabled) {
+    transform: scale(0.9);
+  }
+
+  .composer[data-phone] .send[data-mode="stop"] {
+    border: 1.5px solid var(--ink-soft);
+    background: none;
+    color: var(--ink);
+    opacity: 1;
+  }
+
+  .composer[data-phone] .send-stop {
+    width: 14px;
+    height: 14px;
+  }
+
+  /* Dictation takes the box's place: the words as they come, then one row */
+  .dictation {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px 14px 10px;
+    border: 1px solid var(--gilt);
+    border-radius: 22px;
+    background: var(--surface);
+    box-shadow: var(--lift-1), 0 0 0 4px var(--gilt-wash);
+    animation: arrive var(--dur-2) var(--ease) both;
+  }
+
+  .dictation-text {
+    min-height: 52px;
+    margin: 0;
+    font-size: 19px;
+    font-style: italic;
+    line-height: 1.45;
+    color: var(--ink-soft);
+    overflow-wrap: anywhere;
+  }
+
+  .dictation-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .dictation-cancel,
+  .dictation-done {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    transition: transform var(--dur-1) var(--ease);
+  }
+
+  .dictation-cancel {
+    border: 1px solid var(--hairline);
+    color: var(--muted);
+  }
+
+  .dictation-done {
+    background: var(--gilt);
+    color: var(--on-gilt);
+  }
+
+  .dictation-cancel:active,
+  .dictation-done:active {
+    transform: scale(0.92);
+  }
+
+  .dictation-live {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+  }
+
+  .dictation .voice-bars {
+    gap: 3px;
+    height: 28px;
+  }
+
+  .dictation .voice-bars > span {
+    width: 3px;
+    border-radius: 2px;
+    transform-origin: center;
+    animation: dictation-bar 0.9s ease-in-out infinite;
+  }
+
+  .dictation .voice-bars > :nth-child(3n + 2) {
+    animation-duration: 1.15s;
+  }
+
+  .dictation .voice-bars > :nth-child(3n) {
+    animation-duration: 1.4s;
+  }
+
+  .dictation .voice-bars > :nth-child(1) { animation-delay: 0s; }
+  .dictation .voice-bars > :nth-child(2) { animation-delay: -0.17s; }
+  .dictation .voice-bars > :nth-child(3) { animation-delay: -0.34s; }
+  .dictation .voice-bars > :nth-child(4) { animation-delay: -0.51s; }
+  .dictation .voice-bars > :nth-child(5) { animation-delay: -0.68s; }
+  .dictation .voice-bars > :nth-child(6) { animation-delay: -0.85s; }
+  .dictation .voice-bars > :nth-child(7) { animation-delay: -1.02s; }
+  .dictation .voice-bars > :nth-child(8) { animation-delay: -1.19s; }
+  .dictation .voice-bars > :nth-child(9) { animation-delay: -1.36s; }
+
+  .dictation .voice-bars[data-heard] > span {
+    animation: none;
+    transform: scaleY(var(--level, 0.3));
+  }
+
+  .dictation .voice-time {
+    display: inline;
+    font-size: 15px;
+  }
+
+  @keyframes dictation-bar {
+    0%,
+    100% {
+      transform: scaleY(0.25);
+    }
+    50% {
+      transform: scaleY(1);
+    }
+  }
+
+  /* ---------- The toast ---------- */
+  .toast-region {
+    left: 16px;
+    right: 16px;
+    bottom: calc(env(safe-area-inset-bottom) + 8.5rem);
+    width: auto;
+    transform: none;
+  }
+
+  .toast {
+    gap: 10px;
+    min-height: 50px;
+    padding: 0 10px 0 18px;
+    border-radius: 14px;
+    font-size: 16px;
+  }
+
+  .toast .text-button {
+    min-height: 36px;
+    padding: 0 6px;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--gilt);
+  }
+
+  .toast-fuse {
+    display: none;
+  }
+}

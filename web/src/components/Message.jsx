@@ -10,6 +10,9 @@ import {
   Check,
   ClockCounterClockwise,
   Copy,
+  DotsThree,
+  BookmarkSimple,
+  Quotes,
   File,
   FolderOpen,
   GitBranch,
@@ -33,6 +36,8 @@ import { LONG_QUIET_MS, QUIET_MS, afterStep, clock, stillLine, thinkingPreview }
 import { formatSize } from "../lib/attachments.js";
 import { isLongReply } from "../lib/library.js";
 import { orderPlan, planSummary } from "../lib/plan.js";
+import { buzz } from "../lib/haptics.js";
+import { Sheet } from "./Sheet.jsx";
 import "./message.css";
 import { HoldButton } from "./HoldButton.jsx";
 
@@ -587,9 +592,79 @@ const ERROR_ACTION = {
   auth: { label: "Sign in again", icon: SignIn, type: "signin" },
 };
 
-function MessageView({ message, requestText = "", fresh, busy, live, streaming, phase, isLast, edited, onAction }) {
+/* Holding a message for half a second opens what can be done with it; a
+   finger that moves more than a few pixels is scrolling instead. Links,
+   buttons and fields keep their own touch. Right-click does the same. */
+const HOLD_MS = 480;
+const HOLD_SLOP = 8;
+const OWN_TOUCH = "a, button, input, textarea, select, summary, label, pre, [contenteditable], .table-scroll";
+
+function useHold(enabled, onHold) {
+  const timer = useRef(0);
+  const origin = useRef(null);
+  const hold = useRef(onHold);
+  hold.current = onHold;
+  const stop = () => clearTimeout(timer.current);
+  useEffect(() => stop, []);
+  if (!enabled) return {};
+  return {
+    onPointerDown(event) {
+      /* A sheet rises from inside the message but is not part of it */
+      if (event.button > 0 || !event.currentTarget.contains(event.target) || event.target.closest?.(OWN_TOUCH)) return;
+      origin.current = [event.clientX, event.clientY];
+      stop();
+      timer.current = setTimeout(() => {
+        buzz();
+        hold.current();
+      }, HOLD_MS);
+    },
+    onPointerMove(event) {
+      const from = origin.current;
+      if (from && Math.hypot(event.clientX - from[0], event.clientY - from[1]) > HOLD_SLOP) stop();
+    },
+    onPointerUp: stop,
+    onPointerCancel: stop,
+    onContextMenu(event) {
+      if (!event.currentTarget.contains(event.target) || event.target.closest?.("a, input, textarea")) return;
+      event.preventDefault();
+      stop();
+      hold.current();
+    },
+  };
+}
+
+/* Words with their Markdown marks taken off, for quoting a message */
+function plainWords(text = "") {
+  return String(text)
+    .replace(/```[\s\S]*?(```|$)/g, " ")
+    .replace(/\s*\[\[?\d+\]?\]\([^)]*\)/g, "")
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/[#*_`>|]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/* The reply's sources as one pill: up to three overlapping initials and a
+   count. Tapping it opens them in a sheet. */
+function SourcesPill({ sources, onOpen }) {
+  return (
+    <button className="sources-pill" onClick={onOpen} aria-label={`Show ${sources.length} ${sources.length === 1 ? "source" : "sources"}`}>
+      <span className="sources-pill-dots" aria-hidden="true">
+        {sources.slice(0, 3).map((source) => (
+          <span key={source.id}>{source.domain.charAt(0).toUpperCase()}</span>
+        ))}
+      </span>
+      <span>
+        {sources.length} {sources.length === 1 ? "source" : "sources"}
+      </span>
+    </button>
+  );
+}
+
+function MessageView({ message, requestText = "", fresh, busy, live, streaming, phase, isLast, edited, onAction, phone = false }) {
   const [copied, copy] = useCopy();
   const [editing, setEditing] = useState(false);
+  const [menu, setMenu] = useState(false);
   const editButton = useRef(null);
   const leftEditing = useRef(false);
   /* Leaving the editor returns focus to Edit, not to the top of the page. */
@@ -617,6 +692,9 @@ function MessageView({ message, requestText = "", fresh, busy, live, streaming, 
         : "idle";
   const action = message.failed && ERROR_ACTION[message.errorKind || "unknown"];
   const shown = mine ? (message.text ?? message.content) : message.content;
+  const holdable = phone && !live && !editing && !!shown;
+  const hold = useHold(holdable, () => setMenu(true));
+  const savedWork = long || edited;
 
   return (
     <article
@@ -627,10 +705,12 @@ function MessageView({ message, requestText = "", fresh, busy, live, streaming, 
       data-last={isLast || undefined}
       data-failed={message.failed || undefined}
       data-editing={editing || undefined}
+      data-phone={phone || undefined}
       aria-label={mine ? "Your message" : "Vaelo"}
+      {...hold}
     >
       <div className="message-label">
-        {!mine && <Mark size={22} state={face} />}
+        {!mine && <Mark size={phone ? 20 : 22} state={face} />}
         <span className="label">{mine ? "You" : "Vaelo"}</span>
       </div>
       <div className="message-body">
@@ -657,6 +737,9 @@ function MessageView({ message, requestText = "", fresh, busy, live, streaming, 
         )}
 
 
+        {/* On a phone a file sits above the slip it was sent with */}
+        {mine && phone && !editing && <AttachmentList items={message.attachments} />}
+
         <Slip mine={mine} editing={editing}>
           {editing ? (
             <Edit
@@ -680,10 +763,10 @@ function MessageView({ message, requestText = "", fresh, busy, live, streaming, 
             )
           )}
 
-          {mine && <AttachmentList items={message.attachments} />}
+          {mine && (!phone || editing) && <AttachmentList items={message.attachments} />}
         </Slip>
 
-        {!mine && sources.length > 0 && (
+        {!mine && !phone && sources.length > 0 && (
           <SourceStrip
             sources={sources}
             arriving={live || fresh}
@@ -740,7 +823,50 @@ function MessageView({ message, requestText = "", fresh, busy, live, streaming, 
           </div>
         )}
 
-        {!editing && !live && (shown || versions) && (
+        {/* On a phone a reply ends with its sources, then three round buttons;
+            everything else is behind the long press or the third one. Your
+            own message has no row: hold it. */}
+        {phone && !mine && !editing && !live && shown && (
+          <div className="message-actions message-actions-phone">
+            {versions && (
+              <span className="versions" aria-label="Versions of this reply">
+                <button
+                  className="icon-button small"
+                  aria-label="Previous version"
+                  disabled={busy || message.version === 0}
+                  onClick={() => act("version", message.version - 1)}
+                >
+                  <CaretLeft size={14} />
+                </button>
+                <span>
+                  <Rolling value={message.version + 1} /> / {versions.length}
+                </span>
+                <button
+                  className="icon-button small"
+                  aria-label="Next version"
+                  disabled={busy || message.version === versions.length - 1}
+                  onClick={() => act("version", message.version + 1)}
+                >
+                  <CaretRight size={14} />
+                </button>
+              </span>
+            )}
+            {sources.length > 0 && <SourcesPill sources={sources} onOpen={() => open({ kind: "sources" })} />}
+            <button className="round-action" aria-label={copied ? "Copied" : "Copy"} onClick={() => copy(shown)}>
+              {copied ? <Check size={19} /> : <Copy size={19} />}
+            </button>
+            {isLast && !busy && !message.failed && !message.interrupted && (
+              <button className="round-action" aria-label="Try again" onClick={() => act("retry")}>
+                <ArrowClockwise size={19} />
+              </button>
+            )}
+            <button className="round-action" aria-label="More" aria-haspopup="dialog" onClick={() => setMenu(true)}>
+              <DotsThree size={19} />
+            </button>
+          </div>
+        )}
+
+        {!phone && !editing && !live && (shown || versions) && (
           <div className="message-actions">
             {versions && (
               <span className="versions" aria-label="Versions of this reply">
@@ -808,6 +934,102 @@ function MessageView({ message, requestText = "", fresh, busy, live, streaming, 
           </div>
         )}
       </div>
+
+      {phone && (
+        <Sheet open={menu} onClose={() => setMenu(false)} label={mine ? "Your message" : "Reply"}>
+          {shown && <p className="sh-quote">{plainWords(shown)}</p>}
+          <div className="sh-rows">
+            <button
+              className="sh-row"
+              onClick={() => {
+                copy(shown);
+                setMenu(false);
+              }}
+            >
+              <Copy size={22} />
+              <span className="sh-row-text">Copy</span>
+            </button>
+            {mine && !busy && (
+              <button
+                className="sh-row"
+                onClick={() => {
+                  setMenu(false);
+                  setEditing(true);
+                }}
+              >
+                <PencilSimple size={22} />
+                <span className="sh-row-text">Edit and resend</span>
+              </button>
+            )}
+            {!mine && isLast && !busy && !message.failed && !message.interrupted && (
+              <button
+                className="sh-row"
+                onClick={() => {
+                  setMenu(false);
+                  act("retry");
+                }}
+              >
+                <ArrowClockwise size={22} />
+                <span className="sh-row-text">
+                  Retry
+                  <span className="sh-row-note">Keeps this version</span>
+                </span>
+              </button>
+            )}
+            {!mine && message.content && (
+              <button
+                className="sh-row"
+                onClick={() => {
+                  setMenu(false);
+                  open({ kind: "document" });
+                }}
+              >
+                <BookOpenText size={22} />
+                <span className="sh-row-text">{edited ? "Open the edited document" : "Open as a document"}</span>
+              </button>
+            )}
+            {!mine && message.content && !savedWork && (
+              <button
+                className="sh-row"
+                onClick={() => {
+                  setMenu(false);
+                  act("keep");
+                }}
+              >
+                <BookmarkSimple size={22} />
+                <span className="sh-row-text">Save to Library</span>
+              </button>
+            )}
+            {!mine && sources.length > 0 && (
+              <button
+                className="sh-row"
+                onClick={() => {
+                  setMenu(false);
+                  open({ kind: "sources" });
+                }}
+              >
+                <Quotes size={22} />
+                <span className="sh-row-text">Show sources</span>
+              </button>
+            )}
+            {!mine && message.content && !busy && (
+              <button
+                className="sh-row"
+                onClick={() => {
+                  setMenu(false);
+                  act("branch");
+                }}
+              >
+                <GitBranch size={22} />
+                <span className="sh-row-text">
+                  Branch from here
+                  <span className="sh-row-note">A new conversation that starts at this point</span>
+                </span>
+              </button>
+            )}
+          </div>
+        </Sheet>
+      )}
     </article>
   );
 }

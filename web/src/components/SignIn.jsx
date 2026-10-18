@@ -1,5 +1,9 @@
-import React from "react";
+import React, { useEffect } from "react";
+import { GoogleLogo } from "@phosphor-icons/react";
 import { Mark, Wordmark } from "./Mark.jsx";
+import { OnboardingFrame, WelcomeStep, onboardingSteps, readOnboarding, writeOnboarding } from "./Onboarding.jsx";
+import { usePhone } from "../lib/use-phone.js";
+import { buzz } from "../lib/haptics.js";
 import "./entry.css";
 
 export function Opening() {
@@ -27,7 +31,76 @@ function GoogleG() {
   );
 }
 
-export function SignIn({
+/* On a phone, signing in is the first of the welcome's screens. The pill
+   goes the way the "sign in on Google's page" fallback goes, which works the
+   same in a tab and in an installed app; the guest door stays beside it. */
+function PhoneSignIn({ configured, error, signingIn, onCancelSignIn, onGoogleRedirect, onGuest }) {
+  /* The welcome continues after sign-in, even across Google's redirect */
+  useEffect(() => {
+    if (readOnboarding() !== "replay") writeOnboarding("pending");
+  }, []);
+  const total = 1 + onboardingSteps("pending").length;
+  return (
+    <OnboardingFrame
+      index={0}
+      total={total}
+      actions={[
+        configured && (
+          <button
+            key="google"
+            className="onb-primary"
+            disabled={signingIn}
+            onClick={() => {
+              buzz();
+              onGoogleRedirect();
+            }}
+          >
+            <GoogleLogo size={21} aria-hidden="true" />
+            {signingIn ? "Finish signing in in your browser…" : "Continue with Google"}
+          </button>
+        ),
+        signingIn && (
+          <button key="cancel" className="onb-quiet" onClick={onCancelSignIn}>
+            Cancel sign-in
+          </button>
+        ),
+        onGuest && !signingIn && (
+          <button
+            key="guest"
+            className="onb-quiet"
+            title="Guest chats are not saved and can’t use saved work, web research or images."
+            onClick={() => {
+              buzz();
+              onGuest();
+            }}
+          >
+            Use as a guest
+          </button>
+        ),
+        <p key="foot" className="onb-foot">
+          By continuing you agree to the <a href="/terms">Terms</a> and <a href="/privacy">Privacy</a>.
+        </p>,
+      ]}
+    >
+      <WelcomeStep>
+        {!configured && <p className="onb-note">Sign-in is being set up. Please check back in a little while.</p>}
+        {error && (
+          <p className="onb-note" role="alert">
+            {error}
+            <button onClick={() => location.reload()}>Try again</button>
+          </p>
+        )}
+      </WelcomeStep>
+    </OnboardingFrame>
+  );
+}
+
+export function SignIn(props) {
+  const phone = usePhone();
+  return phone ? <PhoneSignIn {...props} /> : <WideSignIn {...props} />;
+}
+
+function WideSignIn({
   configured,
   error,
   buttonRef,
