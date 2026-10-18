@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { validateUsage, UsageStore } from "../server/usage-store.js";
-import { usageAuthorized } from "../api/usage.js";
+import { usageAuthorized } from "../server/usage-api.js";
 
 const event = { id: "test-event-123", route: "hermes", reported: true,
   input: 100, output: 30, cached: 50, at: "2026-10-01T12:00:00Z" };

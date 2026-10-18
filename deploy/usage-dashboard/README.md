@@ -1,6 +1,7 @@
 # Installed FreeLLMAPI usage
 
-The Vaelo relay records one content-free event per accepted attempt at `/api/usage`.
+The Vaelo relay records one content-free event per accepted attempt at
+`/api/session?resource=usage`, reusing a function within Vercel's current plan.
 Postgres retains it across cloud restarts. Input and output tokens use upstream
 usage reports; cached tokens are a subset of input and are not added twice.
 Retries use the same event id. Attempts without usage remain visible as gaps.

@@ -7,8 +7,11 @@ import {
   fail,
   HttpError,
 } from "../server/security.js";
+import usageHandler from "../server/usage-api.js";
 
 export default async function handler(req, res) {
+  if (new URL(req.url, "https://local").searchParams.get("resource") === "usage")
+    return usageHandler(req, res);
   try {
     if (req.method !== "GET") throw new HttpError(405, "Method not allowed.");
     const cfg = settings();

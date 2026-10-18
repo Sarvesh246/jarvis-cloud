@@ -24,7 +24,7 @@ def snapshot(config, previous=None):
     result = {"month": month, "local": {"input": row[0], "output": row[1], "total": sum(row)},
               "checkedAt": now.isoformat(), "cloudAvailable": False}
     try:
-        req = urllib.request.Request(config["url"] + "?month=" + month,
+        req = urllib.request.Request(config["url"] + ("&" if "?" in config["url"] else "?") + "month=" + month,
             headers={"Authorization": "Bearer " + config["readKey"]})
         with urllib.request.urlopen(req, timeout=15) as response:
             cloud = json.load(response)

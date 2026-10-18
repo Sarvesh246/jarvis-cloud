@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { UsageStore, validateUsage } from "../server/usage-store.js";
-import { readJson, json, fail, HttpError } from "../server/security.js";
+import { UsageStore, validateUsage } from "./usage-store.js";
+import { readJson, json, fail, HttpError } from "./security.js";
 
 export function usageAuthorized(header, key) {
   if (!key || key.length < 32 || typeof header !== "string") return false;

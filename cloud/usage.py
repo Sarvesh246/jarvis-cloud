@@ -63,7 +63,7 @@ class UsageReporter:
 
 
 def configured_reporter(environ=os.environ):
-    url = environ.get("USAGE_LEDGER_URL", "https://vaelochat.vercel.app/api/usage")
+    url = environ.get("USAGE_LEDGER_URL", "https://vaelochat.vercel.app/api/session?resource=usage")
     key = environ.get("USAGE_INGEST_KEY") or environ.get("API_SERVER_KEY", "")
     if not url.startswith("https://") or len(key) < 32:
         return None
