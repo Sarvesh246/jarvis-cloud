@@ -13,6 +13,8 @@ import urllib.request
 import urllib.error
 from contextlib import closing
 import tempfile
+import logging
+import os
 
 
 def snapshot(config, previous=None):
@@ -63,6 +65,23 @@ def main():
         print(json.dumps({"local": result["local"], "cloudAvailable": result["cloudAvailable"],
                           "cloud": result.get("cloud")}))
         return
+    # A task restart must not leave a second poller behind. Keep the lock open
+    # for this process's lifetime; Windows releases it even after a forced stop.
+    lock_file = open(str(Path(args.config).with_suffix(".lock")), "a+b")
+    if lock_file.tell() == 0:
+        lock_file.write(b"0")
+        lock_file.flush()
+    lock_file.seek(0)
+    if os.name == "nt":
+        import msvcrt
+        try:
+            msvcrt.locking(lock_file.fileno(), msvcrt.LK_NBLCK, 1)
+        except OSError:
+            lock_file.close()
+            return
+    logging.basicConfig(filename=Path(args.config).with_name("worker.log"),
+                        level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    logging.info("Usage sync started")
     # A scheduled logon task uses IgnoreNew to keep this to one worker.
     while True:
         try:
@@ -73,7 +92,7 @@ def main():
                 pass  # the local router may require authentication for health
             refresh(config)
         except Exception:
-            pass  # the last successful snapshot remains explicitly timestamped
+            logging.exception("Usage sync poll failed; retaining the previous snapshot")
         time.sleep(15)
 
 

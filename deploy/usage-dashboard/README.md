@@ -22,13 +22,17 @@ The Refresh button reloads the latest snapshot and local analytics. The actual
 cloud check time is shown alongside it; polling continues independently.
 The `--once` option verifies a snapshot without installing a task.
 
-Install `sync.py`, the private `config.json`, and `launch.ps1` together in a
-directory accessible to the signed-in user's scheduled tasks. Configure the
-logon task to run PowerShell with `-NoProfile -WindowStyle Hidden -File` and the
-quoted launcher path, using `IgnoreNew`, no execution time limit, and allowing
-battery operation. The launcher passes file paths as separate arguments and
-records startup errors in `worker.log`. Check that the task stays Running and
-that `checkedAt` advances after a second poll, then test a task stop/start.
+Install `sync.py` and the private `config.json` together in a directory accessible
+to the signed-in user's scheduled tasks. Configure the logon task to run the
+installed `pythonw.exe` with the script path and `--config` followed by the config
+path. Quote paths containing spaces. Use `IgnoreNew`, no execution time limit,
+and allow battery operation. `launch.ps1` is an optional diagnostic console
+launcher. The worker records startup and polling errors in `worker.log` and
+holds an exclusive process lock to prevent orphaned duplicate pollers.
+Check that the task stays Running and that `checkedAt` advances after a second
+poll, then test a task stop/start. The installed worker uses
+`C:/Projects/Cursor/vaelo-usage-service`; its scheduled action directly runs
+Python without an intermediate shell.
 
 Coverage begins when recording is deployed. Earlier unrecorded usage cannot be
 reconstructed from shared provider credentials. Provider quotas and capacity
