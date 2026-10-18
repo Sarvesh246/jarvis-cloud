@@ -29,7 +29,16 @@ export function safeMedia(value, kind = "image") {
 export function parseRichUI(source) {
   if (typeof source !== "string" || source.length > 60000) return null;
   try {
-    let data = JSON.parse(source);
+    let data;
+    try { data = JSON.parse(source); }
+    catch {
+      // Some providers serialize the whole object as a JSON string, then omit
+      // its outer quotes. Decode one complete JSON escaping layer, never eval.
+      if (!/^\s*\{\s*\\"/.test(source)) return null;
+      const decoded = JSON.parse('"' + source.trim().replace(/\r/g,'\\r').replace(/\n/g,'\\n').replace(/\t/g,'\\t') + '"');
+      data = JSON.parse(decoded);
+    }
+    if (typeof data === 'string' && data.length <= 60000) data = JSON.parse(data);
     if (data && typeof data === 'object' && !Array.isArray(data)) {
       const type = data.type || data.component;
       if (typeof type === 'string') data = { ...data, type: RICH_ALIASES[type.toLowerCase()] || type.toLowerCase() };
@@ -53,6 +62,8 @@ export function parseRichUI(source) {
               x &&
               text(x.label) &&
               text(x.value) &&
+              (x.chips === undefined || (Array.isArray(x.chips) && x.chips.length <= 8 && x.chips.every(text))) &&
+              (data.type !== 'integrations' || x.direction === undefined || ['source','destination'].includes(x.direction)) &&
               (x.detail === undefined || text(x.detail)),
           )
         )
@@ -65,7 +76,7 @@ export function parseRichUI(source) {
         if (
           !items("nodes", 24) ||
           !items("edges", 60) ||
-          !data.nodes.every((x) => x && text(x.id) && text(x.label))
+          !data.nodes.every((x) => x && text(x.id) && text(x.label) && (x.role === undefined || text(x.role)))
         )
           return null;
         const ids = new Set(data.nodes.map((x) => x.id));
@@ -94,7 +105,8 @@ export function parseRichUI(source) {
       case "gallery":
         if (
           !items("images", 24) ||
-          !data.images.every((x) => x && text(x.alt) && safeMedia(x.src))
+          !data.images.every((x) => x && text(x.alt) && safeMedia(x.src)) ||
+          (data.view !== undefined && !['grid','carousel'].includes(data.view))
         )
           return null;
         break;
@@ -117,12 +129,14 @@ export function parseRichUI(source) {
         break;
       case "receipt":
         if (
+          (data.people !== undefined && (!Number.isInteger(data.people) || data.people < 1 || data.people > 100)) ||
           !items() ||
           !data.items.every(
             (x) =>
               x &&
               text(x.label) &&
               typeof x.amount === "number" &&
+              (x.detail === undefined || text(x.detail)) &&
               Number.isFinite(x.amount) &&
               Math.abs(x.amount) <= 1e12,
           ) ||

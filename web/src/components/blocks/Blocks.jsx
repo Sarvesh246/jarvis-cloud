@@ -1,18 +1,25 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createPortal } from 'react-dom';
 import Markdown, { defaultUrlTransform } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
   ArrowSquareOut,
+  ArrowCounterClockwise,
+  ArrowsInLineVertical,
   ArrowsOut,
   ChartBar,
   Check,
   Copy,
   DownloadSimple,
   Eye,
+  MagnifyingGlass,
+  Columns,
+  FileCode,
+  TextAlignLeft,
   Table,
 } from "@phosphor-icons/react";
 import { collectSources, domainOf, kindLabel, parseUrl, sourceKey } from "../../lib/sources.js";
-import { cellText, comparisonAxis, differenceCells, isNumericColumn, isSectionRow, tableView, toCSV, toTSV } from "../../lib/table.js";
+import { cellText, comparisonAxis, differenceCells, isNumericColumn, isSectionRow, tableView, toCSV, toTSV, toNumber } from "../../lib/table.js";
 import { usePhone } from "../../lib/use-phone.js";
 import {
   STRUCTURED,
@@ -27,8 +34,10 @@ import { inferListPresentation, sectionContext, tablePresentation, overviewItems
 import { TableScroll } from "./TableScroll.jsx";
 import { Chart } from "./Chart.jsx";
 import { richPayload, pendingRichPayload, wantsSourceReply, gridOverview, treePaths, wantsOverview } from "../../lib/rich-ui.js";
-import { RichUI, StepPlayer } from "./RichUI.jsx";
+import { RichUI, StepPlayer, Lightbox, ImageDownload } from "./AfterUI.jsx";
+import { InlinePreview } from "./InlinePreview.jsx";
 import { NumberExplorer } from "./LocalTools.jsx";
+import { bestTableCells, timelineLayout } from '../../lib/output-redesign.js';
 import { SourceIcon } from "./SourceIcon.jsx";
 import { Highlighted } from "./Highlighted.jsx";
 import { Rolling } from "../Rolling.jsx";
@@ -38,6 +47,9 @@ import { getCheck } from "../../../shared/checks.js";
 import "./blocks.css";
 import "./output-layout.css";
 import "./output-polish.css";
+import "./after.css";
+import '@fontsource/jetbrains-mono/400.css';
+import '@fontsource/jetbrains-mono/500.css';
 import { DESKTOP, copyText, saveDesktopFile } from "../../lib/desktop.js";
 
 /* A reply is rendered as typed blocks: prose, code, tables, sources. Each
@@ -113,7 +125,7 @@ export function looksLikeSvg(language, source) {
   return language === "svg" || (language === "xml" && /^\s*<svg[\s>]/.test(source));
 }
 
-const FOLD_AT = 24;
+const FOLD_AT = 18;
 
 function languageOf(children) {
   const code = Array.isArray(children) ? children[0] : children;
@@ -159,32 +171,36 @@ function CodeBlock({ children, node, "data-src": src }) {
       <Timeline source={source} src={src} settled={settled} />
     );
   }
+  if ((language === 'html' || looksLikeSvg(language, source)) && settled && !live && presentation !== 'minimal') return <InlinePreview source={source} language={language} src={src} />;
   return (
-    <CodeFigure language={language} src={src}>
+    <CodeFigure language={language} filename={node?.children?.find(child => child.tagName === 'code')?.properties?.['data-filename']} src={src}>
       {children}
     </CodeFigure>
   );
 }
 
-function CodeFigure({ language, src, children }) {
+function CodeFigure({ language, filename, src, children }) {
   const { open } = useContext(BlockContext);
   const [done, copy] = useCopy();
   const [expanded, setExpanded] = useState(false);
   const [wrapped, setWrapped] = useState(false);
+  const [foldAll, setFoldAll] = useState(false);
   const source = textOf(children).replace(/\n$/, "");
   const lines = source.split("\n").length;
-  const folds = lines > FOLD_AT + 6;
+  const folds = lines > FOLD_AT;
   const canPreview = language === "html" || looksLikeSvg(language, source);
   const name = language.length <= 4 ? language.toUpperCase() : language[0]?.toUpperCase() + language.slice(1);
   const item = { kind: "code", language, source, title: language ? `${name} snippet` : "Snippet" };
+  const downloadName = filename?.split(/[\\/]/).at(-1) || `snippet.${EXT[language] || 'txt'}`;
 
   return (
     <figure className="code" data-src={src} data-wrapped={wrapped || undefined} data-folded={folds && !expanded ? true : undefined}>
       <figcaption className="block-bar">
-        <span className="label">{language || "Code"}</span>
-        <span className="block-count">{lines} {lines === 1 ? "line" : "lines"}</span>
+        <span className="label"><FileCode size={16} />{filename || downloadName}</span>
+        <span className="block-count">{name || 'Code'} · {lines} {lines === 1 ? "line" : "lines"}</span>
         <span className="block-tools">
-          <button className="block-tool" aria-pressed={wrapped} onClick={() => setWrapped(value => !value)}>Wrap lines</button>
+          <button className="block-tool icon-only" aria-label={foldAll ? 'Unfold all' : 'Fold all'} title={foldAll ? 'Unfold all blocks' : 'Fold all blocks'} aria-pressed={foldAll} onClick={() => setFoldAll(value => !value)}><ArrowsInLineVertical size={17} /></button>
+          <button className="block-tool icon-only" aria-label="Wrap lines" title="Wrap lines" aria-pressed={wrapped} onClick={() => setWrapped(value => !value)}><TextAlignLeft size={17} /></button>
           {canPreview && (
             <button
               className="block-tool"
@@ -206,7 +222,7 @@ function CodeFigure({ language, src, children }) {
             className="block-tool icon-only"
             data-tip="Download"
             aria-label="Download code"
-            onClick={() => download(`vaelo-snippet.${EXT[language] || "txt"}`, source)}
+            onClick={() => download(downloadName, source)}
           >
             <DownloadSimple size={15} />
           </button>
@@ -221,11 +237,11 @@ function CodeFigure({ language, src, children }) {
         </span>
       </figcaption>
       <pre tabIndex={0} aria-label={`${language || "Code"}, ${lines} lines`}>
-        <Highlighted source={source} language={language} />
+        <Highlighted source={source} language={language} lineNumbers foldAll={foldAll} />
       </pre>
       {folds && (
         <button className="code-fold" onClick={() => setExpanded((value) => !value)}>
-          {expanded ? "Show less" : `Show all ${lines} lines`}
+          {expanded ? "Collapse" : `Show ${lines - FOLD_AT} more lines`}
         </button>
       )}
     </figure>
@@ -241,7 +257,7 @@ function Delta({ item }) {
   if (!item.delta) return null;
   const word = item.direction === "up" ? "up" : item.direction === "down" ? "down" : "change";
   return (
-    <span className="metric-delta" data-direction={item.direction}>
+    <span className="metric-delta" data-direction={item.direction} data-sentiment={/\b(?:refund|error|churn|cost|latency|defect|bounce)\b/i.test(item.label) ? item.direction === 'down' ? 'good' : 'bad' : item.direction === 'up' ? 'good' : 'bad'}>
       <span aria-hidden="true">{item.direction === "up" ? "▲" : item.direction === "down" ? "▼" : "◆"}</span>
       <span className="sr-only">{word} </span>
       {item.delta.replace(/^[↑↓▲▼]\s*/, "")}
@@ -256,6 +272,7 @@ function Metrics({ source, src, settled }) {
   /* A figure set down while you watch turns into place once its block is
      complete; one already on the page when it opens simply stands there. */
   const [arriving] = useState(!settled);
+  const [replay, setReplay] = useState(0);
   /* Lines that aren't figures may be half-arrived ones while the block
      streams; once it is finished they are part of what was said. */
   const finished = settled || !live;
@@ -276,8 +293,7 @@ function Metrics({ source, src, settled }) {
   return (
     <figure className="metrics" data-src={src} aria-label={data.title || "Key figures"}>
       <figcaption className="block-bar">
-        <span className="label">Figures</span>
-        {data.title && <span className="metrics-title">{data.title}</span>}
+        <span className="block-heading"><strong>{data.title || 'Key figures'}</strong><small>{data.items.length} figures</small></span>
         <span className="block-tools">
           <button
             className="block-tool"
@@ -292,7 +308,7 @@ function Metrics({ source, src, settled }) {
       <div className="metrics-lead">
         <span className="metrics-lead-label">{lead.label}</span>
         <span className="metrics-lead-value">
-          {settled && lead.value.length <= 18 ? <Rolling value={lead.value} enter={arriving} /> : lead.value}
+          {settled && lead.value.length <= 18 ? <Rolling key={replay} value={lead.value} enter={arriving || replay > 0} /> : lead.value}
         </span>
         <Delta item={lead} />
       </div>
@@ -314,6 +330,7 @@ function Metrics({ source, src, settled }) {
           {note}
         </p>
       ))}
+      <footer className="after-footer"><span>Figures as supplied.</span><button className="block-tool" onClick={() => setReplay(value => value + 1)} aria-label="Replay figures"><ArrowCounterClockwise size={15} />Replay</button></footer>
     </figure>
   );
 }
@@ -323,7 +340,9 @@ function Timeline({ source, src, settled }) {
   const data = useMemo(() => parseTimeline(source), [source]);
   const [done, copy] = useCopy();
   /* A finished line without a date still belongs in the sequence */
-  const events = settled || !live ? data.rows : data.events;
+  const [selected, setSelected] = useState(null);
+  const plan = timelineLayout(settled || !live ? data.rows : data.events);
+  const events = plan.events;
   if (!events.length)
     return (
       <p className="block-pending" data-src={src}>
@@ -339,8 +358,7 @@ function Timeline({ source, src, settled }) {
   return (
     <figure className="timeline" data-src={src} aria-label={data.title || "Timeline"}>
       <figcaption className="block-bar">
-        <span className="label">Timeline</span>
-        {data.title && <span className="metrics-title">{data.title}</span>}
+        <span className="block-heading"><strong>{data.title || 'Timeline'}</strong><small>{events.length} milestones{events.some(event => event.status === 'done') ? ` · ${events.filter(event => event.status === 'done').length} complete` : ''}</small></span>
         <span className="block-tools">
           <button
             className="block-tool"
@@ -352,14 +370,16 @@ function Timeline({ source, src, settled }) {
           </button>
         </span>
       </figcaption>
+      <div className="timeline-phases">{events.map((event, i) => <button key={i} aria-pressed={selected === i} data-state={event.status} style={{ flex:event.duration }} onClick={() => setSelected(i)}>{event.what}</button>)}{plan.today !== null && <span className="timeline-today" style={{left:`calc(20px + (100% - 40px) * ${plan.today / 100})`}} title="Today" />}</div>
       <ol className="timeline-list">
         {events.map((event, i) => (
-          <li key={i}>
-            <span className="timeline-when">{event.when}</span>
-            <span className="timeline-what">
+          <li key={i} data-state={event.status} data-active={selected === i || undefined} onClick={() => setSelected(i)}>
+            <span className="timeline-when" title={event.when}>{event.displayDate}<span className="timeline-relative">{event.relative}</span></span>
+            <span className="timeline-state-dot" aria-hidden="true">{event.status === 'done' ? '✓' : ''}</span><span className="timeline-what">
               {event.what}
               {event.detail && <span className="timeline-detail">{event.detail}</span>}
             </span>
+            {event.status && <span className="timeline-state">{({done:'Done',past:'Past',current:'Now',upcoming:'Upcoming'})[event.status]}</span>}
           </li>
         ))}
       </ol>
@@ -486,6 +506,10 @@ function inline(node, key) {
   if (node.type !== "element") return null;
   const kids = (node.children || []).map((child, i) => inline(child, i));
   switch (node.tagName) {
+    case "pre": {
+      const code = node.children?.find(child => child.tagName === "code");
+      return <CodeBlock key={key} node={node}><code className={(code?.properties?.className || []).join(" ")}>{hastText(code || node)}</code></CodeBlock>;
+    }
     case "strong":
       return <strong key={key}>{kids}</strong>;
     case "em":
@@ -548,7 +572,7 @@ function TableBlock({ node, "data-src": src }) {
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState([]);
   const [onlySelected, setOnlySelected] = useState(false);
-  const [toolsOpen, setToolsOpen] = useState(false);
+  const toolsOpen = true;
   const [highlight, setHighlight] = useState(false);
   const [differenceAxis, setDifferenceAxis] = useState(() => comparisonAxis(data.columns));
   const enhance = presentation !== "minimal" && !live && interactive && data.rows.length >= 2 && data.rows.length <= 200 && data.columns.length <= 20;
@@ -557,6 +581,7 @@ function TableBlock({ node, "data-src": src }) {
   }), [data, enhance, query, selected, onlySelected, sort]);
   const visible = displayed.indices;
   const differences = useMemo(() => highlight && !phone ? differenceCells(data.rows, data.columns, visible, selected, differenceAxis) : new Set(), [highlight, phone, data, visible, selected, differenceAxis]);
+  const best = useMemo(() => onlySelected ? bestTableCells(data.columns, data.rows, visible) : new Set(), [onlySelected, data, visible]);
   const rowNumbers = new Map();
   data.rows.forEach((row, i) => { if (!isSectionRow(row)) rowNumbers.set(i, rowNumbers.size + 1); });
   const numeric = data.columns.map((_, i) => isNumericColumn(data.rows, i));
@@ -585,10 +610,11 @@ function TableBlock({ node, "data-src": src }) {
       <RichUI source={JSON.stringify({ type: "overview", items: cardItems })} enabled stateKey={`${stateKey}:overview`} />
       <button className="block-tool" onClick={() => setAsTable(true)}><Table size={15} /> <span>Show as table</span></button>
     </div>;
+  if (enhance && suggested.explore && !asTable && chosenView === null) return <figure className="table-block" data-src={src}><NumberExplorer columns={data.columns} rows={data.rows.filter(row => !isSectionRow(row))} /><footer className="after-footer"><span>What-if calculations stay on this device</span><button className="block-tool" onClick={() => setAsTable(true)}><Table size={15} />Show original table</button></footer></figure>;
   return (
     <figure className="table-block" data-src={src}>
       <figcaption className="block-bar">
-        <span className="label">Table</span>
+        <span className="label">{context && context.length < 80 && !context.includes('\n') ? context : 'Table'}</span>
         <span className="block-count">
           {displayed.total} {displayed.total === 1 ? "row" : "rows"}
         </span>
@@ -646,19 +672,16 @@ function TableBlock({ node, "data-src": src }) {
           </button>
         </span>
       </figcaption>
-      {enhance && <details className="local-table-tools" onToggle={event => setToolsOpen(event.currentTarget.open)}>
-        <summary>Filter and compare{query || onlySelected ? ` · ${displayed.count} of ${displayed.total} rows` : ''}</summary>
+      {enhance && view === 'table' && <div className="local-table-tools">
         <div className="local-controls">
-          <label>Filter rows <input type="search" maxLength={200} value={query} onChange={e => setQuery(e.target.value)} placeholder="Find in this table" /></label>
-          <button className="block-tool" aria-pressed={onlySelected} disabled={!selected.length && !onlySelected} onClick={() => setOnlySelected(v => !v)}>Compare selected ({selected.length})</button>
-          <button className="block-tool" onClick={() => { setQuery(""); setSelected([]); setOnlySelected(false); setHighlight(false); setDifferenceAxis(comparisonAxis(data.columns)); setSort({ column: null, direction: "asc" }); }}>Reset view</button>
+          <label className="after-table-filter"><MagnifyingGlass size={16}/><input aria-label="Filter rows" type="search" maxLength={200} value={query} onChange={e => setQuery(e.target.value)} placeholder="Filter rows…" /></label>
+          <button className="block-tool after-table-compare" aria-pressed={onlySelected} disabled={!selected.length && !onlySelected} onClick={() => setOnlySelected(v => !v)}><Columns size={16}/>{onlySelected ? 'Show all rows' : `Compare (${selected.length})`}</button>
         </div>
-        {!phone && <label className="table-difference-toggle"><input type="checkbox" checked={highlight} onChange={event => setHighlight(event.target.checked)} />Highlight differences</label>}
+        {onlySelected && !phone && <label className="table-difference-toggle"><input type="checkbox" checked={highlight} onChange={event => setHighlight(event.target.checked)} />Highlight differences</label>}
         {!phone && highlight && <><label className="table-difference-axis">Compare <select aria-label="Compare differences by" value={differenceAxis} onChange={event=>setDifferenceAxis(event.target.value)}><option value="rows">Rows</option><option value="columns" disabled={data.columns.length < 3}>Value columns</option></select></label><p className="local-note" role="status">{differenceAxis === 'rows' && selected.length < 2 && displayed.count !== 2 ? 'Select at least two rows to highlight their differences.' : `${differences.size} differing cells. Matching values stay plain.`}</p></>}
-        <p className="local-note" role="status">{displayed.count} of {displayed.total} rows · Copy and CSV include the original table.</p>
-      </details>}
+      </div>}
       {view === "chart" && plan && visible.length > 0 ? (
-        <Chart columns={data.columns} rows={displayed.rows} plan={plan} />
+        <Chart columns={data.columns} rows={displayed.rows} plan={plan} stackedDefault={/\b(?:breakdown|stacked|share of|composition|parts of)\b/i.test(requestText + ' ' + context)} />
       ) : (
         <TableScroll resizable={!live && data.rows.length > 1}>
           <table style={{ "--table-min-width": `${Math.min(38, data.columns.length * 7 + (enhance && toolsOpen ? 3.5 : 0))}rem` }}>
@@ -692,12 +715,13 @@ function TableBlock({ node, "data-src": src }) {
                   <th scope="rowgroup" colSpan={data.columns.length + (enhance && toolsOpen ? 1 : 0)}>{inline(data.cells[r][0], 0)}</th>
                 </tr>
               ) : (
-                <tr key={r}>
+                <tr key={r} data-selected={selected.includes(r) || undefined} onClick={enhance ? event => { if (event.target.closest('a,button,input')) return; setSelected(items => items.includes(r) ? items.filter(i => i !== r) : [...items, r]); } : undefined}>
                   {enhance && toolsOpen && <td><input type="checkbox" aria-label={`Compare row ${rowNumbers.get(r)}: ${data.rows[r][0]}`} checked={selected.includes(r)} onChange={e => setSelected(items => e.target.checked ? [...items, r] : items.filter(i => i !== r))} /></td>}
                   {data.cells[r].map((cell, i) => (
                     <td key={i} data-numeric={numeric[i] || undefined} data-different={differences.has(`${r}:${i}`) || undefined}>
+                      {best.has(`${r}:${i}`) && <span className="table-best" aria-label="Best value">★</span>}
                       {differences.has(`${r}:${i}`) && <span className="sr-only">Different: </span>}
-                      {inline(cell, i)}
+                      {/\b(?:score|rating)\b/i.test(data.columns[i]) && Number.isFinite(toNumber(data.rows[r][i])) ? <span className="table-score"><i aria-hidden="true"><b style={{width:`${Math.max(0, toNumber(data.rows[r][i])) / Math.max(1, ...data.rows.map(row => toNumber(row[i])).filter(Number.isFinite)) * 100}%`}} /></i>{inline(cell, i)}</span> : inline(cell, i)}
                     </td>
                   ))}
                 </tr>
@@ -707,7 +731,8 @@ function TableBlock({ node, "data-src": src }) {
         </TableScroll>
       )}
       {enhance && visible.length === 0 && <p className="local-note">No matching rows. Reset the view to see the full table.</p>}
-      {enhance && visible.length > 0 && <NumberExplorer defaultOpen={suggested.explore} columns={data.columns} rows={displayed.rows.filter(row => !isSectionRow(row))} />}
+      {enhance && view === 'table' && <footer className="after-footer"><b>{selected.length ? `${selected.length} selected` : `${displayed.count} rows`}</b><span>{onlySelected ? 'Comparing selection' : 'Select rows to compare'}</span>{selected.length > 0 && <button className="block-tool" onClick={() => { setSelected([]); setOnlySelected(false); setHighlight(false); }}>Clear</button>}{(query || sort.column !== null) && <button className="block-tool" onClick={() => { setQuery(''); setSort({column:null,direction:'asc'}); }}>Reset view</button>}<span className="sr-only" role="status">{displayed.count} of {displayed.total} rows. Copy and CSV include the original table.</span></footer>}
+      {enhance && suggested.explore && visible.length > 0 && <NumberExplorer defaultOpen columns={data.columns} rows={displayed.rows.filter(row => !isSectionRow(row))} />}
     </figure>
   );
 }
@@ -739,6 +764,8 @@ function ImageRef({ alt, src }) {
   const [reveal] = useState(live);
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const [dimensions, setDimensions] = useState('');
   useEffect(() => { setLoaded(false); setFailed(false); }, [src]);
   if (failed) return <span className="image-ref" role="img" aria-label={alt || 'Image from Vaelo'}>{alt || 'Image from Vaelo'} <span className="local-note">This image could not be displayed.</span></span>;
   if (/^data:image\/(png|jpeg|webp|gif);base64,/.test(src || ""))
@@ -749,37 +776,42 @@ function ImageRef({ alt, src }) {
             src={src}
             alt={alt || "Image from Vaelo"}
             loading="lazy"
-            onLoad={() => setLoaded(true)}
+            onLoad={event => { setLoaded(true); setDimensions(`${event.currentTarget.naturalWidth} × ${event.currentTarget.naturalHeight}`); }}
             onError={() => setFailed(true)}
           />
+          <span className="after-image-tools"><a href={src} target="_blank" rel="noopener noreferrer" aria-label="Open image"><ArrowSquareOut size={17} /></a><ImageDownload src={src} /><button aria-label="Expand image" onClick={() => setExpanded(true)}><ArrowsOut size={17} /></button></span>
           {reveal && (
             <span className="image-tiles" aria-hidden="true">
               {imageTiles("image-tile")}
             </span>
           )}
         </span>
-        {alt && <span className="image-caption">{alt}</span>}
+        <span className="image-caption">{alt || 'Image from Vaelo'}<small>{dimensions}</small></span>
+        {expanded && createPortal(<Lightbox images={[{src,alt:alt || 'Image from Vaelo'}]} index={0} setIndex={() => {}} onClose={() => setExpanded(false)} />, document.body)}
       </span>
     );
   const url = parseUrl(src || "");
+  const Reference = url ? "a" : "span";
   return (
-    <span className="image-ref">
+    <Reference className="image-ref" {...(url ? { href: url.href, target: "_blank", rel: "noopener noreferrer" } : {})}>
       <span className="label">Image</span> {alt || "Untitled image"}
       {url && (
-        <a href={url.href} target="_blank" rel="noopener noreferrer">
+        <span>
           Open <ArrowSquareOut size={13} />
-        </a>
+        </span>
       )}
-    </span>
+      <small>External reference · opens at the source; not loaded in chat.</small>
+    </Reference>
   );
 }
 
 function LocalList({ node, children, ordered = false, "data-src": src, ...props }) {
-  const { presentation, live, interactive, stateKey, content, automatic } = useContext(BlockContext);
+  const { presentation, live, interactive, stateKey, content, automatic, requestText } = useContext(BlockContext);
   const Tag = ordered ? "ol" : "ul";
   if (!interactive || live || presentation === "minimal") return <Tag {...props} data-src={src}>{children}</Tag>;
   const items = (node.children || []).filter(n => n.tagName === "li");
-  const supported = n => n.type === "text" || (["p", "strong", "em", "del", "code", "a", "br", "input"].includes(n.tagName) && (n.children || []).every(supported));
+  const procedural = ordered && automatic && /\b(?:how (?:do|can|to)|walk .{0,10}through|instructions|procedure|set.?up|install|recipe|one step at a time)\b/i.test(`${requestText} ${sectionContext(content, node.position?.start?.offset)}`);
+  const supported = n => n.type === "text" || ((["p", "strong", "em", "del", "code", "a", "br", "input"].includes(n.tagName) || (procedural && n.tagName === "pre")) && (n.children || []).every(supported));
   const nested = items.some(item => !(item.children || []).every(supported));
   const checkbox = n => n.tagName === "input" ? n : (n.children || []).map(checkbox).find(Boolean);
   const defaults = items.map(item => !!checkbox(item)?.properties?.checked);
@@ -796,6 +828,8 @@ function LocalList({ node, children, ordered = false, "data-src": src, ...props 
   });
   const inferred = automatic && !tasks ? inferListPresentation(items.map(hastText), { context: sectionContext(content, node.position?.start?.offset), rich }) : null;
   if (inferred?.kind === "metrics" || inferred?.kind === "timeline") return <InferredList key={key} inferred={inferred} original={<Tag {...props}>{children}</Tag>} src={src} />;
+  if (procedural) return <div data-src={src}><StepPlayer items={items} render={item => item.children.filter(n => n.tagName !== 'input').map((n, j) => n.tagName === 'p' ? <p key={j}>{inline(n, j)}</p> : inline(n, j))} /></div>;
+  if (!tasks && !inferred) return <Tag {...props} data-src={src}>{children}</Tag>;
   return <Checklist key={key} autoActive={inferred?.kind === "checklist"} storageKey={stateKey ? key : null} defaults={defaults} tasks={tasks} items={items} original={children} ordered={ordered} src={src} start={props.start} />;
 }
 
@@ -812,6 +846,7 @@ function Checklist({ storageKey, defaults, tasks, autoActive, items, original, o
   const [stepView, setStepView] = useState(false);
   const [values, setValues] = useState(() => storageKey ? readChecklist(storageKey, defaults) : defaults);
   const [saved, setSaved] = useState(true);
+  const [undo, setUndo] = useState(null);
   const Tag = ordered ? "ol" : "ul";
   const completed = values.filter(Boolean).length;
   function update(next) {
@@ -820,12 +855,13 @@ function Checklist({ storageKey, defaults, tasks, autoActive, items, original, o
   }
   return <div className="local-checklist" data-src={src}>
     <div className="local-checklist-bar">
+      {active && <><span className="checklist-ring" style={{'--progress': `${completed / items.length * 100}%`}}><span>{Math.round(completed / items.length * 100)}%</span></span><strong className="checklist-title">{completed === items.length ? 'All done' : 'Checklist'}</strong></>}
       <button className="block-tool" onClick={() => setActive(v => !v)}>{active ? "Show original list" : "Use as checklist"}</button>
       {ordered && <button className="block-tool" aria-pressed={stepView} onClick={() => setStepView(v => !v)}>{stepView ? "Leave step view" : "Step through"}</button>}
-      {active && <><span className="local-note" role="status">{completed} / {items.length} done</span><button className="block-tool" onClick={() => update(defaults)}>Reset checks</button></>}
+      {active && <><span className="local-note" role="status">{completed} / {items.length} done</span><button className="block-tool" onClick={() => { setUndo(values); update(values.map(() => false)); }}>Reset checks</button>{undo && <button className="block-tool" onClick={() => { update(undo); setUndo(null); }}>Undo reset</button>}</>}
     </div>
     {stepView ? <StepPlayer items={items} render={item => item.children.filter(n => n.tagName !== "input").map((n, j) => inline(n, j))} /> : active ? <>
-      <progress max={items.length} value={completed} aria-label="Checklist progress" />
+      <span className="sr-only" role="progressbar" aria-valuemin={0} aria-valuemax={items.length} aria-valuenow={completed} aria-label="Checklist progress" />
       <ul className="local-check-items">{items.map((item, i) => <li key={i}>
         <label><input type="checkbox" checked={values[i]} onChange={e => update(values.map((v, j) => j === i ? e.target.checked : v))} />
           <span data-checked={values[i] || undefined}>{ordered && <span className="local-step">{(start || 1) + i}. </span>}{item.children.filter(n => n.tagName !== "input").map((n, j) => inline(n, j))}</span>
@@ -853,7 +889,19 @@ const components = {
   ol: props => <LocalList {...props} ordered />,
 };
 
-const remarkPlugins = [remarkGfm];
+function remarkCodeFilename() {
+  return tree => {
+    const visit = node => {
+      if (node.type === 'code' && typeof node.meta === 'string' && node.meta.length <= 160) {
+        const match = node.meta.match(/^(?:(?:filename|title)=)?["']?([\w@./-]+\.[\w-]+)["']?$/);
+        if (match && !match[1].split(/[\\/]/).includes('..')) node.data = {...node.data,hProperties:{...node.data?.hProperties,'data-filename':match[1]}};
+      }
+      node.children?.forEach(visit);
+    };
+    visit(tree);
+  };
+}
+const remarkPlugins = [remarkGfm, remarkCodeFilename];
 
 /* Markdown's own filter drops every data: URL, which would leave the images
    Hermes makes with nothing to show. Raster images inline are let through

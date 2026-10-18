@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { QRLink } from "./blocks/RichUI.jsx";
+import { QRLink } from "./blocks/AfterUI.jsx";
 import { safeMedia } from "../lib/rich-ui.js";
 import "./ui-tools.css";
 

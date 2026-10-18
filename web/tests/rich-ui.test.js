@@ -161,7 +161,7 @@ test("stacked charts reject mixed units, percentages, negatives and missing entr
     assert.equal(stackedSeries(columns, [["Jan", ...values]], [1, 2], 0), null);
   assert.equal(stackedSeries(columns, rows, [1], 0), null);
 });
-test("ordinary requests keep the original prompt budget; rich formats are opt-in per request", () => {
+test("simple requests keep their prompt budget; useful rich formats are discovered automatically", () => {
   const msg = (content) => [{ role: "user", content }];
   assert.equal(richGuidanceFor(msg("Help me pack for a weekend.")), "");
   assert.equal(
@@ -195,7 +195,7 @@ test('production policy permits HTTPS previews while preserving execution bounda
   assert.ok(directives.get('connect-src').includes('blob:'));
   assert.deepEqual(directives.get('worker-src'), ["'self'", 'blob:']);
   assert.deepEqual(directives.get('script-src'), ["'self'", "'wasm-unsafe-eval'", 'https://accounts.google.com/gsi/client']);
-  assert.deepEqual(directives.get('frame-src'), ['https://accounts.google.com']);
+  assert.deepEqual(directives.get('frame-src'), ["'self'", 'https://accounts.google.com']);
   assert.deepEqual(directives.get('object-src'), ["'none'"]);
   assert.deepEqual(directives.get('form-action'), ["'self'"]);
   assert.ok(!directives.get('script-src').includes("'unsafe-eval'"));

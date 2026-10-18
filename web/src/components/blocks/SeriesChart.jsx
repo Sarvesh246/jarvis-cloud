@@ -1,57 +1,93 @@
 import React, { useState } from "react";
-
+import { compactNumber } from "../../lib/charts.js";
 export function SeriesChart({ data }) {
-  const [selected, setSelected] = useState(0);
-  const point = data.points[selected];
+  const [selected, setSelected] = useState(0),
+    [hidden, setHidden] = useState([]);
+  const totals = data.points.map((p) =>
+    p.values.reduce((sum, n, i) => sum + (hidden.includes(i) ? 0 : n), 0),
+  );
+  const max = Math.max(1, ...totals),
+    point = data.points[selected];
   return (
     <section className="series-chart" aria-label="Stacked breakdown">
-      <p className="local-note">
-        Stacked view adds the selected series. Use it only when the amounts form
-        parts of the same whole. Scale starts at zero.
-      </p>
       <div className="series-legend">
         {data.columns.map((name, i) => (
-          <span key={i} style={{ "--series": i }}>
+          <button
+            key={i}
+            aria-pressed={!hidden.includes(i)}
+            onClick={() =>
+              setHidden((prev) =>
+                prev.includes(i)
+                  ? prev.filter((x) => x !== i)
+                  : prev.length < data.columns.length - 1
+                    ? [...prev, i]
+                    : prev,
+              )
+            }
+          >
             {name}
-          </span>
+          </button>
         ))}
       </div>
-      <div className="series-bars">
+      <div className="series-columns">
         {data.points.map((p, i) => (
           <button
             key={i}
-            className="series-row"
+            className="series-column"
             aria-pressed={selected === i}
+            aria-label={`${p.label}: ${compactNumber(totals[i])}`}
             onClick={() => setSelected(i)}
             onPointerEnter={() => setSelected(i)}
+            onFocus={() => setSelected(i)}
+            style={{ "--height": `${(totals[i] / max) * 100}%` }}
           >
-            <span>{p.label}</span>
-            <span className="series-track" aria-hidden="true">
+            <b>{compactNumber(totals[i])}</b>
+            <span>
               {p.values.map((value, j) => (
-                <span
+                <i
                   key={j}
                   style={{
-                    width: `${(value / data.max) * 100}%`,
-                    "--series": j,
+                    flex: hidden.includes(j) ? 0 : value,
+                    display: hidden.includes(j) ? "none" : undefined,
                   }}
                 />
               ))}
             </span>
-            <span>{p.original.join(" + ")}</span>
+            <small>{p.label}</small>
           </button>
         ))}
       </div>
       {point && (
         <dl className="series-reading" aria-live="polite">
           <dt>{point.label}</dt>
-          {data.columns.map((name, i) => (
-            <div key={i}>
-              <dt>{name}</dt>
-              <dd>{point.original[i]}</dd>
-            </div>
-          ))}
+          {data.columns.map(
+            (name, i) =>
+              !hidden.includes(i) && (
+                <div key={i}>
+                  <dt>{name}</dt>
+                  <dd>
+                    {point.original[i]}{" "}
+                    <small>
+                      {totals[selected]
+                        ? Math.round((point.values[i] / totals[selected]) * 100)
+                        : 0}
+                      %
+                    </small>
+                  </dd>
+                  <i
+                    className="series-share"
+                    style={{
+                      width: `${totals[selected] ? (point.values[i] / totals[selected]) * 100 : 0}%`,
+                    }}
+                  />
+                </div>
+              ),
+          )}
         </dl>
       )}
+      <p className="local-note">
+        Stacked totals use the visible series. Scale starts at zero.
+      </p>
     </section>
   );
 }

@@ -27,31 +27,31 @@ test('every rich type renders through actual Markdown with common model fence va
         const content = `Here is your answer.\n\n~~~${language}\n${json}\n~~~`;
         for (const props of [{}, {mapped:true}, {live:true}]) {
           const html = render(content, props);
-          assert.match(html, /class="rich-block"/, `${sample.type}/${language}/${JSON.stringify(props)}`);
+          assert.match(html, /class="after-block"/, `${sample.type}/${language}/${JSON.stringify(props)}`);
           assert.doesNotMatch(html, /block-fallback|class="code-figure"/);
         }
-        assert.doesNotMatch(render(content, {}, 'minimal'), /class="rich-block"/);
-        assert.doesNotMatch(render(content, {requestText:'Return only JSON.'}), /class="rich-block"/);
-        assert.doesNotMatch(render(content, {requestText:'Use plain text.'}), /class="rich-block"/);
+        assert.doesNotMatch(render(content, {}, 'minimal'), /class="after-block"/);
+        assert.doesNotMatch(render(content, {requestText:'Return only JSON.'}), /class="after-block"/);
+        assert.doesNotMatch(render(content, {requestText:'Use plain text.'}), /class="after-block"/);
       }
-      assert.match(render(json), /class="rich-block"/, `bare ${sample.type}`);
+      assert.match(render(json), /class="after-block"/, `bare ${sample.type}`);
     }
     const json = JSON.stringify({type:'overview',title:'Trip Budget',items:[{label:'Hotel',value:'$480'},{label:'Food',value:'$160'},{label:'Travel',value:'$75'},{label:'Total',value:'$715'}]});
     const screenshot = render(`Here's your trip bento overview:\n\n\`\`\`\n${json}\n\`\`\``);
     assert.match(screenshot, /Overview cards/);
-    assert.ok(screenshot.indexOf('>Total<') < screenshot.indexOf('>Hotel<'));
+    assert.ok(screenshot.indexOf('Trip Budget · Total') < screenshot.indexOf('<dt>Hotel'));
     for (const language of ['json','vaelo-ui','']) {
       assert.match(render(`~~~${language}\n{"type":"overview","items":[`, {live:true}), /Preparing this view/);
       assert.doesNotMatch(render(`~~~${language}\n{"type":"overview","items":[`, {live:true}, 'minimal'), /Preparing this view/);
-      assert.doesNotMatch(render(`~~~${language}\n{"type":"overview","items":[`), /class="rich-block"/);
-      assert.doesNotMatch(render(`~~~${language}\n{"type":"gallery","images":[{"src":"javascript:alert(1)","alt":"unsafe"}]}\n~~~`), /class="rich-block"|src="javascript:/);
+      assert.doesNotMatch(render(`~~~${language}\n{"type":"overview","items":[`), /class="after-block"/);
+      assert.doesNotMatch(render(`~~~${language}\n{"type":"gallery","images":[{"src":"javascript:alert(1)","alt":"unsafe"}]}\n~~~`), /class="after-block"|src="javascript:/);
     }
-    assert.doesNotMatch(render(`~~~javascript\n${json}\n~~~`), /class="rich-block"/);
+    assert.doesNotMatch(render(`~~~javascript\n${json}\n~~~`), /class="after-block"/);
     const exact = JSON.stringify({type:'overview',items:[{label:'**literal**',value:'[word](https://example.com)'}]});
     const bare = render(exact, {mapped:true});
     assert.match(bare, /\*\*literal\*\*/);
     assert.match(bare, /\[word\]\(https:\/\/example.com\)/);
     assert.match(bare, /data-src="0:/);
-    assert.doesNotMatch(render('~~~json\n{"type":"invoice","value":123}\n~~~'), /class="rich-block"/);
+    assert.doesNotMatch(render('~~~json\n{"type":"invoice","value":123}\n~~~'), /class="after-block"/);
   } finally { await server.close(); }
 });

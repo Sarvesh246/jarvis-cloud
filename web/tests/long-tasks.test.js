@@ -201,6 +201,21 @@ test("a reply is started on the relay under its own id, then followed from the s
   assert.equal(events().at(-1).name, "jarvis.complete");
 });
 
+test('implicit rich presentation instructions reach normal and direct routes in a single run', async () => {
+  for (const fast of [false, true]) {
+    const {req, res} = fakeExchange();
+    const {request, calls} = fakeRelay();
+    await streamChat(req, res, cfg, user, {...input, fast, messages:[{role:'user', content:'Split the bill between three people: food $60, transport $15.'}]}, request);
+    const starts = calls.filter(call => call.url.endsWith('/vaelo/runs'));
+    assert.equal(starts.length, 1);
+    const body = JSON.parse(starts[0].options.body);
+    const system = body.messages.find(message => message.role === 'system').content;
+    assert.match(system, /Choose these cards automatically/);
+    assert.match(system, /receipt: currency:ISO4217/);
+    if (fast) assert.match(body.fast, /Choose these cards automatically/);
+  }
+});
+
 test("picking a reply back up never starts a new run", async () => {
   const { req, res } = fakeExchange();
   const { request, calls } = fakeRelay();

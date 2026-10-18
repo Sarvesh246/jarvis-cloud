@@ -1,5 +1,5 @@
 import { ReadingProgress } from "./UITools.jsx";
-import { CodeCompare } from "./blocks/RichUI.jsx";
+import { CodeCompare } from "./blocks/AfterUI.jsx";
 import React, { useEffect, useRef, useState } from "react";
 import {
   ArrowBendUpLeft,

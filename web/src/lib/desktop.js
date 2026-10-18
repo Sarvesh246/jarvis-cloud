@@ -78,9 +78,13 @@ export async function desktopSignOut() {
 export const cancelDesktopSignIn = () => invoke("cancel_sign_in");
 
 export async function saveDesktopFile(name, text) {
+  return saveDesktopBytes(name, new TextEncoder().encode(text));
+}
+
+export async function saveDesktopBytes(name, bytes) {
   const path = await save({ defaultPath: name });
   if (!path) return false;
-  await writeFile(path, new TextEncoder().encode(text));
+  await writeFile(path, bytes);
   return true;
 }
 
