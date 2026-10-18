@@ -1,4 +1,5 @@
 import { numberSeries } from "./intelligent-ui.js";
+import { richPresentationFor } from '../../shared/rich-ui-guidance.js';
 // Bounded, declarative content only. A reply cannot supply HTML, handlers or executable code.
 export const RICH_TYPES = new Set([
   "overview",
@@ -26,7 +27,7 @@ export function safeMedia(value, kind = "image") {
     return null;
   }
 }
-export function parseRichUI(source) {
+export function parseRichUI(source, expectedType) {
   if (typeof source !== "string" || source.length > 60000) return null;
   try {
     let data;
@@ -40,7 +41,7 @@ export function parseRichUI(source) {
     }
     if (typeof data === 'string' && data.length <= 60000) data = JSON.parse(data);
     if (data && typeof data === 'object' && !Array.isArray(data)) {
-      const type = data.type || data.component;
+      const type = data.type || data.component || (RICH_TYPES.has(expectedType) ? expectedType : undefined);
       if (typeof type === 'string') data = { ...data, type: RICH_ALIASES[type.toLowerCase()] || type.toLowerCase() };
       if (['overview', 'widgets', 'integrations'].includes(data.type) && Array.isArray(data.items)) data = { ...data, items: data.items.map(item => item && typeof item === 'object' ? { ...item, value: typeof item.value === 'number' && Number.isFinite(item.value) ? String(item.value) : item.value } : item) };
     }
@@ -214,7 +215,7 @@ export function stackedSeries(columns, rows, values, label) {
 export function richPayload(source, language = '', request = '') {
   if (wantsSourceReply(request)) return null;
   if (!richLanguage(language)) return null;
-  return parseRichUI(source);
+  return parseRichUI(source, richPresentationFor(request));
 }
 function richLanguage(language) {
   return ['', 'json', 'application/json', 'vaelo-ui', 'ui', ...RICH_TYPES, ...Object.keys(RICH_ALIASES)].includes(language.toLowerCase());

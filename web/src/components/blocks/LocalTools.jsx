@@ -6,14 +6,20 @@ import {
 } from "@phosphor-icons/react";
 import { numberSeries, scaleSeries } from "../../lib/intelligent-ui.js";
 
-export function NumberExplorer({ columns, rows }) {
+export function NumberExplorer({ columns, rows, initialFactor = 1 }) {
   const available = useMemo(
     () => columns.map((_, i) => i).filter((i) => numberSeries(rows, i)),
     [columns, rows],
   );
   const [choice, setColumn] = useState(available[0] ?? 0);
   const column = available.includes(choice) ? choice : (available[0] ?? 0);
-  const [factor, setFactor] = useState("1");
+  const [factor, setFactor] = useState(
+    String(
+      Number.isFinite(initialFactor) && Math.abs(initialFactor) <= 1000000
+        ? initialFactor
+        : 1,
+    ),
+  );
   const original = numberSeries(rows, column);
   const series = scaleSeries(original, factor);
   if (!available.length) return null;

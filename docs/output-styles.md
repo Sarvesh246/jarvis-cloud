@@ -35,6 +35,10 @@ Run `npm run dev -- --port 5178` from `web`, then open `/tests/fixtures/redesign
 
 ## Verification
 
+Automatic presentation is enforced in the shared settled-answer renderer, regardless of the model/provider that produced the text. Recovery covers supported labelled data, itemized expenses, numbered procedures (including code), file layouts, explicit service relationships, supplied image sets and GLB files, public phone links, supplied code versions, proposed source/destination workflows and local budget scenarios. Existing Markdown controls cover charts, tables, figures, timelines, checklists, code and HTML previews. Ordinary prompts do not need to name a visual. Missing media/data is never fabricated to make a card, and explicit plain/source/table requests take precedence.
+
+The automatic-selection suite exercises all 26 styles through the real Message component using ordinary prompts and responses without UI payloads. All 12 rich schema intents are checked across normal, direct and guest request routes, with exactly one run per reply. Malformed schemas still require valid bounded data; an omitted type can be recovered from selected intent only when the remaining schema validates. This is application-level enforcement for supported data, not a claim of universal instruction compliance or semantic correctness by every upstream model.
+
 - All 26 samples rendered through the actual chat component in browser checks, including a phone document, without raw-payload or renderer fallbacks.
 - The release was integrated with the latest phone and usage-tracking changes. All 439 web tests, the production build and `git diff --check` passed. Regression checks include guided procedures with fenced command blocks and graph presentation when the provider returns prose.
 - Browser interactions checked row selection/comparison; guided/all-step navigation; checklist reset/undo; code folding; receipt splitting; number presets; inline HTML rendering; and loading a public GLB with rotate/reset controls.

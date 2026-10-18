@@ -20,6 +20,7 @@ export const RICH_UI_GUIDANCE = [
 ].join(" ");
 
 export function richPresentationFor(text = "") {
+  if (/\b(?:in|as|into) (?:a |the )?table\b/i.test(text)) return null;
   if (
     /\b(?:write|implement|generate|build)\b.{0,28}\b(?:code|script|program|function|component)\b|\breturn\b.{0,16}\bsource code\b/is.test(
       text,
@@ -33,19 +34,19 @@ export function richPresentationFor(text = "") {
   )
     return null;
   if (
-    /\b(?:code (?:comparison|diff)|compare (?:these |the )?(?:code|versions)|before.{0,30}after.{0,30}code)\b/is.test(
+    /\b(?:code (?:comparison|diff)|compare (?:these |the )?(?:code|versions)|before.{0,30}after.{0,30}code|what (?:changed|is different).{0,45}(?:code|versions|implementations))\b/is.test(
       text,
     )
   )
     return "code-compare";
   if (
-    /\b(?:before.{0,30}after images?|compare.{0,30}(?:photos|pictures|images))\b/is.test(
+    /\b(?:before.{0,30}after (?:images?|photos?)|compare.{0,30}(?:photos|pictures|images)|(?:difference|changed).{0,30}(?:photos|pictures|images))\b/is.test(
       text,
     )
   )
     return "image-compare";
   if (
-    /\b(?:workflow|integrations? cards|how could.{0,60}(?:systems|services).{0,30}(?:work|fit) together)\b/is.test(
+    /\b(?:workflow|integrations? cards|automate.{0,60}(?:email|receipts|sheets|files)|how could.{0,60}(?:systems|services).{0,30}(?:work|fit) together)\b/is.test(
       text,
     )
   )
@@ -59,21 +60,25 @@ export function richPresentationFor(text = "") {
   )
     return "graph";
   if (
-    /\b(?:itemi[sz]ed? (?:receipt|expenses?|costs?)|split.{0,40}(?:bill|cost|expenses?)|(?:bill|cost|expenses?).{0,40}split)\b/is.test(
+    /\b(?:itemi[sz]ed? (?:receipt|expenses?|costs?)|split.{0,40}(?:bill|cost|expenses?|tab|dinner)|(?:bill|cost|expenses?|tab|dinner).{0,40}split|who owes what|(?:we|i) (?:paid|spent).{0,120}(?:total|each|owe|cost))\b/is.test(
       text,
     )
   )
     return "receipt";
-  if (/\b(?:walk me through|guide me through|one step at a time)\b/i.test(text))
+  if (
+    /\b(?:walk me through|guide me through|one step at a time|how (?:do i|can i|to)|step.by.step|instructions for|teach me (?:how|to))\b/i.test(
+      text,
+    )
+  )
     return "steps";
   if (
-    /\b(?:file tree|folder tree|(?:project|folder|directory) structure)\b/i.test(
+    /\b(?:file tree|folder tree|(?:project|folder|directory|repository|repo) (?:structure|layout)|organi[sz]e.{0,30}(?:files|folders|repository|repo))\b/i.test(
       text,
     )
   )
     return "files";
   if (
-    /\b(?:image (?:board|gallery|carousel)|moodboard|inspiration board)\b/i.test(
+    /\b(?:image (?:board|gallery|carousel)|moodboard|inspiration board|(?:browse|look through|look closer|inspect|zoom into).{0,30}(?:photos|images|pictures|details)|(?:design|room|studio|visual) (?:references|inspiration|ideas))\b/i.test(
       text,
     )
   )
@@ -81,13 +86,96 @@ export function richPresentationFor(text = "") {
   if (/\b(?:qr(?: code)?|(?:open|scan).{0,40}(?:phone|device))\b/is.test(text))
     return "qr";
   if (/\b(?:3d model|\.glb\b)/i.test(text)) return "model";
-  if (/\b(?:bento|overview cards)\b/i.test(text)) return "overview";
-  if (/\b(?:widget stack|supporting (?:details|assumptions))\b/i.test(text))
+  if (
+    /\b(?:widget stack|supporting (?:details|assumptions)|assumptions behind|key (?:risks|considerations)|trade.?offs to consider)\b/i.test(
+      text,
+    )
+  )
     return "widgets";
+  if (
+    /\b(?:bento|overview cards|summari[sz]e|summary of|at a glance|key takeaways|quick overview|give me (?:an? )?(?:overview|snapshot))\b/i.test(
+      text,
+    ) &&
+    !/\b(?:compare|versus|over time|monthly trend|revenue growth)\b/i.test(text)
+  )
+    return "overview";
   return null;
 }
 
 const FOCUS_EXAMPLES = {
+  overview: {
+    type: "overview",
+    title: "Summary",
+    items: [
+      { label: "Supplied total", value: "$12" },
+      { label: "Supplied part", value: "$7" },
+    ],
+  },
+  widgets: {
+    type: "widgets",
+    title: "Supporting details",
+    items: [
+      {
+        label: "Supplied assumption",
+        value: "Short statement",
+        detail: "Supporting explanation",
+      },
+    ],
+  },
+  files: {
+    type: "files",
+    title: "Project layout",
+    paths: ["src/main.js", "README.md"],
+  },
+  gallery: {
+    type: "gallery",
+    title: "Supplied images",
+    view: "grid",
+    images: [
+      {
+        src: "https://example.com/supplied.jpg",
+        alt: "Supplied image description",
+      },
+    ],
+  },
+  "image-compare": {
+    type: "image-compare",
+    before: {
+      src: "https://example.com/before.jpg",
+      alt: "Supplied before image",
+    },
+    after: {
+      src: "https://example.com/after.jpg",
+      alt: "Supplied after image",
+    },
+  },
+  "code-compare": {
+    type: "code-compare",
+    before: "Original code supplied by the user",
+    after: "Updated code supplied by the user",
+  },
+  qr: { type: "qr", url: "https://example.com/supplied-public-link" },
+  model: {
+    type: "model",
+    src: "https://example.com/supplied.glb",
+    alt: "Supplied model",
+  },
+  integrations: {
+    type: "integrations",
+    title: "Proposed workflow",
+    items: [
+      {
+        label: "Supplied source",
+        value: "Supplied source role",
+        direction: "source",
+      },
+      {
+        label: "Supplied destination",
+        value: "Supplied destination role",
+        direction: "destination",
+      },
+    ],
+  },
   receipt: {
     type: "receipt",
     title: "Costs",

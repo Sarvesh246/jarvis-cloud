@@ -5,6 +5,8 @@ import { LIMITS, chatInput, clipReply as serverClip, feedInput, followFeed, noti
 import { probeBackend } from "../server/backend-readiness.js";
 import { readEvents } from "../src/stream.js";
 import { clipReply, fitHistory, wireMessage } from "../src/lib/attachments.js";
+import { automaticSamples } from './fixtures/automatic-samples.js';
+import { richPresentationFor } from '../shared/rich-ui-guidance.js';
 
 const conversationId = "123e4567-e89b-12d3-a456-426614174000";
 
@@ -214,6 +216,24 @@ test('implicit rich presentation instructions reach normal and direct routes in 
     assert.match(system, /receipt: currency:ISO4217/);
     if (fast) assert.match(body.fast, /Choose these cards automatically/);
   }
+});
+
+test('natural rich-style intent survives normal, direct and guest routes without an extra generation', async () => {
+  const examples=new Map();
+  for(const [,prompt] of automaticSamples) {const type=richPresentationFor(prompt);if(type && !examples.has(type))examples.set(type,prompt);}
+  for(const [type,prompt] of examples) {
+    for(const mode of ['normal','direct','guest']) {
+      const {req,res}=fakeExchange();const {request,calls}=fakeRelay();
+      await streamChat(req,res,cfg,mode==='guest'?{...user,guest:true}:user,{...input,fast:mode==='direct',messages:[{role:'user',content:prompt}]},request);
+      const starts=calls.filter(call=>call.url.endsWith('/vaelo/runs'));
+      assert.equal(starts.length,1,type+'/'+mode);
+      const body=JSON.parse(starts[0].options.body);
+      const system=body.messages.find(m=>m.role==='system').content;
+      assert.ok(system.includes('"type":"'+type+'"'),type+'/'+mode);
+      if(mode==='direct') assert.ok(body.fast.includes('"type":"'+type+'"'),type+'/fast');
+    }
+  }
+  assert.equal(examples.size,12);
 });
 
 test("picking a reply back up never starts a new run", async () => {

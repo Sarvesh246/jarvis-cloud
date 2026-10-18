@@ -37,8 +37,8 @@ import { richPayload, pendingRichPayload, wantsSourceReply, gridOverview, treePa
 import { RichUI, StepPlayer, Lightbox, ImageDownload } from "./AfterUI.jsx";
 import { InlinePreview } from "./InlinePreview.jsx";
 import { NumberExplorer } from "./LocalTools.jsx";
-import { bestTableCells, timelineLayout, explicitRelationshipGraph } from '../../lib/output-redesign.js';
-import { richPresentationFor } from '../../../shared/rich-ui-guidance.js';
+import { bestTableCells, timelineLayout } from '../../lib/output-redesign.js';
+import { automaticPresentation } from '../../lib/automatic-presentation.js';
 import { SourceIcon } from "./SourceIcon.jsx";
 import { Highlighted } from "./Highlighted.jsx";
 import { Rolling } from "../Rolling.jsx";
@@ -682,7 +682,7 @@ function TableBlock({ node, "data-src": src }) {
         {!phone && highlight && <><label className="table-difference-axis">Compare <select aria-label="Compare differences by" value={differenceAxis} onChange={event=>setDifferenceAxis(event.target.value)}><option value="rows">Rows</option><option value="columns" disabled={data.columns.length < 3}>Value columns</option></select></label><p className="local-note" role="status">{differenceAxis === 'rows' && selected.length < 2 && displayed.count !== 2 ? 'Select at least two rows to highlight their differences.' : `${differences.size} differing cells. Matching values stay plain.`}</p></>}
       </div>}
       {view === "chart" && plan && visible.length > 0 ? (
-        <Chart columns={data.columns} rows={displayed.rows} plan={plan} stackedDefault={/\b(?:breakdown|stacked|share of|composition|parts of)\b/i.test(requestText + ' ' + context)} />
+        <Chart columns={data.columns} rows={displayed.rows} plan={plan} stackedDefault={/\b(?:breakdown|stacked|share of|composition|parts of|how much of|came from|contribution)\b/i.test(requestText + ' ' + context)} />
       ) : (
         <TableScroll resizable={!live && data.rows.length > 1}>
           <table style={{ "--table-min-width": `${Math.min(38, data.columns.length * 7 + (enhance && toolsOpen ? 3.5 : 0))}rem` }}>
@@ -962,33 +962,37 @@ export function useSources(content) {
 export function Rendered({ content, sources, onOpen, mapped = false, live = false, stateKey, requestText = "" }) {
   const preference = useContext(PresentationContext);
   const presentation = wantsPlainReply(requestText) ? "minimal" : preference;
-  const graphFallback = useMemo(() => !mapped && !live && presentation !== 'minimal' && !wantsSourceReply(requestText) && richPresentationFor(requestText) === 'graph' && !/vaelo-ui|["']type["']\s*:\s*["']graph["']/i.test(content) ? explicitRelationshipGraph(requestText) : null, [mapped, live, presentation, requestText, content]);
+  const automaticView = useMemo(() => !mapped && !live && presentation !== 'minimal' ? automaticPresentation(content, requestText) : null, [mapped, live, presentation, requestText, content]);
+  const displayContent = automaticView?.markdown ?? content;
   const value = useMemo(
     () => ({
       sources,
       byKey: new Map(sources.map((source) => [source.id, source])),
       open: onOpen,
       presentation,
-      content,
+      content: displayContent,
       live,
       stateKey,
       requestText,
       interactive: !mapped && !wantsPlainReply(requestText),
       automatic: !mapped && presentation !== "minimal" && !live,
     }),
-    [sources, onOpen, presentation, content, live, stateKey, mapped, requestText],
+    [sources, onOpen, presentation, displayContent, live, stateKey, mapped, requestText],
   );
   return (
     <BlockContext.Provider value={value}>
       <BlockBoundary content={content}>
-        {graphFallback && <RichUI source={JSON.stringify(graphFallback)} enabled stateKey={stateKey} />}
+        {automaticView?.block && <RichUI source={JSON.stringify(automaticView.block)} enabled stateKey={stateKey} />}
+        {automaticView?.language === 'metrics' && <Metrics source={automaticView.source} settled />}
+        {automaticView?.language === 'timeline' && <Timeline source={automaticView.source} settled />}
+        {automaticView?.explorer && <NumberExplorer columns={automaticView.explorer.columns} rows={automaticView.explorer.rows} initialFactor={automaticView.explorer.factor} />}
         <Markdown
           remarkPlugins={remarkPlugins}
           rehypePlugins={mapped ? mappedPlugins : undefined}
           components={components}
           urlTransform={urlTransform}
         >
-          {content}
+          {displayContent}
         </Markdown>
       </BlockBoundary>
     </BlockContext.Provider>

@@ -70,6 +70,7 @@ const ASKS_COMPARE = /\b(?:compare|comparison|versus|vs|which (?:one|is|should)|
 export function requestIntent(request = '') {
   if (typeof request !== 'string' || !request) return null;
   if (ASKS_TABLE.test(request)) return 'table';
+  if (/\b(?:how much of|share of|portion of|contribution|breakdown)\b/i.test(request) && /\b(?:each|every|per|by) (?:month|week|quarter|year)\b/i.test(request) && !/\bcompare\b/i.test(request)) return 'chart';
   if (ASKS_CHART.test(request) && !ASKS_COMPARE.test(request)) return 'chart';
   if (ASKS_COMPARE.test(request)) return 'table';
   return null;
