@@ -37,7 +37,8 @@ import { richPayload, pendingRichPayload, wantsSourceReply, gridOverview, treePa
 import { RichUI, StepPlayer, Lightbox, ImageDownload } from "./AfterUI.jsx";
 import { InlinePreview } from "./InlinePreview.jsx";
 import { NumberExplorer } from "./LocalTools.jsx";
-import { bestTableCells, timelineLayout } from '../../lib/output-redesign.js';
+import { bestTableCells, timelineLayout, explicitRelationshipGraph } from '../../lib/output-redesign.js';
+import { richPresentationFor } from '../../../shared/rich-ui-guidance.js';
 import { SourceIcon } from "./SourceIcon.jsx";
 import { Highlighted } from "./Highlighted.jsx";
 import { Rolling } from "../Rolling.jsx";
@@ -961,6 +962,7 @@ export function useSources(content) {
 export function Rendered({ content, sources, onOpen, mapped = false, live = false, stateKey, requestText = "" }) {
   const preference = useContext(PresentationContext);
   const presentation = wantsPlainReply(requestText) ? "minimal" : preference;
+  const graphFallback = useMemo(() => !mapped && !live && presentation !== 'minimal' && !wantsSourceReply(requestText) && richPresentationFor(requestText) === 'graph' && !/vaelo-ui|["']type["']\s*:\s*["']graph["']/i.test(content) ? explicitRelationshipGraph(requestText) : null, [mapped, live, presentation, requestText, content]);
   const value = useMemo(
     () => ({
       sources,
@@ -979,6 +981,7 @@ export function Rendered({ content, sources, onOpen, mapped = false, live = fals
   return (
     <BlockContext.Provider value={value}>
       <BlockBoundary content={content}>
+        {graphFallback && <RichUI source={JSON.stringify(graphFallback)} enabled stateKey={stateKey} />}
         <Markdown
           remarkPlugins={remarkPlugins}
           rehypePlugins={mapped ? mappedPlugins : undefined}

@@ -1,6 +1,93 @@
 // Derived presentation only. No invented completion states or metric rankings.
 import { numberSeries } from "./intelligent-ui.js";
 
+// A narrow, deterministic fallback over facts in the user's own request.
+// It never derives links from a model's analogy or guesses cache behavior.
+export function explicitRelationshipGraph(request = "") {
+  if (
+    request.length > 12000 ||
+    /\b(?:if|unless|suppose|assuming)\b/i.test(request)
+  )
+    return null;
+  const nodes = [],
+    edges = [],
+    ids = new Map();
+  const entity = (text) => text.replace(/^(?:our|my|the|an?)\s+/i, "").trim();
+  const valid = (text) =>
+    /^[\p{L}\p{N}_][\p{L}\p{N}_ +.\/-]{0,59}$/u.test(text) &&
+    text.split(/\s+/).length <= 5;
+  const node = (label) => {
+    const key = label.toLowerCase();
+    if (!ids.has(key)) {
+      ids.set(key, "n" + nodes.length);
+      nodes.push({
+        id: ids.get(key),
+        label: label[0].toUpperCase() + label.slice(1),
+      });
+    }
+    return ids.get(key);
+  };
+  let subject = "",
+    previousObject = "";
+  const verbs =
+    "(calls|reads|checks|queries|writes to|sends to|connects to|depends on)";
+  for (const fragment of request.split(/(?<=[.!?;])\s+|,\s*|\s+and\s+/)) {
+    if (fragment.includes("?")) continue;
+    const clause = fragment.trim().replace(/[.!?]+$/, "");
+    if (
+      /\b(?:not|never|if|might|may|could|would|should|does|do|how|whether)\b/i.test(
+        clause,
+      )
+    )
+      continue;
+    const relative = clause.match(
+      new RegExp("^(?:which|it)\\s+" + verbs + "\\s+(.+)$", "i"),
+    );
+    const bare = clause.match(new RegExp("^" + verbs + "\\s+(.+)$", "i"));
+    const full = clause.match(
+      new RegExp("^(.+?)\\s+" + verbs + "\\s+(.+)$", "i"),
+    );
+    let verb, target, nextSubject;
+    if (relative) {
+      nextSubject = previousObject;
+      verb = relative[1];
+      target = relative[2];
+    } else if (bare) {
+      nextSubject = subject;
+      verb = bare[1];
+      target = bare[2];
+    } else if (full) {
+      nextSubject = entity(full[1]);
+      verb = full[2];
+      target = full[3];
+    } else continue;
+    target = entity(target);
+    if (!valid(nextSubject) || !valid(target)) continue;
+    subject = nextSubject;
+    previousObject = target;
+    const from = node(subject),
+      to = node(target);
+    if (
+      from !== to &&
+      !edges.some(
+        (e) =>
+          e.from === from &&
+          e.to === to &&
+          e.label.toLowerCase() === verb.toLowerCase(),
+      )
+    )
+      edges.push({
+        from,
+        to,
+        label: verb[0].toUpperCase() + verb.slice(1).toLowerCase(),
+      });
+    if (nodes.length > 24 || edges.length > 40) return null;
+  }
+  return edges.length && nodes.length >= 2
+    ? { type: "graph", title: "Service relationships", nodes, edges }
+    : null;
+}
+
 export function barScale(max) {
   if (!(max > 0) || !Number.isFinite(max)) return 1;
   const step = 10 ** Math.floor(Math.log10(max)) / 2;

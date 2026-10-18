@@ -10,7 +10,40 @@ import {
   timelineDate,
   barScale,
   smoothChartPath,
+  explicitRelationshipGraph,
 } from "../src/lib/output-redesign.js";
+
+test("explicit relationships render independently of provider format without inventing cache flow", () => {
+  const graph = explicitRelationshipGraph(
+    "Our browser calls the API, which reads PostgreSQL and checks Redis. Explain how these services fit together.",
+  );
+  assert.deepEqual(
+    graph.nodes.map((n) => n.label),
+    ["Browser", "API", "PostgreSQL", "Redis"],
+  );
+  assert.deepEqual(
+    graph.edges.map((e) => [e.from, e.to, e.label]),
+    [
+      ["n0", "n1", "Calls"],
+      ["n1", "n2", "Reads"],
+      ["n1", "n3", "Checks"],
+    ],
+  );
+  assert.equal(
+    explicitRelationshipGraph("How could the API call Redis?"),
+    null,
+  );
+  assert.equal(explicitRelationshipGraph("The API does not read Redis."), null);
+  assert.equal(
+    explicitRelationshipGraph("Explain databases using a library analogy."),
+    null,
+  );
+  assert.equal(
+    explicitRelationshipGraph("If Browser calls API, API reads Redis."),
+    null,
+  );
+  assert.equal(explicitRelationshipGraph("Browser calls API?"), null);
+});
 import {
   RICH_UI_GUIDANCE,
   richGuidanceFor,
@@ -138,10 +171,23 @@ test("provider-escaped declarative JSON decodes once without leaking syntax or c
   assert.ok(richPayload(escaped, "vaelo-ui"));
   assert.equal(richPayload(escaped, "vaelo-ui", "Return raw JSON."), null);
   assert.equal(parseRichUI('{\\"type\\":\\"steps\\",broken}'), null);
-  const receipt = {type:'receipt',currency:'USD',people:2,items:[{label:'Food',amount:60}]};
-  assert.deepEqual(parseRichUI(JSON.stringify(receipt)),receipt);
-  assert.equal(parseRichUI(JSON.stringify({...receipt,people:0})),null);
-  assert.equal(parseRichUI(JSON.stringify({type:'widgets',items:[{label:'Detail',value:'Given',chips:[{}]}]})),null);
+  const receipt = {
+    type: "receipt",
+    currency: "USD",
+    people: 2,
+    items: [{ label: "Food", amount: 60 }],
+  };
+  assert.deepEqual(parseRichUI(JSON.stringify(receipt)), receipt);
+  assert.equal(parseRichUI(JSON.stringify({ ...receipt, people: 0 })), null);
+  assert.equal(
+    parseRichUI(
+      JSON.stringify({
+        type: "widgets",
+        items: [{ label: "Detail", value: "Given", chips: [{}] }],
+      }),
+    ),
+    null,
+  );
 });
 test("all 26 designs reach the actual chat message without renderer fallback or leaked payloads", async () => {
   const server = await createServer({
@@ -199,14 +245,55 @@ test("all 26 designs reach the actual chat message without renderer fallback or 
       /local-checklist/,
     );
     assert.match(render("```html\n<h1>Hello</h1>\n```"), /sandbox=""/);
-    const codedWalkthrough = renderToStaticMarkup(React.createElement(Rendered, {
-      content: '1. **Check Git**\n\n   ```bash\n   git --version\n   ```\n\n   Confirm a version is printed.\n\n2. **Create folder**\n\n   ```bash\n   mkdir project\n   ```',
-      requestText: 'Walk me through making my first Git commit, one step at a time.', sources: [], onOpen() {},
-    }));
+    const codedWalkthrough = renderToStaticMarkup(
+      React.createElement(Rendered, {
+        content:
+          "1. **Check Git**\n\n   ```bash\n   git --version\n   ```\n\n   Confirm a version is printed.\n\n2. **Create folder**\n\n   ```bash\n   mkdir project\n   ```",
+        requestText:
+          "Walk me through making my first Git commit, one step at a time.",
+        sources: [],
+        onOpen() {},
+      }),
+    );
     assert.match(codedWalkthrough, /class="after-steps"/);
-    assert.match(codedWalkthrough.replace(/<[^>]+>/g, ''), /git --version/);
+    assert.match(codedWalkthrough.replace(/<[^>]+>/g, ""), /git --version/);
     assert.match(codedWalkthrough, /code-line-number/);
-    assert.match(render('```javascript filename="settle.js"\nconst total = 2;\n```'), /settle\.js/);
+    const relationshipRequest =
+      "Our browser calls the API, which reads PostgreSQL and checks Redis. Explain how these services fit together.";
+    const fallbackRender = (content, requestText = relationshipRequest) =>
+      renderToStaticMarkup(
+        React.createElement(Rendered, {
+          content,
+          requestText,
+          sources: [],
+          onOpen() {},
+        }),
+      );
+    assert.match(
+      fallbackRender("These services cooperate."),
+      /data-kind="graph"/,
+    );
+    assert.doesNotMatch(
+      fallbackRender(
+        "These services cooperate.",
+        relationshipRequest + " Plain text only.",
+      ),
+      /data-kind="graph"/,
+    );
+    assert.equal(
+      (
+        fallbackRender(
+          "~~~json\n" +
+            JSON.stringify(explicitRelationshipGraph(relationshipRequest)) +
+            "\n~~~",
+        ).match(/data-kind="graph"/g) || []
+      ).length,
+      1,
+    );
+    assert.match(
+      render('```javascript filename="settle.js"\nconst total = 2;\n```'),
+      /settle\.js/,
+    );
     assert.match(
       render("```javascript\nfunction sum() {\n  return 2;\n}\n```"),
       /code-line-number/,
