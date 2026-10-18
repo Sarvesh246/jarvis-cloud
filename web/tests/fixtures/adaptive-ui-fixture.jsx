@@ -32,6 +32,8 @@ const samples = [
 | Hotel | $480 |
 | Food | $160 |
 | Total | $715 |`],
+  ['Auto cards', 'How much will a weekend in Lisbon cost me?', '## Trip costs\n| Item | Cost |\n| --- | ---: |\n| Hotel | $480 |\n| Food | $160 |\n| Travel | $75 |\n| **Total** | **$715** |'],
+  ['Auto tree', 'How should I lay out the project?', 'Use this layout:\n\n```\nweb/\n├── src/\n│   ├── App.jsx\n│   └── main.jsx\n├── package.json\n└── README.md\n```'],
   ['Simple answer', 'What is 2 plus 2?', '2 + 2 = 4.'],
   ['Information list', 'What are the benefits?', '## Benefits\n- Lightweight\n- Flexible\n- Durable'],
 ];

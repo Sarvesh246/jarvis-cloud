@@ -104,3 +104,19 @@ test('what was asked decides between chart and table for the same data', async (
   assert.equal(tablePresentation(['Month', 'Sales'], [['Jan', '120'], ['Feb', '180']], '', 'Give me this in a table').view, 'table');
   assert.equal(tablePresentation(['Month', 'Sales', 'Cost', 'Profit'], [['Jan', '1', '1', '1'], ['Feb', '2', '1', '1']], '', 'Graph the monthly results').view, 'chart');
 });
+
+test('summaries become cards and file trees become browsers without being asked', async () => {
+  const { overviewItems } = await import('../src/lib/adaptive-ui.js');
+  const { treePaths } = await import('../src/lib/rich-ui.js');
+  const costs = [['Hotel', '$480'], ['Food', '$160'], ['Total', '$640']];
+  assert.equal(tablePresentation(['Item', 'Cost'], costs, 'Trip costs').view, 'cards');
+  assert.equal(tablePresentation(['Region', 'Revenue'], [['North', '$1'], ['South', '$2']], 'Revenue summary').view, 'cards');
+  assert.equal(tablePresentation(['Item', 'Cost'], costs, 'Trip costs', 'Compare these').view, 'table');
+  assert.equal(tablePresentation(['Plan', 'Price'], [['A', '$1'], ['B', '$2']], 'Pricing').view, 'table');
+  assert.equal(tablePresentation(['Month', 'Sales'], [['Jan', '120'], ['Feb', '180'], ['Total', '300']], 'Sales').view !== 'cards', true);
+  assert.equal(overviewItems(['Item', 'Cost'], Array(9).fill(['Rent', '$1'])), null);
+  assert.equal(tablePresentation(['Category', 'Monthly cost'], [['Rent', '$1200'], ['Food', '$350']], 'Monthly budget').view, 'table');
+  assert.deepEqual(treePaths('app/\n├── src/\n│   └── main.js\n└── package.json', '').paths, ['app/src/main.js', 'app/package.json']);
+  assert.equal(treePaths('a\nb\nc', ''), null);
+  assert.equal(treePaths('├── a\n├── b\n└── c', 'js'), null);
+});

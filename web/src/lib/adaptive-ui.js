@@ -1,5 +1,5 @@
 import { numberSeries } from './intelligent-ui.js';
-import { chartable, isSectionRow, isBlank } from './table.js';
+import { cellText, chartable, isSectionRow, isBlank, toNumber } from './table.js';
 import { plainLine, parseMetrics, parseTimeline } from './structured.js';
 
 // These are presentation decisions over existing data, never model requests.
@@ -75,6 +75,25 @@ export function requestIntent(request = '') {
   return null;
 }
 
+const TOTAL_LABEL = /^(?:grand total|total|overall|sum|net|subtotal)\b/i;
+const SUMMARY_CONTEXT = /\b(?:summary|overview|snapshot|at a glance|key (?:numbers|figures|stats|metrics)|highlights|totals?|dashboard)\b/i;
+
+// Label and amount rows that can stand as cards: nothing time-ordered, one unit.
+export function overviewItems(columns, rows, max = 8) {
+  rows = rows.filter(row => !isSectionRow(row));
+  if (columns.length < 2 || columns.length > 3 || rows.length < 2 || rows.length > max) return null;
+  if (TIME_COLUMN.test(String(columns[0])) || !numberSeries(rows, 1)) return null;
+  const items = rows.map(row => ({ label: cellText(row[0]), value: cellText(row[1]), detail: columns.length === 3 ? cellText(row[2]) : '' }));
+  if (items.some(item => !item.label || !item.value || item.label.length > 60 || item.value.length > 40 || item.detail.length > 120 || Number.isFinite(toNumber(item.label)))) return null;
+  if (rows.every(row => DATE_LABEL.test(cellText(row[0])))) return null;
+  return items.map(({ detail, ...item }) => detail ? { ...item, detail } : item);
+}
+
+function summaryLike(rows, context) {
+  if (/\b(?:compare|comparison|options|plans|products|laptops|pricing|versus)\b/i.test(context)) return false;
+  return rows.some(row => TOTAL_LABEL.test(cellText(row[0]).trim())) || SUMMARY_CONTEXT.test(context);
+}
+
 export function tablePresentation(columns, rows, context = '', request = '') {
   const result = { view: 'table', explore: false };
   if (rows.length < 2 || rows.length > 200 || columns.length > 20) return result;
@@ -86,6 +105,9 @@ export function tablePresentation(columns, rows, context = '', request = '') {
   const budget = /\b(?:budget|expenses|cost breakdown)\b/i.test(context) && headers.some(h => /\b(?:cost|amount|expense)\b/.test(h));
   result.explore = ingredients || budget;
   const intent = requestIntent(request);
+  // A short label and amount summary, especially one that ends in a total, reads
+  // best as cards without anyone asking for them.
+  if (!intent && !result.explore && overviewItems(columns, rows) && summaryLike(rows, context)) { result.view = 'cards'; return result; }
   if (label < 0 || intent === 'table') return result;
   if (intent === 'chart' && !result.explore) { result.view = 'chart'; return result; }
   if (result.explore || columns.length > 3) return result;

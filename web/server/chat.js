@@ -95,7 +95,7 @@ export const RESPONSE_STANDARDS =
    half-streamed block still reads. */
 export const REPLY_FORMAT_GUIDANCE =
   "Choose useful presentation automatically; never wait for a UI request. Respect requested formats; keep simple facts and conversation in prose. " +
-  "Use Markdown tables for comparisons, numeric series or quantities (local charts and controls are automatic); '- [ ]' lists for tasks, packing or actionable steps; ```timeline blocks for dated plans or histories ('When: event — detail'); ```metrics blocks for 2–6 key figures ('Label: value (+change)', optional '# Title' and '> caveat'). " +
+  "Use Markdown tables for comparisons, numeric series or quantities (charts, cards for Item | Amount summaries with a Total, and file trees from ├── plain fences are automatic); '- [ ]' lists for tasks, packing or actionable steps; ```timeline blocks for dated plans or histories ('When: event — detail'); ```metrics blocks for 2–6 key figures ('Label: value (+change)', optional '# Title' and '> caveat'). " +
   "Lead with the answer. Add only shapes that help, without duplicating data. Keep sources inline as Markdown links, including outside figures when needed; never invent data for a widget. Put code in language-tagged fences. " +
   "A final [Vaelo request: …] note applies only to that reply; do not mention it.";
 

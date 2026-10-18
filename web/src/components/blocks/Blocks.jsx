@@ -22,10 +22,10 @@ import {
   timelineText,
 } from "../../lib/structured.js";
 import { blockKey, readChecklist, saveChecklist } from "../../lib/intelligent-ui.js";
-import { inferListPresentation, sectionContext, tablePresentation, wantsPlainReply, safeChartPlan } from "../../lib/adaptive-ui.js";
+import { inferListPresentation, sectionContext, tablePresentation, overviewItems, wantsPlainReply, safeChartPlan } from "../../lib/adaptive-ui.js";
 import { TableScroll } from "./TableScroll.jsx";
 import { Chart } from "./Chart.jsx";
-import { richPayload, pendingRichPayload, wantsSourceReply, gridOverview, wantsOverview } from "../../lib/rich-ui.js";
+import { richPayload, pendingRichPayload, wantsSourceReply, gridOverview, treePaths, wantsOverview } from "../../lib/rich-ui.js";
 import { RichUI, StepPlayer } from "./RichUI.jsx";
 import { NumberExplorer } from "./LocalTools.jsx";
 import { SourceIcon } from "./SourceIcon.jsx";
@@ -126,7 +126,7 @@ function CodeBlock({ children, node, "data-src": src }) {
   const { content, open, live, presentation, stateKey, requestText } = useContext(BlockContext);
   const language = languageOf(children);
   const source = textOf(children);
-  const grid = !wantsSourceReply(requestText) && !live ? gridOverview(source, language) : null;
+  const grid = !wantsSourceReply(requestText) && !live ? gridOverview(source, language) || treePaths(source, language) : null;
   if (grid && presentation !== "minimal") return <div data-src={src}><RichUI source={JSON.stringify(grid)} enabled stateKey={stateKey} /></div>;
   const payload = richPayload(source, language, requestText);
   const settled = fenceClosed(content, node?.position?.start?.offset, node?.position?.end?.offset);
@@ -535,6 +535,7 @@ function TableBlock({ node, "data-src": src }) {
   const context = useMemo(() => sectionContext(content, node.position?.start?.offset), [content, node.position?.start?.offset]);
   const suggested = useMemo(() => automatic ? tablePresentation(data.columns, data.rows, context, requestText) : { view: "table", explore: false }, [automatic, data, context, requestText]);
   const [chosenView, setView] = useState(null);
+  const [asTable, setAsTable] = useState(false);
   const view = chosenView || suggested.view;
   const [done, copy] = useCopy();
   const [query, setQuery] = useState("");
@@ -564,13 +565,16 @@ function TableBlock({ node, "data-src": src }) {
   }
 
   if (!data.columns.length) return null;
-  /* Asked for a bento or overview cards, a plain label and value table is
-     shown as the cards it stands for. */
-  if (automatic && interactive && wantsOverview(requestText) && data.columns.length <= 3 && data.rows.length >= 2 && data.rows.length <= 12 && !data.rows.some(isSectionRow)) {
-    const items = data.rows.map((row) => ({ label: cellText(row[0]), value: cellText(row[1]), ...(row[2] && { detail: cellText(row[2]) }) }));
-    if (items.every((item) => item.label && item.value && item.label.length <= 200 && item.value.length <= 200))
-      return <div data-src={src}><RichUI source={JSON.stringify({ type: "overview", items })} enabled stateKey={`${stateKey}:overview`} /></div>;
-  }
+  /* A short label and amount summary (one that ends in a total, sits under a
+     summary heading, or was asked for as a bento) stands as cards. No request
+     is needed; the table stays one press away. */
+  const cardItems = automatic && interactive && !asTable && !live && (suggested.view === "cards" || wantsOverview(requestText))
+    ? overviewItems(data.columns, data.rows, 12) : null;
+  if (cardItems)
+    return <div className="auto-cards" data-src={src}>
+      <RichUI source={JSON.stringify({ type: "overview", items: cardItems })} enabled stateKey={`${stateKey}:overview`} />
+      <button className="block-tool" onClick={() => setAsTable(true)}><Table size={15} /> <span>Show as table</span></button>
+    </div>;
   return (
     <figure className="table-block" data-src={src}>
       <figcaption className="block-bar">

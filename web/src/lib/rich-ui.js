@@ -241,6 +241,32 @@ export function gridOverview(source, language = '') {
     items: body.map(([label, value, detail]) => ({ label, value, ...(detail && { detail }) })),
   };
 }
+// A directory tree drawn with ├── and └── is a file browser, not code.
+const TREE_LINE = /^((?:[│| ]   |    )*)(?:├── |└── |\|-- |`-- |\+-- )(.+?)\s*$/;
+export function treePaths(source, language = '') {
+  if (typeof source !== 'string' || source.length > 6000 || !['', 'text', 'txt', 'plain', 'plaintext', 'tree'].includes(language.toLowerCase())) return null;
+  const lines = source.split('\n').filter((line) => line.trim());
+  const entries = [];
+  const stack = [];
+  let root = '';
+  for (const [index, line] of lines.entries()) {
+    const match = line.match(TREE_LINE);
+    if (!match) {
+      if (index === 0 && !/[│├└|]/.test(line)) { root = line.trim().replace(/\/$/, ''); continue; }
+      return null;
+    }
+    const depth = match[1].length / 4;
+    const name = match[2].replace(/\s+(?:#|\/\/|<-|←).*$/, '').replace(/\/$/, '').trim();
+    if (!name || name.includes('/') || depth > stack.length) return null;
+    stack.length = depth;
+    stack.push(name);
+    entries.push((root ? [root, ...stack] : [...stack]).join('/'));
+  }
+  if (entries.length < 3 || entries.length > 100) return null;
+  const parents = new Set(entries.flatMap((path) => path.split('/').slice(0, -1).map((_, i, all) => all.slice(0, i + 1).join('/'))));
+  const paths = entries.filter((path) => !parents.has(path) || false);
+  return paths.length && paths.every((path) => path.length <= 500 && path.split('/').length <= 12) ? { type: 'files', paths } : null;
+}
 export function wantsOverview(request = '') {
   return /\b(?:bento|overview cards?|summary cards?|cards? (?:view|layout)|dashboard)\b/i.test(request);
 }
