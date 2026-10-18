@@ -18,7 +18,17 @@ It only reads aggregate counters. It cannot submit events or access chats.
 logon task launches it with a private config containing `url`, `readKey`,
 `database`, and `output`. Only counters and timestamps reach `client-dist`.
 The dashboard polls that local file every five seconds and labels stale data.
+The Refresh button reloads the latest snapshot and local analytics. The actual
+cloud check time is shown alongside it; polling continues independently.
 The `--once` option verifies a snapshot without installing a task.
+
+Install `sync.py`, the private `config.json`, and `launch.ps1` together in a
+directory accessible to the signed-in user's scheduled tasks. Configure the
+logon task to run PowerShell with `-NoProfile -WindowStyle Hidden -File` and the
+quoted launcher path, using `IgnoreNew`, no execution time limit, and allowing
+battery operation. The launcher passes file paths as separate arguments and
+records startup errors in `worker.log`. Check that the task stays Running and
+that `checkedAt` advances after a second poll, then test a task stop/start.
 
 Coverage begins when recording is deployed. Earlier unrecorded usage cannot be
 reconstructed from shared provider credentials. Provider quotas and capacity

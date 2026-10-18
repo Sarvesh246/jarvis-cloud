@@ -2,8 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { CombinedUsage } from './combined-usage'
 
-const query = vi.hoisted(() => ({ data: undefined as unknown, isError: false }))
-vi.mock('@tanstack/react-query', () => ({ useQuery: () => query }))
+const query = vi.hoisted(() => ({ data: undefined as unknown, isError: false, isFetching: false }))
+vi.mock('@tanstack/react-query', () => ({ useQuery: () => query, useQueryClient: () => ({ invalidateQueries: vi.fn() }) }))
 afterEach(() => { vi.restoreAllMocks(); query.data = undefined; query.isError = false })
 const snapshot = () => ({ month: '2026-10', checkedAt: '2026-10-18T20:00:00Z', cloudAvailable: true,
   local: { total: 1000 }, cloud: { total: 300, input: 200, output: 100, unreported: 1, attempts: 2,
@@ -18,6 +18,8 @@ describe('combined usage', () => {
     expect(html).toContain('Updating every 15 seconds')
     expect(html).toContain('the total is a lower bound')
     expect(html).toContain('Earlier unrecorded cloud usage is excluded')
+    expect(html).toContain('>Refresh</button>')
+    expect(html).toContain('Cloud checked:')
   })
   it('retains counts and marks stale data after the sync worker stops', () => {
     vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-10-18T20:05:00Z'))
