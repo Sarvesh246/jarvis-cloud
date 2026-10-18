@@ -28,7 +28,7 @@
   "cleanUrls": true,
   "headers": [
     {
-      "source": "/(.*)",
+      "source": "/((?!icons/|apple-touch-icon).*)",
       "headers": [
         {
           "key": "X-Content-Type-Options",
