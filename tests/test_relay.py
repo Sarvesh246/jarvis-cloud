@@ -745,10 +745,16 @@ class RelayTests(unittest.TestCase):
         ])
         reports = []
         relay.report = reports.append
+        relay.usage_reporter = mock.Mock()
         self.start(port)
         run = self.finished(relay)
         self.assertEqual((run.prompt_tokens, run.completion_tokens, run.cached_tokens), (200, 40, 160))
         self.assertEqual((run.usage_reports, run.upstream_requests), (2, 2))
+        events = [call.args[0] for call in relay.usage_reporter.record.call_args_list]
+        self.assertEqual(len(events), 2)
+        self.assertEqual(len({event["id"] for event in events}), 2)
+        self.assertEqual(sum(event["input"] + event["output"] for event in events), 240)
+        self.assertTrue(all(event["reported"] for event in events))
         self.assertEqual(len(hermes.requests), 2)
 
     def test_reposting_a_failed_generated_run_replays_without_model_calls(self):

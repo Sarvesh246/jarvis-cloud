@@ -20,6 +20,12 @@ import os
 import re
 import threading
 import time
+import uuid
+from datetime import datetime, timezone
+try:
+    from usage import configured_reporter
+except ModuleNotFoundError:
+    from cloud.usage import configured_reporter
 try:
     from context_policy import CONTEXT_POLICY
 except ModuleNotFoundError:
@@ -400,6 +406,7 @@ class Relay:
             host, port, timeout=FAST_SECONDS
         )
         self.report = lambda line: print(line, flush=True)
+        self.usage_reporter = configured_reporter()
 
     def guest_admit(self, owner, retry=False):
         """Count a guest reply in, or say why not: too many at once, or too many this hour.
@@ -439,6 +446,7 @@ class Relay:
             "messages": [{"role": "system", "content": body["fast"]},
                          *[m for m in messages if m.get("role") != "system"]],
             "stream": True,
+            "stream_options": {"include_usage": True},
             "max_tokens": FAST_MAX_TOKENS,
         }
         reasoning = direct_reasoning(body)
@@ -474,6 +482,7 @@ class Relay:
             "model": route["model"],
             "messages": messages,
             "stream": True,
+            "stream_options": {"include_usage": True},
             "max_tokens": GUEST_MAX_TOKENS,
         }
         reasoning = direct_reasoning(body or {})
@@ -685,6 +694,8 @@ class Relay:
         usage = {"prompt_tokens": 0, "completion_tokens": 0, "cached_tokens": 0}
         seen["usage"] = usage
         seen["usage_reported"] = False
+        usage_id = str(uuid.uuid4())
+        usage_at = datetime.now(timezone.utc).isoformat()
         lines, frame_bytes = [], 0
         try:
             for raw in iter(lambda: response.readline(FRAME_BYTES + 1), b""):
@@ -718,6 +729,14 @@ class Relay:
                 run.usage_reports += 1
                 for key, value in usage.items():
                     setattr(run, key, getattr(run, key) + value)
+            if self.usage_reporter is not None:
+                try:
+                    self.usage_reporter.record({"id": usage_id, "at": usage_at,
+                        "route": run.route or "unknown", "reported": seen["usage_reported"],
+                        "input": usage["prompt_tokens"], "output": usage["completion_tokens"],
+                        "cached": usage["cached_tokens"]})
+                except Exception:
+                    self.report("Usage outbox unavailable; token counters could not be queued")
         return seen
 
     def inspect(self, run, frame, seen):
@@ -1200,6 +1219,7 @@ def make_handler(relay):
                     if key.lower() not in HOP_HEADERS:
                         self.send_header(key, value)
                 if urlsplit(self.path).path == "/health":
+                    self.send_header("X-Vaelo-Usage-Tracking", "persistent-v1" if relay.usage_reporter else "disabled")
                     self.send_header("X-Vaelo-Context-Window", str(CONTEXT_POLICY["windowTokens"]))
                     self.send_header("X-Vaelo-Compression-Cap", str(CONTEXT_POLICY["compressionCapTokens"]))
                 self.end_headers()
