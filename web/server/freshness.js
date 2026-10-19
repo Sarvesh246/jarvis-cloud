@@ -21,13 +21,15 @@ function currencyLookup(text) {
 }
 
 const QUICK = /\b(?:weather|forecast|temperature|rain|snow|time in|scores?|stock price|share price|exchange rate|price of|how much is|who won|sunrise|sunset)\b/i;
+const FEED_LOOKUP = /^(?:(?:show(?: me)?|get|what(?:'?s| is))\s+)?(?:(?:top|new|best|ask|show|job)\s+)?(?:hacker\s*news|HN)(?:\s+(?:stories|headlines|today))?[?.!]?$/i;
+const LAUNCH_LOOKUP = /^(?:(?:show(?: me)?|get|what(?:'?s| is))\s+)?(?:today'?s?\s+)?product\s*hunt(?:\s+(?:launches|products|today))?[?.!]?$/i;
 const LOCAL = /\b(?:weather|forecast|temperature|rain|snow|near me|nearby|around here|open now|sunrise|sunset|local)\b/i;
 
 // A short look-up whose answer is one fact from a search result. Evidence is
 // fetched first, so a fast model can state it without a tool-using agent.
 export function simpleLookup(content) {
-  const text = requestText(content).trim();
-  return text.length <= 120 && QUICK.test(text) && !HEALTH.test(text) && !LAW_MONEY.test(text);
+  const text = requestText(content).replace(/[’‘]/g, "'").trim();
+  return text.length <= 120 && (QUICK.test(text) || FEED_LOOKUP.test(text) || LAUNCH_LOOKUP.test(text)) && !HEALTH.test(text) && !LAW_MONEY.test(text);
 }
 
 // "weather today" means weather where they are, when they have said where.

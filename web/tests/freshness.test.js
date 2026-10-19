@@ -122,7 +122,7 @@ const chicago = { lat: 41.884, lon: -87.632, tz: "America/Chicago", city: "Chica
 const ask = (content, extra = {}, options) => chatInput({ conversationId, messages: [{ role: "user", content }], ...extra }, options);
 
 test("a one-fact look-up is searched first and answered directly, not worked out by an agent", () => {
-  for (const text of ["whats the weather today", "what's the score of the Bulls game", "price of bitcoin today"]) {
+  for (const text of ["whats the weather today", "what's the score of the Bulls game", "price of bitcoin today", "Product Hunt launches", "Show today’s Product Hunt launches", "top Hacker News stories"]) {
     const input = ask(text);
     assert.ok(input.freshness, text);
     assert.equal(input.fast, true, text);
@@ -130,6 +130,9 @@ test("a one-fact look-up is searched first and answered directly, not worked out
   assert.equal(ask("whats the weather today", { research: true }).fast, false);
   assert.equal(ask("Compare the iPhone 15 Pro and iPhone 18 Pro Max").fast, false);
   assert.equal(ask("Can I take ibuprofen while pregnant? weather today").fast, false);
+  assert.equal(ask("Explain how Hacker News works").fast, false);
+  assert.equal(ask("Product Hunt launches", { research: true }).fast, false);
+  assert.equal(ask("Product Hunt launches", { style: "thorough" }).fast, false);
 });
 
 test("a shared place localises weather searches and is passed as data, never trusted blindly", () => {

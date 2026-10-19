@@ -114,7 +114,9 @@ Exact currency pairs, definitions, book/paper searches, package names, VINs,
 barcodes and simple city weather/AQI requests also route deterministically before
 generation. More complex requests use the agent's existing tool-selection turn.
 Hacker News, Product Hunt, Pokemon and explicit searches on named supported
-providers also route deterministically. This adds no separate classifier/model request. It does not guarantee that a
+providers also route deterministically. Short Hacker News and Product Hunt feed requests also use the existing fast
+summary route after retrieval, respecting research and thorough modes. This adds
+no separate classifier/model request. It does not guarantee that a
 tool-using conversation has the same total number of model calls as a direct
 answer without tools.
 
