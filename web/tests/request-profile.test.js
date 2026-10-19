@@ -181,6 +181,7 @@ test("self-contained math skips agent bootstrap while retaining reasoning depth"
   assert.equal(profile.shape, "math");
   assert.equal(profile.fast, true);
   assert.equal(profile.tier, "deep");
+  assert.equal(reasoningEffort(profile), "low");
   for (const [text, options] of [
     [prompt, { research: true }], [prompt, { style: "thorough" }],
     [prompt, { role: "tutor" }], [prompt, { work: true }],
@@ -254,6 +255,7 @@ test("effort follows the message tier, and settings that ask for depth keep the 
   assert.equal(reasoningEffort({ tier: "quick" }), "minimal");
   assert.equal(reasoningEffort({ tier: "normal" }), "low");
   assert.equal(reasoningEffort({ tier: "deep" }), "medium");
+  assert.equal(reasoningEffort({ tier: "deep", fast: true }), "low");
   assert.equal(reasoningEffort({}), "low");
   assert.equal(reasoningEffort({ tier: "quick", research: true }), null);
   assert.equal(reasoningEffort({ tier: "deep", style: "thorough" }), null);

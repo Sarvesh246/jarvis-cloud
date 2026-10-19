@@ -65,8 +65,12 @@ const ROLES = {
 const DEEP_ROLES = new Set(["skeptic", "advocate"]);
 const TIER_EFFORT = { quick: "minimal", normal: "low", deep: "medium" };
 
-export function reasoningEffort({ style = "balanced", research = false, role = "none", tier = "normal" } = {}) {
+export function reasoningEffort({ style = "balanced", research = false, role = "none", tier = "normal", fast = false } = {}) {
   if (research || style === "thorough" || DEEP_ROLES.has(role)) return null;
+  // Bounded calculations qualify for the direct route without being trivial.
+  // Low effort keeps ordinary worked problems from inheriting agent-depth
+  // deliberation; thorough mode above still asks for full depth.
+  if (fast && tier === "deep") return "low";
   return TIER_EFFORT[tier] || "low";
 }
 
