@@ -42,6 +42,15 @@ def freellmapi_url(environ):
 def configuration(environ):
     cfg = json.loads((HERE / "profile.json").read_text(encoding="utf-8"))
     window = CONTEXT_POLICY["windowTokens"]
+    # One reply at a time keeps the free 512 MB instance safe. Setting
+    # VAELO_MAX_CONCURRENT_RUNS=2 lets two conversations generate together;
+    # it costs memory, not money, and has not been measured on Render yet.
+    try:
+        runs = min(3, max(1, int(environ.get("VAELO_MAX_CONCURRENT_RUNS", "1"))))
+    except ValueError:
+        runs = 1
+    cfg["gateway"]["max_concurrent_runs"] = runs
+    cfg["gateway"]["api_server"]["max_concurrent_runs"] = runs
     cfg["model"]["context_length"] = CONTEXT_POLICY["openrouterWindowTokens"]
     cfg["providers"]["cloud-openrouter"]["context_length"] = CONTEXT_POLICY["openrouterWindowTokens"]
     cfg["compression"].update({

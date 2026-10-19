@@ -400,8 +400,11 @@ export function App() {
   const writing = useRef({ draft: "", attachments: [] });
   writing.current = { chatId: activeId, draft, attachments };
   const [options, setOptions] = useState({ research: false, style: "balanced", role: "none" });
-  const [busy, setBusy] = useState(false);
-  const [livePhase, setLivePhase] = useState("idle");
+  /* Every conversation can have a reply in flight at once. `live` is what
+     the screen renders from (conversation id to its face phase); `runs`
+     holds what Stop and the effects need (its controller and ids). */
+  const [live, setLive] = useState({});
+  const runs = useRef(new Map());
   const [settling, setSettling] = useState(false);
   const [dictating, setDictating] = useState(false);
   const [cloud, setCloud] = useState("Connecting");
@@ -425,10 +428,11 @@ export function App() {
   }, [onboarding]);
   /* A tap under the finger when a reply starts and again when it finishes */
   const wasBusy = useRef(false);
+  const anyBusy = Object.keys(live).length > 0;
   useEffect(() => {
-    if (phone && wasBusy.current !== busy) buzz();
-    wasBusy.current = busy;
-  }, [busy, phone]);
+    if (phone && wasBusy.current !== anyBusy) buzz();
+    wasBusy.current = anyBusy;
+  }, [anyBusy, phone]);
   /* Signing in without leaving the page (a guest, Google's own button)
      carries on into the welcome */
   useEffect(() => {
@@ -459,17 +463,11 @@ export function App() {
   const googleButton = useRef(null);
   const [gsi, setGsi] = useState("loading");
   const [gsiAttempt, setGsiAttempt] = useState(0);
-  const abort = useRef(null);
-  /* The reply being followed, whether Stop was chosen, and replies already
-     being picked back up after the app opened. */
-  const replyId = useRef(null);
-  const stopping = useRef(false);
+  /* Replies already being picked back up after the app opened. */
   const resuming = useRef(new Set());
   const watchedHere = useRef(new Set());
   /* Replies this device has followed from another device, by message and run. */
   const mirrored = useRef(new Set());
-  const mirrorChat = useRef(null);
-  const replyRun = useRef(null);
   const textarea = useRef(null);
   const conversation = useRef(null);
   const pinned = useRef(true);
@@ -481,6 +479,16 @@ export function App() {
   chatsRef.current = chats;
   const active = chats.find((chat) => chat.id === activeId);
   const messages = active?.messages || [];
+  /* "Busy" is about the conversation in front of you; the others carry on
+     in the background and show their state in the rail. */
+  const busy = Boolean(live[activeId]);
+  const livePhase = live[activeId] || "idle";
+  const setPhase = (chatId, next) =>
+    setLive((current) => {
+      if (!(chatId in current)) return current;
+      const value = typeof next === "function" ? next(current[chatId]) : next;
+      return value === current[chatId] ? current : { ...current, [chatId]: value };
+    });
 
   /* What Vaelo's face shows. Errors and rest states are derived, not stored. */
   const phase = busy
@@ -620,7 +628,7 @@ export function App() {
     return () => {
       removeEventListener("online", goOnline);
       removeEventListener("offline", goOffline);
-      abort.current?.abort();
+      for (const slot of runs.current.values()) slot.controller.abort();
       clearTimeout(settleTimer.current);
       removeEventListener("visibilitychange", ready);
     };
@@ -658,7 +666,7 @@ export function App() {
   }, [guest, chats]);
 
   const { issue: syncIssue, push: pushChat } = useChatSync({
-    session: guest ? { ...session, user: null } : session, chats, setChats, busyId: busy ? activeId : null,
+    session: guest ? { ...session, user: null } : session, chats, setChats, busyId: anyBusy ? activeId : null,
     onConflict: () => showToast({ text: "Both devices edited this conversation. Your changes were kept in a device copy." }),
   });
 
@@ -877,18 +885,10 @@ export function App() {
     el?.scrollTo({ top: el.scrollHeight, behavior: reducedMotion() ? "auto" : "smooth" });
   }
 
-  /* While Vaelo writes a reply, you stay in its conversation, as the rail's
-     rows already do: the live reply, Stop and Esc all belong to it, and
-     another conversation would otherwise show it as its own. Following a
-     reply from another device is different; leaving just stops following. */
-  const STAY = "Vaelo is still replying here. You can switch once it finishes, or stop it first.";
-  function canLeave(id) {
-    // Refs, not state: a toast's action may run from an older render.
-    return !abort.current || id === writing.current.chatId || Boolean(mirrorChat.current);
-  }
-
+  /* Leaving a conversation never touches its reply: it keeps running and
+     writing into its own conversation, and the live state, Stop and Esc
+     belong to whichever conversation is open. */
   function newChat() {
-    if (!canLeave(null)) return;
     if (active && !active.messages.length) {
       textarea.current?.focus();
       setMenu(false);
@@ -900,10 +900,6 @@ export function App() {
   }
 
   function selectChat(id) {
-    if (!canLeave(id)) {
-      showToast({ text: STAY });
-      return;
-    }
     pinned.current = true;
     setAway(false);
     // Read from the latest render: a toast's action may be an older closure.
@@ -1028,8 +1024,6 @@ export function App() {
      in), so its brief and documents travel with every message there. */
   function startWork(record, prompt) {
     if (!record?.revision) return;
-    // Shown in the Workroom, which stays open with the work ready to start.
-    if (busy && active?.messages.length && !canLeave(null)) throw new Error(STAY);
     const workContext = workContextFor(record);
     let chatId = activeId;
     if (active && !active.messages.length) {
@@ -1120,7 +1114,6 @@ export function App() {
   /* When a conversation has outgrown the context, carry the thread of it
      into a fresh one instead of leaving the person stuck. */
   function carryOver() {
-    if (!canLeave(null)) return;
     const last = active.messages.findLast((message) => message.role === "user");
     const chat = freshChat();
     setChats((current) => cap([chat, ...current]));
@@ -1225,7 +1218,7 @@ export function App() {
       });
       patch({ state: choice === "deny" ? "denied" : "approved", choice });
       announce(choice === "deny" ? "Denied." : "Approved. Vaelo is carrying on.");
-      setLivePhase(choice === "deny" ? "thinking" : "working");
+      setPhase(activeId, choice === "deny" ? "thinking" : "working");
     } catch (err) {
       patch({ state: "pending", note: err.message });
     }
@@ -1418,17 +1411,18 @@ export function App() {
      from the relay, so it looks the same here and costs no model tokens. A
      mirror never starts or restarts a run; the device that sent it does. */
   async function followReply({ chatId, id, title, start = null, resumeFrom = null, run = id, mirror = false }) {
-    setBusy(true);
-    setError("");
-    setLivePhase("thinking");
-    setQuote(null);
+    /* One reply per conversation; a second would only talk over the first. */
+    if (runs.current.has(chatId)) return;
+    const here = () => writing.current.chatId === chatId;
+    if (here()) {
+      setError("");
+      setQuote(null);
+    }
     const controller = new AbortController();
-    abort.current = controller;
-    replyId.current = id;
-    stopping.current = false;
-    replyRun.current = run;
-    if (mirror) mirrorChat.current = chatId;
-    else rememberLiveReply(id, chatId, run);
+    const slot = { controller, id, run, mirror, stopping: false };
+    runs.current.set(chatId, slot);
+    setLive((current) => ({ ...current, [chatId]: "thinking" }));
+    if (!mirror) rememberLiveReply(id, chatId, run);
     const releaseLock = mirror ? null : holdReplyLock(id);
     const mirrorKey = `${id}:${run}`;
     let quiet = false;
@@ -1533,13 +1527,13 @@ export function App() {
         joining = false;
         joinBuffer = "";
         updateMessage({ content: "", reasoning: undefined, truncated: false, live: String(data.message || "").slice(0, 160) });
-        setLivePhase("thinking");
+        setPhase(chatId, "thinking");
         announce("Vaelo is writing up what it found.");
         return;
       }
       if (name === "jarvis.status") {
         const waking = /wake|idle/i.test(data.message || "");
-        setLivePhase(waking ? "waking" : "thinking");
+        setPhase(chatId, waking ? "waking" : "thinking");
         if (/working/i.test(data.message || "")) {
           lastReady.current = Date.now();
           setCloud("Connected");
@@ -1553,12 +1547,12 @@ export function App() {
             notes: [...(message.notes || []), { kind: data.kind || "status", text: note.slice(0, 300) }].slice(-8),
           }));
         }
-        setLivePhase((current) => (current === "waking" ? "thinking" : current));
+        setPhase(chatId, (current) => (current === "waking" ? "thinking" : current));
       }
       if (name === "hermes.tool.progress") {
         const tool = data.tool || data.tool_name || data.name || data.function_name || "tool";
         const done = data.status === "completed";
-        setLivePhase(pendingApproval ? "listening" : done ? "thinking" : "working");
+        setPhase(chatId, pendingApproval ? "listening" : done ? "thinking" : "working");
         noteTool({ tool, callId: data.toolCallId || data.tool_call_id, label: data.label, done });
         if (!done) announce(toolInfo(tool).now);
       }
@@ -1580,7 +1574,7 @@ export function App() {
             state: "pending",
           },
         });
-        setLivePhase("listening");
+        setPhase(chatId, "listening");
         announce("Vaelo is asking for your approval.");
         return;
       }
@@ -1603,7 +1597,7 @@ export function App() {
         if (!received) updateMessage({ thoughtMs: Date.now() - startedAt, live: "" });
         received += piece;
         schedule();
-        setLivePhase("speaking");
+        setPhase(chatId, "speaking");
       }
       // A truncated reply also carries an error object; it is not a failure.
       if (choice?.finish_reason === "length") {
@@ -1620,7 +1614,7 @@ export function App() {
       /* Waiting for a sleeping cloud happens here, in the page, so the
          reply gets the request's whole time limit once it starts. */
       if (start && Date.now() - lastReady.current > STALE_READY_MS) {
-        setLivePhase("waking");
+        setPhase(chatId, "waking");
         updateMessage({ live: "Waking Vaelo up. This can take a minute" });
         await new Promise((resolve, reject) => {
           const stop = () => reject(Object.assign(new Error("Stopped"), { name: "AbortError" }));
@@ -1630,7 +1624,7 @@ export function App() {
           );
         });
         updateMessage({ live: "" });
-        setLivePhase("thinking");
+        setPhase(chatId, "thinking");
       }
       /* Ask, read, and when the connection drops, ask again from the last
          event that arrived. Only the reply's own end, or Stop, ends this. */
@@ -1756,7 +1750,7 @@ export function App() {
                     body = retryRequest(original, done, run);
                   }
                   rememberLiveReply(id, chatId, run);
-                  replyRun.current = run;
+                  slot.run = run;
                   updateMessage({ run });
                   pushChat(chatId);
                   seq = -1;
@@ -1768,11 +1762,16 @@ export function App() {
             }
             /* A busy cloud (it runs one reply at a time) is waited out
                quietly, for a few minutes, before it is reported. */
+            /* When the thing it is finishing is another conversation of
+               this person's, there is no reason to give up: it waits its turn. */
+            const queuedBehind = [...runs.current.entries()].some(
+              ([other, theirs]) => other !== chatId && !theirs.mirror,
+            );
             const busyNow =
               body &&
               !received &&
               !pendingApproval &&
-              busyTries < 12 &&
+              (busyTries < 12 || queuedBehind) &&
               classifyError({ name: err.name, message: err.message, status: err.status }).kind === "busy";
             if (!busyNow) throw err;
             busyTries += 1;
@@ -1780,8 +1779,12 @@ export function App() {
             /* The relay starts the retry afresh under the same id, numbered
                from the beginning again; nothing of the refused run is kept. */
             seq = -1;
-            updateMessage({ live: "Vaelo is finishing something else first" });
-            await pause(busyTries > 2 ? 15000 : 5000, controller.signal);
+            updateMessage({
+              live: queuedBehind
+                ? "Waiting for your other conversation to finish first"
+                : "Vaelo is finishing something else first",
+            });
+            await pause(queuedBehind ? 3000 : busyTries > 2 ? 15000 : 5000, controller.signal);
             continue;
           }
           /* Anything else is the connection, not the reply. */
@@ -1823,7 +1826,7 @@ export function App() {
       if (mirror && (err.code === "run_missing" || err.dropped)) {
         /* The device that sent this reply carries it on and reports it. */
         quiet = true;
-      } else if (err.name === "AbortError" && !stopping.current) {
+      } else if (err.name === "AbortError" && !slot.stopping) {
         /* The page is going away (closing, signing out): the reply carries
            on at Vaelo and is picked back up the next time the app opens. */
         detached = true;
@@ -1832,7 +1835,7 @@ export function App() {
           ? "The connection to Vaelo keeps dropping. What arrived is kept; the rest appears when you reopen Vaelo."
           : "The connection to Vaelo keeps dropping. The reply carries on there and appears when you reopen Vaelo.";
         updateMessage({ interrupted: true, note: text });
-        setError(text);
+        if (here()) setError(text);
         announce(text);
       } else if (err.name === "AbortError" || err.stoppedElsewhere) {
         /* Stopping is a choice, not a failure: keep what was written. */
@@ -1849,7 +1852,7 @@ export function App() {
         if (problem.kind === "interrupted")
           updateMessage({ interrupted: true, note: problem.text });
         else updateMessage({ failed: true, note: problem.text, errorKind: problem.kind });
-        setError(problem.text);
+        if (here()) setError(problem.text);
         announce(problem.text);
       }
     } finally {
@@ -1859,7 +1862,7 @@ export function App() {
       }
       /* A reply that carries on without this page stays marked as running.
          A mirror leaves the final word to the device that sent it. */
-      const carriesOn = detached || lost || quiet || (mirror && !stopping.current && !endedElsewhere);
+      const carriesOn = detached || lost || quiet || (mirror && !slot.stopping && !endedElsewhere);
       updateMessage((message) => {
         const patch = { live: "" };
         if (!carriesOn) patch.running = undefined;
@@ -1881,32 +1884,40 @@ export function App() {
         }
         return patch;
       });
-      setBusy(false);
-      setLivePhase("idle");
+      if (runs.current.get(chatId) === slot) runs.current.delete(chatId);
+      setLive((current) => {
+        if (!(chatId in current)) return current;
+        const { [chatId]: _ended, ...rest } = current;
+        return rest;
+      });
       if (!mirror && !detached && !lost) forgetLiveReply(id);
       releaseLock?.();
       if (mirror) {
-        mirrorChat.current = null;
         // Leaving the conversation: coming back to it follows the reply again.
         if (detached) mirrored.current.delete(mirrorKey);
         else if (!quiet && carriesOn) adoptLater(chatId, id, run);
       }
       if (!carriesOn) pushChat(chatId);
-      if (abort.current === controller) {
-        abort.current = null;
-        replyId.current = null;
-      }
       if (succeeded) {
         announce("Vaelo replied.");
         if (document.hidden) {
           document.title = "Reply ready · Vaelo";
           if (prefsRef.current.notify) tellReady(title, received);
         }
-        setSettling(true);
-        settleTimer.current = setTimeout(() => setSettling(false), 1500);
+        if (here()) {
+          setSettling(true);
+          settleTimer.current = setTimeout(() => setSettling(false), 1500);
+        } else {
+          /* Finished in the background: say so, and offer the way back. */
+          showToast({
+            text: `Vaelo finished replying in “${title || "a conversation"}”.`,
+            action: "Open",
+            onAction: () => selectChat(chatId),
+          });
+        }
       }
       // A reply picked up on opening the app must not raise the keyboard.
-      if (start) textarea.current?.focus({ preventScroll: true });
+      if (start && here()) textarea.current?.focus({ preventScroll: true });
     }
   }
 
@@ -1926,10 +1937,11 @@ export function App() {
 
   /* Stop is a decision about the reply, so it is told to Vaelo, which ends
      the run; merely leaving the page never does. */
-  function stopReply() {
-    if (!abort.current) return;
-    stopping.current = true;
-    const id = replyRun.current || replyId.current;
+  function stopReply(chatId = writing.current.chatId) {
+    const slot = runs.current.get(chatId);
+    if (!slot) return;
+    slot.stopping = true;
+    const id = slot.run || slot.id;
     if (id && session?.csrf)
       fetch("/api/stop", {
         method: "POST",
@@ -1937,27 +1949,32 @@ export function App() {
         headers: { "Content-Type": "application/json", "X-CSRF-Token": session.csrf },
         body: JSON.stringify({ runId: id }),
       }).catch(() => {});
-    abort.current.abort();
+    slot.controller.abort();
   }
 
   /* A reply that was still running when the app closed, reloaded or lost
      its connection for good carries on at Vaelo; opening the app picks the
      newest one back up and shows it from the start. */
   useEffect(() => {
-    if (!session?.user || session.offline || busy || !chats.length) return;
-    const live = Object.entries(readLiveReplies()).sort((a, b) => b[1].at - a[1].at);
-    for (const [id, entry] of live) {
+    if (!session?.user || session.offline || !chats.length) return;
+    const pending = Object.entries(readLiveReplies()).sort((a, b) => b[1].at - a[1].at);
+    let opened = false;
+    for (const [id, entry] of pending) {
       const chat = chats.find((item) => item.id === entry.chatId);
       const message = chat?.messages.find((item) => item.id === id);
       if (!message || message.role !== "assistant" || Date.now() - entry.at > LIVE_REPLY_MS) {
         forgetLiveReply(id);
         continue;
       }
-      if (resuming.current.has(id)) return;
+      if (resuming.current.has(id) || runs.current.has(chat.id)) continue;
       // Already followed here while another tab owned it: that tab finishes it.
       if (watchedHere.current.has(id)) continue;
       resuming.current.add(id);
-      setActiveId(chat.id);
+      // Every unfinished reply is picked up; the newest one is shown.
+      if (!opened) {
+        opened = true;
+        setActiveId(chat.id);
+      }
       replyOwnedElsewhere(id)
         .then((elsewhere) => {
           if (elsewhere) watchedHere.current.add(id);
@@ -1975,9 +1992,8 @@ export function App() {
           });
         })
         .finally(() => resuming.current.delete(id));
-      return;
     }
-  }, [session?.user?.sub, session?.offline, busy, chats.length > 0]);
+  }, [session?.user?.sub, session?.offline, chats.length > 0]);
 
   /* A reply another device is writing shows here as it happens, the way
      ChatGPT and Claude do it: the conversation arrives through sync marked
@@ -1987,11 +2003,10 @@ export function App() {
   const autoOpened = useRef(new Set());
   useEffect(() => {
     if (!session?.user || session.offline) return;
-    if (busy) {
-      // Following a reply in a conversation that was left: stop following.
-      if (mirrorChat.current && mirrorChat.current !== activeId) abort.current?.abort();
-      return;
-    }
+    // Following a reply in a conversation that was left: stop following.
+    for (const [chatId, slot] of runs.current)
+      if (slot.mirror && chatId !== activeId) slot.controller.abort();
+    if (runs.current.has(activeId)) return;
     const own = readLiveReplies();
     const active = chats.find((chat) => chat.id === activeId);
     if (!active?.messages.length) {
@@ -2021,7 +2036,7 @@ export function App() {
         startedAt: reply.startedAt,
       },
     });
-  }, [session?.user?.sub, session?.offline, busy, activeId, chats]);
+  }, [session?.user?.sub, session?.offline, live, activeId, chats]);
 
   /* Messages get one stable handler so a streaming reply never re-renders
      the rest of the transcript. It always reaches the latest state. */
@@ -2169,7 +2184,8 @@ export function App() {
         <Rail
           chats={chats}
           activeId={activeId}
-          busy={busy}
+          busy={anyBusy}
+          running={live}
           open={menu}
           phone={phone}
           collapsed={collapsed}
@@ -2444,7 +2460,7 @@ export function App() {
         </p>
         <Toast toasts={toast} onDismiss={id => setToast(current => current.filter(item => item.id !== id))} />
         <CommandPalette open={commandOpen} onClose={() => setCommandOpen(false)} chats={chats} onSelect={selectChat} onOpenWork={openWork} actions={[
-          ...(!busy ? [{ id: "new", label: "New conversation", run: newChat }] : []),
+          { id: "new", label: "New conversation", run: newChat },
           { id: "settings", label: "Settings and appearance", run: () => setSettingsOpen(true) },
           ...(!guest ? [{ id: "workroom", label: "Open Workroom", run: () => { setWorkDraft(null); setWorkroomOpen(true); } }] : []),
           { id: "tools", label: "QR link and interface guide", run: () => setUIToolsOpen(true) },
@@ -2501,7 +2517,7 @@ export function App() {
         <Workroom open={workroomOpen} session={session} initialDraft={workDraft}
           onClose={() => {setWorkroomOpen(false);setWorkDraft(null);}}
           chats={chats}
-          onOpenChat={id => { if (!canLeave(id)) { showToast({text:STAY}); return; } selectChat(id);setWorkroomOpen(false);setWorkDraft(null); }}
+          onOpenChat={id => { selectChat(id);setWorkroomOpen(false);setWorkDraft(null); }}
           onAddChat={(id, record) => { setChats(current=>current.map(chat=>chat.id===id?{...chat,updated:Date.now(),workContext:workContextFor(record)}:chat));pushChat(id); }}
           onStart={startWork} onRecordChange={updateSelectedWork} />
       </div>

@@ -107,7 +107,7 @@ function SwipeRow({ id, openId, setOpenId, actions, active, className = "", chil
   );
 }
 
-function ChatRow({ chat, active, busy, excerpt, openId, setOpenId, onSelect, onDelete, onPin }) {
+function ChatRow({ chat, active, busy, running, excerpt, openId, setOpenId, onSelect, onDelete, onPin }) {
   const preview = excerpt || previewOf(chat);
   return (
     <SwipeRow
@@ -122,12 +122,13 @@ function ChatRow({ chat, active, busy, excerpt, openId, setOpenId, onSelect, onD
     >
       <button
         className="rail-link rp-link"
-        disabled={busy}
+        data-running={running || undefined}
         aria-current={active ? "page" : undefined}
         onClick={() => onSelect(chat.id)}
       >
         <span className="rp-line">
           <span className="rp-title">{chat.title}</span>
+          {running && <span className="rail-running" role="img" aria-label="Vaelo is replying here" />}
           <span className="rp-time">{timeLabel(chat.updated)}</span>
         </span>
         {preview && <span className="rp-excerpt">{preview}</span>}
@@ -136,7 +137,7 @@ function ChatRow({ chat, active, busy, excerpt, openId, setOpenId, onSelect, onD
   );
 }
 
-function Library({ items, query, filter, setFilter, activeId, busy, openId, setOpenId, onOpen, onDelete }) {
+function Library({ items, query, filter, setFilter, activeId, openId, setOpenId, onOpen, onDelete }) {
   const shown = searchWork(items, query)
     .filter((entry) => filter === "all" || entry.kind === filter)
     .slice(0, 80);
@@ -174,7 +175,6 @@ function Library({ items, query, filter, setFilter, activeId, busy, openId, setO
                 <button
                   className="rp-work-link"
                   data-active={entry.chatId === activeId || undefined}
-                  disabled={busy && entry.chatId !== activeId}
                   onClick={() => onOpen(entry)}
                 >
                   <span className="rp-thumb" aria-hidden="true">
@@ -255,6 +255,7 @@ export function PhoneRail({
   chats,
   activeId,
   busy,
+  running = {},
   open,
   user,
   onNew,
@@ -316,7 +317,7 @@ export function PhoneRail({
       /* the arrangement still holds for this visit */
     }
   }
-  const reorder = usePinnedReorder({ aside, ids: pinned, setOrder: setPinOrder, saveOrder, chats, disabled: busy || !!query || view !== "chats" });
+  const reorder = usePinnedReorder({ aside, ids: pinned, setOrder: setPinOrder, saveOrder, chats, disabled: !!query || view !== "chats" });
 
   const results = searchChats(chats.filter((chat) => chat.messages.length), query);
 
@@ -421,7 +422,7 @@ export function PhoneRail({
         </button>
       </div>
 
-      <button className="rp-new" onClick={onNew} disabled={busy || pristine}>
+      <button className="rp-new" onClick={onNew} disabled={pristine}>
         <NotePencil size={21} aria-hidden="true" />
         <span>New conversation</span>
         <ArrowRight size={17} aria-hidden="true" />
@@ -489,7 +490,6 @@ export function PhoneRail({
             filter={filter}
             setFilter={setFilter}
             activeId={activeId}
-            busy={busy}
             openId={openRow}
             setOpenId={setOpenRow}
             onOpen={onOpenWork}
@@ -508,7 +508,8 @@ export function PhoneRail({
                 chat={chat}
                 excerpt={excerpt}
                 active={chat.id === activeId}
-                busy={busy}
+                busy={Boolean(running[chat.id])}
+                running={Boolean(running[chat.id])}
                 openId={openRow}
                 setOpenId={setOpenRow}
                 onSelect={(id) => {
@@ -531,7 +532,8 @@ export function PhoneRail({
                     <ChatRow
                       chat={chat}
                       active={chat.id === activeId}
-                      busy={busy}
+                      busy={Boolean(running[chat.id])}
+                      running={Boolean(running[chat.id])}
                       openId={openRow}
                       setOpenId={setOpenRow}
                       onSelect={onSelect}

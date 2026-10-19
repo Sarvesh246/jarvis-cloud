@@ -94,6 +94,10 @@ class BootstrapTests(unittest.TestCase):
             self.assertNotIn(secret, text)
             cfg = json.loads(text)
             self.assertEqual(cfg["gateway"]["api_server"]["max_concurrent_runs"], 1)
+            for raw, expected in (("2", 2), ("9", 3), ("0", 1), ("two", 1)):
+                tuned = bootstrap.configuration({"VAELO_MAX_CONCURRENT_RUNS": raw, "OPENROUTER_API_KEY": secret})
+                self.assertEqual(tuned["gateway"]["max_concurrent_runs"], expected)
+                self.assertEqual(tuned["gateway"]["api_server"]["max_concurrent_runs"], expected)
             self.assertEqual(cfg["model"]["default"], "openrouter/free")
             self.assertGreaterEqual(cfg["model"]["context_length"], 64000)
             self.assertEqual(cfg["model"]["context_length"], cfg["providers"]["cloud-openrouter"]["context_length"])

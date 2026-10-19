@@ -484,3 +484,32 @@
     display: none;
   }
 }
+
+/* A conversation Vaelo is still replying in, while you are somewhere else */
+.rail-link { position: relative; }
+.rail-row[data-running] .rail-title { padding-inline-end: 1.1rem; }
+.rail-running {
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline-end: 0.25rem;
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-block-start: -0.25rem;
+  border-radius: 50%;
+  background: var(--gilt);
+  animation: rail-running 1.6s var(--ease) infinite;
+}
+.rp-line .rail-running {
+  position: static;
+  flex: none;
+  margin: 0;
+  align-self: center;
+}
+@keyframes rail-running {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
+}
+:root[data-motion="reduce"] .rail-running { animation: none; opacity: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .rail-running { animation: none; opacity: 1; }
+}
