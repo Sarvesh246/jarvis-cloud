@@ -81,7 +81,7 @@ class FreshnessTests(unittest.TestCase):
     def test_relay_can_import_research_without_the_hermes_sdk(self):
         from cloud.research import Research
         with mock.patch.dict("os.environ", {}, clear=True):
-            self.assertFalse(Research().is_available())
+            self.assertTrue(Research().is_available())  # Public read APIs need no index key.
             result = source_context("latest phones")
         self.assertIn("could not verify", result["content"])
 

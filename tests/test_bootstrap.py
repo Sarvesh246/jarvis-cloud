@@ -37,6 +37,8 @@ class BootstrapTests(unittest.TestCase):
                     "agent": types.ModuleType("agent"), "agent.web_search_provider": interface}):
                 spec.loader.exec_module(module)
                 self.assertEqual(module.subjects.__module__, "test_installed_research.source_quality")
+                self.assertEqual(module.data_search.__module__, "test_installed_research.data_sources")
+                self.assertIn("usweather", module.data_search('api:catalog {"query":"National Weather Service"}')["sources"])
                 self.assertEqual(module.subjects("iPhone 15 Pro vs 18 Pro Max"), ["iphone 15 pro", "iphone 18 pro max"])
 
     def test_context_policy_stays_consistent_across_cloud_routes_and_web(self):

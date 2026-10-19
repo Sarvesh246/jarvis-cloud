@@ -5,13 +5,19 @@ from concurrent.futures import ThreadPoolExecutor
 import json
 import re
 try:
+    from data_sources import natural_query
+except ModuleNotFoundError:
+    from cloud.data_sources import natural_query
+try:
     from source_quality import subjects, relevant_sources, comparison_source, source_scope
 except ModuleNotFoundError:
     from cloud.source_quality import subjects, relevant_sources, comparison_source, source_scope
 
 
 def source_context(query, search=None, extract=None):
-    requested = subjects(query)
+    # A paper search mentioning a numbered software version is still a paper
+    # search, not a product comparison. Preserve its exact structured intent.
+    requested = [] if natural_query(query) else subjects(query)
     sources = []
     try:
         if search is None:
@@ -51,13 +57,15 @@ def source_context(query, search=None, extract=None):
                 hits = [hit for group in pool.map(lookup, queries) for hit in group]
         candidates = [
             {"url": hit["url"], "title": str(hit.get("title", ""))[:300],
-             "description": str(hit.get("description", ""))[:1500],
-             "published": str(hit.get("published", ""))[:40]}
+             "description": str(hit.get("description", ""))[:16000 if hit.get("source") else 1500],
+             "published": str(hit.get("published", ""))[:40],
+             **({"source": hit["source"], "retrieved_at": hit.get("retrieved_at", "")} if hit.get("source") else {})}
             for hit in hits[:24] if isinstance(hit, dict)
             and isinstance(hit.get("url"), str) and len(hit["url"]) <= 2048
             and hit["url"].startswith(("https://", "http://"))
         ]
-        ranked = relevant_sources(query, candidates)
+        # Package versions and structured IDs are not product-model names.
+        ranked = [hit for hit in candidates if hit.get("source")] + relevant_sources(query, [hit for hit in candidates if not hit.get("source")])
         # Reserve evidence for every requested subject before filling the rest
         # of the six-source budget. The same page is supplied only once.
         picked = []

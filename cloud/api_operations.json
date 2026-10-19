@@ -1,0 +1,4675 @@
+{
+  "dogbreeds": {
+    "directory_id": 69,
+    "description": "Dog breed metadata search",
+    "endpoint": "https://api.thedogapi.com/v1/breeds/search",
+    "parameters": {
+      "query": {
+        "remote": "q",
+        "required": true
+      }
+    },
+    "defaults": {},
+    "results": "",
+    "documentation": "https://thedogapi.com/",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "query": "poodle"
+    },
+    "aliases": [
+      "The Dog"
+    ],
+    "credential": {
+      "env": "THE_DOG_API_KEY",
+      "header": "x-api-key"
+    }
+  },
+  "worms": {
+    "directory_id": 70,
+    "description": "Marine species taxonomic records",
+    "endpoint": "https://www.marinespecies.org/rest/AphiaRecordsByName/{query}",
+    "parameters": {
+      "query": {
+        "path": true,
+        "required": true
+      }
+    },
+    "defaults": {
+      "like": "true",
+      "marine_only": "true",
+      "offset": 1
+    },
+    "results": "",
+    "documentation": "https://www.marinespecies.org/rest/",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "query": "Delphinus"
+    },
+    "aliases": [
+      "WoRMS"
+    ]
+  },
+  "jikan": {
+    "directory_id": 79,
+    "description": "Anime title metadata from MyAnimeList via Jikan",
+    "endpoint": "https://api.jikan.moe/v4/anime",
+    "parameters": {
+      "query": {
+        "remote": "q",
+        "required": true
+      }
+    },
+    "defaults": {
+      "limit": 5,
+      "sfw": "true"
+    },
+    "results": "data",
+    "documentation": "https://jikan.moe",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "query": "Cowboy Bebop"
+    },
+    "aliases": [
+      "Jikan"
+    ]
+  },
+  "kitsu": {
+    "directory_id": 80,
+    "description": "Anime metadata search",
+    "endpoint": "https://kitsu.io/api/edge/anime",
+    "parameters": {
+      "query": {
+        "remote": "filter[text]",
+        "required": true
+      }
+    },
+    "defaults": {
+      "page[limit]": 5
+    },
+    "results": "data",
+    "documentation": "https://kitsu.docs.apiary.io/",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "query": "Cowboy Bebop"
+    },
+    "headers": {
+      "Accept": "application/vnd.api+json"
+    },
+    "aliases": [
+      "Kitsu"
+    ]
+  },
+  "mangadex": {
+    "directory_id": 81,
+    "description": "Manga title metadata search",
+    "endpoint": "https://api.mangadex.org/manga",
+    "parameters": {
+      "query": {
+        "remote": "title",
+        "required": true
+      }
+    },
+    "defaults": {
+      "limit": 5,
+      "contentRating[]": "safe"
+    },
+    "results": "data",
+    "documentation": "https://api.mangadex.org/docs/",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "query": "One Piece"
+    },
+    "aliases": [
+      "MangaDex"
+    ]
+  },
+  "pokemon": {
+    "directory_id": 87,
+    "description": "Pokemon species and ability metadata by identifier",
+    "endpoint": "https://pokeapi.co/api/v2/pokemon/{name}/",
+    "parameters": {
+      "name": {
+        "pattern": "[A-Za-z0-9][A-Za-z0-9_.-]{0,100}",
+        "path": true,
+        "required": true
+      }
+    },
+    "defaults": {},
+    "results": "",
+    "documentation": "https://pokeapi.co/docs/v2",
+    "qualification": "Pokemon species, moves, types and game reference data; GraphQL/duplicate catalog entries are not counted separately. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "name": "pikachu"
+    },
+    "fields": [
+      "id",
+      "name",
+      "height",
+      "weight",
+      "types",
+      "abilities",
+      "stats",
+      "species"
+    ],
+    "aliases": [
+      "PokéAPI"
+    ]
+  },
+  "googlebooks": {
+    "directory_id": 170,
+    "description": "Google Books bibliographic search",
+    "endpoint": "https://www.googleapis.com/books/v1/volumes",
+    "parameters": {
+      "query": {
+        "remote": "q",
+        "required": true
+      }
+    },
+    "defaults": {
+      "maxResults": 5
+    },
+    "results": "items",
+    "documentation": "https://developers.google.com/books/",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "query": "Dune Frank Herbert"
+    },
+    "aliases": [
+      "Google Books"
+    ]
+  },
+  "gutendex": {
+    "directory_id": 172,
+    "description": "Project Gutenberg catalog search",
+    "endpoint": "https://gutendex.com/books/",
+    "parameters": {
+      "query": {
+        "remote": "search",
+        "required": true
+      }
+    },
+    "defaults": {},
+    "results": "results",
+    "documentation": "https://gutendex.com/",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "query": "Pride and Prejudice"
+    },
+    "aliases": [
+      "Gutendex"
+    ]
+  },
+  "poetry": {
+    "directory_id": 178,
+    "description": "PoetryDB poems by title",
+    "endpoint": "https://poetrydb.org/title/{title}",
+    "parameters": {
+      "title": {
+        "path": true,
+        "required": true
+      }
+    },
+    "defaults": {},
+    "results": "",
+    "documentation": "https://github.com/thundercomb/poetrydb#readme",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "title": "Ozymandias"
+    },
+    "aliases": [
+      "PoetryDB"
+    ]
+  },
+  "bible": {
+    "directory_id": 166,
+    "description": "Public-domain Bible passage by reference",
+    "endpoint": "https://bible-api.com/{reference}",
+    "parameters": {
+      "reference": {
+        "path": true,
+        "required": true
+      }
+    },
+    "defaults": {
+      "translation": "web"
+    },
+    "results": "",
+    "documentation": "https://bible-api.com/",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "reference": "John 3:16"
+    },
+    "aliases": [
+      "Bible-api"
+    ]
+  },
+  "quran": {
+    "directory_id": 180,
+    "description": "Quran chapter in English translation",
+    "endpoint": "https://api.alquran.cloud/v1/surah/{chapter}/en.asad",
+    "parameters": {
+      "chapter": {
+        "pattern": "(?:[1-9]|[1-9][0-9]|10[0-9]|11[0-4])",
+        "path": true,
+        "required": true
+      }
+    },
+    "defaults": {},
+    "results": "data",
+    "documentation": "https://alquran.cloud/api",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "chapter": "1"
+    },
+    "aliases": [
+      "Quran Cloud"
+    ]
+  },
+  "sefaria": {
+    "directory_id": 183,
+    "description": "Sefaria text by reference",
+    "endpoint": "https://www.sefaria.org/api/texts/{reference}",
+    "parameters": {
+      "reference": {
+        "path": true,
+        "required": true
+      }
+    },
+    "defaults": {
+      "context": 0
+    },
+    "results": "",
+    "documentation": "https://developers.sefaria.org/",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "reference": "Genesis.1.1"
+    },
+    "fields": [
+      "ref",
+      "heRef",
+      "book",
+      "categories",
+      "text",
+      "he",
+      "versions",
+      "versionTitle",
+      "license"
+    ],
+    "aliases": [
+      "Sefaria"
+    ]
+  },
+  "stephenking": {
+    "directory_id": 184,
+    "description": "Stephen King book metadata",
+    "endpoint": "https://stephen-king-api.onrender.com/api/books",
+    "parameters": {},
+    "defaults": {},
+    "results": "data",
+    "documentation": "https://stephen-king-api.onrender.com/",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {},
+    "aliases": [
+      "Stephen King"
+    ]
+  },
+  "ukbankholidays": {
+    "directory_id": 242,
+    "description": "UK bank holiday dates by nation",
+    "endpoint": "https://www.gov.uk/bank-holidays.json",
+    "parameters": {},
+    "defaults": {},
+    "results": "",
+    "documentation": "https://www.gov.uk/bank-holidays.json",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {},
+    "aliases": [
+      "UK Bank Holidays"
+    ]
+  },
+  "coinlore": {
+    "directory_id": 297,
+    "description": "Coinlore market ticker by numeric coin ID",
+    "endpoint": "https://api.coinlore.net/api/ticker/",
+    "parameters": {
+      "id": {
+        "remote": "id",
+        "pattern": "\\d{1,10}",
+        "required": true
+      }
+    },
+    "defaults": {},
+    "results": "",
+    "documentation": "https://www.coinlore.com/cryptocurrency-data-api",
+    "qualification": "Free public market/blockchain read endpoints only; no trades, payments, funded account, premium history, exchange-license or geographic access assumptions. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "id": "90"
+    },
+    "aliases": [
+      "Coinlore"
+    ]
+  },
+  "coinpaprika": {
+    "directory_id": 299,
+    "description": "Coinpaprika ticker by coin ID",
+    "endpoint": "https://api.coinpaprika.com/v1/tickers/{coin}",
+    "parameters": {
+      "coin": {
+        "pattern": "[A-Za-z0-9][A-Za-z0-9_.-]{0,100}",
+        "path": true,
+        "required": true
+      }
+    },
+    "defaults": {},
+    "results": "",
+    "documentation": "https://api.coinpaprika.com",
+    "qualification": "Free public market/blockchain read endpoints only; no trades, payments, funded account, premium history, exchange-license or geographic access assumptions. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "coin": "btc-bitcoin"
+    },
+    "fields": [
+      "id",
+      "name",
+      "symbol",
+      "rank",
+      "circulating_supply",
+      "total_supply",
+      "max_supply",
+      "last_updated",
+      "quotes"
+    ],
+    "aliases": [
+      "Coinpaprika"
+    ]
+  },
+  "coinbase": {
+    "directory_id": 289,
+    "description": "Coinbase indicative spot price by pair",
+    "endpoint": "https://api.coinbase.com/v2/prices/{pair}/spot",
+    "parameters": {
+      "pair": {
+        "pattern": "[A-Z0-9]{2,12}-[A-Z]{3}",
+        "path": true,
+        "required": true
+      }
+    },
+    "defaults": {},
+    "results": "data",
+    "documentation": "https://developers.coinbase.com",
+    "qualification": "Free public market/blockchain read endpoints only; no trades, payments, funded account, premium history, exchange-license or geographic access assumptions. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "pair": "BTC-USD"
+    },
+    "aliases": [
+      "Coinbase"
+    ]
+  },
+  "kraken": {
+    "directory_id": 315,
+    "description": "Kraken public market ticker",
+    "endpoint": "https://api.kraken.com/0/public/Ticker",
+    "parameters": {
+      "pair": {
+        "remote": "pair",
+        "pattern": "[A-Za-z0-9]{3,20}",
+        "required": true
+      }
+    },
+    "defaults": {},
+    "results": "result",
+    "documentation": "https://docs.kraken.com/rest/",
+    "qualification": "Free public market/blockchain read endpoints only; no trades, payments, funded account, premium history, exchange-license or geographic access assumptions. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "pair": "XBTUSD"
+    },
+    "aliases": [
+      "Kraken"
+    ]
+  },
+  "geminimarket": {
+    "directory_id": 311,
+    "description": "Gemini public market ticker",
+    "endpoint": "https://api.gemini.com/v1/pubticker/{symbol}",
+    "parameters": {
+      "symbol": {
+        "pattern": "[a-z0-9]{3,20}",
+        "path": true,
+        "required": true
+      }
+    },
+    "defaults": {},
+    "results": "",
+    "documentation": "https://docs.gemini.com/rest-api/",
+    "qualification": "Free public market/blockchain read endpoints only; no trades, payments, funded account, premium history, exchange-license or geographic access assumptions. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "symbol": "btcusd"
+    },
+    "aliases": [
+      "Gemini"
+    ]
+  },
+  "mempool": {
+    "directory_id": 318,
+    "description": "Bitcoin recommended transaction fees",
+    "endpoint": "https://mempool.space/api/v1/fees/recommended",
+    "parameters": {},
+    "defaults": {},
+    "results": "",
+    "documentation": "https://mempool.space/api",
+    "qualification": "Public fee estimates in sat/vB, not guarantees; cache at least 60 seconds.",
+    "sample": {},
+    "aliases": [
+      "Mempool"
+    ]
+  },
+  "vatcomply": {
+    "directory_id": 362,
+    "description": "VATComply reference currency rates",
+    "endpoint": "https://api.vatcomply.com/rates",
+    "parameters": {
+      "base": {
+        "remote": "base",
+        "pattern": "[A-Z]{3}",
+        "required": true
+      }
+    },
+    "defaults": {},
+    "results": "",
+    "documentation": "https://www.vatcomply.com/documentation",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "base": "USD"
+    },
+    "aliases": [
+      "VATComply.com"
+    ]
+  },
+  "nbp": {
+    "directory_id": 358,
+    "description": "National Bank of Poland exchange rates",
+    "endpoint": "https://api.nbp.pl/api/exchangerates/tables/A/",
+    "parameters": {},
+    "defaults": {
+      "format": "json"
+    },
+    "results": "",
+    "documentation": "http://api.nbp.pl/en.html",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {},
+    "aliases": [
+      "National Bank of Poland"
+    ]
+  },
+  "apiguru": {
+    "directory_id": 395,
+    "description": "OpenAPI directory provider discovery",
+    "endpoint": "https://api.apis.guru/v2/providers.json",
+    "parameters": {},
+    "defaults": {},
+    "results": "",
+    "documentation": "https://apis.guru/api-doc/",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {},
+    "aliases": [
+      "APIs.guru"
+    ]
+  },
+  "cdnjs": {
+    "directory_id": 410,
+    "description": "CDNJS library metadata search",
+    "endpoint": "https://api.cdnjs.com/libraries",
+    "parameters": {
+      "query": {
+        "remote": "search",
+        "required": true
+      }
+    },
+    "defaults": {
+      "limit": 5,
+      "fields": "name,version,description,homepage,license"
+    },
+    "results": "results",
+    "documentation": "https://api.cdnjs.com/libraries/jquery",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "query": "react"
+    },
+    "aliases": [
+      "CDNJS"
+    ]
+  },
+  "gitlab": {
+    "directory_id": 445,
+    "description": "Public GitLab project search",
+    "endpoint": "https://gitlab.com/api/v4/projects",
+    "parameters": {
+      "query": {
+        "remote": "search",
+        "required": true
+      }
+    },
+    "defaults": {
+      "visibility": "public",
+      "per_page": 5
+    },
+    "results": "",
+    "documentation": "https://docs.gitlab.com/ee/api/",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "query": "python"
+    },
+    "fields": [
+      "id",
+      "name",
+      "path_with_namespace",
+      "description",
+      "web_url",
+      "last_activity_at",
+      "star_count"
+    ],
+    "aliases": [
+      "Gitlab"
+    ]
+  },
+  "networkcalc": {
+    "directory_id": 489,
+    "description": "Public DNS record lookup",
+    "endpoint": "https://networkcalc.com/api/dns/lookup/{domain}",
+    "parameters": {
+      "domain": {
+        "pattern": "(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\\.)+[A-Za-z]{2,63}",
+        "path": true,
+        "required": true
+      }
+    },
+    "defaults": {},
+    "results": "records",
+    "documentation": "https://networkcalc.com/api/docs",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "domain": "example.com"
+    },
+    "aliases": [
+      "NetworkCalc"
+    ]
+  },
+  "wiktionary": {
+    "directory_id": 570,
+    "description": "Wiktionary page discovery",
+    "endpoint": "https://en.wiktionary.org/w/api.php",
+    "parameters": {
+      "query": {
+        "remote": "srsearch",
+        "required": true
+      }
+    },
+    "defaults": {
+      "action": "query",
+      "list": "search",
+      "srlimit": 5,
+      "format": "json"
+    },
+    "results": "query.search",
+    "documentation": "https://en.wiktionary.org/w/api.php",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "query": "serendipity"
+    },
+    "aliases": [
+      "Wiktionary"
+    ]
+  },
+  "carbonintensity": {
+    "directory_id": 700,
+    "description": "Great Britain current modeled carbon intensity",
+    "endpoint": "https://api.carbonintensity.org.uk/intensity",
+    "parameters": {},
+    "defaults": {},
+    "results": "data",
+    "documentation": "https://carbon-intensity.github.io/api-definitions/#carbon-intensity-api-v1-0-0",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {},
+    "aliases": [
+      "UK Carbon Intensity"
+    ]
+  },
+  "ifsc": {
+    "directory_id": 766,
+    "description": "Indian bank branch by IFSC code",
+    "endpoint": "https://ifsc.razorpay.com/{code}",
+    "parameters": {
+      "code": {
+        "pattern": "[A-Z]{4}0[A-Z0-9]{6}",
+        "path": true,
+        "required": true
+      }
+    },
+    "defaults": {},
+    "results": "",
+    "documentation": "https://razorpay.com/docs/",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "code": "HDFC0000001"
+    },
+    "aliases": [
+      "Razorpay IFSC"
+    ]
+  },
+  "indianfund": {
+    "directory_id": 747,
+    "description": "Indian mutual fund NAV history by scheme code",
+    "endpoint": "https://api.mfapi.in/mf/{scheme}/latest",
+    "parameters": {
+      "scheme": {
+        "pattern": "[0-9]{1,10}",
+        "path": true,
+        "required": true
+      }
+    },
+    "defaults": {},
+    "results": "",
+    "documentation": "https://www.mfapi.in/",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "scheme": "119598"
+    },
+    "aliases": [
+      "Indian Mutual Fund"
+    ]
+  },
+  "breweries": {
+    "directory_id": 804,
+    "description": "Open Brewery DB brewery search",
+    "endpoint": "https://api.openbrewerydb.org/v1/breweries/search",
+    "parameters": {
+      "query": {
+        "remote": "query",
+        "required": true
+      }
+    },
+    "defaults": {
+      "per_page": 5
+    },
+    "results": "",
+    "documentation": "https://www.openbrewerydb.org",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "query": "Chicago"
+    },
+    "aliases": [
+      "Open Brewery DB"
+    ]
+  },
+  "cheapshark": {
+    "directory_id": 831,
+    "description": "PC game store price listings",
+    "endpoint": "https://www.cheapshark.com/api/1.0/deals",
+    "parameters": {
+      "query": {
+        "remote": "title",
+        "required": true
+      }
+    },
+    "defaults": {
+      "pageSize": 5
+    },
+    "results": "",
+    "documentation": "https://www.cheapshark.com/api",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "query": "Portal"
+    },
+    "aliases": [
+      "CheapShark"
+    ]
+  },
+  "chess": {
+    "directory_id": 832,
+    "description": "Chess.com public player profile",
+    "endpoint": "https://api.chess.com/pub/player/{username}",
+    "parameters": {
+      "username": {
+        "pattern": "[A-Za-z0-9_-]{2,50}",
+        "path": true,
+        "required": true
+      }
+    },
+    "defaults": {},
+    "results": "",
+    "documentation": "https://www.chess.com/news/view/published-data-api",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "username": "hikaru"
+    },
+    "aliases": [
+      "Chess.com"
+    ]
+  },
+  "lichess": {
+    "directory_id": 868,
+    "description": "Lichess public player profile",
+    "endpoint": "https://lichess.org/api/user/{username}",
+    "parameters": {
+      "username": {
+        "pattern": "[A-Za-z0-9_-]{2,30}",
+        "path": true,
+        "required": true
+      }
+    },
+    "defaults": {},
+    "results": "",
+    "documentation": "https://lichess.org/api",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "username": "thibault"
+    },
+    "aliases": [
+      "Lichess"
+    ]
+  },
+  "dnd": {
+    "directory_id": 845,
+    "description": "Dungeons and Dragons SRD spell search",
+    "endpoint": "https://www.dnd5eapi.co/api/2014/spells",
+    "parameters": {
+      "query": {
+        "remote": "name",
+        "required": true
+      }
+    },
+    "defaults": {},
+    "results": "results",
+    "documentation": "https://www.dnd5eapi.co/docs/",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "query": "fireball"
+    },
+    "aliases": [
+      "Dungeons and Dragons"
+    ]
+  },
+  "scryfall": {
+    "directory_id": 897,
+    "description": "Magic card name search",
+    "endpoint": "https://api.scryfall.com/cards/named",
+    "parameters": {
+      "name": {
+        "remote": "fuzzy",
+        "required": true
+      }
+    },
+    "defaults": {},
+    "results": "",
+    "documentation": "https://scryfall.com/docs/api",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "name": "Lightning Bolt"
+    },
+    "fields": [
+      "id",
+      "name",
+      "released_at",
+      "lang",
+      "type_line",
+      "oracle_text",
+      "mana_cost",
+      "legalities",
+      "prices",
+      "set_name",
+      "scryfall_uri"
+    ],
+    "aliases": [
+      "Scryfall"
+    ]
+  },
+  "yugioh": {
+    "directory_id": 913,
+    "description": "Yu-Gi-Oh card metadata by name",
+    "endpoint": "https://db.ygoprodeck.com/api/v7/cardinfo.php",
+    "parameters": {
+      "name": {
+        "remote": "name",
+        "required": true
+      }
+    },
+    "defaults": {},
+    "results": "data",
+    "documentation": "https://db.ygoprodeck.com/api-guide/",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "name": "Dark Magician"
+    },
+    "aliases": [
+      "Yu-Gi-Oh!"
+    ]
+  },
+  "xkcd": {
+    "directory_id": 912,
+    "description": "xkcd comic by number",
+    "endpoint": "https://xkcd.com/{number}/info.0.json",
+    "parameters": {
+      "number": {
+        "pattern": "[0-9]{1,10}",
+        "path": true,
+        "required": true
+      }
+    },
+    "defaults": {},
+    "results": "",
+    "documentation": "https://xkcd.com/json.html",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "number": "353"
+    },
+    "aliases": [
+      "xkcd"
+    ]
+  },
+  "guildwars": {
+    "directory_id": 858,
+    "description": "Guild Wars 2 item metadata by ID",
+    "endpoint": "https://api.guildwars2.com/v2/items/{id}",
+    "parameters": {
+      "id": {
+        "pattern": "[0-9]{1,10}",
+        "path": true,
+        "required": true
+      }
+    },
+    "defaults": {},
+    "results": "",
+    "documentation": "https://wiki.guildwars2.com/wiki/API:Main",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "id": "19721"
+    },
+    "aliases": [
+      "Guild Wars 2"
+    ]
+  },
+  "franceaddress": {
+    "directory_id": 918,
+    "description": "French address search",
+    "endpoint": "https://data.geopf.fr/geocodage/search",
+    "parameters": {
+      "query": {
+        "remote": "q",
+        "required": true
+      }
+    },
+    "defaults": {
+      "limit": 5
+    },
+    "results": "features",
+    "documentation": "https://adresse.data.gouv.fr",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "query": "Paris"
+    },
+    "aliases": [
+      "adresse.data.gouv.fr"
+    ]
+  },
+  "ibge": {
+    "directory_id": 954,
+    "description": "Brazil state metadata",
+    "endpoint": "https://servicodados.ibge.gov.br/api/v1/localidades/estados",
+    "parameters": {},
+    "defaults": {
+      "orderBy": "nome"
+    },
+    "results": "",
+    "documentation": "https://servicodados.ibge.gov.br/api/docs/",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {},
+    "aliases": [
+      "IBGE"
+    ]
+  },
+  "postcodes": {
+    "directory_id": 993,
+    "description": "UK postcode geocoding",
+    "endpoint": "https://api.postcodes.io/postcodes/{postcode}",
+    "parameters": {
+      "postcode": {
+        "pattern": "[A-Za-z0-9 ]{3,9}",
+        "path": true,
+        "required": true
+      }
+    },
+    "defaults": {},
+    "results": "result",
+    "documentation": "https://postcodes.io",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "postcode": "SW1A 1AA"
+    },
+    "aliases": [
+      "Postcodes.io"
+    ]
+  },
+  "viacep": {
+    "directory_id": 1005,
+    "description": "Brazil postal address lookup",
+    "endpoint": "https://viacep.com.br/ws/{cep}/json/",
+    "parameters": {
+      "cep": {
+        "pattern": "\\d{8}",
+        "path": true,
+        "required": true
+      }
+    },
+    "defaults": {},
+    "results": "",
+    "documentation": "https://viacep.com.br",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "cep": "01001000"
+    },
+    "aliases": [
+      "ViaCep"
+    ]
+  },
+  "zippopotam": {
+    "directory_id": 1010,
+    "description": "Postal code location lookup",
+    "endpoint": "https://api.zippopotam.us/{country}/{postcode}",
+    "parameters": {
+      "country": {
+        "pattern": "[a-z]{2}",
+        "path": true,
+        "required": true
+      },
+      "postcode": {
+        "pattern": "[A-Za-z0-9 -]{2,12}",
+        "path": true,
+        "required": true
+      }
+    },
+    "defaults": {},
+    "results": "",
+    "documentation": "http://www.zippopotam.us",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "country": "us",
+      "postcode": "90210"
+    },
+    "aliases": [
+      "Zippopotam.us"
+    ]
+  },
+  "colombia": {
+    "directory_id": 1012,
+    "description": "Colombia department metadata",
+    "endpoint": "https://api-colombia.com/api/v1/Department",
+    "parameters": {},
+    "defaults": {},
+    "results": "",
+    "documentation": "https://api-colombia.com/",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {},
+    "aliases": [
+      "Api Colombia"
+    ]
+  },
+  "brasil": {
+    "directory_id": 1017,
+    "description": "Brazil postal address metadata",
+    "endpoint": "https://brasilapi.com.br/api/cep/v1/{cep}",
+    "parameters": {
+      "cep": {
+        "pattern": "\\d{8}",
+        "path": true,
+        "required": true
+      }
+    },
+    "defaults": {},
+    "results": "",
+    "documentation": "https://brasilapi.com.br/",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "cep": "01001000"
+    },
+    "aliases": [
+      "Brazil"
+    ]
+  },
+  "brazildeputies": {
+    "directory_id": 1021,
+    "description": "Brazil Chamber of Deputies member search",
+    "endpoint": "https://dadosabertos.camara.leg.br/api/v2/deputados",
+    "parameters": {
+      "name": {
+        "remote": "nome",
+        "required": true
+      }
+    },
+    "defaults": {
+      "itens": 5,
+      "ordem": "ASC",
+      "ordenarPor": "nome"
+    },
+    "results": "dados",
+    "documentation": "https://dadosabertos.camara.leg.br/swagger/api.html",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "name": "Silva"
+    },
+    "aliases": [
+      "Brazilian Chamber of Deputies Open Data"
+    ]
+  },
+  "fbiwanted": {
+    "directory_id": 1045,
+    "description": "FBI public wanted notices",
+    "endpoint": "https://api.fbi.gov/wanted/v1/list",
+    "parameters": {
+      "query": {
+        "remote": "title",
+        "required": true
+      }
+    },
+    "defaults": {
+      "pageSize": 5
+    },
+    "results": "items",
+    "documentation": "https://www.fbi.gov/wanted/api",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "query": "fraud"
+    },
+    "fields": [
+      "uid",
+      "title",
+      "description",
+      "subjects",
+      "publication",
+      "modified",
+      "url",
+      "caution"
+    ],
+    "aliases": [
+      "FBI Wanted"
+    ]
+  },
+  "federalregister": {
+    "directory_id": 1048,
+    "description": "US Federal Register document search",
+    "endpoint": "https://www.federalregister.gov/api/v1/documents.json",
+    "parameters": {
+      "query": {
+        "remote": "conditions[term]",
+        "required": true
+      }
+    },
+    "defaults": {
+      "per_page": 5,
+      "order": "newest"
+    },
+    "results": "results",
+    "documentation": "https://www.federalregister.gov/reader-aids/developer-resources/rest-api",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "query": "energy"
+    },
+    "aliases": [
+      "Federal Register"
+    ]
+  },
+  "nppes": {
+    "directory_id": 1128,
+    "description": "US NPI public provider search",
+    "endpoint": "https://npiregistry.cms.hhs.gov/api/",
+    "parameters": {
+      "name": {
+        "remote": "last_name",
+        "required": true
+      }
+    },
+    "defaults": {
+      "version": "2.1",
+      "limit": 5
+    },
+    "results": "results",
+    "documentation": "https://npiregistry.cms.hhs.gov/registry/help-api",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "name": "Smith"
+    },
+    "aliases": [
+      "NPPES"
+    ]
+  },
+  "openfda": {
+    "directory_id": 1132,
+    "description": "FDA drug recall enforcement reports by text",
+    "endpoint": "https://api.fda.gov/drug/enforcement.json",
+    "parameters": {
+      "query": {
+        "remote": "search",
+        "required": true
+      }
+    },
+    "defaults": {
+      "limit": 5
+    },
+    "results": "results",
+    "documentation": "https://open.fda.gov",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "query": "reason_for_recall:contamination"
+    },
+    "aliases": [
+      "openFDA"
+    ]
+  },
+  "arbeitnow": {
+    "directory_id": 1138,
+    "description": "Arbeitnow public job board listings",
+    "endpoint": "https://www.arbeitnow.com/api/job-board-api",
+    "parameters": {},
+    "defaults": {},
+    "results": "data",
+    "documentation": "https://documenter.getpostman.com/view/18545278/UVJbJdKh",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {},
+    "aliases": [
+      "Arbeitnow"
+    ]
+  },
+  "himalayas": {
+    "directory_id": 1145,
+    "description": "Himalayas remote job listings",
+    "endpoint": "https://himalayas.app/jobs/api",
+    "parameters": {},
+    "defaults": {
+      "limit": 5
+    },
+    "results": "jobs",
+    "documentation": "https://himalayas.app/api",
+    "qualification": "Search remote jobs; optional free key gives a separate allowance. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {},
+    "aliases": [
+      "Himalayas"
+    ]
+  },
+  "jobicy": {
+    "directory_id": 1151,
+    "description": "Jobicy remote jobs by tag",
+    "endpoint": "https://jobicy.com/api/v2/remote-jobs",
+    "parameters": {
+      "query": {
+        "remote": "tag",
+        "required": true
+      }
+    },
+    "defaults": {
+      "count": 5
+    },
+    "results": "jobs",
+    "documentation": "https://jobicy.com/jobs-rss-feed",
+    "qualification": "Remote jobs and Jobicy listing links are free; paid direct-ATS URLs are excluded. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "query": "python"
+    },
+    "aliases": [
+      "Jobicy"
+    ]
+  },
+  "lrclib": {
+    "directory_id": 1188,
+    "description": "LRCLIB lyric metadata by track and artist",
+    "endpoint": "https://lrclib.net/api/search",
+    "parameters": {
+      "query": {
+        "remote": "q",
+        "required": true
+      }
+    },
+    "defaults": {},
+    "results": "",
+    "documentation": "https://lrclib.net/docs",
+    "qualification": "Song lyric metadata and available synchronized lyric data; no bulk copying or blanket redistribution rights assumed. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "query": "Moon River"
+    },
+    "fields": [
+      "id",
+      "trackName",
+      "artistName",
+      "albumName",
+      "duration",
+      "instrumental"
+    ],
+    "aliases": [
+      "LRCLIB"
+    ]
+  },
+  "radio": {
+    "directory_id": 1196,
+    "description": "Radio Browser station search",
+    "endpoint": "https://de1.api.radio-browser.info/json/stations/search",
+    "parameters": {
+      "query": {
+        "remote": "name",
+        "required": true
+      }
+    },
+    "defaults": {
+      "limit": 5,
+      "hidebroken": "true"
+    },
+    "results": "",
+    "documentation": "https://api.radio-browser.info/",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "query": "BBC"
+    },
+    "fields": [
+      "stationuuid",
+      "name",
+      "homepage",
+      "country",
+      "countrycode",
+      "language",
+      "tags",
+      "codec",
+      "bitrate",
+      "lastcheckok",
+      "lastchecktime_iso8601"
+    ],
+    "aliases": [
+      "Radio Browser"
+    ]
+  },
+  "spaceflightnews": {
+    "directory_id": 1225,
+    "description": "Spaceflight news article discovery",
+    "endpoint": "https://api.spaceflightnewsapi.net/v4/articles/",
+    "parameters": {
+      "query": {
+        "remote": "search",
+        "required": true
+      }
+    },
+    "defaults": {
+      "limit": 5
+    },
+    "results": "results",
+    "documentation": "https://spaceflightnewsapi.net",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "query": "NASA"
+    },
+    "aliases": [
+      "Spaceflight News"
+    ]
+  },
+  "guardian": {
+    "directory_id": 1227,
+    "description": "Guardian news search",
+    "endpoint": "https://content.guardianapis.com/search",
+    "parameters": {
+      "query": {
+        "remote": "q",
+        "required": true
+      }
+    },
+    "defaults": {
+      "page-size": 5,
+      "order-by": "newest",
+      "show-fields": "trailText"
+    },
+    "results": "response.results",
+    "documentation": "https://open-platform.theguardian.com/access/",
+    "qualification": "500 calls/day, 1 call/s; cite/link articles, with content/AI-use terms checked before integration. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "query": "climate"
+    },
+    "credential": {
+      "env": "GUARDIAN_API_KEY",
+      "parameter": "api-key"
+    },
+    "aliases": [
+      "The Guardian"
+    ]
+  },
+  "archive": {
+    "directory_id": 1233,
+    "description": "Internet Archive metadata search",
+    "endpoint": "https://archive.org/advancedsearch.php",
+    "parameters": {
+      "query": {
+        "remote": "q",
+        "required": true
+      }
+    },
+    "defaults": {
+      "rows": 5,
+      "output": "json",
+      "fl[]": "identifier,title,creator,date,mediatype"
+    },
+    "results": "response.docs",
+    "documentation": "https://archive.readme.io/docs",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "query": "title:Dune"
+    },
+    "aliases": [
+      "Archive.org"
+    ]
+  },
+  "nobel": {
+    "directory_id": 1257,
+    "description": "Nobel laureate metadata search",
+    "endpoint": "https://api.nobelprize.org/2.1/laureates",
+    "parameters": {
+      "name": {
+        "remote": "name",
+        "required": true
+      }
+    },
+    "defaults": {
+      "limit": 5
+    },
+    "results": "laureates",
+    "documentation": "https://www.nobelprize.org/about/developer-zone-2/",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "name": "Einstein"
+    },
+    "aliases": [
+      "Nobel Prize"
+    ]
+  },
+  "datamuse": {
+    "directory_id": 1280,
+    "description": "Datamuse words related to a meaning",
+    "endpoint": "https://api.datamuse.com/words",
+    "parameters": {
+      "query": {
+        "remote": "ml",
+        "required": true
+      }
+    },
+    "defaults": {
+      "max": 5
+    },
+    "results": "",
+    "documentation": "https://www.datamuse.com/api/",
+    "qualification": "Word lookup; 100,000/day current allowance, key changes announced for 2027; customer-facing use requires contacting provider. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "query": "ocean"
+    },
+    "aliases": [
+      "Datamuse"
+    ]
+  },
+  "devto": {
+    "directory_id": 1295,
+    "description": "Dev.to public articles by tag",
+    "endpoint": "https://dev.to/api/articles",
+    "parameters": {
+      "tag": {
+        "remote": "tag",
+        "pattern": "[a-z0-9]{1,40}",
+        "required": true
+      }
+    },
+    "defaults": {
+      "per_page": 5
+    },
+    "results": "",
+    "documentation": "https://developers.forem.com/api",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "tag": "python"
+    },
+    "fields": [
+      "id",
+      "title",
+      "description",
+      "url",
+      "published_at",
+      "edited_at",
+      "tags",
+      "user"
+    ],
+    "aliases": [
+      "Dev.to"
+    ]
+  },
+  "itunes": {
+    "directory_id": 1359,
+    "description": "iTunes podcast discovery",
+    "endpoint": "https://itunes.apple.com/search",
+    "parameters": {
+      "query": {
+        "remote": "term",
+        "required": true
+      }
+    },
+    "defaults": {
+      "entity": "podcast",
+      "limit": 5
+    },
+    "results": "results",
+    "documentation": "https://developer.apple.com/library/archive/documentation/AudioVideo/Conceptual/iTuneSearchAPI/index.html",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "query": "science"
+    },
+    "aliases": [
+      "iTunes"
+    ]
+  },
+  "inspire": {
+    "directory_id": 1382,
+    "description": "INSPIRE high-energy physics paper search",
+    "endpoint": "https://inspirehep.net/api/literature",
+    "parameters": {
+      "query": {
+        "remote": "q",
+        "required": true
+      }
+    },
+    "defaults": {
+      "size": 5
+    },
+    "results": "hits.hits",
+    "documentation": "https://github.com/inspirehep/rest-api-doc",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "query": "Higgs"
+    },
+    "aliases": [
+      "inspirehep.net"
+    ]
+  },
+  "launches": {
+    "directory_id": 1386,
+    "description": "Launch Library upcoming space launches",
+    "endpoint": "https://ll.thespacedevs.com/2.3.0/launches/upcoming/",
+    "parameters": {},
+    "defaults": {
+      "limit": 5,
+      "mode": "list"
+    },
+    "results": "results",
+    "documentation": "https://thespacedevs.com/llapi",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {},
+    "aliases": [
+      "Launch Library 2"
+    ]
+  },
+  "osf": {
+    "directory_id": 1394,
+    "description": "Open Science Framework public project discovery",
+    "endpoint": "https://api.osf.io/v2/nodes/",
+    "parameters": {
+      "query": {
+        "remote": "filter[title]",
+        "required": true
+      }
+    },
+    "defaults": {
+      "page[size]": 5
+    },
+    "results": "data",
+    "documentation": "https://developer.osf.io",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "query": "climate"
+    },
+    "aliases": [
+      "Open Science Framework"
+    ]
+  },
+  "spacex": {
+    "directory_id": 1399,
+    "description": "SpaceX public historical launch record",
+    "endpoint": "https://api.spacexdata.com/v4/launches/latest",
+    "parameters": {},
+    "defaults": {},
+    "results": "",
+    "documentation": "https://api.spacex.land/graphql/",
+    "qualification": "Community SpaceX data may be abandoned/outdated. Latest record is not proof of the latest actual launch; check the date and use current official sources.",
+    "sample": {},
+    "fields": [
+      "id",
+      "name",
+      "date_utc",
+      "success",
+      "details",
+      "rocket",
+      "upcoming",
+      "links"
+    ],
+    "aliases": [
+      "SpaceX"
+    ]
+  },
+  "sunrise": {
+    "directory_id": 1400,
+    "description": "Sunrise and sunset at explicit coordinates/date",
+    "endpoint": "https://api.sunrise-sunset.org/json",
+    "parameters": {
+      "latitude": {
+        "remote": "lat",
+        "pattern": "-?\\d{1,2}(?:\\.\\d{1,8})?",
+        "required": true
+      },
+      "longitude": {
+        "remote": "lng",
+        "pattern": "-?\\d{1,3}(?:\\.\\d{1,8})?",
+        "required": true
+      },
+      "date": {
+        "remote": "date",
+        "pattern": "\\d{4}-\\d{2}-\\d{2}",
+        "required": true
+      }
+    },
+    "defaults": {
+      "formatted": 0
+    },
+    "results": "results",
+    "documentation": "https://sunrise-sunset.org/api",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "latitude": "41.88",
+      "longitude": "-87.63",
+      "date": "2026-10-19"
+    },
+    "aliases": [
+      "Sunrise and Sunset"
+    ]
+  },
+  "tle": {
+    "directory_id": 1402,
+    "description": "Satellite two-line orbital element lookup",
+    "endpoint": "https://tle.ivanstanojevic.me/api/tle/",
+    "parameters": {
+      "name": {
+        "remote": "search",
+        "required": true
+      }
+    },
+    "defaults": {
+      "page_size": 5
+    },
+    "results": "member",
+    "documentation": "https://tle.ivanstanojevic.me/#/docs",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "name": "ISS"
+    },
+    "aliases": [
+      "TLE"
+    ]
+  },
+  "nvd": {
+    "directory_id": 1439,
+    "description": "NIST NVD vulnerability search",
+    "endpoint": "https://services.nvd.nist.gov/rest/json/cves/2.0",
+    "parameters": {
+      "query": {
+        "remote": "keywordSearch",
+        "required": true
+      }
+    },
+    "defaults": {
+      "resultsPerPage": 5
+    },
+    "results": "vulnerabilities",
+    "documentation": "https://nvd.nist.gov/vuln/Data-Feeds/JSON-feed-changelog",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "query": "openssl"
+    },
+    "aliases": [
+      "National Vulnerability Database"
+    ]
+  },
+  "ukpolice": {
+    "directory_id": 1452,
+    "description": "UK police force directory",
+    "endpoint": "https://data.police.uk/api/forces",
+    "parameters": {},
+    "defaults": {},
+    "results": "",
+    "documentation": "https://data.police.uk/docs/",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {},
+    "aliases": [
+      "UK Police"
+    ]
+  },
+  "nhl": {
+    "directory_id": 1566,
+    "description": "NHL club scoreboard and dated schedule",
+    "endpoint": "https://api-web.nhle.com/v1/scoreboard/{team}/now",
+    "parameters": {
+      "team": {
+        "pattern": "[A-Z]{3}",
+        "path": true,
+        "required": true
+      }
+    },
+    "defaults": {},
+    "results": "gamesByDate",
+    "documentation": "https://gitlab.com/dword4/nhlapi",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "team": "CHI"
+    },
+    "aliases": [
+      "NHL Records and Stats"
+    ]
+  },
+  "openliga": {
+    "directory_id": 1569,
+    "description": "OpenLigaDB German football match data",
+    "endpoint": "https://api.openligadb.de/getmatchdata/{league}/{year}",
+    "parameters": {
+      "league": {
+        "pattern": "bl[123]",
+        "path": true,
+        "required": true
+      },
+      "year": {
+        "pattern": "20\\d{2}",
+        "path": true,
+        "required": true
+      }
+    },
+    "defaults": {},
+    "results": "",
+    "documentation": "https://www.openligadb.de",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "league": "bl1",
+      "year": "2026"
+    },
+    "aliases": [
+      "OpenLigaDB"
+    ]
+  },
+  "citybikes": {
+    "directory_id": 1543,
+    "description": "CityBikes station network metadata",
+    "endpoint": "https://api.citybik.es/v2/networks/{network}",
+    "parameters": {
+      "network": {
+        "pattern": "[A-Za-z0-9][A-Za-z0-9_.-]{0,100}",
+        "path": true,
+        "required": true
+      }
+    },
+    "defaults": {
+      "fields": "id,name,location"
+    },
+    "results": "network",
+    "documentation": "https://api.citybik.es/v2/",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "network": "divvy"
+    },
+    "aliases": [
+      "City Bikes"
+    ]
+  },
+  "adsb": {
+    "directory_id": 1636,
+    "description": "ADS-B aircraft registration metadata",
+    "endpoint": "https://api.adsbdb.com/v0/aircraft/{registration}",
+    "parameters": {
+      "registration": {
+        "pattern": "[A-Za-z0-9-]{3,12}",
+        "path": true,
+        "required": true
+      }
+    },
+    "defaults": {},
+    "results": "response.aircraft",
+    "documentation": "https://www.adsbdb.com/",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "registration": "N12345"
+    },
+    "aliases": [
+      "adsbdb"
+    ]
+  },
+  "mbta": {
+    "directory_id": 1645,
+    "description": "Boston MBTA route search by route type",
+    "endpoint": "https://api-v3.mbta.com/routes",
+    "parameters": {},
+    "defaults": {
+      "page[limit]": 5
+    },
+    "results": "data",
+    "documentation": "https://www.mbta.com/developers/v3-api",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {},
+    "aliases": [
+      "Boston MBTA Transit"
+    ]
+  },
+  "tfl": {
+    "directory_id": 1684,
+    "description": "London public transport line status",
+    "endpoint": "https://api.tfl.gov.uk/Line/{line}/Status",
+    "parameters": {
+      "line": {
+        "pattern": "[a-z0-9-]{1,50}",
+        "path": true,
+        "required": true
+      }
+    },
+    "defaults": {},
+    "results": "",
+    "documentation": "https://api.tfl.gov.uk",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "line": "central"
+    },
+    "aliases": [
+      "Transport for London, England"
+    ]
+  },
+  "entur": {
+    "directory_id": 1686,
+    "description": "Norway transport stop geocoding",
+    "endpoint": "https://api.entur.io/geocoder/v1/autocomplete",
+    "parameters": {
+      "query": {
+        "remote": "text",
+        "required": true
+      }
+    },
+    "defaults": {
+      "size": 5
+    },
+    "results": "features",
+    "documentation": "https://developer.entur.org/",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "query": "Oslo"
+    },
+    "aliases": [
+      "Transport for Norway"
+    ]
+  },
+  "fipe": {
+    "directory_id": 1718,
+    "description": "Brazil FIPE car manufacturer list",
+    "endpoint": "https://parallelum.com.br/fipe/api/v1/carros/marcas",
+    "parameters": {},
+    "defaults": {},
+    "results": "",
+    "documentation": "https://deividfortuna.github.io/fipe/",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {},
+    "aliases": [
+      "Brazilian Vehicles and Prices"
+    ]
+  },
+  "iceandfire": {
+    "directory_id": 1729,
+    "description": "A Song of Ice and Fire character by name",
+    "endpoint": "https://anapioficeandfire.com/api/characters",
+    "parameters": {
+      "name": {
+        "remote": "name",
+        "required": true
+      }
+    },
+    "defaults": {
+      "pageSize": 5
+    },
+    "results": "",
+    "documentation": "https://anapioficeandfire.com/",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "name": "Jon Snow"
+    },
+    "aliases": [
+      "An API of Ice And Fire"
+    ]
+  },
+  "harrypotter": {
+    "directory_id": 1745,
+    "description": "Harry Potter character by ID",
+    "endpoint": "https://hp-api.onrender.com/api/character/{id}",
+    "parameters": {
+      "id": {
+        "pattern": "[a-f0-9-]{36}",
+        "path": true,
+        "required": true
+      }
+    },
+    "defaults": {},
+    "results": "",
+    "documentation": "https://hp-api.onrender.com/",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "id": "9e3f7ce4-b9a7-4244-b709-dae5c1f1d4a8"
+    },
+    "aliases": [
+      "Harry Potter Characters"
+    ]
+  },
+  "omdb": {
+    "directory_id": 1758,
+    "description": "Open Movie Database title search",
+    "endpoint": "https://www.omdbapi.com/",
+    "parameters": {
+      "query": {
+        "remote": "s",
+        "required": true
+      }
+    },
+    "defaults": {
+      "type": "movie",
+      "page": 1
+    },
+    "results": "Search",
+    "documentation": "https://www.omdbapi.com/apikey.aspx",
+    "qualification": "1,000 daily calls; film/TV metadata, not the paid poster API. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "query": "Dune"
+    },
+    "credential": {
+      "env": "OMDB_API_KEY",
+      "parameter": "apikey"
+    },
+    "aliases": [
+      "Open Movie Database"
+    ]
+  },
+  "lotr": {
+    "directory_id": 1774,
+    "description": "Lord of the Rings book metadata",
+    "endpoint": "https://the-one-api.dev/v2/book",
+    "parameters": {},
+    "defaults": {},
+    "results": "docs",
+    "documentation": "https://the-one-api.dev/",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {},
+    "aliases": [
+      "The Lord of the Rings"
+    ]
+  },
+  "opensensemap": {
+    "directory_id": 1812,
+    "description": "openSenseMap sensor station discovery by name",
+    "endpoint": "https://api.opensensemap.org/boxes",
+    "parameters": {
+      "query": {
+        "remote": "name",
+        "required": true
+      }
+    },
+    "defaults": {
+      "minimal": "true"
+    },
+    "results": "",
+    "documentation": "https://api.opensensemap.org/",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Retain source dates, units and attribution; this operation provides metadata/public data only.",
+    "sample": {
+      "query": "Berlin"
+    },
+    "aliases": [
+      "openSenseMap"
+    ]
+  },
+  "rainviewer": {
+    "directory_id": 1816,
+    "description": "RainViewer available weather radar frame timestamps",
+    "endpoint": "https://api.rainviewer.com/public/weather-maps.json",
+    "parameters": {},
+    "defaults": {},
+    "results": "",
+    "documentation": "https://www.rainviewer.com/api.html",
+    "qualification": "Public radar frames and timestamps, not a point forecast or weather warning. Attribute RainViewer; do not follow returned tile URLs automatically.",
+    "sample": {},
+    "aliases": [
+      "RainViewer"
+    ]
+  },
+  "brazilcentralbank": {
+    "directory_id": 1018,
+    "description": "Brazil Central Bank Open Data dataset metadata search",
+    "endpoint": "https://dadosabertos.bcb.gov.br/api/3/action/package_search",
+    "parameters": {
+      "query": {
+        "remote": "q",
+        "required": true
+      }
+    },
+    "defaults": {
+      "rows": 5
+    },
+    "results": "result.results",
+    "documentation": "https://dadosabertos.bcb.gov.br/",
+    "qualification": "Public dataset catalog metadata only. metadata_modified is the catalog edit time, not the observation date. Follow the dataset license and verify the actual data before answering numerical questions.",
+    "sample": {
+      "query": "*:*"
+    },
+    "protocol": "ckan",
+    "fields": [
+      "id",
+      "name",
+      "title",
+      "notes",
+      "metadata_modified",
+      "license_id",
+      "license_title",
+      "organization",
+      "resources"
+    ],
+    "aliases": [
+      "Brazil Central Bank Open Data"
+    ]
+  },
+  "gdansk": {
+    "directory_id": 1025,
+    "description": "City, Gdańsk dataset metadata search",
+    "endpoint": "https://ckan.multimediagdansk.pl/api/3/action/package_search",
+    "parameters": {
+      "query": {
+        "remote": "q",
+        "required": true
+      }
+    },
+    "defaults": {
+      "rows": 5
+    },
+    "results": "result.results",
+    "documentation": "https://ckan.multimediagdansk.pl/en",
+    "qualification": "Public dataset catalog metadata only. metadata_modified is the catalog edit time, not the observation date. Follow the dataset license and verify the actual data before answering numerical questions.",
+    "sample": {
+      "query": "*:*"
+    },
+    "protocol": "ckan",
+    "fields": [
+      "id",
+      "name",
+      "title",
+      "notes",
+      "metadata_modified",
+      "license_id",
+      "license_title",
+      "organization",
+      "resources"
+    ],
+    "aliases": [
+      "City, Gdańsk"
+    ]
+  },
+  "lviv": {
+    "directory_id": 1027,
+    "description": "City, Lviv dataset metadata search",
+    "endpoint": "https://opendata.city-adm.lviv.ua/api/3/action/package_search",
+    "parameters": {
+      "query": {
+        "remote": "q",
+        "required": true
+      }
+    },
+    "defaults": {
+      "rows": 5
+    },
+    "results": "result.results",
+    "documentation": "https://opendata.city-adm.lviv.ua/",
+    "qualification": "Public dataset catalog metadata only. metadata_modified is the catalog edit time, not the observation date. Follow the dataset license and verify the actual data before answering numerical questions.",
+    "sample": {
+      "query": "water"
+    },
+    "protocol": "ckan",
+    "fields": [
+      "id",
+      "name",
+      "title",
+      "notes",
+      "metadata_modified",
+      "license_id",
+      "license_title",
+      "organization",
+      "resources"
+    ],
+    "aliases": [
+      "City, Lviv"
+    ]
+  },
+  "toronto": {
+    "directory_id": 1030,
+    "description": "City, Toronto Open Data dataset metadata search",
+    "endpoint": "https://ckan0.cf.opendata.inter.prod-toronto.ca/api/3/action/package_search",
+    "parameters": {
+      "query": {
+        "remote": "q",
+        "required": true
+      }
+    },
+    "defaults": {
+      "rows": 5
+    },
+    "results": "result.results",
+    "documentation": "https://open.toronto.ca/",
+    "qualification": "Public dataset catalog metadata only. metadata_modified is the catalog edit time, not the observation date. Follow the dataset license and verify the actual data before answering numerical questions.",
+    "sample": {
+      "query": "water"
+    },
+    "protocol": "ckan",
+    "fields": [
+      "id",
+      "name",
+      "title",
+      "notes",
+      "metadata_modified",
+      "license_id",
+      "license_title",
+      "organization",
+      "resources"
+    ],
+    "aliases": [
+      "City, Toronto Open Data"
+    ]
+  },
+  "datagov": {
+    "directory_id": 1038,
+    "description": "Data.gov dataset metadata search",
+    "endpoint": "https://catalog.data.gov/api/3/action/package_search",
+    "parameters": {
+      "query": {
+        "remote": "q",
+        "required": true
+      }
+    },
+    "defaults": {
+      "rows": 5
+    },
+    "results": "result.results",
+    "documentation": "https://api.data.gov/",
+    "qualification": "Public dataset catalog metadata only. metadata_modified is the catalog edit time, not the observation date. Follow the dataset license and verify the actual data before answering numerical questions.",
+    "sample": {
+      "query": "water"
+    },
+    "protocol": "ckan",
+    "fields": [
+      "id",
+      "name",
+      "title",
+      "notes",
+      "metadata_modified",
+      "license_id",
+      "license_title",
+      "organization",
+      "resources"
+    ],
+    "aliases": [
+      "Data.gov"
+    ]
+  },
+  "istanbul": {
+    "directory_id": 1051,
+    "description": "Istanbul (İBB) Open Data dataset metadata search",
+    "endpoint": "https://data.ibb.gov.tr/api/3/action/package_search",
+    "parameters": {
+      "query": {
+        "remote": "q",
+        "required": true
+      }
+    },
+    "defaults": {
+      "rows": 5
+    },
+    "results": "result.results",
+    "documentation": "https://data.ibb.gov.tr",
+    "qualification": "Public dataset catalog metadata only. metadata_modified is the catalog edit time, not the observation date. Follow the dataset license and verify the actual data before answering numerical questions.",
+    "sample": {
+      "query": "water"
+    },
+    "protocol": "ckan",
+    "fields": [
+      "id",
+      "name",
+      "title",
+      "notes",
+      "metadata_modified",
+      "license_id",
+      "license_title",
+      "organization",
+      "resources"
+    ],
+    "aliases": [
+      "Istanbul (İBB) Open Data"
+    ]
+  },
+  "argentinadata": {
+    "directory_id": 1054,
+    "description": "Open Government, Argentina dataset metadata search",
+    "endpoint": "https://datos.gob.ar/api/3/action/package_search",
+    "parameters": {
+      "query": {
+        "remote": "q",
+        "required": true
+      }
+    },
+    "defaults": {
+      "rows": 5
+    },
+    "results": "result.results",
+    "documentation": "https://datos.gob.ar/",
+    "qualification": "Public dataset catalog metadata only. metadata_modified is the catalog edit time, not the observation date. Follow the dataset license and verify the actual data before answering numerical questions.",
+    "sample": {
+      "query": "*:*"
+    },
+    "protocol": "ckan",
+    "fields": [
+      "id",
+      "name",
+      "title",
+      "notes",
+      "metadata_modified",
+      "license_id",
+      "license_title",
+      "organization",
+      "resources"
+    ],
+    "aliases": [
+      "Open Government, Argentina"
+    ]
+  },
+  "australiadata": {
+    "directory_id": 1055,
+    "description": "Open Government, Australia dataset metadata search",
+    "endpoint": "https://data.gov.au/data/api/3/action/package_search",
+    "parameters": {
+      "query": {
+        "remote": "q",
+        "required": true
+      }
+    },
+    "defaults": {
+      "rows": 5
+    },
+    "results": "result.results",
+    "documentation": "https://www.data.gov.au/",
+    "qualification": "Public dataset catalog metadata only. metadata_modified is the catalog edit time, not the observation date. Follow the dataset license and verify the actual data before answering numerical questions.",
+    "sample": {
+      "query": "water"
+    },
+    "protocol": "ckan",
+    "fields": [
+      "id",
+      "name",
+      "title",
+      "notes",
+      "metadata_modified",
+      "license_id",
+      "license_title",
+      "organization",
+      "resources"
+    ],
+    "aliases": [
+      "Open Government, Australia"
+    ]
+  },
+  "austriadata": {
+    "directory_id": 1056,
+    "description": "Open Government, Austria dataset metadata search",
+    "endpoint": "https://www.data.gv.at/katalog/api/3/action/package_search",
+    "parameters": {
+      "query": {
+        "remote": "q",
+        "required": true
+      }
+    },
+    "defaults": {
+      "rows": 5
+    },
+    "results": "result.results",
+    "documentation": "https://www.data.gv.at/",
+    "qualification": "Public dataset catalog metadata only. metadata_modified is the catalog edit time, not the observation date. Follow the dataset license and verify the actual data before answering numerical questions.",
+    "sample": {
+      "query": "water"
+    },
+    "protocol": "ckan",
+    "fields": [
+      "id",
+      "name",
+      "title",
+      "notes",
+      "metadata_modified",
+      "license_id",
+      "license_title",
+      "organization",
+      "resources"
+    ],
+    "aliases": [
+      "Open Government, Austria"
+    ]
+  },
+  "canadadata": {
+    "directory_id": 1058,
+    "description": "Open Government, Canada dataset metadata search",
+    "endpoint": "https://open.canada.ca/data/api/3/action/package_search",
+    "parameters": {
+      "query": {
+        "remote": "q",
+        "required": true
+      }
+    },
+    "defaults": {
+      "rows": 5
+    },
+    "results": "result.results",
+    "documentation": "http://open.canada.ca/en",
+    "qualification": "Public dataset catalog metadata only. metadata_modified is the catalog edit time, not the observation date. Follow the dataset license and verify the actual data before answering numerical questions.",
+    "sample": {
+      "query": "water"
+    },
+    "protocol": "ckan",
+    "fields": [
+      "id",
+      "name",
+      "title",
+      "notes",
+      "metadata_modified",
+      "license_id",
+      "license_title",
+      "organization",
+      "resources"
+    ],
+    "aliases": [
+      "Open Government, Canada"
+    ]
+  },
+  "denmarkdata": {
+    "directory_id": 1062,
+    "description": "Open Government, Denmark dataset metadata search",
+    "endpoint": "https://www.opendata.dk/api/3/action/package_search",
+    "parameters": {
+      "query": {
+        "remote": "q",
+        "required": true
+      }
+    },
+    "defaults": {
+      "rows": 5
+    },
+    "results": "result.results",
+    "documentation": "https://www.opendata.dk/",
+    "qualification": "Public dataset catalog metadata only. metadata_modified is the catalog edit time, not the observation date. Follow the dataset license and verify the actual data before answering numerical questions.",
+    "sample": {
+      "query": "water"
+    },
+    "protocol": "ckan",
+    "fields": [
+      "id",
+      "name",
+      "title",
+      "notes",
+      "metadata_modified",
+      "license_id",
+      "license_title",
+      "organization",
+      "resources"
+    ],
+    "aliases": [
+      "Open Government, Denmark"
+    ]
+  },
+  "finlanddata": {
+    "directory_id": 1064,
+    "description": "Open Government, Finland dataset metadata search",
+    "endpoint": "https://www.avoindata.fi/data/api/3/action/package_search",
+    "parameters": {
+      "query": {
+        "remote": "q",
+        "required": true
+      }
+    },
+    "defaults": {
+      "rows": 5
+    },
+    "results": "result.results",
+    "documentation": "https://www.avoindata.fi/en",
+    "qualification": "Public dataset catalog metadata only. metadata_modified is the catalog edit time, not the observation date. Follow the dataset license and verify the actual data before answering numerical questions.",
+    "sample": {
+      "query": "water"
+    },
+    "protocol": "ckan",
+    "fields": [
+      "id",
+      "name",
+      "title",
+      "notes",
+      "metadata_modified",
+      "license_id",
+      "license_title",
+      "organization",
+      "resources"
+    ],
+    "aliases": [
+      "Open Government, Finland"
+    ]
+  },
+  "germanydata": {
+    "directory_id": 1066,
+    "description": "Open Government, Germany dataset metadata search",
+    "endpoint": "https://www.govdata.de/ckan/api/3/action/package_search",
+    "parameters": {
+      "query": {
+        "remote": "q",
+        "required": true
+      }
+    },
+    "defaults": {
+      "rows": 5
+    },
+    "results": "result.results",
+    "documentation": "https://www.govdata.de/daten/-/details/govdata-metadatenkatalog",
+    "qualification": "Public dataset catalog metadata only. metadata_modified is the catalog edit time, not the observation date. Follow the dataset license and verify the actual data before answering numerical questions.",
+    "sample": {
+      "query": "water"
+    },
+    "protocol": "ckan",
+    "fields": [
+      "id",
+      "name",
+      "title",
+      "notes",
+      "metadata_modified",
+      "license_id",
+      "license_title",
+      "organization",
+      "resources"
+    ],
+    "aliases": [
+      "Open Government, Germany"
+    ]
+  },
+  "irelanddata": {
+    "directory_id": 1069,
+    "description": "Open Government, Ireland dataset metadata search",
+    "endpoint": "https://data.gov.ie/api/3/action/package_search",
+    "parameters": {
+      "query": {
+        "remote": "q",
+        "required": true
+      }
+    },
+    "defaults": {
+      "rows": 5
+    },
+    "results": "result.results",
+    "documentation": "https://data.gov.ie/pages/developers",
+    "qualification": "Public dataset catalog metadata only. metadata_modified is the catalog edit time, not the observation date. Follow the dataset license and verify the actual data before answering numerical questions.",
+    "sample": {
+      "query": "water"
+    },
+    "protocol": "ckan",
+    "fields": [
+      "id",
+      "name",
+      "title",
+      "notes",
+      "metadata_modified",
+      "license_id",
+      "license_title",
+      "organization",
+      "resources"
+    ],
+    "aliases": [
+      "Open Government, Ireland"
+    ]
+  },
+  "netherlandsdata": {
+    "directory_id": 1077,
+    "description": "Open Government, Netherlands dataset metadata search",
+    "endpoint": "https://data.overheid.nl/data/api/3/action/package_search",
+    "parameters": {
+      "query": {
+        "remote": "q",
+        "required": true
+      }
+    },
+    "defaults": {
+      "rows": 5
+    },
+    "results": "result.results",
+    "documentation": "https://data.overheid.nl/en/ondersteuning/data-publiceren/api",
+    "qualification": "Public dataset catalog metadata only. metadata_modified is the catalog edit time, not the observation date. Follow the dataset license and verify the actual data before answering numerical questions.",
+    "sample": {
+      "query": "water"
+    },
+    "protocol": "ckan",
+    "fields": [
+      "id",
+      "name",
+      "title",
+      "notes",
+      "metadata_modified",
+      "license_id",
+      "license_title",
+      "organization",
+      "resources"
+    ],
+    "aliases": [
+      "Open Government, Netherlands"
+    ]
+  },
+  "queenslanddata": {
+    "directory_id": 1083,
+    "description": "Open Government, Queensland Government dataset metadata search",
+    "endpoint": "https://www.data.qld.gov.au/api/3/action/package_search",
+    "parameters": {
+      "query": {
+        "remote": "q",
+        "required": true
+      }
+    },
+    "defaults": {
+      "rows": 5
+    },
+    "results": "result.results",
+    "documentation": "https://www.data.qld.gov.au/",
+    "qualification": "Public dataset catalog metadata only. metadata_modified is the catalog edit time, not the observation date. Follow the dataset license and verify the actual data before answering numerical questions.",
+    "sample": {
+      "query": "water"
+    },
+    "protocol": "ckan",
+    "fields": [
+      "id",
+      "name",
+      "title",
+      "notes",
+      "metadata_modified",
+      "license_id",
+      "license_title",
+      "organization",
+      "resources"
+    ],
+    "aliases": [
+      "Open Government, Queensland Government"
+    ]
+  },
+  "romaniadata": {
+    "directory_id": 1084,
+    "description": "Open Government, Romania dataset metadata search",
+    "endpoint": "https://data.gov.ro/api/3/action/package_search",
+    "parameters": {
+      "query": {
+        "remote": "q",
+        "required": true
+      }
+    },
+    "defaults": {
+      "rows": 5
+    },
+    "results": "result.results",
+    "documentation": "http://data.gov.ro/",
+    "qualification": "Public dataset catalog metadata only. metadata_modified is the catalog edit time, not the observation date. Follow the dataset license and verify the actual data before answering numerical questions.",
+    "sample": {
+      "query": "water"
+    },
+    "protocol": "ckan",
+    "fields": [
+      "id",
+      "name",
+      "title",
+      "notes",
+      "metadata_modified",
+      "license_id",
+      "license_title",
+      "organization",
+      "resources"
+    ],
+    "aliases": [
+      "Open Government, Romania"
+    ]
+  },
+  "sloveniadata": {
+    "directory_id": 1087,
+    "description": "Open Government, Slovenia dataset metadata search",
+    "endpoint": "https://podatki.gov.si/api/3/action/package_search",
+    "parameters": {
+      "query": {
+        "remote": "q",
+        "required": true
+      }
+    },
+    "defaults": {
+      "rows": 5
+    },
+    "results": "result.results",
+    "documentation": "https://podatki.gov.si/",
+    "qualification": "Public dataset catalog metadata only. metadata_modified is the catalog edit time, not the observation date. Follow the dataset license and verify the actual data before answering numerical questions.",
+    "sample": {
+      "query": "water"
+    },
+    "protocol": "ckan",
+    "fields": [
+      "id",
+      "name",
+      "title",
+      "notes",
+      "metadata_modified",
+      "license_id",
+      "license_title",
+      "organization",
+      "resources"
+    ],
+    "aliases": [
+      "Open Government, Slovenia"
+    ]
+  },
+  "swissdata": {
+    "directory_id": 1090,
+    "description": "Open Government, Switzerland dataset metadata search",
+    "endpoint": "https://opendata.swiss/api/3/action/package_search",
+    "parameters": {
+      "query": {
+        "remote": "q",
+        "required": true
+      }
+    },
+    "defaults": {
+      "rows": 5
+    },
+    "results": "result.results",
+    "documentation": "https://handbook.opendata.swiss/de/content/nutzen/api-nutzen.html",
+    "qualification": "Public dataset catalog metadata only. metadata_modified is the catalog edit time, not the observation date. Follow the dataset license and verify the actual data before answering numerical questions.",
+    "sample": {
+      "query": "water"
+    },
+    "protocol": "ckan",
+    "fields": [
+      "id",
+      "name",
+      "title",
+      "notes",
+      "metadata_modified",
+      "license_id",
+      "license_title",
+      "organization",
+      "resources"
+    ],
+    "aliases": [
+      "Open Government, Switzerland"
+    ]
+  },
+  "thailanddata": {
+    "directory_id": 1092,
+    "description": "Open Government, Thailand dataset metadata search",
+    "endpoint": "https://data.go.th/api/3/action/package_search",
+    "parameters": {
+      "query": {
+        "remote": "q",
+        "required": true
+      }
+    },
+    "defaults": {
+      "rows": 5
+    },
+    "results": "result.results",
+    "documentation": "https://data.go.th/",
+    "qualification": "Public dataset catalog metadata only. metadata_modified is the catalog edit time, not the observation date. Follow the dataset license and verify the actual data before answering numerical questions.",
+    "sample": {
+      "query": "water"
+    },
+    "protocol": "ckan",
+    "fields": [
+      "id",
+      "name",
+      "title",
+      "notes",
+      "metadata_modified",
+      "license_id",
+      "license_title",
+      "organization",
+      "resources"
+    ],
+    "aliases": [
+      "Open Government, Thailand"
+    ]
+  },
+  "ukdata": {
+    "directory_id": 1093,
+    "description": "Open Government, UK dataset metadata search",
+    "endpoint": "https://ckan.publishing.service.gov.uk/api/3/action/package_search",
+    "parameters": {
+      "query": {
+        "remote": "q",
+        "required": true
+      }
+    },
+    "defaults": {
+      "rows": 5
+    },
+    "results": "result.results",
+    "documentation": "https://data.gov.uk/",
+    "qualification": "Public dataset catalog metadata only. metadata_modified is the catalog edit time, not the observation date. Follow the dataset license and verify the actual data before answering numerical questions.",
+    "sample": {
+      "query": "water"
+    },
+    "protocol": "ckan",
+    "fields": [
+      "id",
+      "name",
+      "title",
+      "notes",
+      "metadata_modified",
+      "license_id",
+      "license_title",
+      "organization",
+      "resources"
+    ],
+    "aliases": [
+      "Open Government, UK"
+    ]
+  },
+  "victoriadata": {
+    "directory_id": 1095,
+    "description": "Open Government, Victoria State Government dataset metadata search",
+    "endpoint": "https://discover.data.vic.gov.au/api/3/action/package_search",
+    "parameters": {
+      "query": {
+        "remote": "q",
+        "required": true
+      }
+    },
+    "defaults": {
+      "rows": 5
+    },
+    "results": "result.results",
+    "documentation": "https://www.data.vic.gov.au/",
+    "qualification": "Public dataset catalog metadata only. metadata_modified is the catalog edit time, not the observation date. Follow the dataset license and verify the actual data before answering numerical questions.",
+    "sample": {
+      "query": "water"
+    },
+    "protocol": "ckan",
+    "fields": [
+      "id",
+      "name",
+      "title",
+      "notes",
+      "metadata_modified",
+      "license_id",
+      "license_title",
+      "organization",
+      "resources"
+    ],
+    "aliases": [
+      "Open Government, Victoria State Government"
+    ]
+  },
+  "westernaustraliadata": {
+    "directory_id": 1096,
+    "description": "Open Government, West Australia dataset metadata search",
+    "endpoint": "https://catalogue.data.wa.gov.au/api/3/action/package_search",
+    "parameters": {
+      "query": {
+        "remote": "q",
+        "required": true
+      }
+    },
+    "defaults": {
+      "rows": 5
+    },
+    "results": "result.results",
+    "documentation": "https://data.wa.gov.au/",
+    "qualification": "Public dataset catalog metadata only. metadata_modified is the catalog edit time, not the observation date. Follow the dataset license and verify the actual data before answering numerical questions.",
+    "sample": {
+      "query": "water"
+    },
+    "protocol": "ckan",
+    "fields": [
+      "id",
+      "name",
+      "title",
+      "notes",
+      "metadata_modified",
+      "license_id",
+      "license_title",
+      "organization",
+      "resources"
+    ],
+    "aliases": [
+      "Open Government, West Australia"
+    ]
+  },
+  "humanitariandata": {
+    "directory_id": 1121,
+    "description": "Humanitarian Data Exchange dataset metadata search",
+    "endpoint": "https://data.humdata.org/api/3/action/package_search",
+    "parameters": {
+      "query": {
+        "remote": "q",
+        "required": true
+      }
+    },
+    "defaults": {
+      "rows": 5
+    },
+    "results": "result.results",
+    "documentation": "https://data.humdata.org/",
+    "qualification": "Public dataset catalog metadata only. metadata_modified is the catalog edit time, not the observation date. Follow the dataset license and verify the actual data before answering numerical questions.",
+    "sample": {
+      "query": "water"
+    },
+    "protocol": "ckan",
+    "fields": [
+      "id",
+      "name",
+      "title",
+      "notes",
+      "metadata_modified",
+      "license_id",
+      "license_title",
+      "organization",
+      "resources"
+    ],
+    "aliases": [
+      "Humanitarian Data Exchange"
+    ]
+  },
+  "openafrica": {
+    "directory_id": 1259,
+    "description": "openAFRICA dataset metadata search",
+    "endpoint": "https://open.africa/api/3/action/package_search",
+    "parameters": {
+      "query": {
+        "remote": "q",
+        "required": true
+      }
+    },
+    "defaults": {
+      "rows": 5
+    },
+    "results": "result.results",
+    "documentation": "https://africaopendata.org/",
+    "qualification": "Public dataset catalog metadata only. metadata_modified is the catalog edit time, not the observation date. Follow the dataset license and verify the actual data before answering numerical questions.",
+    "sample": {
+      "query": "water"
+    },
+    "protocol": "ckan",
+    "fields": [
+      "id",
+      "name",
+      "title",
+      "notes",
+      "metadata_modified",
+      "license_id",
+      "license_title",
+      "organization",
+      "resources"
+    ],
+    "aliases": [
+      "openAFRICA"
+    ]
+  },
+  "nycdata": {
+    "directory_id": 1029,
+    "description": "City, New York Open Data dataset discovery",
+    "endpoint": "https://api.us.socrata.com/api/catalog/v1",
+    "parameters": {
+      "query": {
+        "remote": "q",
+        "required": true
+      }
+    },
+    "defaults": {
+      "limit": 5,
+      "domains": "data.cityofnewyork.us"
+    },
+    "results": "results",
+    "documentation": "https://opendata.cityofnewyork.us/",
+    "qualification": "Socrata dataset discovery metadata; not dataset rows or evidence of current measurements. Read observation dates and dataset license before using underlying data.",
+    "sample": {
+      "query": "water"
+    },
+    "aliases": [
+      "City, New York Open Data"
+    ]
+  },
+  "coloradodata": {
+    "directory_id": 1034,
+    "description": "Colorado Information Marketplace dataset discovery",
+    "endpoint": "https://api.us.socrata.com/api/catalog/v1",
+    "parameters": {
+      "query": {
+        "remote": "q",
+        "required": true
+      }
+    },
+    "defaults": {
+      "limit": 5,
+      "domains": "data.colorado.gov"
+    },
+    "results": "results",
+    "documentation": "https://data.colorado.gov/",
+    "qualification": "Socrata dataset discovery metadata; not dataset rows or evidence of current measurements. Read observation dates and dataset license before using underlying data.",
+    "sample": {
+      "query": "water"
+    },
+    "aliases": [
+      "Colorado Information Marketplace"
+    ]
+  },
+  "actdata": {
+    "directory_id": 1053,
+    "description": "Open Government, ACT dataset discovery",
+    "endpoint": "https://api.us.socrata.com/api/catalog/v1",
+    "parameters": {
+      "query": {
+        "remote": "q",
+        "required": true
+      }
+    },
+    "defaults": {
+      "limit": 5,
+      "domains": "www.data.act.gov.au"
+    },
+    "results": "results",
+    "documentation": "https://www.data.act.gov.au/",
+    "qualification": "Socrata dataset discovery metadata; not dataset rows or evidence of current measurements. Read observation dates and dataset license before using underlying data.",
+    "sample": {
+      "query": "water"
+    },
+    "aliases": [
+      "Open Government, ACT"
+    ]
+  },
+  "socratadata": {
+    "directory_id": 1265,
+    "description": "Socrata dataset discovery",
+    "endpoint": "https://api.us.socrata.com/api/catalog/v1",
+    "parameters": {
+      "query": {
+        "remote": "q",
+        "required": true
+      }
+    },
+    "defaults": {
+      "limit": 5
+    },
+    "results": "results",
+    "documentation": "https://dev.socrata.com/",
+    "qualification": "Socrata dataset discovery metadata; not dataset rows or evidence of current measurements. Read observation dates and dataset license before using underlying data.",
+    "sample": {
+      "query": "water"
+    },
+    "aliases": [
+      "Socrata"
+    ]
+  },
+  "francedata": {
+    "directory_id": 1065,
+    "description": "Open Government, France dataset search",
+    "endpoint": "https://www.data.gouv.fr/api/1/datasets/",
+    "parameters": {
+      "query": {
+        "remote": "q",
+        "required": true
+      }
+    },
+    "defaults": {
+      "page_size": 5
+    },
+    "results": "data",
+    "documentation": "https://www.data.gouv.fr/",
+    "qualification": "Public dataset catalog search; metadata edit dates do not establish measurement freshness. Respect the individual dataset license.",
+    "sample": {
+      "query": "water"
+    },
+    "aliases": [
+      "Open Government, France"
+    ]
+  },
+  "luxembourgdata": {
+    "directory_id": 1074,
+    "description": "Open Government, Luxembourg dataset search",
+    "endpoint": "https://data.public.lu/api/1/datasets/",
+    "parameters": {
+      "query": {
+        "remote": "q",
+        "required": true
+      }
+    },
+    "defaults": {
+      "page_size": 5
+    },
+    "results": "data",
+    "documentation": "https://data.public.lu",
+    "qualification": "Public dataset catalog search; metadata edit dates do not establish measurement freshness. Respect the individual dataset license.",
+    "sample": {
+      "query": "water"
+    },
+    "aliases": [
+      "Open Government, Luxembourg"
+    ]
+  },
+  "portugaldata": {
+    "directory_id": 1082,
+    "description": "Open Government, Portugal dataset search",
+    "endpoint": "https://dados.gov.pt/api/1/datasets/",
+    "parameters": {
+      "query": {
+        "remote": "q",
+        "required": true
+      }
+    },
+    "defaults": {
+      "page_size": 5
+    },
+    "results": "data",
+    "documentation": "https://dados.gov.pt/en/recursos/desenvolvimento/referencia-api",
+    "qualification": "Public dataset catalog search; metadata edit dates do not establish measurement freshness. Respect the individual dataset license.",
+    "sample": {
+      "query": "water"
+    },
+    "aliases": [
+      "Open Government, Portugal"
+    ]
+  },
+  "ebird": {
+    "directory_id": 57,
+    "description": "eBird recent bird observations by region",
+    "endpoint": "https://api.ebird.org/v2/data/obs/{region}/recent",
+    "parameters": {
+      "region": {
+        "required": true,
+        "pattern": "[A-Z]{2}(?:-[A-Z0-9]{1,3}){0,2}",
+        "path": true
+      }
+    },
+    "defaults": {
+      "maxResults": 5
+    },
+    "results": "",
+    "sample": {
+      "region": "US-IL"
+    },
+    "documentation": "https://documenter.getpostman.com/view/664302/S1ENwy59",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "eBird"
+    ],
+    "credential": {
+      "env": "EBIRD_API_KEY",
+      "header": "X-eBirdApiToken"
+    }
+  },
+  "europeana": {
+    "directory_id": 121,
+    "description": "Europeana cultural heritage search",
+    "endpoint": "https://api.europeana.eu/record/v2/search.json",
+    "parameters": {
+      "query": {
+        "required": true,
+        "remote": "query"
+      }
+    },
+    "defaults": {
+      "rows": 5
+    },
+    "results": "items",
+    "sample": {
+      "query": "Monet"
+    },
+    "documentation": "https://pro.europeana.eu/resources/apis/search",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "Europeana"
+    ],
+    "credential": {
+      "env": "EUROPEANA_API_KEY",
+      "parameter": "wskey"
+    }
+  },
+  "harvardart": {
+    "directory_id": 124,
+    "description": "Harvard Art Museums artwork search",
+    "endpoint": "https://api.harvardartmuseums.org/object",
+    "parameters": {
+      "query": {
+        "required": true,
+        "remote": "q"
+      }
+    },
+    "defaults": {
+      "size": 5
+    },
+    "results": "records",
+    "sample": {
+      "query": "Monet"
+    },
+    "documentation": "https://github.com/harvardartmuseums/api-docs",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "Harvard Art Museums"
+    ],
+    "credential": {
+      "env": "HARVARD_ART_API_KEY",
+      "parameter": "apikey"
+    }
+  },
+  "cooperhewitt": {
+    "directory_id": 115,
+    "description": "Cooper Hewitt collection search",
+    "endpoint": "https://api.collection.cooperhewitt.org/rest/",
+    "parameters": {
+      "query": {
+        "required": true,
+        "remote": "query"
+      }
+    },
+    "defaults": {
+      "method": "cooperhewitt.search.collection",
+      "per_page": 5
+    },
+    "results": "objects",
+    "sample": {
+      "query": "chair"
+    },
+    "documentation": "https://collection.cooperhewitt.org/api",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "Cooper Hewitt"
+    ],
+    "credential": {
+      "env": "COOPER_HEWITT_TOKEN",
+      "parameter": "access_token"
+    }
+  },
+  "etherscan": {
+    "directory_id": 155,
+    "description": "Ethereum mainnet balance for a public address",
+    "endpoint": "https://api.etherscan.io/v2/api",
+    "parameters": {
+      "address": {
+        "required": true,
+        "remote": "address",
+        "pattern": "0x[a-fA-F0-9]{40}"
+      }
+    },
+    "defaults": {
+      "chainid": 1,
+      "module": "account",
+      "action": "balance",
+      "tag": "latest"
+    },
+    "results": "",
+    "sample": {
+      "address": "0x0000000000000000000000000000000000000000"
+    },
+    "documentation": "https://etherscan.io/apis",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "Etherscan"
+    ],
+    "credential": {
+      "env": "ETHERSCAN_API_KEY",
+      "parameter": "apikey"
+    }
+  },
+  "binance": {
+    "directory_id": 273,
+    "description": "Binance public market price by symbol",
+    "endpoint": "https://data-api.binance.vision/api/v3/ticker/price",
+    "parameters": {
+      "symbol": {
+        "required": true,
+        "remote": "symbol",
+        "pattern": "[A-Z0-9]{4,24}"
+      }
+    },
+    "defaults": {},
+    "results": "",
+    "sample": {
+      "symbol": "BTCUSDT"
+    },
+    "documentation": "https://github.com/binance/binance-spot-api-docs",
+    "qualification": "Free public market/blockchain read endpoints only; no trades, payments, funded account, premium history, exchange-license or geographic access assumptions. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "Binance"
+    ]
+  },
+  "bitfinex": {
+    "directory_id": 275,
+    "description": "Bitfinex public market ticker",
+    "endpoint": "https://api.bitfinex.com/v1/pubticker/{pair}",
+    "parameters": {
+      "pair": {
+        "required": true,
+        "pattern": "[a-z0-9]{4,20}",
+        "path": true
+      }
+    },
+    "defaults": {},
+    "results": "",
+    "sample": {
+      "pair": "btcusd"
+    },
+    "documentation": "https://docs.bitfinex.com/docs",
+    "qualification": "Free public market/blockchain read endpoints only; no trades, payments, funded account, premium history, exchange-license or geographic access assumptions. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "Bitfinex"
+    ]
+  },
+  "bitmex": {
+    "directory_id": 276,
+    "description": "BitMEX public instrument metadata",
+    "endpoint": "https://www.bitmex.com/api/v1/instrument",
+    "parameters": {
+      "symbol": {
+        "required": true,
+        "remote": "symbol",
+        "pattern": "[A-Za-z0-9_]{3,24}"
+      }
+    },
+    "defaults": {
+      "count": 5,
+      "reverse": "true"
+    },
+    "results": "",
+    "sample": {
+      "symbol": "XBTUSD"
+    },
+    "documentation": "https://www.bitmex.com/app/apiOverview",
+    "qualification": "Free public market/blockchain read endpoints only; no trades, payments, funded account, premium history, exchange-license or geographic access assumptions. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "Bitmex"
+    ]
+  },
+  "blockchain": {
+    "directory_id": 280,
+    "description": "Blockchain public address summary",
+    "endpoint": "https://blockchain.info/balance",
+    "parameters": {
+      "address": {
+        "required": true,
+        "remote": "active",
+        "pattern": "[A-Za-z0-9]{26,90}"
+      }
+    },
+    "defaults": {},
+    "results": "",
+    "sample": {
+      "address": "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa"
+    },
+    "documentation": "https://www.blockchain.com/api",
+    "qualification": "Free public market/blockchain read endpoints only; no trades, payments, funded account, premium history, exchange-license or geographic access assumptions. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "Blockchain"
+    ]
+  },
+  "btcturk": {
+    "directory_id": 283,
+    "description": "BtcTurk public market ticker",
+    "endpoint": "https://api.btcturk.com/api/v2/ticker",
+    "parameters": {
+      "pair": {
+        "required": true,
+        "remote": "pairSymbol",
+        "pattern": "[A-Z0-9]{4,24}"
+      }
+    },
+    "defaults": {},
+    "results": "data",
+    "sample": {
+      "pair": "BTCTRY"
+    },
+    "documentation": "https://docs.btcturk.com/",
+    "qualification": "Free public market/blockchain read endpoints only; no trades, payments, funded account, premium history, exchange-license or geographic access assumptions. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "BtcTurk"
+    ]
+  },
+  "bybit": {
+    "directory_id": 284,
+    "description": "Bybit public spot market ticker",
+    "endpoint": "https://api.bybit.com/v5/market/tickers",
+    "parameters": {
+      "symbol": {
+        "required": true,
+        "remote": "symbol",
+        "pattern": "[A-Z0-9]{4,24}"
+      }
+    },
+    "defaults": {
+      "category": "spot"
+    },
+    "results": "result.list",
+    "sample": {
+      "symbol": "BTCUSDT"
+    },
+    "documentation": "https://www.bybit.com/docs/v5/introduction",
+    "qualification": "Free public market/blockchain read endpoints only; no trades, payments, funded account, premium history, exchange-license or geographic access assumptions. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "Bybit"
+    ]
+  },
+  "dexpaprika": {
+    "directory_id": 306,
+    "description": "DexPaprika public network directory",
+    "endpoint": "https://api.dexpaprika.com/networks",
+    "parameters": {},
+    "defaults": {},
+    "results": "",
+    "sample": {},
+    "documentation": "https://docs.dexpaprika.com/",
+    "qualification": "Free public market/blockchain read endpoints only; no trades, payments, funded account, premium history, exchange-license or geographic access assumptions. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "DexPaprika"
+    ]
+  },
+  "exmo": {
+    "directory_id": 309,
+    "description": "EXMO public market metadata",
+    "endpoint": "https://api.exmo.com/v1.1/pair_settings",
+    "parameters": {},
+    "defaults": {},
+    "results": "",
+    "sample": {},
+    "documentation": "https://documenter.getpostman.com/view/10287440/SzYXWKPi",
+    "qualification": "Free public market/blockchain read endpoints only; no trades, payments, funded account, premium history, exchange-license or geographic access assumptions. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "EXMO"
+    ]
+  },
+  "gateio": {
+    "directory_id": 310,
+    "description": "Gate.io public spot market ticker",
+    "endpoint": "https://api.gateio.ws/api/v4/spot/tickers",
+    "parameters": {
+      "pair": {
+        "required": true,
+        "remote": "currency_pair",
+        "pattern": "[A-Z0-9]{2,12}_[A-Z0-9]{2,12}"
+      }
+    },
+    "defaults": {},
+    "results": "",
+    "sample": {
+      "pair": "BTC_USDT"
+    },
+    "documentation": "https://www.gate.io/api2",
+    "qualification": "Free public market/blockchain read endpoints only; no trades, payments, funded account, premium history, exchange-license or geographic access assumptions. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "Gateio"
+    ]
+  },
+  "huobi": {
+    "directory_id": 312,
+    "description": "HTX/Huobi public merged market ticker",
+    "endpoint": "https://api.huobi.pro/market/detail/merged",
+    "parameters": {
+      "symbol": {
+        "required": true,
+        "remote": "symbol",
+        "pattern": "[a-z0-9]{4,24}"
+      }
+    },
+    "defaults": {},
+    "results": "",
+    "sample": {
+      "symbol": "btcusdt"
+    },
+    "documentation": "https://huobiapi.github.io/docs/spot/v1/en/",
+    "qualification": "Free public market/blockchain read endpoints only; no trades, payments, funded account, premium history, exchange-license or geographic access assumptions. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "Huobi"
+    ]
+  },
+  "indodax": {
+    "directory_id": 313,
+    "description": "Indodax public market ticker",
+    "endpoint": "https://indodax.com/api/ticker/{pair}",
+    "parameters": {
+      "pair": {
+        "required": true,
+        "pattern": "[a-z0-9_]{4,24}",
+        "path": true
+      }
+    },
+    "defaults": {},
+    "results": "",
+    "sample": {
+      "pair": "btc_idr"
+    },
+    "documentation": "https://github.com/btcid/indodax-official-api-docs",
+    "qualification": "Free public market/blockchain read endpoints only; no trades, payments, funded account, premium history, exchange-license or geographic access assumptions. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "Indodax"
+    ]
+  },
+  "kucoin": {
+    "directory_id": 316,
+    "description": "KuCoin public market ticker",
+    "endpoint": "https://api.kucoin.com/api/v1/market/orderbook/level1",
+    "parameters": {
+      "symbol": {
+        "required": true,
+        "remote": "symbol",
+        "pattern": "[A-Z0-9]{2,12}-[A-Z0-9]{2,12}"
+      }
+    },
+    "defaults": {},
+    "results": "data",
+    "sample": {
+      "symbol": "BTC-USDT"
+    },
+    "documentation": "https://docs.kucoin.com/",
+    "qualification": "Free public market/blockchain read endpoints only; no trades, payments, funded account, premium history, exchange-license or geographic access assumptions. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "KuCoin"
+    ]
+  },
+  "novadax": {
+    "directory_id": 323,
+    "description": "NovaDAX public market ticker",
+    "endpoint": "https://api.novadax.com/v1/market/ticker",
+    "parameters": {
+      "symbol": {
+        "required": true,
+        "remote": "symbol",
+        "pattern": "[A-Z0-9]{2,12}_[A-Z0-9]{2,12}"
+      }
+    },
+    "defaults": {},
+    "results": "data",
+    "sample": {
+      "symbol": "BTC_BRL"
+    },
+    "documentation": "https://doc.novadax.com/en-US/#introduction",
+    "qualification": "Free public market/blockchain read endpoints only; no trades, payments, funded account, premium history, exchange-license or geographic access assumptions. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "NovaDax"
+    ]
+  },
+  "okx": {
+    "directory_id": 324,
+    "description": "OKX public spot market ticker",
+    "endpoint": "https://www.okx.com/api/v5/market/ticker",
+    "parameters": {
+      "pair": {
+        "required": true,
+        "remote": "instId",
+        "pattern": "[A-Z0-9]{2,12}-[A-Z0-9]{2,12}"
+      }
+    },
+    "defaults": {},
+    "results": "data",
+    "sample": {
+      "pair": "BTC-USDT"
+    },
+    "documentation": "https://www.okex.com/docs/",
+    "qualification": "Free public market/blockchain read endpoints only; no trades, payments, funded account, premium history, exchange-license or geographic access assumptions. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "OKEx"
+    ]
+  },
+  "poloniex": {
+    "directory_id": 327,
+    "description": "Poloniex public market ticker",
+    "endpoint": "https://api.poloniex.com/markets/{pair}/ticker24h",
+    "parameters": {
+      "pair": {
+        "required": true,
+        "pattern": "[A-Z0-9]{2,12}_[A-Z0-9]{2,12}",
+        "path": true
+      }
+    },
+    "defaults": {},
+    "results": "",
+    "sample": {
+      "pair": "BTC_USDT"
+    },
+    "documentation": "https://docs.poloniex.com",
+    "qualification": "Free public market/blockchain read endpoints only; no trades, payments, funded account, premium history, exchange-license or geographic access assumptions. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "Poloniex"
+    ]
+  },
+  "valr": {
+    "directory_id": 333,
+    "description": "VALR public market summary",
+    "endpoint": "https://api.valr.com/v1/public/{pair}/marketsummary",
+    "parameters": {
+      "pair": {
+        "required": true,
+        "pattern": "[A-Z0-9]{4,24}",
+        "path": true
+      }
+    },
+    "defaults": {},
+    "results": "",
+    "sample": {
+      "pair": "BTCZAR"
+    },
+    "documentation": "https://docs.valr.com/",
+    "qualification": "Free public market/blockchain read endpoints only; no trades, payments, funded account, premium history, exchange-license or geographic access assumptions. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "VALR"
+    ]
+  },
+  "currencyapi": {
+    "directory_id": 344,
+    "description": "Open-source currency reference rates",
+    "endpoint": "https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/{base}.json",
+    "parameters": {
+      "base": {
+        "required": true,
+        "pattern": "[a-z]{3,12}",
+        "path": true
+      }
+    },
+    "defaults": {},
+    "results": "",
+    "sample": {
+      "base": "usd"
+    },
+    "documentation": "https://github.com/fawazahmed0/currency-api#readme",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "Currency-api"
+    ]
+  },
+  "economia": {
+    "directory_id": 349,
+    "description": "Brazil BRL reference currency rates",
+    "endpoint": "https://economia.awesomeapi.com.br/json/last/{pair}",
+    "parameters": {
+      "pair": {
+        "required": true,
+        "pattern": "[A-Z]{3}-[A-Z]{3}",
+        "path": true
+      }
+    },
+    "defaults": {},
+    "results": "",
+    "sample": {
+      "pair": "USD-BRL"
+    },
+    "documentation": "https://docs.awesomeapi.com.br/api-de-moedas",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "Economia.Awesome"
+    ]
+  },
+  "exchangerate": {
+    "directory_id": 352,
+    "description": "ExchangeRate-API free open reference rates",
+    "endpoint": "https://open.er-api.com/v6/latest/{base}",
+    "parameters": {
+      "base": {
+        "required": true,
+        "pattern": "[A-Z]{3}",
+        "path": true
+      }
+    },
+    "defaults": {},
+    "results": "",
+    "sample": {
+      "base": "USD"
+    },
+    "documentation": "https://www.exchangerate-api.com/docs/free",
+    "qualification": "Reference exchange-rate data from free open endpoint; attribution/update cadence apply. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "ExchangeRate-API"
+    ]
+  },
+  "dolar": {
+    "directory_id": 725,
+    "description": "Argentine dollar reference quotes",
+    "endpoint": "https://dolarapi.com/v1/dolares",
+    "parameters": {},
+    "defaults": {},
+    "results": "",
+    "sample": {},
+    "documentation": "https://dolarapi.com/docs/",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "DolarAPI"
+    ]
+  },
+  "treasury": {
+    "directory_id": 730,
+    "description": "US Treasury public debt observations",
+    "endpoint": "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v2/accounting/od/debt_to_penny",
+    "parameters": {},
+    "defaults": {
+      "page[size]": 5,
+      "sort": "-record_date"
+    },
+    "results": "data",
+    "sample": {},
+    "documentation": "https://fiscaldata.treasury.gov/api-documentation/",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "Fed Treasury"
+    ]
+  },
+  "fred": {
+    "directory_id": 739,
+    "description": "FRED economic observations by series ID",
+    "endpoint": "https://api.stlouisfed.org/fred/series/observations",
+    "parameters": {
+      "series": {
+        "required": true,
+        "remote": "series_id",
+        "pattern": "[A-Za-z0-9_]{1,80}"
+      }
+    },
+    "defaults": {
+      "file_type": "json",
+      "limit": 5,
+      "sort_order": "desc"
+    },
+    "results": "observations",
+    "sample": {
+      "series": "CPIAUCSL"
+    },
+    "documentation": "https://fred.stlouisfed.org/docs/api/fred/",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "FRED"
+    ],
+    "credential": {
+      "env": "FRED_API_KEY",
+      "parameter": "api_key"
+    }
+  },
+  "sec": {
+    "directory_id": 772,
+    "description": "SEC public company filing submissions by CIK",
+    "endpoint": "https://data.sec.gov/submissions/CIK{cik}.json",
+    "parameters": {
+      "cik": {
+        "required": true,
+        "pattern": "\\d{10}",
+        "path": true
+      }
+    },
+    "defaults": {},
+    "results": "",
+    "sample": {
+      "cik": "0000320193"
+    },
+    "documentation": "https://www.sec.gov/edgar/sec-api-documentation",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "SEC EDGAR Data"
+    ]
+  },
+  "cheapsharkstores": {
+    "directory_id": 831,
+    "description": "CheapShark public game store directory",
+    "endpoint": "https://www.cheapshark.com/api/1.0/stores",
+    "parameters": {},
+    "defaults": {},
+    "results": "",
+    "sample": {},
+    "documentation": "https://www.cheapshark.com/api",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "CheapShark"
+    ]
+  },
+  "digimon": {
+    "directory_id": 842,
+    "description": "Digimon card metadata by exact name",
+    "endpoint": "https://digimoncard.io/api-public/search.php",
+    "parameters": {
+      "name": {
+        "required": true,
+        "remote": "n"
+      }
+    },
+    "defaults": {
+      "sort": "name",
+      "sortdirection": "asc"
+    },
+    "results": "",
+    "sample": {
+      "name": "Agumon"
+    },
+    "documentation": "https://documenter.getpostman.com/view/14059948/TzecB4fH",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "Digimon TCG"
+    ]
+  },
+  "freetogame": {
+    "directory_id": 850,
+    "description": "FreeToGame PC game metadata by category",
+    "endpoint": "https://www.freetogame.com/api/games",
+    "parameters": {
+      "category": {
+        "required": true,
+        "remote": "category",
+        "pattern": "[a-z-]{2,30}"
+      }
+    },
+    "defaults": {
+      "platform": "pc"
+    },
+    "results": "",
+    "sample": {
+      "category": "shooter"
+    },
+    "documentation": "https://www.freetogame.com/api-doc",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "FreeToGame"
+    ]
+  },
+  "gamerpower": {
+    "directory_id": 853,
+    "description": "GamerPower public Steam giveaways",
+    "endpoint": "https://www.gamerpower.com/api/giveaways",
+    "parameters": {},
+    "defaults": {
+      "platform": "steam"
+    },
+    "results": "",
+    "sample": {},
+    "documentation": "https://www.gamerpower.com/api-read",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "GamerPower"
+    ]
+  },
+  "genshin": {
+    "directory_id": 855,
+    "description": "Genshin Impact character metadata",
+    "endpoint": "https://genshin.jmp.blue/characters/{name}",
+    "parameters": {
+      "name": {
+        "required": true,
+        "pattern": "[A-Za-z0-9][A-Za-z0-9_-]{0,80}",
+        "path": true
+      }
+    },
+    "defaults": {},
+    "results": "",
+    "sample": {
+      "name": "amber"
+    },
+    "documentation": "https://genshin.dev",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "Genshin Impact"
+    ]
+  },
+  "hyrule": {
+    "directory_id": 863,
+    "description": "Hyrule Compendium item metadata by ID",
+    "endpoint": "https://botw-compendium.herokuapp.com/api/v3/compendium/entry/{id}",
+    "parameters": {
+      "id": {
+        "required": true,
+        "pattern": "[0-9]{1,10}",
+        "path": true
+      }
+    },
+    "defaults": {},
+    "results": "data",
+    "sample": {
+      "id": "1"
+    },
+    "documentation": "https://github.com/gadhagod/Hyrule-Compendium-API",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "Hyrule Compendium"
+    ]
+  },
+  "mtg": {
+    "directory_id": 869,
+    "description": "Magic the Gathering card search",
+    "endpoint": "https://api.magicthegathering.io/v1/cards",
+    "parameters": {
+      "name": {
+        "required": true,
+        "remote": "name"
+      }
+    },
+    "defaults": {
+      "pageSize": 5
+    },
+    "results": "cards",
+    "sample": {
+      "name": "Lightning Bolt"
+    },
+    "documentation": "http://magicthegathering.io/",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "Magic The Gathering"
+    ]
+  },
+  "pokemontcg": {
+    "directory_id": 885,
+    "description": "Pokemon TCG card search",
+    "endpoint": "https://api.pokemontcg.io/v2/cards",
+    "parameters": {
+      "query": {
+        "required": true,
+        "remote": "q"
+      }
+    },
+    "defaults": {
+      "pageSize": 5
+    },
+    "results": "data",
+    "sample": {
+      "query": "name:pikachu"
+    },
+    "documentation": "https://pokemontcg.io",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "Pokémon TCG"
+    ]
+  },
+  "raiderio": {
+    "directory_id": 891,
+    "description": "Raider.IO public WoW character profile",
+    "endpoint": "https://raider.io/api/v1/characters/profile",
+    "parameters": {
+      "region": {
+        "required": true,
+        "remote": "region",
+        "pattern": "us|eu|kr|tw"
+      },
+      "realm": {
+        "required": true,
+        "remote": "realm",
+        "pattern": "[A-Za-z0-9-]{1,80}"
+      },
+      "name": {
+        "required": true,
+        "remote": "name",
+        "pattern": "[\\w-]{1,40}"
+      }
+    },
+    "defaults": {},
+    "results": "",
+    "sample": {
+      "region": "us",
+      "realm": "illidan",
+      "name": "Jpc"
+    },
+    "documentation": "https://raider.io/api",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "Raider"
+    ]
+  },
+  "tetrio": {
+    "directory_id": 905,
+    "description": "TETR.IO public player metadata",
+    "endpoint": "https://ch.tetr.io/api/users/{username}",
+    "parameters": {
+      "username": {
+        "required": true,
+        "pattern": "[a-z0-9_]{3,30}",
+        "path": true
+      }
+    },
+    "defaults": {},
+    "results": "data",
+    "sample": {
+      "username": "osk"
+    },
+    "documentation": "https://tetr.io/about/api/",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "TETR.IO"
+    ]
+  },
+  "universalis": {
+    "directory_id": 906,
+    "description": "Final Fantasy XIV public item market data",
+    "endpoint": "https://universalis.app/api/v2/{world}/{item}",
+    "parameters": {
+      "world": {
+        "required": true,
+        "pattern": "[A-Za-z-]{2,40}",
+        "path": true
+      },
+      "item": {
+        "required": true,
+        "pattern": "[0-9]{1,10}",
+        "path": true
+      }
+    },
+    "defaults": {
+      "listings": 5,
+      "entries": 5
+    },
+    "results": "",
+    "sample": {
+      "world": "Aether",
+      "item": "5333"
+    },
+    "documentation": "https://universalis.app/docs/index.html",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "Universalis"
+    ]
+  },
+  "valorant": {
+    "directory_id": 907,
+    "description": "Unofficial Valorant public agent metadata",
+    "endpoint": "https://valorant-api.com/v1/agents",
+    "parameters": {},
+    "defaults": {
+      "isPlayableCharacter": "true"
+    },
+    "results": "data",
+    "sample": {},
+    "documentation": "https://valorant-api.com",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "Valorant (non-official)"
+    ]
+  },
+  "wynncraft": {
+    "directory_id": 911,
+    "description": "Wynncraft public player metadata",
+    "endpoint": "https://api.wynncraft.com/v3/player/{username}",
+    "parameters": {
+      "username": {
+        "required": true,
+        "pattern": "[A-Za-z0-9_]{3,16}",
+        "path": true
+      }
+    },
+    "defaults": {},
+    "results": "",
+    "sample": {
+      "username": "Salted"
+    },
+    "documentation": "https://docs.wynncraft.com/",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "Wynncraft"
+    ]
+  },
+  "opentopo": {
+    "directory_id": 984,
+    "description": "Open Topo Data elevation lookup",
+    "endpoint": "https://api.opentopodata.org/v1/srtm90m",
+    "parameters": {
+      "coordinates": {
+        "required": true,
+        "remote": "locations",
+        "pattern": "-?\\d{1,2}(?:\\.\\d+)?,-?\\d{1,3}(?:\\.\\d+)?"
+      }
+    },
+    "defaults": {},
+    "results": "results",
+    "sample": {
+      "coordinates": "41.88,-87.63"
+    },
+    "documentation": "https://www.opentopodata.org",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "Open Topo Data"
+    ]
+  },
+  "represent": {
+    "directory_id": 1102,
+    "description": "Canadian elected representative by postal code",
+    "endpoint": "https://represent.opennorth.ca/postcodes/{postcode}/",
+    "parameters": {
+      "postcode": {
+        "required": true,
+        "pattern": "[A-Z]\\d[A-Z]\\d[A-Z]\\d",
+        "path": true
+      }
+    },
+    "defaults": {},
+    "results": "",
+    "sample": {
+      "postcode": "K1A0A9"
+    },
+    "documentation": "https://represent.opennorth.ca/",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "Represent by Open North"
+    ]
+  },
+  "companieshouse": {
+    "directory_id": 1104,
+    "description": "UK Companies House public company search",
+    "endpoint": "https://api.company-information.service.gov.uk/search/companies",
+    "parameters": {
+      "query": {
+        "required": true,
+        "remote": "q"
+      }
+    },
+    "defaults": {
+      "items_per_page": 5
+    },
+    "results": "items",
+    "sample": {
+      "query": "Tesla"
+    },
+    "documentation": "https://developer.company-information.service.gov.uk/",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "UK Companies House"
+    ],
+    "credential": {
+      "env": "COMPANIES_HOUSE_API_KEY",
+      "header": "Authorization",
+      "prefix": "Basic ",
+      "encoding": "basic"
+    }
+  },
+  "fooddata": {
+    "directory_id": 1119,
+    "description": "USDA FoodData Central food search",
+    "endpoint": "https://api.nal.usda.gov/fdc/v1/foods/search",
+    "parameters": {
+      "query": {
+        "required": true,
+        "remote": "query"
+      }
+    },
+    "defaults": {
+      "pageSize": 5
+    },
+    "results": "foods",
+    "sample": {
+      "query": "apple"
+    },
+    "documentation": "https://fdc.nal.usda.gov/",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "FoodData Central"
+    ],
+    "credential": {
+      "env": "FOODDATA_API_KEY",
+      "parameter": "api_key"
+    }
+  },
+  "lastfm": {
+    "directory_id": 1187,
+    "description": "Last.fm public artist metadata search",
+    "endpoint": "https://ws.audioscrobbler.com/2.0/",
+    "parameters": {
+      "query": {
+        "required": true,
+        "remote": "artist"
+      }
+    },
+    "defaults": {
+      "method": "artist.search",
+      "format": "json",
+      "limit": 5
+    },
+    "results": "results.artistmatches.artist",
+    "sample": {
+      "query": "Beatles"
+    },
+    "documentation": "https://www.last.fm/api",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "LastFm"
+    ],
+    "credential": {
+      "env": "LASTFM_API_KEY",
+      "parameter": "api_key"
+    }
+  },
+  "codeforces": {
+    "directory_id": 1366,
+    "description": "Codeforces public user metadata",
+    "endpoint": "https://codeforces.com/api/user.info",
+    "parameters": {
+      "username": {
+        "required": true,
+        "remote": "handles",
+        "pattern": "[A-Za-z0-9_.-]{3,40}"
+      }
+    },
+    "defaults": {},
+    "results": "result",
+    "sample": {
+      "username": "tourist"
+    },
+    "documentation": "https://codeforces.com/apiHelp",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "Codeforces"
+    ]
+  },
+  "idigbio": {
+    "directory_id": 1381,
+    "description": "iDigBio specimen search by scientific name",
+    "endpoint": "https://search.idigbio.org/v2/search/records/",
+    "parameters": {
+      "query": {
+        "required": true,
+        "remote": "rq"
+      }
+    },
+    "defaults": {
+      "limit": 5
+    },
+    "results": "items",
+    "sample": {
+      "query": "{\"scientificname\":\"Panthera leo\"}"
+    },
+    "documentation": "https://github.com/idigbio/idigbio-search-api/wiki",
+    "qualification": "iDigBio public specimen metadata. Keep license and rights per record; specimen and catalog dates do not imply current species presence.",
+    "aliases": [
+      "iDigBio"
+    ]
+  },
+  "usgswater": {
+    "directory_id": 1404,
+    "description": "USGS instantaneous streamflow by site number",
+    "endpoint": "https://waterservices.usgs.gov/nwis/iv/",
+    "parameters": {
+      "site": {
+        "required": true,
+        "remote": "sites",
+        "pattern": "\\d{8,15}"
+      }
+    },
+    "defaults": {
+      "format": "json",
+      "parameterCd": "00060"
+    },
+    "results": "value.timeSeries",
+    "sample": {
+      "site": "01646500"
+    },
+    "documentation": "https://waterservices.usgs.gov/",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "USGS Water Services"
+    ]
+  },
+  "msrc": {
+    "directory_id": 1436,
+    "description": "Microsoft Security Response Center update index",
+    "endpoint": "https://api.msrc.microsoft.com/cvrf/v3.0/updates",
+    "parameters": {},
+    "defaults": {
+      "$top": 5
+    },
+    "results": "value",
+    "sample": {},
+    "documentation": "https://msrc.microsoft.com/report/developer",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "Microsoft Security Response Center (MSRC)"
+    ]
+  },
+  "apifootball": {
+    "directory_id": 1539,
+    "description": "API-Football football league discovery",
+    "endpoint": "https://v3.football.api-sports.io/leagues",
+    "parameters": {
+      "name": {
+        "required": true,
+        "remote": "name"
+      }
+    },
+    "defaults": {},
+    "results": "response",
+    "sample": {
+      "name": "Premier League"
+    },
+    "documentation": "https://www.api-football.com/pricing",
+    "qualification": "100 requests/day, limited seasons, no card needed; no paid plan or RapidAPI overage path. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "API-FOOTBALL"
+    ],
+    "credential": {
+      "env": "API_FOOTBALL_KEY",
+      "header": "x-apisports-key"
+    }
+  },
+  "balldontlie": {
+    "directory_id": 1540,
+    "description": "balldontlie NBA team directory",
+    "endpoint": "https://api.balldontlie.io/v1/teams",
+    "parameters": {},
+    "defaults": {
+      "per_page": 5
+    },
+    "results": "data",
+    "sample": {},
+    "documentation": "https://www.balldontlie.io/",
+    "qualification": "5 requests/minute; only endpoints actually in free sports tier, not paid statistics/live enhancements. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "balldontlie"
+    ],
+    "credential": {
+      "env": "BALLDONTLIE_API_KEY",
+      "header": "Authorization"
+    }
+  },
+  "footballdata": {
+    "directory_id": 1555,
+    "description": "Football-Data.org competition metadata",
+    "endpoint": "https://api.football-data.org/v4/competitions/{code}",
+    "parameters": {
+      "code": {
+        "required": true,
+        "pattern": "[A-Z0-9]{2,6}",
+        "path": true
+      }
+    },
+    "defaults": {},
+    "results": "",
+    "sample": {
+      "code": "PL"
+    },
+    "documentation": "https://www.football-data.org",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "Football-Data"
+    ],
+    "credential": {
+      "env": "FOOTBALL_DATA_TOKEN",
+      "header": "X-Auth-Token"
+    }
+  },
+  "mlb": {
+    "directory_id": 1562,
+    "description": "MLB team metadata by team ID",
+    "endpoint": "https://statsapi.mlb.com/api/v1/teams/{id}",
+    "parameters": {
+      "id": {
+        "required": true,
+        "pattern": "[0-9]{1,10}",
+        "path": true
+      }
+    },
+    "defaults": {},
+    "results": "teams",
+    "sample": {
+      "id": "112"
+    },
+    "documentation": "https://appac.github.io/mlb-data-api-docs/",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "MLB Records and Stats"
+    ]
+  },
+  "squiggle": {
+    "directory_id": 1581,
+    "description": "Squiggle Australian football fixture data",
+    "endpoint": "https://api.squiggle.com.au/",
+    "parameters": {
+      "year": {
+        "required": true,
+        "remote": "year",
+        "pattern": "20\\d{2}"
+      }
+    },
+    "defaults": {
+      "q": "games",
+      "round": 1
+    },
+    "results": "games",
+    "sample": {
+      "year": "2026"
+    },
+    "documentation": "https://api.squiggle.com.au",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "Squiggle"
+    ]
+  },
+  "wger": {
+    "directory_id": 1587,
+    "description": "Wger exercise categories",
+    "endpoint": "https://wger.de/api/v2/exercisecategory/",
+    "parameters": {},
+    "defaults": {
+      "limit": 5
+    },
+    "results": "results",
+    "sample": {},
+    "documentation": "https://wger.de/en/software/api",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "Wger"
+    ]
+  },
+  "airports": {
+    "directory_id": 1637,
+    "description": "Airport metadata by ICAO airport code",
+    "endpoint": "https://airport-data.com/api/ap_info.json",
+    "parameters": {
+      "icao": {
+        "required": true,
+        "remote": "icao",
+        "pattern": "[A-Z]{4}"
+      }
+    },
+    "defaults": {},
+    "results": "",
+    "sample": {
+      "icao": "KORD"
+    },
+    "documentation": "https://airport-web.appspot.com/api/docs/",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "airportsapi"
+    ]
+  },
+  "aviationapi": {
+    "directory_id": 1641,
+    "description": "US airport metadata by ICAO code",
+    "endpoint": "https://api.aviationapi.com/v1/airports",
+    "parameters": {
+      "icao": {
+        "required": true,
+        "remote": "apt",
+        "pattern": "[A-Z]{4}"
+      }
+    },
+    "defaults": {},
+    "results": "",
+    "sample": {
+      "icao": "KORD"
+    },
+    "documentation": "https://docs.aviationapi.com",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "AviationAPI"
+    ]
+  },
+  "restrooms": {
+    "directory_id": 1662,
+    "description": "REFUGE public restroom search",
+    "endpoint": "https://www.refugerestrooms.org/api/v1/restrooms/search.json",
+    "parameters": {
+      "query": {
+        "required": true,
+        "remote": "query"
+      }
+    },
+    "defaults": {
+      "per_page": 5
+    },
+    "results": "",
+    "sample": {
+      "query": "Chicago"
+    },
+    "documentation": "https://www.refugerestrooms.org/api/docs/#!/restrooms",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "REFUGE Restrooms"
+    ]
+  },
+  "berlintransport": {
+    "directory_id": 1674,
+    "description": "Berlin transport stop search",
+    "endpoint": "https://v6.vbb.transport.rest/locations",
+    "parameters": {
+      "query": {
+        "required": true,
+        "remote": "query"
+      }
+    },
+    "defaults": {
+      "results": 5
+    },
+    "results": "",
+    "sample": {
+      "query": "Alexanderplatz"
+    },
+    "documentation": "https://github.com/derhuerst/vbb-rest/blob/3/docs/index.md",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "Transport for Berlin, Germany"
+    ]
+  },
+  "hessentransport": {
+    "directory_id": 1681,
+    "description": "Hessen transport stop search",
+    "endpoint": "https://v6.rmv.transport.rest/locations",
+    "parameters": {
+      "query": {
+        "required": true,
+        "remote": "query"
+      }
+    },
+    "defaults": {
+      "results": 5
+    },
+    "results": "",
+    "sample": {
+      "query": "Frankfurt"
+    },
+    "documentation": "https://opendata.rmv.de/site/start.html",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "Transport for Hessen, Germany"
+    ]
+  },
+  "transportrest": {
+    "directory_id": 1699,
+    "description": "German national transport stop search",
+    "endpoint": "https://v6.db.transport.rest/locations",
+    "parameters": {
+      "query": {
+        "required": true,
+        "remote": "query"
+      }
+    },
+    "defaults": {
+      "results": 5
+    },
+    "results": "",
+    "sample": {
+      "query": "Berlin"
+    },
+    "documentation": "https://transport.rest",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "transport.rest"
+    ]
+  },
+  "wmata": {
+    "directory_id": 1698,
+    "description": "Washington WMATA rail station information",
+    "endpoint": "https://api.wmata.com/Rail.svc/json/jStations",
+    "parameters": {},
+    "defaults": {
+      "LineCode": "RD"
+    },
+    "results": "Stations",
+    "sample": {},
+    "documentation": "https://developer.wmata.com/",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "Transport for Washington, US"
+    ],
+    "credential": {
+      "env": "WMATA_API_KEY",
+      "header": "api_key"
+    }
+  },
+  "bobsburgers": {
+    "directory_id": 1730,
+    "description": "Bobs Burgers character metadata by name",
+    "endpoint": "https://bobsburgers-api.herokuapp.com/characters/",
+    "parameters": {
+      "name": {
+        "required": true,
+        "remote": "name"
+      }
+    },
+    "defaults": {
+      "limit": 5
+    },
+    "results": "",
+    "sample": {
+      "name": "Bob Belcher"
+    },
+    "documentation": "https://www.bobsburgersapi.com/",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "Bob's Burgers API"
+    ]
+  },
+  "finalspace": {
+    "directory_id": 1740,
+    "description": "Final Space character metadata by ID",
+    "endpoint": "https://finalspaceapi.com/api/v0/character/{id}",
+    "parameters": {
+      "id": {
+        "required": true,
+        "pattern": "[0-9]{1,10}",
+        "path": true
+      }
+    },
+    "defaults": {},
+    "results": "",
+    "sample": {
+      "id": "1"
+    },
+    "documentation": "https://finalspaceapi.com/docs/",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "Final Space"
+    ]
+  },
+  "dailymotion": {
+    "directory_id": 1736,
+    "description": "Dailymotion public video metadata search",
+    "endpoint": "https://api.dailymotion.com/videos",
+    "parameters": {
+      "query": {
+        "required": true,
+        "remote": "search"
+      }
+    },
+    "defaults": {
+      "limit": 5,
+      "fields": "id,title,url,created_time,description"
+    },
+    "results": "list",
+    "sample": {
+      "query": "space"
+    },
+    "documentation": "https://developer.dailymotion.com/",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "Dailymotion"
+    ]
+  },
+  "swapi": {
+    "directory_id": 1772,
+    "description": "Star Wars character metadata by name",
+    "endpoint": "https://www.swapi.tech/api/people",
+    "parameters": {
+      "name": {
+        "required": true,
+        "remote": "name"
+      }
+    },
+    "defaults": {},
+    "results": "result",
+    "sample": {
+      "name": "Luke Skywalker"
+    },
+    "documentation": "https://www.swapi.tech",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "SWAPI"
+    ]
+  },
+  "thrones": {
+    "directory_id": 1776,
+    "description": "Game of Thrones character metadata by ID",
+    "endpoint": "https://thronesapi.com/api/v2/Characters/{id}",
+    "parameters": {
+      "id": {
+        "required": true,
+        "pattern": "[0-9]{1,10}",
+        "path": true
+      }
+    },
+    "defaults": {},
+    "results": "",
+    "sample": {
+      "id": "0"
+    },
+    "documentation": "https://thronesapi.com/",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "ThronesApi"
+    ]
+  },
+  "hko": {
+    "directory_id": 1803,
+    "description": "Hong Kong Observatory current weather observations",
+    "endpoint": "https://data.weather.gov.hk/weatherAPI/opendata/weather.php",
+    "parameters": {},
+    "defaults": {
+      "dataType": "rhrread",
+      "lang": "en"
+    },
+    "results": "",
+    "sample": {},
+    "documentation": "https://www.hko.gov.hk/en/abouthko/opendata_intro.htm",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "Hong Kong Obervatory"
+    ]
+  },
+  "metno": {
+    "directory_id": 1807,
+    "description": "Norway Meteorological Institute global forecast",
+    "endpoint": "https://api.met.no/weatherapi/locationforecast/2.0/compact",
+    "parameters": {
+      "latitude": {
+        "required": true,
+        "remote": "lat",
+        "pattern": "-?\\d{1,2}(?:\\.\\d{1,4})?"
+      },
+      "longitude": {
+        "required": true,
+        "remote": "lon",
+        "pattern": "-?\\d{1,3}(?:\\.\\d{1,4})?"
+      }
+    },
+    "defaults": {},
+    "results": "",
+    "sample": {
+      "latitude": "41.88",
+      "longitude": "-87.63"
+    },
+    "documentation": "https://api.met.no/weatherapi/documentation",
+    "qualification": "MET Norway public forecast under CC BY 4.0, attribute Norwegian Meteorological Institute. Retain updated_at, local validity periods and units. Not a local station observation.",
+    "aliases": [
+      "Meteorologisk Institutt"
+    ]
+  },
+  "aqicn": {
+    "directory_id": 1793,
+    "description": "World Air Quality Index city observations",
+    "endpoint": "https://api.waqi.info/feed/{city}/",
+    "parameters": {
+      "city": {
+        "required": true,
+        "pattern": "[A-Za-z0-9-]{2,80}",
+        "path": true
+      }
+    },
+    "defaults": {},
+    "results": "data",
+    "sample": {
+      "city": "chicago"
+    },
+    "documentation": "https://aqicn.org/api/",
+    "qualification": "Public/open data or established free route; normal rate limits, attribution and dataset terms apply. Endpoint availability and exact integration scope must be checked before implementation. Public read operation only; preserve source dates and units. Not booking, account access, trading or verification of current availability.",
+    "aliases": [
+      "AQICN"
+    ],
+    "credential": {
+      "env": "AQICN_TOKEN",
+      "parameter": "token"
+    }
+  },
+  "openweather": {
+    "directory_id": 1814,
+    "description": "OpenWeather free current weather observations",
+    "endpoint": "https://api.openweathermap.org/data/2.5/weather",
+    "parameters": {
+      "location": {
+        "required": true,
+        "remote": "q"
+      }
+    },
+    "defaults": {
+      "units": "metric"
+    },
+    "results": "",
+    "sample": {
+      "location": "Chicago,US"
+    },
+    "documentation": "https://openweathermap.org/price",
+    "qualification": "OpenWeather free current-weather endpoint only; requires a free key. Attribute OpenWeather; preserve dt and units. No paid One Call subscription.",
+    "aliases": [
+      "OpenWeatherMap"
+    ],
+    "credential": {
+      "env": "OPENWEATHER_API_KEY",
+      "parameter": "appid"
+    }
+  },
+  "weatherapi": {
+    "directory_id": 1822,
+    "description": "WeatherAPI free current weather observations",
+    "endpoint": "https://api.weatherapi.com/v1/current.json",
+    "parameters": {
+      "location": {
+        "required": true,
+        "remote": "q"
+      }
+    },
+    "defaults": {
+      "aqi": "no"
+    },
+    "results": "",
+    "sample": {
+      "location": "Chicago"
+    },
+    "documentation": "https://www.weatherapi.com/pricing.aspx",
+    "qualification": "WeatherAPI free current-weather endpoint only; requires a free key. Attribute WeatherAPI.com with a link; retain last_updated and units.",
+    "aliases": [
+      "WeatherAPI"
+    ],
+    "credential": {
+      "env": "WEATHERAPI_KEY",
+      "parameter": "key"
+    }
+  },
+  "weatherbit": {
+    "directory_id": 1823,
+    "description": "Weatherbit free current weather observations",
+    "endpoint": "https://api.weatherbit.io/v2.0/current",
+    "parameters": {
+      "location": {
+        "required": true,
+        "remote": "city"
+      }
+    },
+    "defaults": {},
+    "results": "data",
+    "sample": {
+      "location": "Chicago,US"
+    },
+    "documentation": "https://www.weatherbit.io/pricing",
+    "qualification": "Weatherbit free noncommercial current-weather endpoint only; requires a free key. Attribute Weatherbit; preserve observation timestamps and units.",
+    "aliases": [
+      "Weatherbit"
+    ],
+    "credential": {
+      "env": "WEATHERBIT_API_KEY",
+      "parameter": "key"
+    },
+    "noncommercial": true
+  }
+}
