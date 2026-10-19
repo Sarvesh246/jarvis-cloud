@@ -95,6 +95,8 @@ const SILENT_MS = 60 * 1000;
    pick them up. The relay keeps a finished reply for an hour. */
 const LIVE_KEY = "vaelo-live-replies";
 const LIVE_REPLY_MS = 55 * 60 * 1000;
+// A followed reply Vaelo doesn't know, with no words yet, is given up on after this.
+const ORPHAN_MS = 2 * 60 * 1000;
 /* How long a device that followed a reply waits for the sender's own copy
    before saving the finished reply itself. */
 const MIRROR_GRACE_MS = 15000;
@@ -405,6 +407,7 @@ export function App() {
      holds what Stop and the effects need (its controller and ids). */
   const [live, setLive] = useState({});
   const runs = useRef(new Map());
+  const startingRuns = useRef(new Map());
   const [settling, setSettling] = useState(false);
   const [dictating, setDictating] = useState(false);
   const [cloud, setCloud] = useState("Connecting");
@@ -1367,7 +1370,12 @@ export function App() {
        and starts a mirror, which then blocks this run from ever starting. */
     rememberLiveReply(id, chatId);
     setLive((current) => ({ ...current, [chatId]: "thinking" }));
+    /* Stop can land during that wait, before the run has a controller. */
+    const starting = { id, stopped: false };
+    startingRuns.current.set(chatId, starting);
     const place = await placeFor(prefsRef.current);
+    if (startingRuns.current.get(chatId) === starting) startingRuns.current.delete(chatId);
+    if (starting.stopped) return;
     await followReply({
       chatId,
       id,
@@ -1829,7 +1837,16 @@ export function App() {
       frame = 0;
       if (received || reasoning) flush();
       endedElsewhere = Boolean(err.stoppedElsewhere);
-      if (mirror && (err.code === "run_missing" || err.dropped)) {
+      const orphaned =
+        mirror && err.code === "run_missing" && !received && Date.now() - startedAt > ORPHAN_MS;
+      if (orphaned) {
+        /* Vaelo has no such run and nothing was ever written: the sender is
+           gone, so waiting would only leave "thinking" on screen for an hour. */
+        const text = "This reply never started. Send it again to get an answer.";
+        updateMessage({ interrupted: true, note: text });
+        if (here()) setError(text);
+        announce(text);
+      } else if (mirror && (err.code === "run_missing" || err.dropped)) {
         /* The device that sent this reply carries it on and reports it. */
         quiet = true;
       } else if (err.name === "AbortError" && !slot.stopping) {
@@ -1945,6 +1962,20 @@ export function App() {
      the run; merely leaving the page never does. */
   function stopReply(chatId = writing.current.chatId) {
     const slot = runs.current.get(chatId);
+    const starting = startingRuns.current.get(chatId);
+    if (!slot && starting) {
+      /* Nothing was sent to Vaelo yet: just keep the reply from starting. */
+      starting.stopped = true;
+      startingRuns.current.delete(chatId);
+      updateChatMessage(chatId, starting.id, { running: undefined, stopped: true, live: "" });
+      forgetLiveReply(starting.id);
+      setLive((current) => {
+        const { [chatId]: _stopped, ...rest } = current;
+        return rest;
+      });
+      pushChat(chatId);
+      return;
+    }
     if (!slot) return;
     slot.stopping = true;
     const id = slot.run || slot.id;
