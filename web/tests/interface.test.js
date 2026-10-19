@@ -501,6 +501,9 @@ test("a busy reply keeps saying something new: still-lines, the next step, the n
   assert.equal(afterStep({ tool: "web_search", done: true }), "Going through the results");
   assert.equal(afterStep(undefined), "Thinking");
   assert.equal(thinkingPreview("First idea.\n\n**Now** compare the *two* splits"), "Now compare the two splits");
+  assert.equal(thinkingPreview("The fetch tool returned nothing for both pages.
+
+Let me try fetching them."), "The fetch tool returned nothing for both pages. Let me try fetching them.");
   const long = thinkingPreview("word ".repeat(100), 40);
   assert.ok(long.startsWith("…") && long.length <= 41);
 });

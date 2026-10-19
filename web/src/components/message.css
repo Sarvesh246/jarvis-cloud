@@ -779,6 +779,9 @@
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
+  /* Always two lines tall, so the fade at the top lands on empty space
+     rather than on the only line there is. */
+  min-height: calc(2 * 1.45em);
   max-height: calc(2 * 1.45em);
   overflow: hidden;
   font-style: italic;

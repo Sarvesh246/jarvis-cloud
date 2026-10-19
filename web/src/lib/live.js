@@ -59,7 +59,10 @@ export function thinkingPreview(reasoning = "", limit = 280) {
         .trim(),
     )
     .filter(Boolean);
-  const last = paragraphs.at(-1) || "";
+  let last = paragraphs.at(-1) || "";
+  /* A finished one-liner ("Let me try fetching them.") means nothing alone:
+     keep the paragraph before it so "them" has something to point at. */
+  if (paragraphs.length > 1 && last.length < 50 && /[.!?]$/.test(last)) last = paragraphs.at(-2) + " " + last;
   if (last.length <= limit) return last;
   const tail = last.slice(-limit);
   const start = tail.indexOf(" ");
