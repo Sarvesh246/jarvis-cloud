@@ -1,15 +1,6 @@
 /* Not every failure is the same failure. Each kind gets its own plain
    sentence and its own way forward, said in the reply where it happened. */
 
-export const ERROR_ACTIONS = {
-  offline: "retry",
-  busy: "retry",
-  limit: "fresh",
-  auth: "signin",
-  interrupted: "continue",
-  unknown: "retry",
-};
-
 export function classifyError({ name = "", message = "", status = 0, partial = false, code = "" } = {}) {
   const text = String(message || "");
   if (code === "repetitive_output")

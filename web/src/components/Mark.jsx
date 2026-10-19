@@ -5,17 +5,6 @@ import "./mark.css";
    contrast that gives a high-contrast serif its composure, with fine
    bracket serifs at the top. It is also Vaelo's face: state is a data
    attribute so CSS owns all motion. */
-export const MARK_STATES = [
-  "idle",
-  "listening",
-  "waking",
-  "thinking",
-  "working",
-  "speaking",
-  "settling",
-  "concern",
-];
-
 const TOP = 13;
 const BOTTOM = 53;
 const LEFT = 11;

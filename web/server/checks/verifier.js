@@ -95,11 +95,3 @@ export function verifyObservation(input, observation, { before = null, now = Dat
     limitations: ['Verifies only the declared properties at read time; it does not prove who caused the state or that the full request was captured.', 'Digests detect changes only when compared to a trusted retained digest; they are not signed attestations.'],
   };
 }
-
-export async function readAndVerify(contract, adapter, options = {}) {
-  validateContract(contract);
-  let observation;
-  try { observation = await adapter.read(structuredClone(contract.resource)); }
-  catch { observation = {available: false, resource: contract.resource, reason: 'Readback failed. Check access and source availability.'}; }
-  return verifyObservation(contract, observation, options);
-}
