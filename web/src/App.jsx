@@ -1361,6 +1361,12 @@ export function App() {
       setAttachments([]);
     }
     announce(mode.research ? "Vaelo is researching." : "Vaelo is thinking.");
+    /* Claim the reply and mark the conversation busy before any waiting. The
+       reply is already in the chat as running, and until it is claimed the
+       effect that follows other devices' replies takes it for one of theirs
+       and starts a mirror, which then blocks this run from ever starting. */
+    rememberLiveReply(id, chatId);
+    setLive((current) => ({ ...current, [chatId]: "thinking" }));
     const place = await placeFor(prefsRef.current);
     await followReply({
       chatId,
