@@ -11,6 +11,7 @@ import { readEvents } from "./stream.js";
 import { normalizeReplySpacing, normalizeSavedReplySpacing } from "./lib/reply-spacing.js";
 import { requestForReply, imagesForReply } from "./lib/adaptive-ui.js";
 import { fullImages } from "./lib/image-store.js";
+import { cachedPlace, placeFor } from "./lib/location.js";
 import { chatTitle, displayChatTitle } from './lib/titles.js';
 import { liveReply, readSyncCache } from "./lib/chat-sync.js";
 import { useChatSync } from "./lib/use-chat-sync.js";
@@ -1367,13 +1368,14 @@ export function App() {
       setAttachments([]);
     }
     announce(mode.research ? "Vaelo is researching." : "Vaelo is thinking.");
+    const place = await placeFor(prefsRef.current);
     await followReply({
       chatId,
       id,
       title: active.messages.length
         ? active.title
         : chatTitle(messages[0].text || messages[0].content),
-      start: { conversationId: chatId, runId: id, messages: input,
+      start: { conversationId: chatId, runId: id, messages: input, ...(place && { place }),
         ...(lastUser.workContext && {work:{id:lastUser.workContext.id,revision:lastUser.workContext.revision}}) },
     });
   }
@@ -1402,7 +1404,7 @@ export function App() {
     const { messages } = wireHistory(chat.messages.slice(0, at));
     const selectedWork = chat.messages.slice(0, at).findLast(message => message.role === "user")?.workContext;
     return messages.length && messages.at(-1).role === "user"
-      ? { conversationId: chatId, runId: id, messages,
+      ? { conversationId: chatId, runId: id, messages, ...(cachedPlace(prefsRef.current) && { place: cachedPlace(prefsRef.current) }),
           ...(selectedWork && {work:{id:selectedWork.id,revision:selectedWork.revision}}) }
       : null;
   }

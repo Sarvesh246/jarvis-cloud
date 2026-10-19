@@ -878,8 +878,9 @@ class Relay:
                 run.event("jarvis.status", {"message": "Checking current sources…"})
                 # A separate context message keeps the first user message and
                 # Hermes session identity stable. Reuse this evidence on recovery.
+                # The web asks for a direct answer only when one search result is
+                # enough; otherwise it already cleared "fast" for the full agent.
                 messages = [*messages, source_context(query)]
-                body = {**body, "fast": None}
             if run.stopped:
                 return run.finish("stopped")
             request = messages

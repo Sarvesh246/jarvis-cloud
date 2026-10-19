@@ -12,6 +12,7 @@ export const DEFAULTS = {
   presentation: "adaptive",
   motion: "system",
   notify: false,
+  location: false,
 };
 
 const ALLOWED = {
@@ -27,6 +28,7 @@ export function cleanPrefs(value) {
   for (const [key, options] of Object.entries(ALLOWED))
     if (options.includes(value[key])) prefs[key] = value[key];
   prefs.notify = value.notify === true;
+  prefs.location = value.location === true;
   return prefs;
 }
 

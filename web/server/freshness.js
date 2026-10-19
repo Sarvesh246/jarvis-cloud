@@ -19,6 +19,26 @@ function currencyLookup(text) {
   return currencies.size > 1 && /\b(?:convert|to|into|in|worth)\b/i.test(text) && !suppliedRate;
 }
 
+const QUICK = /\b(?:weather|forecast|temperature|rain|snow|time in|scores?|stock price|share price|exchange rate|price of|how much is|who won|sunrise|sunset)\b/i;
+const LOCAL = /\b(?:weather|forecast|temperature|rain|snow|near me|nearby|around here|open now|sunrise|sunset|local)\b/i;
+
+// A short look-up whose answer is one fact from a search result. Evidence is
+// fetched first, so a fast model can state it without a tool-using agent.
+export function simpleLookup(content) {
+  const text = requestText(content).trim();
+  return text.length <= 120 && QUICK.test(text) && !HEALTH.test(text) && !LAW_MONEY.test(text);
+}
+
+// "weather today" means weather where they are, when they have said where.
+export function placeLabel(place) {
+  return [place?.city, place?.region].filter(Boolean).join(", ") || (place ? `${place.lat}, ${place.lon}` : "");
+}
+
+export function localizedQuery(query, place) {
+  if (!query || !place || !LOCAL.test(query) || /\b(?:in|at|near|for)\s+(?:the\s+)?[A-Z][\p{L}]+/u.test(query)) return query;
+  return `${query} in ${placeLabel(place)}`.slice(0, 600);
+}
+
 // Freshness is independent of verbosity and research toggles. Only the person's
 // request is searched: attachments, account data and model assertions stay out.
 export function freshnessQuery(content, previous = "") {

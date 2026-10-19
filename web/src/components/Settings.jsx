@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
-import { BellSimple, CaretLeft, CaretRight, DeviceMobile, QrCode, Sparkle, SignOut, X } from "@phosphor-icons/react";
+import { BellSimple, CaretLeft, MapPin, CaretRight, DeviceMobile, QrCode, Sparkle, SignOut, X } from "@phosphor-icons/react";
 import { notifySupport } from "../lib/preferences.js";
+import { forgetPlace, locate, locationSupport } from "../lib/location.js";
 import { allowNotifications, DESKTOP, STORE_BUILD } from "../lib/desktop.js";
 import { usePhone } from "../lib/use-phone.js";
 import { dragProps } from "../lib/gesture.js";
@@ -68,11 +69,39 @@ function useNotify(prefs, onChange) {
   return { problem, toggle, support: notifySupport() };
 }
 
+/* The location switch: the browser asks for permission when it is turned
+   on, and a refusal is said plainly rather than left looking enabled. */
+function useLocate(prefs, onChange) {
+  const [problem, setProblem] = useState("");
+  async function toggle(on) {
+    setProblem("");
+    if (!on) {
+      forgetPlace();
+      return onChange({ location: false });
+    }
+    try {
+      await locate({ force: true });
+      onChange({ location: true });
+    } catch (error) {
+      setProblem(
+        error?.code === 1
+          ? "Location is blocked for Vaelo. Allow it in your browser’s or system’s settings, then try again."
+          : "Vaelo couldn’t work out where you are just now.",
+      );
+    }
+  }
+  return { problem, toggle, support: locationSupport() };
+}
+
+const LOCATION_NOTE =
+  "Shares roughly where you are (about a kilometre) and your nearest city with your messages, so questions like the weather just work. Off by default.";
+
 function PhoneSettings({ open, user, prefs, onChange, onClose, onTools, onWelcome, onSignOut }) {
   const page = useRef(null);
   const edge = useRef(false);
   const [install, setInstall] = useState(false);
   const notify = useNotify(prefs, onChange);
+  const place = useLocate(prefs, onChange);
   const guest = !!user?.guest;
   const initial = (user?.name || "?").trim().charAt(0).toUpperCase();
 
@@ -212,6 +241,30 @@ function PhoneSettings({ open, user, prefs, onChange, onClose, onTools, onWelcom
               {notify.problem}
             </p>
           )}
+          {place.support && !guest && (
+            <button
+              type="button"
+              className="sp-row"
+              role="switch"
+              aria-checked={!!prefs.location}
+              onClick={() => {
+                buzz();
+                place.toggle(!prefs.location);
+              }}
+            >
+              <MapPin size={22} aria-hidden="true" />
+              <span className="sp-row-text">
+                <span>Use my location</span>
+                <span className="sp-row-note">{LOCATION_NOTE}</span>
+              </span>
+              <span className="sh-switch" data-on={prefs.location || undefined} aria-hidden="true" />
+            </button>
+          )}
+          {place.problem && (
+            <p className="sp-note" data-tone="problem" role="alert">
+              {place.problem}
+            </p>
+          )}
           <button type="button" className="sp-row" aria-haspopup="dialog" onClick={() => setInstall(true)}>
             <DeviceMobile size={22} aria-hidden="true" />
             <span className="sp-row-text">Add to home screen</span>
@@ -255,6 +308,7 @@ export function Settings(props) {
 function WideSettings({ open, prefs, onChange, onClose, onTools }) {
   const dialog = useRef(null);
   const { problem, toggle: toggleNotify, support } = useNotify(prefs, onChange);
+  const place = useLocate(prefs, onChange);
 
   useEffect(() => {
     const el = dialog.current;
@@ -336,6 +390,29 @@ function WideSettings({ open, prefs, onChange, onClose, onTools }) {
             </p>
           )}
         </fieldset>
+
+        {place.support && (
+          <fieldset className="settings-group">
+            <legend className="label">Where you are</legend>
+            <label className="settings-switch">
+              <span>
+                Use my location
+                <span className="settings-note">{LOCATION_NOTE}</span>
+              </span>
+              <input
+                type="checkbox"
+                role="switch"
+                checked={prefs.location}
+                onChange={(event) => place.toggle(event.target.checked)}
+              />
+            </label>
+            {place.problem && (
+              <p className="settings-note" data-tone="problem" role="alert">
+                {place.problem}
+              </p>
+            )}
+          </fieldset>
+        )}
 
         {DESKTOP && <DesktopUpdates store={STORE_BUILD} />}
         {onTools && <button className="text-button" onClick={onTools}>QR link and interface guide</button>}
