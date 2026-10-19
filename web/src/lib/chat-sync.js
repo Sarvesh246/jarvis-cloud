@@ -79,6 +79,8 @@ export class ChatSync {
     this.again = false;
     this.forced = new Set();
     this.saveTimer = null;
+    this.retryAt = 0;
+    this.conflicts = 0;
     // Leaving the page writes the backup at once rather than after the pause.
     this.flush = () => { if (this.saveTimer) this.persist(); };
     globalThis.addEventListener?.("pagehide", this.flush);
@@ -125,6 +127,7 @@ export class ChatSync {
   }
   async tick() {
     if (this.stopped) return;
+    if (Date.now() < this.retryAt) return;
     // Asked again mid-pass (a live update, a push): one more pass follows.
     if (this.running) { this.again = true; return; }
     this.running = true;
@@ -197,11 +200,21 @@ export class ChatSync {
           // follow. Consume only this attempt's request, preserving any new
           // push queued while the upload was in flight.
           if (forced) this.forced.add(id);
-          if (error.status === 409 || error.status === 401) throw error;
+          if (error.status === 401) throw error;
+          if (error.status === 409) {
+            // A concurrent write won during upload. Back off even when
+            // streaming updates request another pass, and still let
+            // unrelated conversations upload in this pass.
+            blocked.add(id);
+            if (!this.busy()) this.again = true;
+            this.retryAt = Date.now() + Math.min(1000 * 2 ** this.conflicts++, 30000);
+            continue;
+          }
           failure ??= error;
         }
       }
       if (failure) throw failure;
+      if (!blocked.size) this.conflicts = 0;
       this.onStatus("");
     } catch (error) {
       if (!this.stopped) this.onStatus(error.status === 409 ? "" :
@@ -211,7 +224,7 @@ export class ChatSync {
       this.running = false;
       if (this.again && !this.stopped) {
         this.again = false;
-        setTimeout(() => void this.tick(), 300);
+        setTimeout(() => void this.tick(), Math.max(300, this.retryAt - Date.now()));
       }
     }
   }

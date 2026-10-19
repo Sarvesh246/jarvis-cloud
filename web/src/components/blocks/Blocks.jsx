@@ -881,7 +881,13 @@ function Checklist({ storageKey, defaults, tasks, autoActive, items, original, o
 function RichParagraph({ node, children, "data-src": src, ...props }) {
   const { presentation, stateKey, requestText, live, content } = useContext(BlockContext);
   const source = content.slice(node.position?.start?.offset, node.position?.end?.offset).trim();
-  if (presentation !== 'minimal' && !live && source.startsWith('{') && richPayload(source, '', requestText)) return <div data-src={src}><RichUI source={source} enabled stateKey={stateKey} /></div>;
+  if (presentation !== 'minimal' && source.startsWith('{')) {
+    const payload = richPayload(source, '', requestText);
+    // Math and emphasis inside JSON are data until the complete object is
+    // decoded. Recover completed bare objects even while a reply streams.
+    if (payload) return <div data-src={src}><RichUI source={source} enabled stateKey={stateKey} /></div>;
+    if (live && pendingRichPayload(source, '', requestText)) return <div data-src={src}><RichUI source={source} enabled pending stateKey={stateKey} /></div>;
+  }
   return <p {...props} data-src={src}>{children}</p>;
 }
 

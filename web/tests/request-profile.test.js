@@ -162,7 +162,7 @@ for (const [prompt, shape, tier] of CASES) {
     const profile = profileRequest(prompt);
     assert.equal(profile.shape, shape, `shape for: ${prompt}`);
     assert.equal(profile.tier, tier, `tier for: ${prompt}`);
-    assert.equal(profile.fast, tier === "quick");
+    if (shape !== "math") assert.equal(profile.fast, tier === "quick");
   });
 }
 
@@ -173,6 +173,22 @@ test("every inferred shape has its own wording, safe to join into a note", () =>
     assert.doesNotMatch(text, /\]/, `${name} must not close the note early`);
     assert.ok(text.length < 400, name);
   }
+});
+
+test("self-contained math skips agent bootstrap while retaining reasoning depth", () => {
+  const prompt = "How do I solve this: A mixing tank initially has 100 gallons and 5 lb sugar. Water enters at 10 gal/min and sugar at 1 lb/min. Find C(t) and explain its asymptotes.";
+  const profile = profileRequest(prompt);
+  assert.equal(profile.shape, "math");
+  assert.equal(profile.fast, true);
+  assert.equal(profile.tier, "deep");
+  for (const [text, options] of [
+    [prompt, { research: true }], [prompt, { style: "thorough" }],
+    [prompt, { role: "tutor" }], [prompt, { work: true }],
+    ["Prove the equation holds for every real x", {}],
+    ["Calculate the monthly payment on my mortgage", {}],
+    ["Solve the equation in the attached image", {}],
+    ["Calculate today's exchange rate", {}],
+  ]) assert.equal(profileRequest(text, options).fast, false, text);
 });
 
 test("the laptop comparison asks for one table with verdicts, not bullet lists", () => {
