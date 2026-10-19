@@ -1,3 +1,5 @@
+import { seriesTable, suppliedFigures } from "./supplied-data.js";
+
 // Shared by the normal and direct routes. Selection adds no model request.
 export const RICH_UI_GUIDANCE = [
   "Choose these cards automatically when the answer benefits from them, even without a UI request. Use one fenced vaelo-ui block containing valid JSON for a shape Markdown cannot express.",
@@ -13,7 +15,7 @@ export const RICH_UI_GUIDANCE = [
       ],
     }) +
     "\n```",
-  "Use steps for guided procedures, graph for evidenced dependencies, files for folder layouts, gallery for verified image sets, image-compare or code-compare for two actual versions, receipt for supplied itemized costs, qr for a public link to open on a phone, model for a supplied .glb, and integrations for a proposed workflow. Overview cards carry summaries; widget stacks carry supporting details.",
+  "Use steps for guided procedures, graph for evidenced dependencies, files for folder layouts, gallery for verified image sets, image-compare or code-compare for two actual versions, receipt for supplied itemized costs, qr for a public link to open on a phone, model for a supplied .glb, and integrations for a proposed workflow. Overview cards carry a few unordered summary figures; widget stacks carry supporting details. Figures over time or across categories are never overview cards: write them as a Markdown table, which draws itself as a chart.",
   "Never replace these views with ASCII art or a table inside a code fence. Prefer ordinary Markdown tables for comparisons and numeric series, checklists for actionable lists, and metrics for simple figures. A timeline event may use [done], [current] or [upcoming] immediately after its date only when that state is established; past dates alone do not prove completion.",
   "Graph edges require evidence; receipts only sum supplied line items; code comparisons need both real versions. Only show integration directions when supplied or clearly proposed. Never imply integrations are connected, a receipt was paid, a QR transfers account state, or a model file was created.",
   "If required inputs are unavailable, explain that in prose instead of fabricating them. Keep blocks small: at most 24 images/nodes, 40 items, 12 overview cards and 8 chips per card; code versions under 8000 chars. Keep prose outside JSON brief, preserve citations outside the card, and do not duplicate the same information in a second table or list. Respect explicit plain-text, code-only, raw JSON, and answer-only requests.",
@@ -72,7 +74,7 @@ export function richPresentationFor(text = "") {
   )
     return "steps";
   if (
-    /\b(?:file tree|folder tree|(?:project|folder|directory|repository|repo) (?:structure|layout)|organi[sz]e.{0,30}(?:files|folders|repository|repo))\b/i.test(
+    /\b(?:file tree|folder tree|(?:project|folder|directory|repository|repo) (?:structure|layout)|organi[sz]e.{0,60}(?:files|folders|repository|repo|project|codebase)|concrete paths|file browser|(?:file|directory|folder) (?:structure|layout|organi[sz]ation)|where (?:should|do|would) (?:i|we) (?:put|place|keep|store).{0,40}(?:files|code|components|tests))\b/i.test(
       text,
     )
   )
@@ -87,7 +89,7 @@ export function richPresentationFor(text = "") {
     return "qr";
   if (/\b(?:3d model|\.glb\b)/i.test(text)) return "model";
   if (
-    /\b(?:widget stack|supporting (?:details|assumptions)|assumptions behind|key (?:risks|considerations)|trade.?offs to consider)\b/i.test(
+    /\b(?:widget stack|supporting (?:details|assumptions)|assumptions behind|key (?:risks|considerations)|trade.?offs to consider|(?:explain|walk through|break down|list|outline) (?:the |these |my )?(?:assumptions|key factors|considerations|risks|reasons|constraints))\b/i.test(
       text,
     )
   )
@@ -199,6 +201,22 @@ const FOCUS_EXAMPLES = {
   },
 };
 
+const ASKS_FIGURES =
+  /\b(?:key|main|top|headline)\s+(?:business\s+)?(?:numbers|figures|stats|statistics|metrics|kpis?)\b|\bkpis?\b/i;
+
+// Shapes Markdown already draws on its own: a series becomes a chart, figures
+// become cards. The model only needs to be told which plain shape to write.
+function shapeHint(text) {
+  const series = seriesTable(text);
+  if (series && series.width > 1)
+    return `The request supplies ${series.rows.length} periods or categories with ${series.width} parts each. Write one Markdown table (header row; first column the ${series.columns[0].toLowerCase()}; one numeric column per part: ${series.columns.slice(1).join(", ")}), with no total or share columns. Vaelo draws it as a stacked chart. Do not use a vaelo-ui block, overview cards or a paragraph for these figures. Quote only the supplied values.`;
+  if (series && !/\b(?:compare|versus|vs|which (?:one|is|should)|better|choose)\b/i.test(text))
+    return `The request supplies ${series.rows.length} ${series.kind ? series.kind.toLowerCase() + "ly" : "categorical"} values. Write them as one Markdown table (header row; ${series.columns.join(" | ")}; one row each, values exactly as supplied). Vaelo draws it as a ${series.kind ? "line" : "bar"} chart. Do not use a vaelo-ui block, overview cards or a paragraph in its place, and add a short written takeaway after the table.`;
+  if (ASKS_FIGURES.test(text) && suppliedFigures(text))
+    return "The request supplies headline figures. Present them in one fenced metrics block, one 'Label: value' line each, with a one-line takeaway after it.";
+  return "";
+}
+
 export function richGuidanceFor(messages = []) {
   const last = messages.filter((x) => x.role === "user").at(-1)?.content;
   const text =
@@ -217,6 +235,8 @@ export function richGuidanceFor(messages = []) {
   )
     return "";
   const selected = richPresentationFor(text);
+  const hint = selected ? "" : shapeHint(text);
+  if (hint) return `\n\n${RICH_UI_GUIDANCE}\n\nPresentation for this reply: ${hint}`;
   if (selected)
     return `\n\n${RICH_UI_GUIDANCE}\n\nPresentation for this reply: use the ${selected} view. When the required inputs are supplied or verified, include one fenced vaelo-ui JSON block with the REQUIRED field "type":"${selected}". Do not replace the selected view with prose alone. ${FOCUS_EXAMPLES[selected] ? "Schema illustration only (replace labels, figures and relationships with the actual supplied facts):\n```vaelo-ui\n" + JSON.stringify(FOCUS_EXAMPLES[selected]) + "\n```\n" : ""}${selected === "receipt" ? "Put only the original chargeable line items in items; NEVER include totals, subtotals, per-person shares or other calculated values as items. Set people to the stated split count (integer 1–100); the interface calculates total and per-person amounts locally. " : ""}${selected === "graph" ? "Only include relationships established in the prompt. Do not add a cache-miss fallback, writes, invalidation or other typical architecture behavior unless it was actually stated. " : ""}If required inputs are missing, ask for them rather than inventing any.`;
   return /\b(?:bento|overview cards|widget stack|relationship (?:graph|diagram)|dependency (?:graph|diagram)|file tree|folder tree|image (?:board|gallery|comparison|compare)|before.and.after images?|code (?:comparison|diff)|compare (?:these |the )?(?:code|versions)|itemized receipt|expense receipt|qr(?: code)?|3d model|integrations cards|vaelo-ui|walk me through|guide me through|one step at a time|how .{0,30}(?:connect|depend)|architecture|dependencies|folder structure|project structure|moodboard|inspiration board|split .{0,30}(?:bill|cost|expense)|(?:bill|cost|expense).{0,30}split|itemi[sz]e|scan .{0,30}(?:phone|device)|open .{0,30}(?:phone|device)|\.glb\b|before .{0,30}after|compare .{0,30}(?:pictures|photos|images)|workflow|systems .{0,20}(?:work|fit) together)\b/i.test(

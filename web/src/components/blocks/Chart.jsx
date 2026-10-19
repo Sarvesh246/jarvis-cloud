@@ -6,6 +6,9 @@ import { chartData, compactNumber, lineGeometry, temporalColumn } from '../../li
 import { barScale, smoothChartPath } from '../../lib/output-redesign.js';
 
 const COLLAPSED_ROWS = 8;
+// A total or a share restates the parts; stacking it would count them twice.
+const NOT_A_PART = /\b(?:total|sum|overall|combined|share|percent(?:age)?|ratio|growth|change|margin|rate)\b|%/i;
+const TOTAL_ROW = /^(?:grand total|total|overall|sum|subtotal)\b/i;
 
 export function Chart({ columns, rows, plan, stackedDefault = false }) {
   const [choice, setColumn] = useState(plan.values[0]);
@@ -16,7 +19,11 @@ export function Chart({ columns, rows, plan, stackedDefault = false }) {
   const kind = canLine ? chosenKind || 'line' : 'bar';
   const [expanded, setExpanded] = useState(false);
   const [reading, setReading] = useState(null);
-  const stacked = useMemo(() => stackedSeries(columns, rows, plan.values, plan.label), [columns, rows, plan.values, plan.label]);
+  const stacked = useMemo(() => {
+    const parts = plan.values.filter(i => !NOT_A_PART.test(String(columns[i] ?? '')));
+    const body = rows.filter(row => !TOTAL_ROW.test(String(row[plan.label] ?? '').trim()));
+    return stackedSeries(columns, body, parts, plan.label);
+  }, [columns, rows, plan.values, plan.label]);
   const [stackedView, setStackedView] = useState(stackedDefault && !!stacked);
   const shown = expanded ? data.points : data.points.slice(0, COLLAPSED_ROWS);
   const scale = barScale(data.max);

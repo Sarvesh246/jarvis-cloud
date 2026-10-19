@@ -9,6 +9,7 @@ import {
 import { wantsPlainReply, inferListPresentation, requestIntent } from "./adaptive-ui.js";
 import { explicitRelationshipGraph } from "./output-redesign.js";
 import { headedTimeline, headedComparison, rankedFigures, periodFigures } from "./shape-recovery.js";
+import { seriesTable, suppliedFigures, suppliedDates } from "../../shared/supplied-data.js";
 
 // Presentation recovery runs on settled answers from every provider. It only
 // restructures existing data; it never calls a model or executes reply code.
@@ -241,7 +242,140 @@ const retainedLinks = (content) =>
     .filter((x, i, a) => a.indexOf(x) === i)
     .join(" · ");
 
-export function automaticPresentation(content = "", request = "") {
+const TABLE_LINE = /(?:^|\n)\s*\|.*\|\s*(?:\n|$)/;
+const KEEP_IMAGE =
+  /\b(?:keep|show|display|include|place|put|pair|attach|embed)\b[^.?!]{0,40}\b(?:image|photo|picture|screenshot)s?\b|\balongside\b|\bcaption\b/i;
+const ASKS_FIGURES =
+  /\b(?:key|main|top|headline)\s+(?:business\s+)?(?:numbers|figures|stats|statistics|metrics|kpis?)\b|\bkpis?\b/i;
+const ASKS_SCHEDULE =
+  /\b(?:schedule|timeline|roadmap|milestones?|phases?|key dates|dates|calendar|plan)\b/i;
+const REPLACEABLE = new Set(["overview", "widgets", "metrics"]);
+const tidy = (text) => text.replace(/\n{3,}/g, "\n\n").trim();
+const cut = (content, ranges) =>
+  tidy(
+    [...ranges]
+      .sort((a, b) => b.start - a.start)
+      .reduce((text, r) => text.slice(0, r.start) + text.slice(r.end), content),
+  );
+
+// The request carried the figures, the reply did not draw them: build the table
+// from the person's own words and let the table block pick the chart.
+function recoverSeries(content, request, blocks, whole) {
+  if (requestIntent(request) !== "chart") return null;
+  const table = seriesTable(request);
+  if (!table || TABLE_LINE.test(content)) return null;
+  if (whole) return REPLACEABLE.has(whole.type) ? { markdown: table.markdown } : null;
+  if (blocks.some((b) => !REPLACEABLE.has(b.type))) return null;
+  const rest = cut(
+    content,
+    blocks.map((b) => ({ start: b.fence.start, end: b.fence.end })),
+  );
+  return { markdown: table.markdown + (rest ? "\n\n" + rest : "") };
+}
+
+// Rows of a Markdown table as label / value / detail, for supporting details.
+function tableItems(content) {
+  const lines = content.split("\n");
+  const row = (l) => /^\s*\|.*\|\s*$/.test(l);
+  const first = lines.findIndex(row);
+  if (first < 0) return null;
+  let end = first;
+  while (end < lines.length && row(lines[end])) end++;
+  const rows = lines
+    .slice(first, end)
+    .filter((l) => !/^\s*\|?[\s:|-]+\|?\s*$/.test(l))
+    .map((l) =>
+      l
+        .trim()
+        .replace(/^\||\|$/g, "")
+        .split(/(?<!\\)\|/)
+        .map((c) => strip(c.replace(/\\\|/g, "|"))),
+    );
+  const body = rows.slice(1).filter((r) => r.length >= 2 && r[0] && r[1]);
+  if (body.length < 2 || body.length > 12) return null;
+  const items = body.map(([label, value, ...more]) => {
+    const detail = more.filter(Boolean).join(" · ");
+    return { label, value, ...(detail && { detail }) };
+  });
+  return { items, rest: tidy([...lines.slice(0, first), ...lines.slice(end)].join("\n")) };
+}
+
+// "- **Travelers:** two adults" and bold-led paragraphs name their own labels.
+function boldLed(content) {
+  const found = [];
+  const kept = [];
+  for (const line of content.split("\n")) {
+    const m = line.match(
+      /^\s*(?:[-*+]\s+|\d+[.)]\s+)?\*\*([^*\n]{1,60}?)\*\*\s*[:—–-]?\s*(.{3,400})$/,
+    );
+    if (m) found.push({ label: strip(m[1]).replace(/[:—–-]$/, "").trim(), value: strip(m[2]) });
+    else kept.push(line);
+  }
+  return found.length >= 2 && found.length <= 12
+    ? { items: found, rest: tidy(kept.join("\n")) }
+    : null;
+}
+
+// A tree can sit in a fence of any plain language, or in a run of bullets.
+function fileTree(content, fences) {
+  for (const f of fences) {
+    // Asked for a layout, a fence tagged with the wrong language is still one.
+    const tree = treePaths(f.source, "");
+    if (tree) return { tree, markdown: cut(content, [f]) };
+  }
+  if (fences.length) return null;
+  const whole = treePaths(content, "");
+  if (whole) return { tree: whole, markdown: "" };
+  let offset = 0;
+  for (const block of content.split(/\n\s*\n/)) {
+    const start = content.indexOf(block, offset);
+    offset = start + block.length;
+    const lines = block.split("\n");
+    for (const drop of [0, 1]) {
+      const tree = treePaths(lines.slice(drop).join("\n"), "");
+      if (tree)
+        return {
+          tree,
+          markdown: tidy(
+            cut(content, [{ start, end: start + block.length }]) + (drop ? "\n\n" + lines[0] : ""),
+          ),
+        };
+    }
+  }
+  return null;
+}
+
+// Reply lines that only restate a supplied date are what the timeline replaces.
+function withoutDateLines(content, events) {
+  const days = events.map((x) => x.when.replace(/,?\s+\d{4}$/, "").toLowerCase());
+  return tidy(
+    content
+      .split("\n")
+      .filter(
+        (line) =>
+          line.length > 160 ||
+          !/^\s*(?:[-*+•]|\d+[.)])\s|^[^:\n]{1,40}:\s|^\s*\|/.test(line) ||
+          !days.some((d) => line.toLowerCase().replace(/\*\*|__/g, "").includes(d)),
+      )
+      .join("\n"),
+  );
+}
+
+function withoutFigureLines(content, items) {
+  return tidy(
+    content
+      .split("\n")
+      .filter(
+        (line) =>
+          line.length > 160 ||
+          !/^\s*(?:[-*+•]|\d+[.)])\s|^[^:\n]{1,40}:\s/.test(line) ||
+          !items.some((x) => line.includes(x.value)),
+      )
+      .join("\n"),
+  );
+}
+
+export function automaticPresentation(content = "", request = "", attached = []) {
   if (
     !content.trim() ||
     content.length > MAX ||
@@ -255,12 +389,25 @@ export function automaticPresentation(content = "", request = "") {
   )
     return null;
   const fences = dataFences(content);
+  // An image the person attached is shown beside the reply's caption.
+  if (attached.length && KEEP_IMAGE.test(request) && !/!\[[^\]\n]*\]\(/.test(content))
+    return {
+      markdown:
+        attached
+          .map((x) => "![" + String(x.alt).replace(/[[\]\n]/g, " ") + "](" + x.src + ")")
+          .join("\n\n") +
+        "\n\n" +
+        content,
+    };
+  const whole = parseRichUI(content.trim());
+  const blocks = fences
+    .map((fence) => ({ fence, ...richPayload(fence.source, fence.language, request) }))
+    .filter((b) => b.type);
+  // Figures typed into the request win over a card the model chose for them.
+  const series = recoverSeries(content, request, blocks, whole);
+  if (series) return series;
   // Already valid rich output has its own renderer; never add a duplicate card.
-  if (
-    parseRichUI(content.trim()) ||
-    fences.some((f) => richPayload(f.source, f.language, request))
-  )
-    return null;
+  if (whole || blocks.length) return null;
   const intent = richPresentationFor(request);
   const forceTable = /\b(?:in|as|into) (?:a |the )?table\b/i.test(request);
   if(forceTable) {
@@ -379,12 +526,17 @@ export function automaticPresentation(content = "", request = "") {
         after: code[1].source,
       });
       if (code === fences)
-        result.markdown =
+        result.markdown = tidy(
           content.slice(0, code[0].start) +
-          content.slice(code[0].end, code[1].start) +
-          content.slice(code[1].end);
+            content.slice(code[0].end, code[1].start) +
+            content.slice(code[1].end),
+        );
       return result;
     }
+    // Two versions written as inline code in the request itself.
+    const spans = [...request.matchAll(/`([^`\n]{6,})`/g)].map((m) => m[1]);
+    if (spans.length === 2 && spans[0] !== spans[1])
+      return rich({ type: "code-compare", title: "Code changes", before: spans[0], after: spans[1] });
   }
   if (intent === "steps") {
     const headings = [
@@ -410,11 +562,29 @@ export function automaticPresentation(content = "", request = "") {
         markdown: content.slice(0, headings[0].index),
       };
   }
-  if (fences.length || /(?:^|\n)\s*\|.*\|\s*(?:\n|$)/.test(content))
-    return null;
   if (intent === "files") {
-    const tree = treePaths(content, "");
-    if (tree) return { block: checked(tree), markdown: "" };
+    const found = fileTree(content, fences);
+    if (found) return { block: checked(found.tree), markdown: found.markdown };
+  }
+  if (intent === "widgets") {
+    const found = tableItems(content) || boldLed(content);
+    const block =
+      found &&
+      checked({
+        type: "widgets",
+        title: "Supporting details",
+        items: found.items.map((x) => ({
+          ...x,
+          value: x.value.slice(0, 220),
+          ...(x.value.length > 220
+            ? { detail: [x.value.slice(220), x.detail].filter(Boolean).join(" · ") }
+            : {}),
+        })),
+      });
+    if (block) return { block, markdown: found.rest };
+  }
+  if (fences.length || TABLE_LINE.test(content)) return null;
+  if (intent === "files") {
     const paths = [
       ...content.matchAll(
         /^\s*(?:[-*+]\s+)?`?([\w@.-]+(?:\/[\w@.-]+)+)`?\s*$/gm,
@@ -428,6 +598,20 @@ export function automaticPresentation(content = "", request = "") {
     const shaped = recover(content);
     if (shaped) return shaped;
   }
+  const dates = ASKS_SCHEDULE.test(request) ? suppliedDates(request) : null;
+  if (dates)
+    return {
+      language: "timeline",
+      source: dates.map((x) => x.when + ": " + x.label).join("\n"),
+      markdown: withoutDateLines(content, dates),
+    };
+  const figures = ASKS_FIGURES.test(request) ? suppliedFigures(request) : null;
+  if (figures)
+    return {
+      language: "metrics",
+      source: figures.map((x) => x.label + ": " + x.value).join("\n"),
+      markdown: withoutFigureLines(content, figures),
+    };
   const labeled = pairs(content);
   if (intent === "integrations") {
     const move = request.match(

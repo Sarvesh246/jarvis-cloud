@@ -258,8 +258,41 @@ export function gridOverview(source, language = '') {
 }
 // A directory tree drawn with ├── and └── is a file browser, not code.
 const TREE_LINE = /^((?:[│| ]   |    )*)(?:├── |└── |\|-- |`-- |\+-- )(.+?)\s*$/;
+const TREE_LANGUAGES = ['', 'text', 'txt', 'plain', 'plaintext', 'tree', 'ascii', 'bash', 'sh', 'shell', 'console', 'markdown', 'md'];
+const finishTree = (entries) => {
+  if (entries.length < 3 || entries.length > 100) return null;
+  const parents = new Set(entries.flatMap((path) => path.split('/').slice(0, -1).map((_, i, all) => all.slice(0, i + 1).join('/'))));
+  const paths = entries.filter((path) => !parents.has(path));
+  return paths.length && paths.every((path) => path.length <= 500 && path.split('/').length <= 12) ? { type: 'files', paths } : null;
+};
+// Indented outlines, markdown bullets and plain path lists: "src/", "  app.js",
+// "- `lib/` — helpers". Every entry must look like a path, so prose never passes.
+const OUTLINE_LINE = /^(\s*)(?:[-*+]\s+)?`?([\w@.-][\w@.\/-]*)`?\/?(?:`)?(?:\s*(?:[—–:#]|\/\/|<-|←|-\s).*)?$/;
+function outlineTree(source) {
+  const lines = source.split('\n').filter((line) => line.trim());
+  if (lines.length < 3) return null;
+  const stack = [];
+  const entries = [];
+  const named = [];
+  for (const line of lines) {
+    const match = line.replace(/\t/g, '    ').match(OUTLINE_LINE);
+    if (!match || /^\d+$/.test(match[2])) return null;
+    const indent = match[1].length;
+    while (stack.length && stack.at(-1).indent >= indent) stack.pop();
+    const name = match[2].replace(/\/$/, '');
+    stack.push({ indent, name });
+    entries.push(stack.map((x) => x.name).join('/'));
+    named.push({ name: match[2], parent: stack.length > 1 });
+  }
+  const parents = new Set(entries.flatMap((path) => path.split('/').slice(0, -1).map((_, i, all) => all.slice(0, i + 1).join('/'))));
+  const pathLike = entries.every((path, i) => /[./]/.test(named[i].name) || parents.has(path) || /^[A-Z][A-Za-z]+$/.test(named[i].name));
+  return pathLike && entries.some((path) => /[./]/.test(path)) ? finishTree(entries) : null;
+}
 export function treePaths(source, language = '') {
-  if (typeof source !== 'string' || source.length > 6000 || !['', 'text', 'txt', 'plain', 'plaintext', 'tree'].includes(language.toLowerCase())) return null;
+  if (typeof source !== 'string' || source.length > 6000 || !TREE_LANGUAGES.includes(language.toLowerCase())) return null;
+  return boxTree(source) || outlineTree(source);
+}
+function boxTree(source) {
   const lines = source.split('\n').filter((line) => line.trim());
   const entries = [];
   const stack = [];
@@ -277,10 +310,7 @@ export function treePaths(source, language = '') {
     stack.push(name);
     entries.push((root ? [root, ...stack] : [...stack]).join('/'));
   }
-  if (entries.length < 3 || entries.length > 100) return null;
-  const parents = new Set(entries.flatMap((path) => path.split('/').slice(0, -1).map((_, i, all) => all.slice(0, i + 1).join('/'))));
-  const paths = entries.filter((path) => !parents.has(path) || false);
-  return paths.length && paths.every((path) => path.length <= 500 && path.split('/').length <= 12) ? { type: 'files', paths } : null;
+  return finishTree(entries);
 }
 export function wantsOverview(request = '') {
   return /\b(?:bento|overview cards?|summary cards?|cards? (?:view|layout)|dashboard)\b/i.test(request);

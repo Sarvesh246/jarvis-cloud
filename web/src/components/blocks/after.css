@@ -2654,7 +2654,13 @@
   grid-template-columns: 96px 28px minmax(0, 1fr) auto;
   align-items: start;
   gap: 0;
-  padding: 10px 0;
+  padding: 10px 14px;
+  margin-inline: -14px;
+  border-radius: 12px;
+  transition: background-color 0.15s ease;
+}
+.prose.prose .timeline-list > li:hover {
+  background: var(--gilt-wash);
 }
 .timeline-state-dot {
   position: relative;
@@ -2745,7 +2751,7 @@
 .prose.prose .timeline-list > li::before {
   content: "";
   position: absolute;
-  left: 109px;
+  left: 123px;
   top: 29px;
   bottom: -11px;
   width: 2px;
@@ -2756,7 +2762,7 @@
 }
 @media (max-width: 600px) {
   .prose.prose .timeline-list > li::before {
-    left: 80px;
+    left: 94px;
   }
 }
 .after-widgets .after-widget > strong {

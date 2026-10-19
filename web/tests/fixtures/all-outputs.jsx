@@ -8,9 +8,11 @@ import "../../src/shell.css";
 import "../../src/design/refinements.css";
 import { Message } from "../../src/components/Message.jsx";
 import { automaticSamples } from "./automatic-samples.js";
+import { cases, prompts, DESK } from "./prompt-cases.js";
 
 const theme = new URLSearchParams(location.search).get("theme");
 if (theme) document.documentElement.dataset.theme = theme;
+const match = new URLSearchParams(location.search).get("match");
 const extra = [
   ["Itinerary", "Plan a 3-day trip to Lisbon.", "### Day 1: Alfama\n- Morning: Walk the streets\n- Evening: Fado dinner\n\n### Day 2: Belém\n- Morning: Monastery\n- Afternoon: Tower\n\n### Day 3: Sintra\n- Pena Palace"],
   ["Compare sections", "Compare React and Vue.", "### React\n- **Curve:** Moderate\n- **Ecosystem:** Huge\n\n### Vue\n- **Curve:** Gentle\n- **Ecosystem:** Smaller"],
@@ -19,10 +21,10 @@ const extra = [
 ];
 createRoot(document.getElementById("root")).render(
   <main style={{ maxWidth: 900, margin: "auto", padding: "1rem", background: "var(--canvas)", color: "var(--ink)" }}>
-    {[...automaticSamples, ...extra].map(([name, requestText, content], i) => (
+    {[...automaticSamples, ...extra, ...cases.map(([name, request, reply]) => ["Prompt · " + name, request, reply]), ["Prompt · attached image", prompts.image, "A tidy desk with a lamp.", [{ src: DESK, alt: "desk.jpg" }]]].filter(([name]) => !match || name.toLowerCase().includes(match.toLowerCase())).map(([name, requestText, content, requestImages], i) => (
       <section key={name} style={{ marginBottom: "2rem" }}>
         <h2 style={{ font: "600 .8rem var(--font-ui)", color: "var(--muted)" }}>{i}. {name}</h2>
-        <Message message={{ id: "a" + i, role: "assistant", content, createdAt: 1 }} requestText={requestText} isLast={false} busy={false} live={false} onAction={() => {}} />
+        <Message message={{ id: "a" + i, role: "assistant", content, createdAt: 1 }} requestText={requestText} requestImages={requestImages} isLast={false} busy={false} live={false} onAction={() => {}} />
       </section>
     ))}
   </main>,

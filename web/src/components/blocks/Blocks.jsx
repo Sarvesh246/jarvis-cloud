@@ -959,10 +959,10 @@ export function useSources(content) {
   return useMemo(() => collectSources(content || ""), [content]);
 }
 
-export function Rendered({ content, sources, onOpen, mapped = false, live = false, stateKey, requestText = "" }) {
+export function Rendered({ content, sources, onOpen, mapped = false, live = false, stateKey, requestText = "", attached }) {
   const preference = useContext(PresentationContext);
   const presentation = wantsPlainReply(requestText) ? "minimal" : preference;
-  const automaticView = useMemo(() => !mapped && !live && presentation !== 'minimal' ? automaticPresentation(content, requestText) : null, [mapped, live, presentation, requestText, content]);
+  const automaticView = useMemo(() => !mapped && !live && presentation !== 'minimal' ? automaticPresentation(content, requestText, attached) : null, [mapped, live, presentation, requestText, content, attached]);
   const displayContent = automaticView?.markdown ?? content;
   const value = useMemo(
     () => ({

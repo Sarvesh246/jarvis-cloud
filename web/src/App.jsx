@@ -9,7 +9,8 @@ import React, {
 import { ArrowDown, FileArrowUp, IconContext, Quotes } from "@phosphor-icons/react";
 import { readEvents } from "./stream.js";
 import { normalizeReplySpacing, normalizeSavedReplySpacing } from "./lib/reply-spacing.js";
-import { requestForReply } from "./lib/adaptive-ui.js";
+import { requestForReply, imagesForReply } from "./lib/adaptive-ui.js";
+import { fullImages } from "./lib/image-store.js";
 import { chatTitle, displayChatTitle } from './lib/titles.js';
 import { liveReply, readSyncCache } from "./lib/chat-sync.js";
 import { useChatSync } from "./lib/use-chat-sync.js";
@@ -473,7 +474,7 @@ export function App() {
   const pinned = useRef(true);
   const fresh = useRef(new Set());
   /* Full-size images stay in memory only; conversations keep thumbnails. */
-  const imageData = useRef(new Map());
+  const imageData = useRef(fullImages);
   const settleTimer = useRef(0);
   const chatsRef = useRef(chats);
   chatsRef.current = chats;
@@ -2269,6 +2270,7 @@ export function App() {
                       key={message.id}
                       message={message}
                       requestText={requestForReply(messages, index)}
+                      requestImages={imagesForReply(messages, index)}
                       fresh={fresh.current.has(message.id)}
                       busy={busy}
                       phase={live ? livePhase : undefined}

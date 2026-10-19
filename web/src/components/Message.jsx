@@ -661,7 +661,7 @@ function SourcesPill({ sources, onOpen }) {
   );
 }
 
-function MessageView({ message, requestText = "", fresh, busy, live, streaming, phase, isLast, edited, onAction, phone = false }) {
+function MessageView({ message, requestText = "", requestImages, fresh, busy, live, streaming, phase, isLast, edited, onAction, phone = false }) {
   const [copied, copy] = useCopy();
   const [editing, setEditing] = useState(false);
   const [menu, setMenu] = useState(false);
@@ -756,7 +756,7 @@ function MessageView({ message, requestText = "", fresh, busy, live, streaming, 
                 {mine ? (
                   shown
                 ) : (
-                  <Rendered requestText={requestText} stateKey={message.id} content={message.content} sources={sources} onOpen={open} live={live} />
+                  <Rendered requestText={requestText} attached={requestImages} stateKey={message.id} content={message.content} sources={sources} onOpen={open} live={live} />
                 )}
                 {streaming && <span className="caret" aria-hidden="true" />}
               </div>
