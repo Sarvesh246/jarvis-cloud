@@ -65,3 +65,46 @@
   .code .block-bar .block-tools { flex: 1 1 auto; justify-content: flex-end; gap: 0; }
   .table-block .block-bar .block-tools { flex: 1 1 auto; justify-content: flex-start; gap: 0; }
 }
+
+/* Phones: bar charts keep label and bar on one line. An earlier narrow-screen
+   rule stacked the track under the label inside a fixed-height row, which
+   laid the next label over the bar. */
+@media (max-width: 600px) {
+  .prose.prose .chart-row .chart-label { grid-column: 1; grid-row: 1; }
+  .prose.prose .chart-row .chart-track { grid-column: 2; grid-row: 1; }
+  .prose.prose .chart-row .chart-value { grid-column: 2; grid-row: 1; }
+}
+
+/* Cards whose header only holds a title and Copy: Copy drops its word on
+   phones instead of wrapping to a row of its own. */
+@media (max-width: 560px) {
+  .metrics .block-bar .block-tool:not([aria-pressed]) > span,
+  .timeline .block-bar .block-tool:not([aria-pressed]) > span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+/* The checklist header is already flush with its card; an older negative
+   margin pushed it 16px past each edge, clipping "1 / 2 done" on phones. */
+.prose.prose .local-checklist > .local-checklist-bar { margin-inline: 0; }
+
+/* Checklist title stays whole; the other header items wrap around it. */
+.checklist-title { white-space: nowrap; }
+
+/* Weather: the small-screen rule that tucks a summary card's icon to the
+   right also caught the hourly and daily icons, pushing them off centre. */
+.weather-detailed .weather-icon { align-self: center; }
+
+/* Sideways scrollers get a quiet track instead of the browser's white one. */
+.weather-hours-scroll,
+.weather-days,
+.after-graph-scroll,
+.table-block [class*="scroll"] { scrollbar-color: var(--hairline-strong) transparent; }
+
+/* Code scrolls sideways on a dark track that matches the block. */
+.prose.prose .code pre { scrollbar-width: thin; scrollbar-color: #5a4a3e transparent; }
