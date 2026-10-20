@@ -1,3 +1,4 @@
+/* Phone rules retain d864aef; desktop rules retain the desktop redesign. */
 /* The workspace is a facing page: same paper, a fine rule down its spine. */
 .workspace {
   min-width: 0;
@@ -36,11 +37,13 @@
   opacity: 0;
   transition: opacity var(--dur-1) var(--ease);
 }
+
 @media (hover: hover) and (pointer: fine) {
 .ws-resize:hover::after {
   opacity: 0.6;
 }
 }
+
 .ws-resize:focus-visible::after,
 body.resizing .ws-resize::after {
   opacity: 0.6;
@@ -541,8 +544,6 @@ body.resizing iframe {
   background: var(--surface);
 }
 
-
-
 /* Beside the conversation on wide screens; a sheet over it otherwise, so the
    conversation never gets squeezed into an unreadable column. */
 /* Only a sheet needs a scrim; beside the conversation it is a facing page */
@@ -566,66 +567,66 @@ body.resizing iframe {
 }
 
 @media (max-width: 47.9375rem), (pointer: coarse) and (max-height: 31.25rem) {
-  .workspace {
-    inset: 0;
-    width: 100%;
-    border-left: 0;
-    animation-name: ws-up;
-  }
+.workspace {
+  inset: 0;
+  width: 100%;
+  border-left: 0;
+  animation-name: ws-up;
+}
 
-  @keyframes ws-up {
-    from {
-      opacity: 0;
-      transform: translateY(24px);
-    }
+@keyframes ws-up {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
   }
+}
 
-  .ws-resize {
-    display: none;
-  }
+.ws-resize {
+  display: none;
+}
 
-  .ws-head {
-    padding-left: var(--s-4);
-  }
+.ws-head {
+  padding-left: var(--s-4);
+}
 
-  .ws-document {
-    padding: var(--s-5) var(--s-4) var(--s-6);
-  }
+.ws-document {
+  padding: var(--s-5) var(--s-4) var(--s-6);
+}
 
-  .ws-sources,
-  .ws-filters,
-  .ws-grid {
-    padding-left: var(--s-4);
-    padding-right: var(--s-4);
-  }
+.ws-sources,
+.ws-filters,
+.ws-grid {
+  padding-left: var(--s-4);
+  padding-right: var(--s-4);
+}
 
-  .ws-filter {
-    margin-left: var(--s-4);
-    margin-right: var(--s-4);
-  }
+.ws-filter {
+  margin-left: var(--s-4);
+  margin-right: var(--s-4);
+}
 
-  .doc-bar {
-    padding-left: var(--s-4);
-  }
+.doc-bar {
+  padding-left: var(--s-4);
+}
 
-  /* On a phone the tools keep their icons; the byline gets its own line */
-  .doc-tools .block-tool span {
-    display: none;
-  }
+/* On a phone the tools keep their icons; the byline gets its own line */
+.doc-tools .block-tool span {
+  display: none;
+}
 
-  .doc-edit textarea {
-    padding: var(--s-4);
-  }
+.doc-edit textarea {
+  padding: var(--s-4);
+}
 
-  .doc-edit-actions,
-  .revise {
-    padding-left: var(--s-4);
-    padding-right: var(--s-4);
-  }
+.doc-edit-actions,
+.revise {
+  padding-left: var(--s-4);
+  padding-right: var(--s-4);
+}
 
-  .doc-edit-actions .doc-byline {
-    display: none;
-  }
+.doc-edit-actions .doc-byline {
+  display: none;
+}
 }
 
 @media print {
@@ -664,11 +665,16 @@ body.resizing iframe {
 }
 
 .ws-head { flex-wrap: wrap; row-gap: var(--s-2); padding-bottom: var(--s-2); }
+
 .ws-title-group { flex: 1 1 10rem; }
+
 .ws-actions { flex-wrap: wrap; justify-content: flex-end; }
+
 .ws-grid { padding-inline: var(--s-4); scroll-padding-inline: var(--s-4); }
+
 .ws-grid:focus-visible { outline-offset: -2px; }
 
+@media (min-width: 48rem) and (min-height: 31.3125rem), (min-width: 48rem) and (pointer: fine) {
 /* Views of one reply: document, sources, table. A quiet segmented strip under
    the header, the chosen one lifted onto paper. */
 .ws-views {
@@ -710,4 +716,5 @@ body.resizing iframe {
   .ws-views button[aria-selected="false"]:hover {
     color: var(--ink);
   }
+}
 }

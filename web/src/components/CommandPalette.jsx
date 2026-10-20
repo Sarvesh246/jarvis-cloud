@@ -4,6 +4,7 @@ import { collectWork } from "../lib/library.js";
 import { searchChats } from "../lib/format.js";
 import { displayChatTitle } from "../lib/titles.js";
 import "./ui-tools.css";
+import { usePhone } from "../lib/use-phone.js";
 import "./palette-desk.css";
 
 /* The kinds of result, as the section headings a person reads */
@@ -17,6 +18,7 @@ export function CommandPalette({
   onOpenWork,
   actions,
 }) {
+  const phone = usePhone();
   const dialog = useRef(null),
     input = useRef(null);
   const previousResults = useRef([]);
@@ -82,7 +84,81 @@ export function CommandPalette({
     onClose();
     item.run();
   }
-  return (
+  return phone ? (
+    <dialog
+      ref={dialog}
+      className="command-dialog"
+      aria-labelledby="command-title"
+      onClose={onClose}
+      onCancel={(event) => { event.preventDefault(); onClose(); }}
+      onClick={(e) => {
+        if (e.target === dialog.current) onClose();
+      }}
+    >
+      <header className="rich-toolbar">
+        <h2 id="command-title">Find or do something</h2>
+        <button
+          className="block-tool"
+          onClick={onClose}
+          aria-label="Close command palette"
+        >
+          Close
+        </button>
+      </header>
+      <input
+        ref={input}
+        type="search"
+        value={query}
+        maxLength={200}
+        placeholder="Search actions, conversations and saved outputs"
+        aria-label="Search commands"
+        aria-controls="command-results"
+        onChange={(e) => setQuery(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.nativeEvent.isComposing) return;
+          if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+            e.preventDefault();
+            setSelected((i) =>
+              Math.max(
+                0,
+                Math.min(
+                  results.length - 1,
+                  i + (e.key === "ArrowDown" ? 1 : -1),
+                ),
+              ),
+            );
+          }
+          if (e.key === "Enter") {
+            e.preventDefault();
+            choose(results[selected]);
+          }
+        }}
+      />
+      <p className="local-note">↑ ↓ to choose · Enter to open · Esc to close</p>
+      <div className="command-results" id="command-results">
+        {results.map((x, i) => (
+          <button
+            key={`${x.kind}-${x.id}`}
+            data-command-index={i}
+            data-selected={i === selected || undefined}
+            onPointerMove={() => setSelected(i)}
+            onClick={() => choose(x)}
+          >
+            <span>{x.label}</span>
+            <small>{x.kind}</small>
+          </button>
+        ))}
+        {!results.length && (
+          <p role="status">No matches. Try a shorter word.</p>
+        )}
+      </div>
+      <p className="sr-only" role="status">
+        {results[selected]
+          ? `${results[selected].label}, ${results[selected].kind}`
+          : "No results"}
+      </p>
+    </dialog>
+  ) : (
     <dialog
       ref={dialog}
       className="command-dialog"

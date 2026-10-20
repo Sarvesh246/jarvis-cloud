@@ -2,6 +2,7 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { fitTitle } from '../lib/titles.js';
 import { CaretRight, DotsThreeCircle, FolderSimplePlus, List, SidebarSimple } from "@phosphor-icons/react";
 import "./header.css";
+import { usePhone } from "../lib/use-phone.js";
 
 /* The header only names the conversation. What Vaelo is doing is shown
    where it is happening: in the reply itself. Its one action keeps a
@@ -9,6 +10,7 @@ import "./header.css";
    a menu on the left, the name in the middle and the conversation's own
    options on the right. */
 export function Header({ title, kicker, meta, canRename, onRename, onOpenRail, onToggleRail, onSaveAsWorkspace, onFind, onMenu }) {
+  const phone = usePhone();
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(title);
   const input = useRef(null);
@@ -70,8 +72,8 @@ export function Header({ title, kicker, meta, canRename, onRename, onOpenRail, o
         >
           <SidebarSimple size={21} />
         </button>
-        <div className="header-titles" data-kicker={kicker || meta ? "" : undefined}>
-          {(kicker || meta) && (
+        <div className="header-titles" data-kicker={!phone && (kicker || meta) ? "" : undefined}>
+          {!phone && (kicker || meta) && (
             <p className="header-kicker">
               {kicker && (
                 <span className="header-kicker-name">

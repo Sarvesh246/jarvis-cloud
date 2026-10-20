@@ -1,3 +1,4 @@
+/* Phone rules retain d864aef; desktop rules retain the desktop redesign. */
 .shell {
   display: flex;
   height: 100dvh;
@@ -137,6 +138,47 @@
   padding: 0 var(--s-5) calc(var(--s-3) + env(safe-area-inset-bottom));
 }
 
+@media (max-width: 47.9375rem), (pointer: coarse) and (max-height: 31.25rem) {
+/* Appears only once you have scrolled away from the newest words */
+.jump {
+  position: absolute;
+  bottom: calc(100% + var(--s-3));
+  left: 50%;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  height: 2.25rem;
+  padding: 0 var(--s-4) 0 var(--s-3);
+  border-radius: var(--r-pill);
+  border: 1px solid var(--hairline-strong);
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-size: var(--t-sm);
+  white-space: nowrap;
+  box-shadow: var(--lift-1);
+  transform: translateX(-50%);
+  animation: fade var(--dur-2) var(--ease) both;
+  transition:
+    color var(--dur-1) var(--ease),
+    border-color var(--dur-1) var(--ease);
+}
+
+@media (hover: hover) and (pointer: fine) {
+.jump:hover {
+  color: var(--gilt-ink);
+  border-color: var(--gilt);
+}
+}
+
+.jump[data-live] {
+  gap: var(--s-2);
+  max-width: min(26rem, calc(100% - 2rem));
+  padding-left: var(--s-2);
+  font-style: italic;
+}
+}
+
+@media (min-width: 48rem) and (min-height: 31.3125rem), (min-width: 48rem) and (pointer: fine) {
 /* Appears only once you have scrolled away from the newest words. While Vaelo
    works it carries Vaelo's face and its current action; the chip at its end
    is the way back. */
@@ -184,6 +226,7 @@
   padding-left: var(--s-3);
   font-style: italic;
 }
+}
 
 .jump-text {
   min-width: 0;
@@ -191,6 +234,14 @@
   text-overflow: ellipsis;
 }
 
+@media (max-width: 47.9375rem), (pointer: coarse) and (max-height: 31.25rem) {
+.jump-arrow {
+  flex: none;
+  color: var(--muted);
+}
+}
+
+@media (min-width: 48rem) and (min-height: 31.3125rem), (min-width: 48rem) and (pointer: fine) {
 .jump-rule {
   flex: none;
   width: 1px;
@@ -210,6 +261,7 @@
   color: var(--gilt-ink);
   font-style: normal;
   font-weight: var(--w-strong);
+}
 }
 
 /* Select words in a reply and ask about exactly those */
@@ -303,45 +355,54 @@
 }
 
 @media (max-width: 47.9375rem), (pointer: coarse) and (max-height: 31.25rem) {
-  .stage > * {
-    --text: 100cqw;
-  }
-
-  .shell > .rail,
-  .shell[data-collapsed="true"] > .rail {
-    margin-left: 0;
-    visibility: visible;
-    transition: transform var(--dur-2) var(--ease);
-  }
-
-  .thread {
-    padding: var(--s-4) var(--s-4) var(--s-5);
-    gap: var(--s-5);
-  }
-
-  .dock {
-    padding: 0 var(--s-3) calc(var(--s-2) + env(safe-area-inset-bottom));
-  }
-
-  .jump {
-    left: 50%;
-  }
-
-  .quote-ask {
-    height: var(--hit);
-  }
+.stage > * {
+  --text: 100cqw;
 }
+
+.shell > .rail,
+.shell[data-collapsed="true"] > .rail {
+  margin-left: 0;
+  visibility: visible;
+  transition: transform var(--dur-2) var(--ease);
+}
+
+.thread {
+  padding: var(--s-4) var(--s-4) var(--s-5);
+  gap: var(--s-5);
+}
+
+.dock {
+  padding: 0 var(--s-3) calc(var(--s-2) + env(safe-area-inset-bottom));
+}
+
+.jump {
+  left: 50%;
+}
+
+.quote-ask {
+  height: var(--hit);
+}
+}
+
 .selected-work-context { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-3); padding: var(--s-3) var(--s-4); border-top: 1px solid var(--hairline); font-size: var(--t-xs); color: var(--muted); }
+
 .selected-work-context > span { flex: 1 1 16rem; overflow-wrap: anywhere; }
+
 .selected-work-context button { min-height: var(--hit); font-size: var(--t-xs); }
+
 .selected-work-context strong { font-weight: var(--w-ui); color: var(--ink); }
+
 /* An empty conversation in a workspace offers its starters as the first move */
 .work-dock-starters { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: var(--s-2); }
+
 .selected-work-context .work-dock-starters button { padding: var(--s-2) var(--s-3); border: 1px solid var(--hairline); border-radius: var(--r-sm); background: var(--surface); color: var(--ink-soft); font-style: italic; font-size: var(--t-xs); text-align: left; cursor: pointer; transition: border-color var(--dur-1) var(--ease); }
+
 .selected-work-context .work-dock-starters button:disabled { opacity: 0.5; cursor: default; }
+
 @media (hover: hover) and (pointer: fine) {
 @media (hover: hover) and (pointer: fine) {
 .selected-work-context .work-dock-starters button:hover:not(:disabled) { border-color: var(--gilt); }
 }
  }
+
 @media (max-width: 700px) { .work-dock-starters { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; } .selected-work-context .work-dock-starters button { flex-shrink: 0; white-space: nowrap; } }

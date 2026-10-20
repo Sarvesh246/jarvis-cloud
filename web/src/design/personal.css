@@ -1,3 +1,5 @@
+/* This redesign belongs to the desktop; phones have their own layout. */
+@media (min-width: 48rem) and (min-height: 31.3125rem), (min-width: 48rem) and (pointer: fine) {
 /* Personal choices (Settings → Appearance). Each one is a data attribute on
    the root, set before first paint by public/prefs.js, so a chosen accent,
    line length or density never flashes the default first. */
@@ -87,4 +89,5 @@
 /* ---- Paper grain ---- */
 :root[data-grain="off"] body::before {
   display: none;
+}
 }

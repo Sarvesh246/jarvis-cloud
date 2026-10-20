@@ -19,6 +19,7 @@ import { currentContent, docTitle, isLongReply, parseTables } from "../lib/libra
 import { DocumentWork } from "./DocumentWork.jsx";
 import { requestForReply } from "../lib/adaptive-ui.js";
 import "./workspace.css";
+import { usePhone } from "../lib/use-phone.js";
 
 /* The workspace opens beside the conversation only when something deserves
    sustained attention: a preview, a long piece of code, a reply to read as a
@@ -261,6 +262,7 @@ export function Workspace({
   );
   const work = item?.kind === "document" ? works?.[item.messageId] : undefined;
   const documentText = currentContent(work, message?.content ?? "");
+  const phone = usePhone();
   const sourceCount = useSources(message?.content).length;
   /* One reply can be read as a document, as the sources behind it, or as its
      table; the tabs move between them without leaving the reply. */
@@ -430,7 +432,7 @@ export function Workspace({
           </button>
         </div>
       </header>
-      {views.length > 1 && views.some((view) => view.id === item.kind) && (
+      {!phone && views.length > 1 && views.some((view) => view.id === item.kind) && (
         <div className="ws-views" role="tablist" aria-label="Views of this reply">
           {views.map((view) => (
             <button

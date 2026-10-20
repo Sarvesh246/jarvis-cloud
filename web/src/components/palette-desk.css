@@ -1,3 +1,5 @@
+/* This redesign belongs to the desktop; phones have their own layout. */
+@media (min-width: 48rem) and (min-height: 31.3125rem), (min-width: 48rem) and (pointer: fine) {
 /* The command palette: a search row, results under quiet headings, and the
    keys that drive it along the bottom. It lifts in from just above its place. */
 
@@ -138,4 +140,5 @@
 
 :root[data-motion="reduce"] .command-dialog[open] {
   animation: none;
+}
 }

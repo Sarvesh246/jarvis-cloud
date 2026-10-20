@@ -1,3 +1,5 @@
+/* This redesign belongs to the desktop; phones have their own layout. */
+@media (min-width: 48rem) and (min-height: 31.3125rem), (min-width: 48rem) and (pointer: fine) {
 /* The Workroom catalogue on a wide screen: each audience is a row, its name
    and line on the left, its workspaces as tiles on the right. Phones keep the
    plain list (see the narrow rules in workroom.css). */
@@ -119,4 +121,5 @@
 :root[data-motion="reduce"] .workroom .work-entry {
   transition: none;
   transform: none;
+}
 }

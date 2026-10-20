@@ -1,3 +1,4 @@
+/* Phone rules retain d864aef; desktop rules retain the desktop redesign. */
 .mark {
   position: relative;
   display: inline-grid;
@@ -86,6 +87,28 @@
   }
 }
 
+@media (max-width: 47.9375rem), (pointer: coarse) and (max-height: 31.25rem) {
+@keyframes mark-bow {
+  0% {
+    transform: translateY(-1.5px);
+  }
+  100% {
+    transform: none;
+  }
+}
+
+.mark[data-state="idle"] .mark-glow,
+.mark[data-state="listening"] .mark-glow {
+  animation: mark-breathe 6s ease-in-out infinite;
+}
+
+/* listening: the light lifts a little */
+.mark[data-state="listening"] {
+  --mark-glow-o: 0.7;
+}
+}
+
+@media (min-width: 48rem) and (min-height: 31.3125rem), (min-width: 48rem) and (pointer: fine) {
 @keyframes mark-bow {
   0% {
     opacity: 0;
@@ -104,6 +127,7 @@
 .mark[data-state="idle"] .mark-glow {
   animation: mark-breathe 6s ease-in-out infinite;
 }
+
 .mark[data-state="idle"] .mark-v {
   animation: mark-swell 6s ease-in-out infinite;
 }
@@ -137,22 +161,28 @@
 .mark[data-state="listening"] {
   --mark-glow-o: 0.7;
 }
+
 .mark[data-state="listening"] .mark-glow {
   animation: none;
 }
+
 .mark[data-state="listening"]::before {
   opacity: 0.5;
   animation: mark-beat 1.05s var(--ease) infinite;
 }
+
 .mark[data-state="listening"]::after {
   animation: mark-ripple 3.15s var(--ease) infinite;
 }
+
 .mark[data-state="listening"] .mark-glow::after {
   animation: mark-ripple 3.15s var(--ease) 1.05s infinite;
 }
+
 .mark[data-state="listening"] .mark-v {
   animation: none;
 }
+
 .mark[data-state="listening"] .mark-hair {
   animation: mark-hair-pulse 1.05s var(--ease) infinite;
 }
@@ -190,31 +220,66 @@
     opacity: 0.55;
   }
 }
+}
 
 /* waking: dim and patient */
 .mark[data-state="waking"] .mark-heavy,
 .mark[data-state="waking"] .mark-serif {
   opacity: 0.5;
 }
+
 .mark[data-state="waking"] .mark-hair {
   animation: mark-hair 3.4s ease-in-out infinite;
 }
 
+@media (max-width: 47.9375rem), (pointer: coarse) and (max-height: 31.25rem) {
+/* thinking: the hairline catches the light, slowly */
+.mark[data-state="thinking"] {
+  --mark-glow-o: 0.55;
+}
+
+.mark[data-state="thinking"] .mark-hair {
+  animation: mark-hair 2.6s ease-in-out infinite;
+}
+}
+
+@media (min-width: 48rem) and (min-height: 31.3125rem), (min-width: 48rem) and (pointer: fine) {
 /* thinking: the weighted stroke dims and returns while the hairline catches
    the light */
 .mark[data-state="thinking"] {
   --mark-glow-o: 0.55;
 }
+
 .mark[data-state="thinking"] .mark-heavy {
   animation: mark-dim 3.2s ease-in-out infinite;
 }
+
 .mark[data-state="thinking"] .mark-hair {
   animation: mark-hair 1.6s ease-in-out infinite;
 }
+}
+
 .mark[data-state="thinking"] .mark-glow {
   animation: mark-breathe 2.6s ease-in-out infinite;
 }
 
+@media (max-width: 47.9375rem), (pointer: coarse) and (max-height: 31.25rem) {
+/* working: light travels down the hairline, like a pen being drawn */
+.mark[data-state="working"] {
+  --mark-glow-o: 0.6;
+}
+
+.mark[data-state="working"] .mark-trace {
+  animation: mark-trace 2.2s var(--ease) infinite;
+}
+
+/* speaking: warm and steady, breathing with the words */
+.mark[data-state="speaking"] {
+  --mark-glow-o: 0.85;
+}
+}
+
+@media (min-width: 48rem) and (min-height: 31.3125rem), (min-width: 48rem) and (pointer: fine) {
 @keyframes mark-dim {
   0%,
   100% {
@@ -230,10 +295,12 @@
 .mark[data-state="working"] {
   --mark-glow-o: 0.6;
 }
+
 .mark[data-state="working"] .mark-trace {
   animation: mark-trace 1.6s var(--ease) infinite;
   stroke-width: 3;
 }
+
 .mark[data-state="working"] .mark-v {
   animation: mark-lift 1.6s ease-in-out infinite;
 }
@@ -253,12 +320,30 @@
 .mark[data-state="speaking"] {
   --mark-glow-o: 0.85;
 }
+}
+
 .mark[data-state="speaking"] .mark-glow {
   animation: mark-breathe 1.8s ease-in-out infinite;
 }
+
+@media (max-width: 47.9375rem), (pointer: coarse) and (max-height: 31.25rem) {
+/* settling: one small bow, then still */
+.mark[data-state="settling"] .mark-v {
+  animation: mark-bow 900ms var(--ease) both;
+}
+
+/* concern: earthen and steady, never alarming */
+.mark[data-state="concern"] {
+  color: var(--clay);
+  --mark-glow-o: 0.2;
+}
+}
+
+@media (min-width: 48rem) and (min-height: 31.3125rem), (min-width: 48rem) and (pointer: fine) {
 .mark[data-state="speaking"] .mark-heavy {
   animation: mark-speak 900ms ease-in-out infinite;
 }
+
 .mark[data-state="speaking"] .mark-hair {
   animation: mark-speak 900ms ease-in-out 450ms infinite;
 }
@@ -278,6 +363,7 @@
 .mark[data-state="settling"] .mark-v {
   animation: mark-bow 900ms var(--ease) both;
 }
+
 .mark[data-state="settling"] .mark-glow {
   animation: mark-flash 1200ms var(--ease) 500ms both;
 }
@@ -288,6 +374,7 @@
   color: var(--concern, var(--clay));
   --mark-glow-o: 0.2;
 }
+
 .mark[data-state="concern"] .mark-v {
   animation: mark-lean 900ms var(--ease) both;
 }
@@ -313,6 +400,7 @@
     opacity: 0;
     transform: scale(1.25);
   }
+}
 }
 
 /* inked: the outline is drawn, then the ink floods in. Reduced motion lands
@@ -363,6 +451,22 @@
   color: var(--ink);
 }
 
+@media (max-width: 47.9375rem), (pointer: coarse) and (max-height: 31.25rem) {
+@media (prefers-reduced-motion: reduce) {
+  .mark-glow,
+  .mark-hair,
+  .mark-trace,
+  .mark-v {
+    animation: none !important;
+  }
+}
+
+:root[data-motion="reduce"] :is(.mark-glow, .mark-hair, .mark-trace, .mark-v) {
+  animation: none !important;
+}
+}
+
+@media (min-width: 48rem) and (min-height: 31.3125rem), (min-width: 48rem) and (pointer: fine) {
 @media (prefers-reduced-motion: reduce) {
   .mark-glow,
   .mark-glow::after,
@@ -378,6 +482,7 @@
 
 :root[data-motion="reduce"] :is(.mark-glow, .mark-glow::after, .mark::before, .mark::after, .mark-heavy, .mark-hair, .mark-trace, .mark-v) {
   animation: none !important;
+}
 }
 
 .brandmark {

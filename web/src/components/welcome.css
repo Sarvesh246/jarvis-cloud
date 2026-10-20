@@ -1,3 +1,4 @@
+/* Phone rules retain d864aef; desktop rules retain the desktop redesign. */
 .welcome {
   display: flex;
   flex-direction: column;
@@ -12,12 +13,15 @@
 .welcome > * {
   animation: settle var(--dur-3) var(--ease) both;
 }
+
 .welcome > :nth-child(2) {
   animation-delay: 120ms;
 }
+
 .welcome > :nth-child(3) {
   animation-delay: 240ms;
 }
+
 .welcome > :nth-child(n + 4) {
   animation-delay: 380ms;
 }
@@ -154,28 +158,34 @@
     opacity var(--dur-2) var(--ease),
     transform var(--dur-2) var(--ease);
 }
+
 @media (hover: hover) and (pointer: fine) {
 .starters button:hover {
   padding-left: var(--s-3);
 }
 }
+
 .starters button:focus-visible {
   padding-left: var(--s-3);
 }
+
 @media (hover: hover) and (pointer: fine) {
 .starters button:hover .starter-title {
   color: var(--gilt-ink);
 }
 }
+
 .starters button:focus-visible .starter-title {
   color: var(--gilt-ink);
 }
+
 @media (hover: hover) and (pointer: fine) {
 .starters button:hover svg {
   opacity: 1;
   transform: none;
 }
 }
+
 .starters button:focus-visible svg {
   opacity: 1;
   transform: none;
@@ -189,42 +199,42 @@
 }
 
 @media (max-width: 47.9375rem), (pointer: coarse) and (max-height: 31.25rem) {
-  .welcome {
-    margin: auto;
-    padding: var(--s-4) var(--s-2);
-  }
+.welcome {
+  margin: auto;
+  padding: var(--s-4) var(--s-2);
+}
 
-  .welcome .mark {
-    width: 52px;
-    height: 52px;
-    margin-bottom: var(--s-4);
-  }
+.welcome .mark {
+  width: 52px;
+  height: 52px;
+  margin-bottom: var(--s-4);
+}
 
-  .welcome h1 {
-    font-size: clamp(2rem, 8.5vw, 2.5rem);
-  }
+.welcome h1 {
+  font-size: clamp(2rem, 8.5vw, 2.5rem);
+}
 
-  .welcome-line {
-    margin: var(--s-2) 0 var(--s-5);
-    font-size: var(--t-base);
-  }
+.welcome-line {
+  margin: var(--s-2) 0 var(--s-5);
+  font-size: var(--t-base);
+}
 
-  .starters button {
-    padding: var(--s-3) var(--s-1);
-  }
+.starters button {
+  padding: var(--s-3) var(--s-1);
+}
 
-  .starter-title {
-    font-size: var(--t-md);
-  }
+.starter-title {
+  font-size: var(--t-md);
+}
 
-  .starters svg {
-    opacity: 0.6;
-    transform: none;
-  }
+.starters svg {
+  opacity: 0.6;
+  transform: none;
+}
 
-  .welcome-foot {
-    margin-top: var(--s-4);
-  }
+.welcome-foot {
+  margin-top: var(--s-4);
+}
 }
 
 /* The whole welcome fits without scrolling: it tightens in steps as the
@@ -318,6 +328,7 @@
   }
 }
 
+@media (min-width: 48rem) and (min-height: 31.3125rem), (min-width: 48rem) and (pointer: fine) {
 /* Where you left off: the last few conversations, set like the starters so
    the page reads as one contents list. Shown only when there is something to
    go back to, and only where the room allows. */
@@ -424,7 +435,6 @@
   }
 }
 
-
 /* ---- The desk: the message box lives inside the page ---- */
 
 .welcome {
@@ -432,10 +442,15 @@
 }
 
 .welcome > :nth-child(1) { animation-delay: 0ms; }
+
 .welcome > :nth-child(2) { animation-delay: 80ms; }
+
 .welcome > :nth-child(3) { animation-delay: 160ms; }
+
 .welcome > :nth-child(4) { animation-delay: 240ms; }
+
 .welcome > :nth-child(5) { animation-delay: 320ms; }
+
 .welcome > :nth-child(n + 6) { animation-delay: 420ms; }
 
 .desk-meta {
@@ -584,4 +599,5 @@
   .desk-lower[data-two] {
     grid-template-columns: minmax(0, 1fr);
   }
+}
 }

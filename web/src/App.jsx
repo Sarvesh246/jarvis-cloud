@@ -2342,15 +2342,22 @@ export function App() {
               <button className="jump" data-live={busy || undefined} onClick={jumpToLatest}>
                 {busy && (
                   <>
-                    <Mark size={22} state={livePhase} />
+                    <Mark size={phone ? 18 : 22} state={livePhase} />
                     <span className="jump-text">{liveLine(messages.at(-1), livePhase)}</span>
-                    <span className="jump-rule" aria-hidden="true" />
+                    {!phone && <span className="jump-rule" aria-hidden="true" />}
                   </>
                 )}
-                <span className="jump-chip">
-                  Jump to latest
-                  <ArrowDown size={14} aria-hidden="true" />
-                </span>
+                {phone ? (
+                  <>
+                    {!busy && <ArrowDown size={15} />}
+                    {busy ? <ArrowDown size={14} className="jump-arrow" /> : "Latest"}
+                  </>
+                ) : (
+                  <span className="jump-chip">
+                    Jump to latest
+                    <ArrowDown size={14} aria-hidden="true" />
+                  </span>
+                )}
               </button>
             )}
             {cloud === "Starting" && !busy && online && !session.offline && (
@@ -2523,7 +2530,7 @@ export function App() {
             </div>
             {!messages.length ? (
               <Welcome
-                name={prefs.callMe || session.user.name}
+                name={phone ? session.user.name : prefs.callMe || session.user.name}
                 phase={phase}
                 recent={chats
                   .filter((chat) => chat.id !== activeId && chat.messages.length)
@@ -2531,7 +2538,7 @@ export function App() {
                   .slice(0, 3)}
                 onOpen={selectChat}
                 plain={!prefs.greet}
-                dock={dockNode}
+                dock={phone ? undefined : dockNode}
                 status={
                   guest || session.offline || !online
                     ? undefined
@@ -2596,7 +2603,7 @@ export function App() {
             </button>
           )}
 
-          {messages.length > 0 && dockNode}
+          {(phone || messages.length > 0) && dockNode}
 
           </>
           )}

@@ -1,3 +1,4 @@
+/* Phone rules retain d864aef; desktop rules retain the desktop redesign. */
 .header {
   position: relative;
   z-index: 5;
@@ -34,6 +35,7 @@
   display: none;
 }
 
+@media (min-width: 48rem) and (min-height: 31.3125rem), (min-width: 48rem) and (pointer: fine) {
 /* The name sits under a quiet line saying where it belongs and how far it has
    come, with room above and below so the two never crowd each other. */
 .header-titles {
@@ -95,6 +97,7 @@
   height: 2.25rem;
   font-weight: 300;
 }
+}
 
 .header-title,
 .header-title-input {
@@ -119,12 +122,12 @@
   text-align: left;
   transition: background var(--dur-1) var(--ease);
 }
+
 @media (hover: hover) and (pointer: fine) {
 .header-title:hover:not(:disabled) {
   background: var(--gilt-wash);
 }
 }
-
 
 .header-title-input {
   width: min(34rem, 60vw);
@@ -142,55 +145,55 @@
 /* On a phone: ☰ on the left, the name centred, ⋯ on the right, and the
    gilt hairline under it, inset 16px each side. */
 @media (max-width: 47.9375rem), (pointer: coarse) and (max-height: 31.25rem) {
-  .header {
-    gap: 4px;
-    min-height: calc(50px + 6px + var(--ios-edge, 0px));
-    padding: 0 8px 6px;
-    padding-top: calc(env(safe-area-inset-top) + var(--ios-edge, 0px));
-  }
+.header {
+  gap: 4px;
+  min-height: calc(50px + 6px + var(--ios-edge, 0px));
+  padding: 0 8px 6px;
+  padding-top: calc(env(safe-area-inset-top) + var(--ios-edge, 0px));
+}
 
-  .header::after {
-    left: 16px;
-    right: 16px;
-  }
+.header::after {
+  left: 16px;
+  right: 16px;
+}
 
-  .header-left {
-    gap: 0;
-  }
+.header-left {
+  gap: 0;
+}
 
-  .header-rail-mobile,
-  .header-more {
-    display: inline-grid;
-    flex: none;
-    width: 44px;
-    height: 44px;
-    color: var(--ink-soft);
-  }
+.header-rail-mobile,
+.header-more {
+  display: inline-grid;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  color: var(--ink-soft);
+}
 
-  .header-rail-mobile:active,
-  .header-more:active {
-    background: var(--gilt-wash);
-  }
+.header-rail-mobile:active,
+.header-more:active {
+  background: var(--gilt-wash);
+}
 
-  .header .header-rail-desktop,
-  .header .header-find,
-  .header .header-save-work {
-    display: none;
-  }
+.header .header-rail-desktop,
+.header .header-find,
+.header .header-save-work {
+  display: none;
+}
 
-  .header-title,
-  .header-title-input {
-    height: 44px;
-    padding: 0 4px;
-    font-size: 17px;
-    max-width: none;
-    text-align: center;
-  }
+.header-title,
+.header-title-input {
+  height: 44px;
+  padding: 0 4px;
+  font-size: 17px;
+  max-width: none;
+  text-align: center;
+}
 
-  .header-title-input {
-    width: auto;
-    flex: 1;
-  }
+.header-title-input {
+  width: auto;
+  flex: 1;
+}
 }
 
 /* iOS Safari draws a soft blur under its status bar that can catch the top
@@ -203,6 +206,7 @@
   }
 }
 
+@media (min-width: 48rem) and (min-height: 31.3125rem), (min-width: 48rem) and (pointer: fine) {
 /* A phone keeps its single centred name */
 @media (max-width: 47.9375rem), (pointer: coarse) and (max-height: 31.25rem) {
   .header-kicker {
@@ -222,4 +226,9 @@
     height: 44px;
     font-weight: 400;
   }
+}
+}
+
+@media (max-width: 47.9375rem), (pointer: coarse) and (max-height: 31.25rem) {
+.header-titles { display: contents; }
 }

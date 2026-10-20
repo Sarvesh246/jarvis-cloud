@@ -3,6 +3,7 @@ import { ArrowRight } from "@phosphor-icons/react";
 import { Mark } from "./Mark.jsx";
 import { firstName, greeting, previewOf, timeLabel } from "../lib/format.js";
 import "./welcome.css";
+import { usePhone } from "../lib/use-phone.js";
 
 /* Ways in, offered as quiet chips under the message box. Not cards: nothing
    here should feel like a menu of features. */
@@ -32,6 +33,8 @@ const today = () => new Date().toLocaleDateString(undefined, { weekday: "long", 
    you. `dock` is the message box itself, so it is the real composer, not a
    picture of one. */
 export function Welcome({ name, phase, onPick, recent = [], onOpen, plain = false, dock, status, waiting = [], onWorkroom }) {
+  const phone = usePhone();
+  if (phone) return <PhoneWelcome name={name} phase={phase} onPick={onPick} />;
   const who = firstName(name);
   return (
     <section className="welcome" aria-label="Start a conversation">
@@ -113,6 +116,44 @@ export function Welcome({ name, phase, onPick, recent = [], onOpen, plain = fals
           )}
         </div>
       )}
+      <p className="welcome-foot">
+        Vaelo can make mistakes. Where it matters, it shows its sources so you can check.
+      </p>
+    </section>
+  );
+}
+
+/* The phone welcome from d864aef, with its composer fixed below the page. */
+function PhoneWelcome({ name, phase, onPick }) {
+  const who = firstName(name);
+  return (
+    <section className="welcome" aria-label="Start a conversation">
+      <Mark size={64} state={phase} />
+      <h1 className="kinetic-greeting">
+        {greeting()}
+        {who ? (
+          <>
+            , <em>{who}.</em>
+          </>
+        ) : (
+          "."
+        )}
+      </h1>
+      <p className="welcome-line">What would you like to take care of?</p>
+      <ul className="starters">
+        {starters.map((starter, index) => (
+          <li key={starter.title}>
+            <button onClick={() => onPick(starter.text, { research: !!starter.research })}>
+              <span className="starter-index" aria-hidden="true">
+                {["i", "ii", "iii"][index]}.
+              </span>
+              <span className="starter-title">{starter.title}</span>
+              <span className="starter-note">{starter.note}</span>
+              <ArrowRight size={18} aria-hidden="true" />
+            </button>
+          </li>
+        ))}
+      </ul>
       <p className="welcome-foot">
         Vaelo can make mistakes. Where it matters, it shows its sources so you can check.
       </p>
