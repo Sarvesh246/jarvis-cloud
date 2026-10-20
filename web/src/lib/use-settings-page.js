@@ -17,7 +17,8 @@ export function useSettingsPage(enabled) {
     };
   }, [enabled]);
   const navigate = useCallback((next) => {
-    if (!enabled) return setOpen(next);
+    // Phone opens stay local, but closing must also consume a desktop URL.
+    if (!enabled && next) return setOpen(next);
     if (next) {
       if (location.hash !== "#settings") {
         history.pushState({ ...history.state, vaeloSettings: true }, "", "#settings");

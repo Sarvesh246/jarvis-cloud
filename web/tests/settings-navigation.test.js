@@ -100,3 +100,39 @@ test("hash changes synchronize on desktop and listeners are cleaned up", () => {
   page.unmount();
   assert.equal(page.listeners.size, 0);
 });
+
+test("closing a desktop deep link on phone clears the URL before widening", () => {
+  const page = fixture("#settings");
+  page.render();
+  page.render(false)(false);
+  assert.equal(page.open, false);
+  assert.equal(page.location.hash, "");
+  assert.deepEqual(page.calls, ["/chat?source=saved"]);
+  assert.equal(page.history.state.existing, "preserved");
+  page.render(true);
+  assert.equal(page.open, false, "closed Settings must not reopen on desktop");
+});
+
+test("phone close consumes the desktop Settings history entry", () => {
+  const page = fixture();
+  page.render()(true);
+  page.render(false)(false);
+  assert.equal(page.open, false);
+  assert.deepEqual(page.calls, ["push", "back"]);
+  // The browser completes back() asynchronously while desktop listeners are off.
+  page.event("popstate", "");
+  page.render(true);
+  assert.equal(page.open, false);
+  page.event("popstate", "#settings");
+  assert.equal(page.open, true, "Forward still restores desktop Settings");
+});
+
+test("ordinary phone open and close leave unrelated history untouched", () => {
+  const page = fixture("#conversation", false);
+  page.render()(true);
+  assert.equal(page.open, true);
+  page.render()(false);
+  assert.equal(page.open, false);
+  assert.equal(page.location.hash, "#conversation");
+  assert.deepEqual(page.calls, []);
+});
