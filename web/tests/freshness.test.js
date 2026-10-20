@@ -159,5 +159,8 @@ test("the relay request names the place and tells a direct answer to use the sou
   assert.match(sent.messages[0].content, /approximate location[\s\S]*Chicago/);
   assert.match(sent.fast, /approximate location[\s\S]*Chicago/);
   assert.match(sent.fast, /Live-source context follows/);
+  // Search context must never outrank the forecast tool, however the question is worded.
+  assert.match(sent.fast, /weather_forecast tool/);
+  assert.doesNotMatch(sent.fast, /weather table guidance/);
   assert.equal(sent.freshness, "whats the weather today in Chicago, Illinois");
 });

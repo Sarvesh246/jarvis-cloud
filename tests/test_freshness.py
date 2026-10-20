@@ -6,6 +6,13 @@ from cloud.freshness import source_context
 
 
 class FreshnessTests(unittest.TestCase):
+    def test_search_evidence_never_outranks_the_forecast_tool(self):
+        # Evidence is fetched for any request that looks time-sensitive, so the
+        # model itself must be told a forecast comes from the tool, not snippets.
+        context = source_context("weather today in Denver", mock.Mock(return_value={"success": False}))
+        self.assertIn("dedicated forecast tool", context["content"])
+        self.assertIn("hand-written", context["content"])
+
     def test_each_subject_lookup_keeps_the_actual_question_and_region(self):
         search = mock.Mock(return_value={"success": False})
         query = "Is Python 3.14 affected by this security advisory in October 2026?"
