@@ -88,6 +88,8 @@
   );
   --on-gilt: #fbf7ef;
   --clay: #8a3f2f;
+  /* Concern wears its own deeper red so it never reads as the gilt */
+  --concern: #7a2216;
   --clay-wash: rgb(150 80 63 / 9%);
   --sage: #6b7d62;
   --scrim: rgb(36 29 27 / 34%);
@@ -140,6 +142,7 @@
   );
   --on-gilt: #181311;
   --clay: #e3a491;
+  --concern: #f08f78;
   --clay-wash: rgb(215 152 134 / 10%);
   --sage: #9bb08f;
   --scrim: rgb(0 0 0 / 58%);
@@ -174,6 +177,7 @@
     );
     --on-gilt: #181311;
     --clay: #e3a491;
+    --concern: #f08f78;
     --clay-wash: rgb(215 152 134 / 10%);
     --sage: #9bb08f;
     --scrim: rgb(0 0 0 / 58%);

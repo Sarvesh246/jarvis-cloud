@@ -5,6 +5,7 @@ import "@fontsource-variable/newsreader/opsz.css";
 import "@fontsource-variable/newsreader/opsz-italic.css";
 import "../../src/design/tokens.css";
 import "../../src/design/base.css";
+import "../../src/design/personal.css";
 import { App } from "../../src/App.jsx";
 
 const now = Date.now();

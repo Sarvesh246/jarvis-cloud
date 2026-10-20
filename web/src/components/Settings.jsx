@@ -9,6 +9,7 @@ import { buzz } from "../lib/haptics.js";
 import { DesktopUpdates } from "./DesktopUpdates.jsx";
 import { InstallSteps } from "./Onboarding.jsx";
 import { Sheet } from "./Sheet.jsx";
+import { SettingsDesk } from "./SettingsDesk.jsx";
 import "./settings.css";
 import "./settings-page.css";
 
@@ -305,119 +306,23 @@ export function Settings(props) {
   return phone ? <PhoneSettings {...props} /> : <WideSettings {...props} />;
 }
 
-function WideSettings({ open, prefs, onChange, onClose, onTools }) {
-  const dialog = useRef(null);
-  const { problem, toggle: toggleNotify, support } = useNotify(prefs, onChange);
+function WideSettings({ open, user, prefs, onChange, onClose, onTools, onWelcome, onSignOut }) {
+  const notify = useNotify(prefs, onChange);
   const place = useLocate(prefs, onChange);
-
-  useEffect(() => {
-    const el = dialog.current;
-    if (!el) return;
-    if (open && !el.open) el.showModal();
-    if (!open && el.open) el.close();
-  }, [open]);
-
   return (
-    <dialog
-      ref={dialog}
-      className="settings"
-      aria-labelledby="settings-title"
+    <SettingsDesk
+      open={open}
+      user={user}
+      prefs={prefs}
+      onChange={onChange}
       onClose={onClose}
-      onClick={(event) => {
-        /* A tap on the dimmed backdrop closes the sheet */
-        if (event.target === dialog.current) onClose();
-      }}
-    >
-      <div className="settings-body">
-        <header className="settings-head">
-          <h2 id="settings-title">Settings</h2>
-          <button className="icon-button" aria-label="Close settings" onClick={onClose}>
-            <X size={19} />
-          </button>
-        </header>
-
-        {GROUPS.map((group) => {
-          const chosen = group.options.find((option) => option.value === prefs[group.key]);
-          return (
-            <fieldset key={group.key} className="settings-group">
-              <legend className="label">{group.label}</legend>
-              <div className="settings-options">
-                {group.options.map((option) => (
-                  <label key={option.value} className="settings-option">
-                    <input
-                      type="radio"
-                      name={group.key}
-                      value={option.value}
-                      checked={prefs[group.key] === option.value}
-                      onChange={() => onChange({ [group.key]: option.value })}
-                    />
-                    <span>{option.label}</span>
-                  </label>
-                ))}
-              </div>
-              {chosen?.note && <p className="settings-note">{chosen.note}</p>}
-            </fieldset>
-          );
-        })}
-
-        <fieldset className="settings-group">
-          <legend className="label">While you’re away</legend>
-          {support === "available" ? (
-            <label className="settings-switch">
-              <span>
-                Tell me when a reply is ready
-                <span className="settings-note">
-                  Only when Vaelo finishes while this window is in the background.
-                </span>
-              </span>
-              <input
-                type="checkbox"
-                role="switch"
-                checked={prefs.notify}
-                onChange={(event) => toggleNotify(event.target.checked)}
-              />
-            </label>
-          ) : (
-            <p className="settings-note">
-              {support === "install"
-                ? "Add Vaelo to your Home Screen (Share → Add to Home Screen) to be told when a reply is ready."
-                : "This browser can’t tell you when a reply is ready. The tab title still changes."}
-            </p>
-          )}
-          {problem && (
-            <p className="settings-note" data-tone="problem" role="alert">
-              {problem}
-            </p>
-          )}
-        </fieldset>
-
-        {place.support && (
-          <fieldset className="settings-group">
-            <legend className="label">Where you are</legend>
-            <label className="settings-switch">
-              <span>
-                Use my location
-                <span className="settings-note">{LOCATION_NOTE}</span>
-              </span>
-              <input
-                type="checkbox"
-                role="switch"
-                checked={prefs.location}
-                onChange={(event) => place.toggle(event.target.checked)}
-              />
-            </label>
-            {place.problem && (
-              <p className="settings-note" data-tone="problem" role="alert">
-                {place.problem}
-              </p>
-            )}
-          </fieldset>
-        )}
-
-        {DESKTOP && <DesktopUpdates store={STORE_BUILD} />}
-        {onTools && <button className="text-button" onClick={onTools}>QR link and interface guide</button>}
-        <p className="settings-foot">Kept on this device only.</p>
-      </div>
-    </dialog>
+      onTools={onTools}
+      onWelcome={onWelcome}
+      onSignOut={onSignOut}
+      notify={notify}
+      place={{ ...place, note: LOCATION_NOTE }}
+      desktop={DESKTOP}
+      store={STORE_BUILD}
+    />
   );
 }

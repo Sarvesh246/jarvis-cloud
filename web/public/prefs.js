@@ -14,6 +14,10 @@
     if (prefs.text === "large") root.dataset.text = "large";
     if (prefs.motion === "reduce") root.dataset.motion = "reduce";
     if (prefs.presentation === "minimal") root.dataset.presentation = "minimal";
+    if (["sage", "clay", "ink"].indexOf(prefs.accent) >= 0) root.dataset.accent = prefs.accent;
+    if (prefs.line === "narrow" || prefs.line === "wide") root.dataset.line = prefs.line;
+    if (prefs.density === "compact") root.dataset.density = "compact";
+    if (prefs.grain === false) root.dataset.grain = "off";
   } catch (error) {
     /* defaults it is */
   }

@@ -1,7 +1,7 @@
 import React from "react";
 import { ArrowRight } from "@phosphor-icons/react";
 import { Mark } from "./Mark.jsx";
-import { firstName, greeting } from "../lib/format.js";
+import { firstName, greeting, previewOf, timeLabel } from "../lib/format.js";
 import "./welcome.css";
 
 /* Three ways in, offered as a quiet list. Not cards: nothing here should
@@ -25,13 +25,13 @@ export const starters = [
   },
 ];
 
-export function Welcome({ name, phase, onPick }) {
+export function Welcome({ name, phase, onPick, recent = [], onOpen, plain = false }) {
   const who = firstName(name);
   return (
     <section className="welcome" aria-label="Start a conversation">
       <Mark size={64} state={phase} />
       <h1 className="kinetic-greeting">
-        {greeting()}
+        {plain ? "Hello" : greeting()}
         {who ? (
           <>
             , <em>{who}.</em>
@@ -55,6 +55,27 @@ export function Welcome({ name, phase, onPick }) {
           </li>
         ))}
       </ul>
+      {recent.length > 0 && onOpen && (
+        <section className="welcome-recent" aria-labelledby="welcome-recent-h">
+          <h2 id="welcome-recent-h" className="label">
+            Pick up where you left off
+          </h2>
+          <ul>
+            {recent.map((chat) => (
+              <li key={chat.id}>
+                <button className="recent-row" onClick={() => onOpen(chat.id)}>
+                  <span className="recent-text">
+                    <span className="recent-title">{chat.title}</span>
+                    <span className="recent-excerpt">{previewOf(chat)}</span>
+                  </span>
+                  <span className="recent-when">{timeLabel(chat.updated)}</span>
+                  <ArrowRight size={18} aria-hidden="true" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       <p className="welcome-foot">
         Vaelo can make mistakes. Where it matters, it shows its sources so you can check.
       </p>

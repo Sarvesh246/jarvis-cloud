@@ -1,0 +1,90 @@
+/* Personal choices (Settings → Appearance). Each one is a data attribute on
+   the root, set before first paint by public/prefs.js, so a chosen accent,
+   line length or density never flashes the default first. */
+
+/* ---- Accent: Vaelo's presence and the one primary action. The user's own
+   side stays neutral whatever is chosen. ---- */
+:root[data-accent="sage"] {
+  --gilt: #5d6e52;
+  --gilt-ink: #3f4d37;
+  --gilt-wash: rgb(93 110 82 / 12%);
+  --gilt-line: linear-gradient(90deg, transparent, rgb(93 110 82 / 55%) 50%, transparent);
+}
+:root[data-accent="clay"] {
+  --gilt: #9a4b37;
+  --gilt-ink: #7a3424;
+  --gilt-wash: rgb(154 75 55 / 10%);
+  --gilt-line: linear-gradient(90deg, transparent, rgb(154 75 55 / 55%) 50%, transparent);
+}
+:root[data-accent="ink"] {
+  --gilt: #3a302b;
+  --gilt-ink: #1c1614;
+  --gilt-wash: rgb(58 48 43 / 8%);
+  --gilt-line: linear-gradient(90deg, transparent, rgb(58 48 43 / 50%) 50%, transparent);
+}
+:root[data-accent="sage"][data-theme="dark"] {
+  --gilt: #a9bd9c;
+  --gilt-ink: #c3d4b6;
+  --gilt-wash: rgb(169 189 156 / 12%);
+  --gilt-line: linear-gradient(90deg, transparent, rgb(169 189 156 / 45%) 50%, transparent);
+}
+:root[data-accent="clay"][data-theme="dark"] {
+  --gilt: #e3a491;
+  --gilt-ink: #f0bfae;
+  --gilt-wash: rgb(227 164 145 / 12%);
+  --gilt-line: linear-gradient(90deg, transparent, rgb(227 164 145 / 45%) 50%, transparent);
+}
+:root[data-accent="ink"][data-theme="dark"] {
+  --gilt: #e2d6c6;
+  --gilt-ink: #f6eee3;
+  --gilt-wash: rgb(226 214 198 / 10%);
+  --gilt-line: linear-gradient(90deg, transparent, rgb(226 214 198 / 40%) 50%, transparent);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-accent="sage"]:not([data-theme="light"]) {
+    --gilt: #a9bd9c;
+    --gilt-ink: #c3d4b6;
+    --gilt-wash: rgb(169 189 156 / 12%);
+    --gilt-line: linear-gradient(90deg, transparent, rgb(169 189 156 / 45%) 50%, transparent);
+  }
+  :root[data-accent="clay"]:not([data-theme="light"]) {
+    --gilt: #e3a491;
+    --gilt-ink: #f0bfae;
+    --gilt-wash: rgb(227 164 145 / 12%);
+    --gilt-line: linear-gradient(90deg, transparent, rgb(227 164 145 / 45%) 50%, transparent);
+  }
+  :root[data-accent="ink"]:not([data-theme="light"]) {
+    --gilt: #e2d6c6;
+    --gilt-ink: #f6eee3;
+    --gilt-wash: rgb(226 214 198 / 10%);
+    --gilt-line: linear-gradient(90deg, transparent, rgb(226 214 198 / 40%) 50%, transparent);
+  }
+}
+
+/* ---- Line length: how wide the reading column may grow ---- */
+:root[data-line="narrow"] {
+  --text-max: 44rem;
+}
+
+:root[data-line="wide"] {
+  --text-max: 76rem;
+}
+
+/* ---- Density: spacing in the rail and the thread ---- */
+:root[data-density="compact"] .rail-link {
+  min-height: 2.1rem;
+}
+
+:root[data-density="compact"] .rail-list {
+  gap: var(--s-4);
+}
+
+:root[data-density="compact"] .thread {
+  gap: var(--s-5);
+}
+
+/* ---- Paper grain ---- */
+:root[data-grain="off"] body::before {
+  display: none;
+}

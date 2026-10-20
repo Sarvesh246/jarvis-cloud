@@ -1,0 +1,122 @@
+/* The Workroom catalogue on a wide screen: each audience is a row, its name
+   and line on the left, its workspaces as tiles on the right. Phones keep the
+   plain list (see the narrow rules in workroom.css). */
+
+@media (min-width: 48rem) {
+  .work-browser {
+    padding: var(--s-7) var(--s-7) var(--s-8);
+  }
+
+  .work-browser h3 {
+    font-size: clamp(2rem, 3.4vw, 2.75rem);
+    font-weight: 300;
+    letter-spacing: -0.015em;
+  }
+
+  .work-browser-head p {
+    font-size: var(--t-md);
+  }
+
+  .work-categories button {
+    min-height: 2.5rem;
+    border-radius: var(--r-pill);
+    font-size: var(--t-sm);
+    transition: background var(--dur-1) var(--ease), border-color var(--dur-2) var(--ease);
+  }
+
+  .work-group {
+    display: grid;
+    grid-template-columns: 13.5rem minmax(0, 1fr);
+    gap: var(--s-4) var(--s-6);
+    margin-top: var(--s-7);
+    padding-top: var(--s-4);
+    border-top: 1px solid var(--hairline-strong);
+  }
+
+  .work-group > header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--s-2);
+    padding: 0;
+    border: 0;
+  }
+
+  .work-group h4 {
+    font-size: var(--t-lg);
+    font-weight: 400;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--ink);
+  }
+
+  .work-group > header > p {
+    font-size: var(--t-sm);
+    line-height: 1.45;
+  }
+
+  .work-entries {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 14.25rem), 1fr));
+    gap: var(--s-3);
+  }
+
+  .work-entries > li {
+    display: flex;
+    border: 0;
+  }
+
+  .workroom .work-entry {
+    flex: 1;
+    min-height: 8.25rem;
+    padding: var(--s-4) var(--s-4) var(--s-3);
+    border: 1px solid var(--hairline);
+    border-radius: var(--r-lg);
+    background: var(--surface);
+    transition: background var(--dur-1) var(--ease), border-color var(--dur-2) var(--ease),
+      transform var(--dur-2) var(--ease);
+  }
+
+  .work-entry strong {
+    font-size: var(--t-md);
+    font-weight: var(--w-ui);
+  }
+
+  .work-entry > svg {
+    opacity: 0;
+    transform: translateX(-4px);
+    transition: opacity var(--dur-2) var(--ease), transform var(--dur-2) var(--ease);
+  }
+
+  .work-entry-meta {
+    margin-top: auto;
+    padding-top: var(--s-2);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .workroom .work-entry:hover:not(:disabled) {
+      border-color: var(--gilt);
+      background: var(--gilt-wash);
+      transform: translateY(-1px);
+    }
+
+    .workroom .work-entry:hover > svg {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  .workroom .work-entry:focus-visible > svg {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (min-width: 48rem) and (max-width: 62rem) {
+  .work-group {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+:root[data-motion="reduce"] .workroom .work-entry {
+  transition: none;
+  transform: none;
+}

@@ -4,6 +4,7 @@ import "@fontsource-variable/newsreader/opsz.css";
 import "@fontsource-variable/newsreader/opsz-italic.css";
 import "./design/tokens.css";
 import "./design/base.css";
+import "./design/personal.css";
 import { App } from "./App.jsx";
 import { DESKTOP, installDesktopTransport } from "./lib/desktop.js";
 

@@ -1,0 +1,278 @@
+/* The desktop rail folds to a slim strip of icons and unfolds again.
+
+   Only the rail's width really moves. Its body keeps a fixed width inside, so
+   nothing inside ever re-wraps while it opens or closes; the body and the strip
+   trade places by fading, drifting a few pixels and (for the body) softening,
+   a beat apart so the two are never both legible at once. The chat area simply
+   follows the rail's edge. */
+
+:root {
+  --rail-mini: 4.25rem;
+  /* A long, soft landing: quick off the mark, then settles. Never bounces. */
+  --ease-rail: cubic-bezier(0.32, 0.72, 0, 1);
+  --dur-rail: 560ms;
+}
+
+.shell > .rail.rail-wide {
+  position: relative;
+  flex: none;
+  width: var(--rail-w);
+  margin-left: 0;
+  padding: 0;
+  gap: 0;
+  visibility: visible;
+  overflow: hidden;
+  contain: layout paint style;
+  will-change: width;
+  transition: width var(--dur-rail) var(--ease-rail);
+}
+
+.shell[data-collapsed="true"] > .rail.rail-wide {
+  width: var(--rail-mini);
+  margin-left: 0;
+  visibility: visible;
+}
+
+/* With the workspace beside the chat on a mid-size screen, the rail steps
+   aside to its strip, the same way. */
+@media (min-width: 75rem) and (max-width: 95rem) {
+  .shell[data-workspace="open"] > .rail.rail-wide {
+    width: var(--rail-mini);
+    margin-left: 0;
+    visibility: visible;
+  }
+}
+
+/* ---- the full rail ---- */
+
+.rail-wide .rail-body {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: calc(var(--rail-w) - 1px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-5);
+  padding: var(--s-6) var(--s-5) var(--s-4);
+  opacity: 1;
+  transform: none;
+  filter: none;
+  visibility: visible;
+  transition:
+    opacity 400ms var(--ease-rail) 150ms,
+    transform var(--dur-rail) var(--ease-rail) 90ms,
+    filter 400ms var(--ease-rail) 150ms,
+    visibility 0s;
+}
+
+.rail-wide .rail-body > * {
+  min-width: 0;
+}
+
+.rail-wide .rail-head {
+  gap: var(--s-2);
+}
+
+.rail-wide .rail-brand {
+  flex: 1;
+}
+
+.rail-wide .rail-collapse {
+  flex: none;
+  color: var(--muted);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .rail-wide .rail-collapse:hover {
+    color: var(--ink);
+  }
+}
+
+/* the list rises in, row by row, each time the rail opens */
+.rail-wide .rail-body > :not(.rail-head) {
+  transition: opacity 360ms var(--ease-rail), transform var(--dur-rail) var(--ease-rail);
+}
+
+.shell[data-collapsed="true"] .rail-wide .rail-body {
+  opacity: 0;
+  transform: translateX(-16px);
+  filter: blur(5px);
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity 170ms ease-out,
+    transform 380ms var(--ease-rail),
+    filter 220ms ease-out,
+    visibility 0s linear 230ms;
+}
+
+@media (min-width: 75rem) and (max-width: 95rem) {
+  .shell[data-workspace="open"] .rail-wide .rail-body {
+    opacity: 0;
+    transform: translateX(-16px);
+    filter: blur(5px);
+    visibility: hidden;
+    pointer-events: none;
+    transition:
+      opacity 170ms ease-out,
+      transform 380ms var(--ease-rail),
+      filter 220ms ease-out,
+      visibility 0s linear 230ms;
+  }
+}
+
+/* ---- the strip ---- */
+
+.rail-mini {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: calc(var(--rail-mini) - 1px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s-2);
+  padding: var(--s-5) 0 var(--s-4);
+  opacity: 0;
+  transform: translateX(12px);
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity 150ms ease-out,
+    transform 300ms var(--ease-rail),
+    visibility 0s linear 150ms;
+}
+
+.shell[data-collapsed="true"] .rail-mini {
+  opacity: 1;
+  transform: none;
+  visibility: visible;
+  pointer-events: auto;
+  transition:
+    opacity 400ms var(--ease-rail) 230ms,
+    transform var(--dur-rail) var(--ease-rail) 190ms,
+    visibility 0s;
+}
+
+@media (min-width: 75rem) and (max-width: 95rem) {
+  .shell[data-workspace="open"] .rail-mini {
+    opacity: 1;
+    transform: none;
+    visibility: visible;
+    pointer-events: auto;
+    transition:
+      opacity 400ms var(--ease-rail) 230ms,
+      transform var(--dur-rail) var(--ease-rail) 190ms,
+      visibility 0s;
+  }
+}
+
+/* the icons settle one after another, top to bottom */
+.shell[data-collapsed="true"] .rail-mini > * {
+  animation: rail-mini-in 520ms var(--ease-rail) both;
+}
+.shell[data-collapsed="true"] .rail-mini > :nth-child(1) { animation-delay: 240ms; }
+.shell[data-collapsed="true"] .rail-mini > :nth-child(2) { animation-delay: 290ms; }
+.shell[data-collapsed="true"] .rail-mini > :nth-child(3) { animation-delay: 340ms; }
+.shell[data-collapsed="true"] .rail-mini > :nth-child(4) { animation-delay: 390ms; }
+.shell[data-collapsed="true"] .rail-mini > :nth-child(6) { animation-delay: 440ms; }
+
+@keyframes rail-mini-in {
+  from {
+    opacity: 0;
+    transform: translateX(-8px) scale(0.9);
+  }
+}
+
+.rail-mini-fill {
+  flex: 1;
+}
+
+.rail-mini-mark,
+.rail-mini-btn {
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: var(--r-lg);
+  color: var(--muted);
+  transition:
+    background var(--dur-1) var(--ease),
+    color var(--dur-1) var(--ease),
+    transform var(--dur-2) var(--ease);
+}
+
+.rail-mini-mark {
+  margin-bottom: var(--s-2);
+  color: var(--gilt);
+}
+
+.rail-mini-new {
+  border: 1px solid var(--hairline-strong);
+  background: var(--surface);
+  color: var(--ink);
+  margin-bottom: var(--s-1);
+}
+
+.rail-mini-btn:disabled {
+  opacity: 0.45;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .rail-mini-mark:hover,
+  .rail-mini-btn:hover:not(:disabled) {
+    background: var(--gilt-wash);
+    color: var(--ink);
+  }
+
+  .rail-mini-mark:hover {
+    transform: scale(1.06);
+  }
+
+  .rail-mini-new:hover:not(:disabled) {
+    border-color: var(--gilt);
+  }
+}
+
+/* The header's own toggle is only needed once the rail is a strip. */
+.shell:not([data-collapsed="true"]) .header .header-rail-desktop {
+  display: none;
+}
+
+@media (min-width: 75rem) and (max-width: 95rem) {
+  .shell[data-workspace="open"] .header .header-rail-desktop {
+    display: inline-grid;
+  }
+}
+
+/* Reduced motion keeps the change, drops the travel */
+@media (prefers-reduced-motion: reduce) {
+  .shell > .rail.rail-wide {
+    transition: none;
+  }
+
+  .rail-wide .rail-body,
+  .rail-mini,
+  .shell .rail-mini > * {
+    transform: none !important;
+    filter: none !important;
+    animation: none !important;
+    transition: opacity 120ms linear, visibility 0s !important;
+  }
+}
+
+:root[data-motion="reduce"] .shell > .rail.rail-wide {
+  transition: none;
+}
+
+:root[data-motion="reduce"] :is(.rail-wide .rail-body, .rail-mini, .shell .rail-mini > *) {
+  transform: none !important;
+  filter: none !important;
+  animation: none !important;
+  transition: opacity 120ms linear, visibility 0s !important;
+}
+
+/* A phone has its own drawer (RailPhone); none of this applies there. */
+@media (max-width: 47.9375rem), (pointer: coarse) and (max-height: 31.25rem) {
+  .rail-mini {
+    display: none;
+  }
+}

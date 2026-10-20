@@ -317,3 +317,114 @@
     font-size: 1.5rem;
   }
 }
+
+/* Where you left off: the last few conversations, set like the starters so
+   the page reads as one contents list. Shown only when there is something to
+   go back to, and only where the room allows. */
+.welcome-recent {
+  width: 100%;
+  margin-top: var(--s-6);
+  text-align: left;
+}
+
+.welcome-recent h2 {
+  margin: 0 0 var(--s-2);
+  padding-bottom: var(--s-3);
+  border-bottom: 1px solid var(--hairline-strong);
+}
+
+.welcome-recent ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.welcome-recent li {
+  border-bottom: 1px solid var(--hairline);
+}
+
+.recent-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: baseline;
+  column-gap: var(--s-3);
+  width: 100%;
+  padding: var(--s-3) var(--s-1);
+  text-align: left;
+  transition: padding var(--dur-2) var(--ease);
+}
+
+.recent-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.recent-title {
+  overflow: hidden;
+  font-size: var(--t-md);
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: color var(--dur-2) var(--ease);
+}
+
+.recent-excerpt {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: var(--t-sm);
+  font-style: italic;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recent-when {
+  color: var(--muted);
+  font-size: var(--t-xs);
+}
+
+.recent-row svg {
+  align-self: center;
+  color: var(--gilt);
+  opacity: 0;
+  transform: translateX(-8px);
+  transition: opacity var(--dur-2) var(--ease), transform var(--dur-2) var(--ease);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .recent-row:hover {
+    padding-left: var(--s-3);
+  }
+
+  .recent-row:hover .recent-title {
+    color: var(--gilt-ink);
+  }
+
+  .recent-row:hover svg {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.recent-row:focus-visible {
+  padding-left: var(--s-3);
+}
+
+.recent-row:focus-visible svg {
+  opacity: 1;
+  transform: none;
+}
+
+/* Not enough height to scroll, or a phone: the starters are enough */
+@media (max-width: 47.9375rem), (pointer: coarse) and (max-height: 31.25rem) {
+  .welcome-recent {
+    display: none;
+  }
+}
+
+@container convo (max-height: 780px) {
+  .welcome-recent {
+    display: none;
+  }
+}

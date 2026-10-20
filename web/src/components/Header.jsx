@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { fitTitle } from '../lib/titles.js';
-import { DotsThreeCircle, FolderSimplePlus, List, SidebarSimple } from "@phosphor-icons/react";
+import { CaretRight, DotsThreeCircle, FolderSimplePlus, List, SidebarSimple } from "@phosphor-icons/react";
 import "./header.css";
 
 /* The header only names the conversation. What Vaelo is doing is shown
@@ -8,7 +8,7 @@ import "./header.css";
    conversation that went well as a workspace to reuse. On a phone it is
    a menu on the left, the name in the middle and the conversation's own
    options on the right. */
-export function Header({ title, canRename, onRename, onOpenRail, onToggleRail, onSaveAsWorkspace, onFind, onMenu }) {
+export function Header({ title, kicker, meta, canRename, onRename, onOpenRail, onToggleRail, onSaveAsWorkspace, onFind, onMenu }) {
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(title);
   const input = useRef(null);
@@ -70,6 +70,19 @@ export function Header({ title, canRename, onRename, onOpenRail, onToggleRail, o
         >
           <SidebarSimple size={21} />
         </button>
+        <div className="header-titles" data-kicker={kicker || meta ? "" : undefined}>
+          {(kicker || meta) && (
+            <p className="header-kicker">
+              {kicker && (
+                <span className="header-kicker-name">
+                  <span className="header-kicker-dot" aria-hidden="true" />
+                  {kicker}
+                </span>
+              )}
+              {kicker && meta && <CaretRight size={12} aria-hidden="true" className="header-kicker-sep" />}
+              {meta && <span className="header-kicker-meta">{meta}</span>}
+            </p>
+          )}
         {editing ? (
           <input
             ref={input}
@@ -105,6 +118,7 @@ export function Header({ title, canRename, onRename, onOpenRail, onToggleRail, o
             {fitted}
           </button>
         )}
+        </div>
       </div>
       {onFind && <button className="block-tool header-find" onClick={onFind} aria-label="Find actions, conversations and saved outputs" aria-keyshortcuts="Control+k Meta+k">Find <kbd>⌘/Ctrl K</kbd></button>}
       {onSaveAsWorkspace && (

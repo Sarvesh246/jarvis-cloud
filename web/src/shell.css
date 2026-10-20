@@ -137,16 +137,18 @@
   padding: 0 var(--s-5) calc(var(--s-3) + env(safe-area-inset-bottom));
 }
 
-/* Appears only once you have scrolled away from the newest words */
+/* Appears only once you have scrolled away from the newest words. While Vaelo
+   works it carries Vaelo's face and its current action; the chip at its end
+   is the way back. */
 .jump {
   position: absolute;
   bottom: calc(100% + var(--s-3));
   left: 50%;
   display: inline-flex;
   align-items: center;
-  gap: var(--s-1);
-  height: 2.25rem;
-  padding: 0 var(--s-4) 0 var(--s-3);
+  gap: var(--s-3);
+  height: 2.875rem;
+  padding: 0 var(--s-2) 0 var(--s-2);
   border-radius: var(--r-pill);
   border: 1px solid var(--hairline-strong);
   background: var(--surface);
@@ -155,23 +157,31 @@
   white-space: nowrap;
   box-shadow: var(--lift-1);
   transform: translateX(-50%);
-  animation: fade var(--dur-2) var(--ease) both;
+  animation: jump-in var(--dur-2) var(--ease) both;
   transition:
-    color var(--dur-1) var(--ease),
-    border-color var(--dur-1) var(--ease);
-}
-@media (hover: hover) and (pointer: fine) {
-.jump:hover {
-  color: var(--gilt-ink);
-  border-color: var(--gilt);
-}
+    box-shadow var(--dur-2) var(--ease),
+    border-color var(--dur-1) var(--ease),
+    transform var(--dur-2) var(--ease);
 }
 
+@keyframes jump-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 10px) scale(0.97);
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .jump:hover {
+    border-color: var(--gilt);
+    box-shadow: var(--lift-2);
+    transform: translate(-50%, -2px);
+  }
+}
 
 .jump[data-live] {
-  gap: var(--s-2);
-  max-width: min(26rem, calc(100% - 2rem));
-  padding-left: var(--s-2);
+  max-width: min(32rem, calc(100% - 2rem));
+  padding-left: var(--s-3);
   font-style: italic;
 }
 
@@ -181,9 +191,25 @@
   text-overflow: ellipsis;
 }
 
-.jump-arrow {
+.jump-rule {
   flex: none;
-  color: var(--muted);
+  width: 1px;
+  height: 1.25rem;
+  background: var(--hairline);
+}
+
+.jump-chip {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--s-1);
+  height: 2.125rem;
+  padding: 0 var(--s-3) 0 var(--s-4);
+  border-radius: var(--r-pill);
+  background: var(--gilt-wash);
+  color: var(--gilt-ink);
+  font-style: normal;
+  font-weight: var(--w-strong);
 }
 
 /* Select words in a reply and ask about exactly those */

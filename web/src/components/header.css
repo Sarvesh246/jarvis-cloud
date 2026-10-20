@@ -34,6 +34,68 @@
   display: none;
 }
 
+/* The name sits under a quiet line saying where it belongs and how far it has
+   come, with room above and below so the two never crowd each other. */
+.header-titles {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--s-1);
+  min-width: 0;
+}
+
+.header-titles[data-kicker] {
+  padding: var(--s-4) 0 var(--s-3);
+}
+
+.header:has(.header-titles[data-kicker]) {
+  min-height: calc(5.5rem + var(--ios-edge, 0px));
+}
+
+.header-kicker {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin: 0;
+  padding-left: var(--s-2);
+  font-size: var(--t-xs);
+  color: var(--muted);
+}
+
+.header-kicker-name {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  font-size: 0.8125rem;
+  font-weight: var(--w-ui);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.header-kicker-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--gilt);
+}
+
+.header-kicker-sep {
+  flex: none;
+  color: var(--muted);
+}
+
+.header-kicker-meta {
+  font-style: italic;
+}
+
+.header-titles[data-kicker] .header-title,
+.header-titles[data-kicker] .header-title-input {
+  height: 2.25rem;
+  font-weight: 300;
+}
+
 .header-title,
 .header-title-input {
   min-width: 0;
@@ -138,5 +200,26 @@
   .header {
     padding-top: calc(env(safe-area-inset-top) + 0.875rem);
     min-height: calc(3.75rem + 0.875rem);
+  }
+}
+
+/* A phone keeps its single centred name */
+@media (max-width: 47.9375rem), (pointer: coarse) and (max-height: 31.25rem) {
+  .header-kicker {
+    display: none;
+  }
+
+  .header-titles[data-kicker] {
+    padding: 0;
+  }
+
+  .header:has(.header-titles[data-kicker]) {
+    min-height: calc(50px + 6px + var(--ios-edge, 0px));
+  }
+
+  .header-titles[data-kicker] .header-title,
+  .header-titles[data-kicker] .header-title-input {
+    height: 44px;
+    font-weight: 400;
   }
 }

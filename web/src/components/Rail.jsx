@@ -10,17 +10,19 @@ import {
   Plus,
   PushPin,
   PushPinSlash,
+  SidebarSimple,
   SignOut,
   Trash,
   User,
   X,
 } from "@phosphor-icons/react";
-import { BrandWordmark } from "./Mark.jsx";
+import { BrandWordmark, Mark } from "./Mark.jsx";
 import { WorkroomIcon } from "./WorkroomIcon.jsx";
 import { PhoneRail } from "./RailPhone.jsx";
 import { groupChats, searchChats } from "../lib/format.js";
 import { collectWork, searchWork } from "../lib/library.js";
 import "./rail.css";
+import "./rail-fluid.css";
 
 const WORK_ICONS = { document: FileText, code: Code, table: Table };
 const WORK_KINDS = { document: "Document", code: "Code", table: "Table" };
@@ -237,6 +239,8 @@ function WideRail({
   onOpenWork,
   onDeleteWork,
   onWorkroom,
+  onToggle,
+  onFind,
 }) {
   const [query, setQuery] = useState("");
   const [view, setView] = useState("chats");
@@ -279,17 +283,49 @@ function WideRail({
   return (
     <aside
       ref={aside}
-      className="rail"
+      className="rail rail-wide"
       data-open={open}
       data-collapsed={collapsed}
       aria-label="Conversations"
       {...reorder.handlers}
       inert={phone && !open ? true : undefined}
     >
+      {/* The strip that stays when the rail folds away: the same doors, as
+          icons. It fades in as the body fades out, so the width is the only
+          thing that moves. */}
+      <div className="rail-mini" aria-label="Quick actions" role="toolbar">
+        <button className="rail-mini-mark" onClick={onToggle} aria-label="Open the sidebar" data-tip="Open the sidebar">
+          <Mark size={30} />
+        </button>
+        <button className="rail-mini-btn rail-mini-new" onClick={onNew} disabled={pristine} aria-label="New conversation" data-tip="New conversation">
+          <Plus size={19} />
+        </button>
+        {onFind && (
+          <button className="rail-mini-btn" onClick={onFind} aria-label="Find or do something" data-tip="Find or do something">
+            <MagnifyingGlass size={20} />
+          </button>
+        )}
+        {!user.guest && (
+          <button className="rail-mini-btn" onClick={onWorkroom} aria-label="Workroom" data-tip="Workroom" aria-haspopup="dialog">
+            <WorkroomIcon open={workroomOpen} size={20} />
+          </button>
+        )}
+        <span className="rail-mini-fill" />
+        <button className="rail-mini-btn" onClick={onSettings} aria-label="Settings" data-tip="Settings" aria-haspopup="dialog">
+          <GearSix size={20} />
+        </button>
+      </div>
+
+      <div className="rail-body">
       <div className="rail-head">
         <span className="rail-brand">
           <BrandWordmark size={32} />
         </span>
+        {onToggle && (
+          <button className="icon-button rail-collapse" aria-label="Collapse the sidebar" data-tip="Collapse the sidebar" onClick={onToggle}>
+            <SidebarSimple size={20} />
+          </button>
+        )}
         <button
           ref={close}
           className="icon-button rail-close"
@@ -455,6 +491,7 @@ function WideRail({
             <SignOut size={19} />
           </button>
         </div>
+      </div>
       </div>
     </aside>
   );

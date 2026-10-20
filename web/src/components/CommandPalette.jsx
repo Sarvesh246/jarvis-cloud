@@ -1,8 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { MagnifyingGlass } from "@phosphor-icons/react";
 import { collectWork } from "../lib/library.js";
 import { searchChats } from "../lib/format.js";
 import { displayChatTitle } from "../lib/titles.js";
 import "./ui-tools.css";
+import "./palette-desk.css";
+
+/* The kinds of result, as the section headings a person reads */
+const GROUPS = { Action: "Do", Conversation: "Go to", "Saved output": "Saved work" };
 
 export function CommandPalette({
   open,
@@ -88,63 +93,68 @@ export function CommandPalette({
         if (e.target === dialog.current) onClose();
       }}
     >
-      <header className="rich-toolbar">
-        <h2 id="command-title">Find or do something</h2>
-        <button
-          className="block-tool"
-          onClick={onClose}
-          aria-label="Close command palette"
-        >
-          Close
-        </button>
-      </header>
-      <input
-        ref={input}
-        type="search"
-        value={query}
-        maxLength={200}
-        placeholder="Search actions, conversations and saved outputs"
-        aria-label="Search commands"
-        aria-controls="command-results"
-        onChange={(e) => setQuery(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.nativeEvent.isComposing) return;
-          if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-            e.preventDefault();
-            setSelected((i) =>
-              Math.max(
-                0,
-                Math.min(
-                  results.length - 1,
-                  i + (e.key === "ArrowDown" ? 1 : -1),
+      <h2 id="command-title" className="sr-only">Find or do something</h2>
+      <div className="palette-search">
+        <MagnifyingGlass size={20} aria-hidden="true" />
+        <input
+          ref={input}
+          type="search"
+          value={query}
+          maxLength={200}
+          placeholder="Find or do something"
+          aria-label="Search commands"
+          aria-controls="command-results"
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.nativeEvent.isComposing) return;
+            if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+              e.preventDefault();
+              setSelected((i) =>
+                Math.max(
+                  0,
+                  Math.min(
+                    results.length - 1,
+                    i + (e.key === "ArrowDown" ? 1 : -1),
+                  ),
                 ),
-              ),
-            );
-          }
-          if (e.key === "Enter") {
-            e.preventDefault();
-            choose(results[selected]);
-          }
-        }}
-      />
-      <p className="local-note">↑ ↓ to choose · Enter to open · Esc to close</p>
+              );
+            }
+            if (e.key === "Enter") {
+              e.preventDefault();
+              choose(results[selected]);
+            }
+          }}
+        />
+        <button className="palette-esc" onClick={onClose} aria-label="Close command palette">
+          <kbd>Esc</kbd>
+        </button>
+      </div>
       <div className="command-results" id="command-results">
         {results.map((x, i) => (
-          <button
-            key={`${x.kind}-${x.id}`}
-            data-command-index={i}
-            data-selected={i === selected || undefined}
-            onPointerMove={() => setSelected(i)}
-            onClick={() => choose(x)}
-          >
-            <span>{x.label}</span>
-            <small>{x.kind}</small>
-          </button>
+          <React.Fragment key={`${x.kind}-${x.id}`}>
+            {(i === 0 || results[i - 1].kind !== x.kind) && (
+              <span className="palette-group" aria-hidden="true">{GROUPS[x.kind] || x.kind}</span>
+            )}
+            <button
+              data-command-index={i}
+              data-selected={i === selected || undefined}
+              onPointerMove={() => setSelected(i)}
+              onClick={() => choose(x)}
+            >
+              <span>{x.label}</span>
+              <small>{x.kind === "Action" ? "" : x.kind}</small>
+            </button>
+          </React.Fragment>
         ))}
         {!results.length && (
           <p role="status">No matches. Try a shorter word.</p>
         )}
       </div>
+      <p className="palette-foot">
+        <span>↑↓ to move</span>
+        <span>Enter to open</span>
+        <span>Esc to close</span>
+      </p>
       <p className="sr-only" role="status">
         {results[selected]
           ? `${results[selected].label}, ${results[selected].kind}`

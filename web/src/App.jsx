@@ -30,7 +30,8 @@ import { getWorkspace } from "../shared/workspaces.js";
 import { getCheck } from "../shared/checks.js";
 import { Mark } from "./components/Mark.jsx";
 import { PresentationContext } from "./components/blocks/Blocks.jsx";
-import { applyPrefs, readPrefs, savePrefs } from "./lib/preferences.js";
+import { speak } from "./lib/speech.js";
+import { applyPrefs, inQuietHours, profileOf, readPrefs, savePrefs } from "./lib/preferences.js";
 import { requestRevision } from "./lib/revise.js";
 import { removeLibraryItem, restoreLibraryItem } from "./lib/library.js";
 import { Toast, Notice } from "./components/Toast.jsx";
@@ -831,6 +832,9 @@ export function App() {
       if (session?.user && (event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && event.key.toLowerCase() === "k") {
         event.preventDefault();
         if (!document.querySelector("dialog[open]")) setCommandOpen(true);
+      } else if (!phone && session?.user && (event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && event.key === "\\") {
+        event.preventDefault();
+        toggleRail();
       } else if (event.key === "Escape" && menu && phone && !document.querySelector("dialog[open]")) {
         // The phone drawer is in front of everything else, so it closes first.
         setMenu(false);
@@ -1375,7 +1379,7 @@ export function App() {
       title: active.messages.length
         ? active.title
         : chatTitle(messages[0].text || messages[0].content),
-      start: { conversationId: chatId, runId: id, messages: input, ...(place && { place }),
+      start: { conversationId: chatId, runId: id, messages: input, ...(place && { place }), ...(profileOf(prefsRef.current) && { profile: profileOf(prefsRef.current) }),
         ...(lastUser.workContext && {work:{id:lastUser.workContext.id,revision:lastUser.workContext.revision}}) },
     });
   }
@@ -1404,7 +1408,7 @@ export function App() {
     const { messages } = wireHistory(chat.messages.slice(0, at));
     const selectedWork = chat.messages.slice(0, at).findLast(message => message.role === "user")?.workContext;
     return messages.length && messages.at(-1).role === "user"
-      ? { conversationId: chatId, runId: id, messages, ...(cachedPlace(prefsRef.current) && { place: cachedPlace(prefsRef.current) }),
+      ? { conversationId: chatId, runId: id, messages, ...(cachedPlace(prefsRef.current) && { place: cachedPlace(prefsRef.current) }), ...(profileOf(prefsRef.current) && { profile: profileOf(prefsRef.current) }),
           ...(selectedWork && {work:{id:selectedWork.id,revision:selectedWork.revision}}) }
       : null;
   }
@@ -1898,9 +1902,10 @@ export function App() {
       }
       if (succeeded) {
         announce("Vaelo replied.");
+        if (prefsRef.current.readAloud) speak(received, { voice: prefsRef.current.voice, rate: prefsRef.current.rate });
         if (document.hidden) {
           document.title = "Reply ready · Vaelo";
-          if (prefsRef.current.notify) tellReady(title, received);
+          if (prefsRef.current.notify && !inQuietHours(prefsRef.current)) tellReady(title, received);
         }
         setSettling(true);
         settleTimer.current = setTimeout(() => setSettling(false), 1500);
@@ -2175,6 +2180,8 @@ export function App() {
           collapsed={collapsed}
           user={session.user}
           onClose={() => setMenu(false)}
+          onToggle={toggleRail}
+          onFind={() => setCommandOpen(true)}
           onNew={newChat}
           onSelect={selectChat}
           onDelete={removeChat}
@@ -2223,6 +2230,8 @@ export function App() {
           <Header
             onFind={() => setCommandOpen(true)}
             title={displayChatTitle(active)}
+            kicker={active?.workContext?.title}
+            meta={messages.length ? `${messages.length} ${messages.length === 1 ? "message" : "messages"}` : undefined}
             canRename={messages.length > 0 && !busy}
             onRename={renameChat}
             onOpenRail={() => {
@@ -2253,8 +2262,14 @@ export function App() {
             </div>
             {!messages.length ? (
               <Welcome
-                name={session.user.name}
+                name={prefs.callMe || session.user.name}
                 phase={phase}
+                recent={chats
+                  .filter((chat) => chat.id !== activeId && chat.messages.length)
+                  .sort((a, b) => (b.updated || 0) - (a.updated || 0))
+                  .slice(0, 3)}
+                onOpen={selectChat}
+                plain={!prefs.greet}
                 onPick={(text, picked) => {
                   setDraft(text);
                   if (picked) setOptions((current) => ({ ...current, ...picked }));
@@ -2326,15 +2341,17 @@ export function App() {
                 current action, so status shows where you are looking. */}
             {away && messages.length > 0 && (
               <button className="jump" data-live={busy || undefined} onClick={jumpToLatest}>
-                {busy ? (
+                {busy && (
                   <>
-                    <Mark size={18} state={livePhase} />
+                    <Mark size={22} state={livePhase} />
                     <span className="jump-text">{liveLine(messages.at(-1), livePhase)}</span>
+                    <span className="jump-rule" aria-hidden="true" />
                   </>
-                ) : (
-                  <ArrowDown size={15} />
                 )}
-                {busy ? <ArrowDown size={14} className="jump-arrow" /> : "Latest"}
+                <span className="jump-chip">
+                  Jump to latest
+                  <ArrowDown size={14} aria-hidden="true" />
+                </span>
               </button>
             )}
             {cloud === "Starting" && !busy && online && !session.offline && (
@@ -2379,6 +2396,7 @@ export function App() {
               onOptions={(patch) => setOptions((current) => ({ ...current, ...patch }))}
               onDictating={setDictating}
               guest={guest}
+              sendKey={prefs.sendKey}
               workContext={active?.workContext}
               onClearWork={() => setChats(current => current.map(chat => chat.id === activeId
                 ? {...chat,updated:Date.now(),workContext:undefined} : chat))}

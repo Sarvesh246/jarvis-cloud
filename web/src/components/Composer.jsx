@@ -558,6 +558,7 @@ export const Composer = forwardRef(function Composer(
     guest = false,
     workContext,
     onClearWork,
+    sendKey = "enter",
   },
   textarea,
 ) {
@@ -740,9 +741,12 @@ export const Composer = forwardRef(function Composer(
           aria-describedby="composer-status"
           rows={1}
           onKeyDown={(event) => {
+            /* "enter" sends on Enter and breaks the line on Shift+Enter; "mod-enter"
+               sends only on Ctrl or Cmd+Enter and lets Enter write a new line. */
+            const sends = sendKey === "mod-enter" ? event.ctrlKey || event.metaKey : !event.shiftKey;
             if (
               event.key === "Enter" &&
-              !event.shiftKey &&
+              sends &&
               !event.nativeEvent.isComposing &&
               event.keyCode !== 229 &&
               !matchMedia("(pointer: coarse)").matches
@@ -878,7 +882,7 @@ export const Composer = forwardRef(function Composer(
           )}
           <div className="composer-end">
             {!draft && !note && (
-              <span className="composer-hint">Enter to send · Shift+Enter for a new line</span>
+              <span className="composer-hint">{sendKey === "mod-enter" ? "Ctrl+Enter to send · Enter for a new line" : "Enter to send · Shift+Enter for a new line"}</span>
             )}
             {dictation.supported && !guest && (
               <button

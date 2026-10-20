@@ -11,6 +11,7 @@ import { readAttachment } from '../lib/attachments.js';
 import { AUDIENCE_NAMES, matchWorkspaces, resultOverview } from '../lib/workroom-view.js';
 import './workroom.css';
 import './workroom-sheet.css';
+import './workroom-desk.css';
 import { workspaceIcon } from './workspace-icons.js';
 import { DESKTOP, saveDesktopFile } from '../lib/desktop.js';
 import { usePhone } from '../lib/use-phone.js';
