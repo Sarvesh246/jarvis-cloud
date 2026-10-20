@@ -25,70 +25,92 @@ class ContextTests(unittest.TestCase):
             '{"parameters":{"urls":[]},"name":"web_extract"}',
             '[{"function":{"arguments":"{}","name":"web_search"}}]',
             '<tool_call>{"name":"web_search"}</tool_call>',
-            '<function_call>web_extract()</function_call>',
-            '<think>I need to search first.</think>Answer',
-            'Let me compare them.\n<analysis>Choose web_search</analysis>',
-            '<|im_start|>assistant to=web_search',
+            "<function_call>web_extract()</function_call>",
+            "<think>I need to search first.</think>Answer",
+            "Let me compare them.\n<analysis>Choose web_search</analysis>",
+            "<|im_start|>assistant to=web_search",
             '[TOOL_CALLS] [{"name":"web_search"}]',
             'Here is the tool call:\n{"name":"web_extract"}',
-            'Thought: I need current facts.\nAction: web_search\nAction Input: phones',
+            "Thought: I need current facts.\nAction: web_search\nAction Input: phones",
             'web_extract({"urls":[]})',
             '<function=web_extract>{"urls":[]}</function>',
-            'Some context first.\nThe function call that best answers is:\n{}',
+            "Some context first.\nThe function call that best answers is:\n{}",
             '```JSON\n{"name":"web_extract","arguments":{}}\n```',
-            '{"name":"web_extract","parameters":{"text":"' + 'x' * 12000 + '"}}',
+            '{"name":"web_extract","parameters":{"text":"' + "x" * 12000 + '"}}',
         ]
         for answer in bad:
             for width in (1, 7, len(answer)):
                 with self.subTest(answer=answer[:60], width=width):
-                    guard = relay_module.ToolOutputGuard([{"role": "user", "content": "Compare the phones"}])
+                    guard = relay_module.ToolOutputGuard(
+                        [{"role": "user", "content": "Compare the phones"}]
+                    )
                     for offset in range(0, len(answer), width):
-                        guard.feed("frame", answer[offset:offset+width])
+                        guard.feed("frame", answer[offset : offset + width])
                         if guard.invalid:
                             break
                     self.assertTrue(guard.invalid)
 
     def test_normal_prose_code_and_named_entities_do_not_disable_the_guard(self):
-        for prompt in ["Compare the phones as JSON", "Write code to compare phones", "What function does this phone have?"]:
+        for prompt in [
+            "Compare the phones as JSON",
+            "Write code to compare phones",
+            "What function does this phone have?",
+        ]:
             guard = relay_module.ToolOutputGuard([{"role": "user", "content": prompt}])
             guard.feed("frame", '{"name":"web_extract","arguments":{}}', final=True)
             self.assertTrue(guard.invalid, prompt)
-        for answer in ["The tool calls were unsuccessful, so I could not verify it.",
-                       '```python\nprint("hello")\n```',
-                       '[Apple](https://apple.com) lists the specifications.',
-                       '{"name":"iPhone","parameters":{"weight":187}}']:
-            guard = relay_module.ToolOutputGuard([{"role": "user", "content": "Compare phones"}])
+        for answer in [
+            "The tool calls were unsuccessful, so I could not verify it.",
+            '```python\nprint("hello")\n```',
+            "[Apple](https://apple.com) lists the specifications.",
+            '{"name":"iPhone","parameters":{"weight":187}}',
+        ]:
+            guard = relay_module.ToolOutputGuard(
+                [{"role": "user", "content": "Compare phones"}]
+            )
             output = []
             for char in answer:
                 output.extend(guard.feed(char, char))
             output.extend(guard.feed("END", final=True))
             self.assertFalse(guard.invalid, answer)
-            self.assertEqual(''.join(output), answer + "END")
+            self.assertEqual("".join(output), answer + "END")
 
     def test_tool_output_guard_preserves_requested_examples_and_normal_json(self):
         call = '{"name":"web_extract","parameters":{"urls":["https://apple.com"]}}'
-        for prompt, answer in [("Show the tool-call JSON", call),
-                               ("Return a JSON example", '```json\n' + call + '\n```'),
-                               ("Compare these phones", '{"phones": ["A", "B"]}'),
-                               ("Explain the error", 'The function calls are described below.'),
-                               ("Write a function to add numbers", 'Here is the function call:\nadd(2, 3)'),
-                               ("Explain ChatML", 'ChatML uses tokens such as `<|im_start|>assistant`.'),
-                               ("Write a Python tokenizer", 'Here is the parser.\n```python\ntoken = "<|im_start|>"\n```')]:
+        for prompt, answer in [
+            ("Show the tool-call JSON", call),
+            ("Return a JSON example", "```json\n" + call + "\n```"),
+            ("Compare these phones", '{"phones": ["A", "B"]}'),
+            ("Explain the error", "The function calls are described below."),
+            (
+                "Write a function to add numbers",
+                "Here is the function call:\nadd(2, 3)",
+            ),
+            ("Explain ChatML", "ChatML uses tokens such as `<|im_start|>assistant`."),
+            (
+                "Write a Python tokenizer",
+                'Here is the parser.\n```python\ntoken = "<|im_start|>"\n```',
+            ),
+        ]:
             with self.subTest(prompt=prompt, answer=answer):
-                guard = relay_module.ToolOutputGuard([{"role": "user", "content": prompt}])
+                guard = relay_module.ToolOutputGuard(
+                    [{"role": "user", "content": prompt}]
+                )
                 output = []
                 for char in answer:
                     output.extend(guard.feed(char, char))
                 output.extend(guard.feed("END", final=True))
                 self.assertFalse(guard.invalid)
-                self.assertEqual(''.join(output), answer + "END")
+                self.assertEqual("".join(output), answer + "END")
 
     def test_long_continuations_keep_the_same_reply_budget_as_the_web(self):
         text = "beginning\n" + "x" * 80_000 + "\nend"
         messages = [{"role": "user", "content": "Continue the program"}]
         continued = relay_module.continuation(messages, text)
         self.assertEqual(continued[-2]["content"], text)
-        self.assertEqual(relay_module.ANSWER_KEEP, relay_module.CONTEXT_POLICY["replyChars"])
+        self.assertEqual(
+            relay_module.ANSWER_KEEP, relay_module.CONTEXT_POLICY["replyChars"]
+        )
 
 
 def chunk(text=None, finish=None, **extra):
@@ -192,7 +214,11 @@ class RelayTests(unittest.TestCase):
             handler.send_response(200)
             handler.send_header("Content-Type", "text/event-stream")
             handler.end_headers()
-            for frame in [chunk("Finished answer.", "stop"), 'data: {"usage":{"prompt_tokens":12,"completion_tokens":5}}', "data: [DONE]"]:
+            for frame in [
+                chunk("Finished answer.", "stop"),
+                'data: {"usage":{"prompt_tokens":12,"completion_tokens":5}}',
+                "data: [DONE]",
+            ]:
                 handler.wfile.write((frame + "\n\n").encode())
                 handler.wfile.flush()
             release.wait(4)
@@ -208,36 +234,67 @@ class RelayTests(unittest.TestCase):
 
     def test_error_frame_tool_text_is_discarded_without_poisoning_recovery(self):
         bad = '{"name":"web_extract","arguments":{}}'
-        hermes, relay, port = self.boot([
-            [chunk(bad, "error", error={"message": "upstream stopped"}), "data: [DONE]"],
-            [chunk("Supported answer.", "stop"), "data: [DONE]"],
-        ])
+        hermes, relay, port = self.boot(
+            [
+                [
+                    chunk(bad, "error", error={"message": "upstream stopped"}),
+                    "data: [DONE]",
+                ],
+                [chunk("Supported answer.", "stop"), "data: [DONE]"],
+            ]
+        )
         self.start(port)
         self.assertEqual(self.finished(relay).outcome, "complete")
         self.assertNotIn(bad, json.dumps(hermes.requests[1]["body"]))
-        self.assertFalse(any(m["role"] == "assistant" for m in hermes.requests[1]["body"]["messages"]))
+        self.assertFalse(
+            any(
+                m["role"] == "assistant" for m in hermes.requests[1]["body"]["messages"]
+            )
+        )
         _, frames = self.events(port)
         self.assertNotIn("web_extract", json.dumps(frames))
 
     def test_withheld_error_content_is_not_used_as_visible_continuation_context(self):
-        hermes, relay, port = self.boot([
-            [chunk('{"answer": '), chunk('"unpublished"}', "error"), "data: [DONE]"],
-            [chunk('42}', "stop"), "data: [DONE]"],
-        ])
+        hermes, relay, port = self.boot(
+            [
+                [
+                    chunk('{"answer": '),
+                    chunk('"unpublished"}', "error"),
+                    "data: [DONE]",
+                ],
+                [chunk("42}", "stop"), "data: [DONE]"],
+            ]
+        )
         self.start(port, content="Give the answer as JSON")
         self.assertEqual(self.finished(relay).outcome, "complete")
-        assistant = [m["content"] for m in hermes.requests[1]["body"]["messages"] if m["role"] == "assistant"]
+        assistant = [
+            m["content"]
+            for m in hermes.requests[1]["body"]["messages"]
+            if m["role"] == "assistant"
+        ]
         self.assertEqual(assistant, ['{"answer": '])
         _, frames = self.events(port)
         self.assertNotIn("unpublished", json.dumps(frames))
 
     def test_unsuccessful_finish_reasons_are_not_overridden_by_done(self):
-        for finish in ["cancelled", "content_filter", "unexpected", "", {"bad": "type"}]:
+        for finish in [
+            "cancelled",
+            "content_filter",
+            "unexpected",
+            "",
+            {"bad": "type"},
+        ]:
             with self.subTest(finish=finish):
-                hermes, relay, port = self.boot([
-                    [chunk("The partial answer "), chunk(finish=finish), "data: [DONE]"],
-                    [chunk("is now complete.", "stop"), "data: [DONE]"],
-                ])
+                hermes, relay, port = self.boot(
+                    [
+                        [
+                            chunk("The partial answer "),
+                            chunk(finish=finish),
+                            "data: [DONE]",
+                        ],
+                        [chunk("is now complete.", "stop"), "data: [DONE]"],
+                    ]
+                )
                 self.start(port)
                 self.assertEqual(self.finished(relay).outcome, "complete")
                 self.assertEqual(len(hermes.requests), 2)
@@ -245,24 +302,39 @@ class RelayTests(unittest.TestCase):
     def test_native_terminal_tool_calls_require_a_fresh_answer(self):
         for finish in ["tool_calls", "function_call"]:
             with self.subTest(finish=finish):
-                hermes, relay, port = self.boot([
-                    [chunk("I will look it up. "), chunk(finish=finish), "data: [DONE]"],
-                    [chunk("The supported answer.", "stop"), "data: [DONE]"],
-                ])
+                hermes, relay, port = self.boot(
+                    [
+                        [
+                            chunk("I will look it up. "),
+                            chunk(finish=finish),
+                            "data: [DONE]",
+                        ],
+                        [chunk("The supported answer.", "stop"), "data: [DONE]"],
+                    ]
+                )
                 self.start(port)
                 self.assertEqual(self.finished(relay).outcome, "complete")
                 _, frames = self.events(port)
                 self.assertIn("jarvis.retry", [name for _, name, _ in frames])
                 self.assertNotIn("jarvis.continue", [name for _, name, _ in frames])
                 self.assertEqual(len(hermes.requests), 2)
-                self.assertFalse(any(m["role"] == "assistant" for m in hermes.requests[1]["body"]["messages"]))
+                self.assertFalse(
+                    any(
+                        m["role"] == "assistant"
+                        for m in hermes.requests[1]["body"]["messages"]
+                    )
+                )
 
     def test_read_failure_keeps_buffered_legitimate_json_for_continuation(self):
         _, relay, _ = self.boot([])
         run = relay_module.Run(RUN, OWNER)
         run.connection = mock.Mock()
         response = mock.Mock()
-        response.readline.side_effect = [(chunk('{"phones": [') + '\n').encode(), b'\n', OSError("cut")]
+        response.readline.side_effect = [
+            (chunk('{"phones": [') + "\n").encode(),
+            b"\n",
+            OSError("cut"),
+        ]
         seen = {"content": "", "answer": "", "tools": [], "approval": False}
         relay.relay(run, response, seen)
         self.assertTrue(seen["dropped"])
@@ -271,26 +343,44 @@ class RelayTests(unittest.TestCase):
         response.close.assert_called_once()
 
     def test_printed_tool_call_is_discarded_and_retried_without_continuation(self):
-        bad = ('The function call that best answers the given prompt is:\n'
-               '{"name": "web_extract", "parameters": {"char_limit": 15000, '
-               '"urls": ["[https://www.apple.com/iphone/compare/](https://www.apple.com/iphone/compare/)"]}}')
+        bad = (
+            "The function call that best answers the given prompt is:\n"
+            '{"name": "web_extract", "parameters": {"char_limit": 15000, '
+            '"urls": ["[https://www.apple.com/iphone/compare/](https://www.apple.com/iphone/compare/)"]}}'
+        )
         for step in (1, 7, len(bad)):
             with self.subTest(step=step):
-                hermes, relay, port = self.boot([
-                    [*[chunk(bad[i:i+step]) for i in range(0, len(bad), step)],
-                     chunk(finish="stop"), "data: [DONE]"],
-                    [chunk("Here is the supported comparison.", "stop"), "data: [DONE]"],
-                ])
+                hermes, relay, port = self.boot(
+                    [
+                        [
+                            *[
+                                chunk(bad[i : i + step])
+                                for i in range(0, len(bad), step)
+                            ],
+                            chunk(finish="stop"),
+                            "data: [DONE]",
+                        ],
+                        [
+                            chunk("Here is the supported comparison.", "stop"),
+                            "data: [DONE]",
+                        ],
+                    ]
+                )
                 self.start(port, content="Compare iPhone 15 Pro and iPhone 18 Pro Max")
                 run = self.finished(relay)
                 _, frames = self.events(port)
                 self.assertEqual(run.outcome, "complete")
                 self.assertEqual(len(hermes.requests), 2)
                 self.assertNotIn("jarvis.continue", [name for _, name, _ in frames])
-                content = ''.join(json.loads(data)["choices"][0]["delta"].get("content", "")
-                                  for _, name, data in frames if name == "message" and data != "[DONE]")
+                content = "".join(
+                    json.loads(data)["choices"][0]["delta"].get("content", "")
+                    for _, name, data in frames
+                    if name == "message" and data != "[DONE]"
+                )
                 self.assertEqual(content, "Here is the supported comparison.")
-                self.assertNotIn('"role": "assistant"', json.dumps(hermes.requests[1]["body"]))
+                self.assertNotIn(
+                    '"role": "assistant"', json.dumps(hermes.requests[1]["body"])
+                )
 
     def test_repeated_raw_tool_json_fails_without_publishing_or_completing(self):
         bad = '```json\n{"name": "web_extract", "parameters": {"urls": ["https://apple.com"]}}\n```'
@@ -319,9 +409,13 @@ class RelayTests(unittest.TestCase):
         # one frame, including a token-limit finish that previously continued it.
         for width in (1, 7, len(answer)):
             with self.subTest(width=width):
-                pieces = [chunk(answer[i:i + width]) for i in range(0, len(answer), width)]
+                pieces = [
+                    chunk(answer[i : i + width]) for i in range(0, len(answer), width)
+                ]
                 script = [
-                    *pieces, chunk(finish="length"), "data: [DONE]",
+                    *pieces,
+                    chunk(finish="length"),
+                    "data: [DONE]",
                 ]
                 hermes, relay, port = self.boot([script, script])
                 self.start(port)
@@ -334,9 +428,11 @@ class RelayTests(unittest.TestCase):
                 self.assertNotIn("jarvis.complete", output)
                 self.assertEqual(len(hermes.requests), 2)
                 self.assertNotIn("249g", json.dumps(hermes.requests[1]["body"]))
-                visible = "".join(json.loads(data)["choices"][0]["delta"].get("content", "")
-                                  for _, name, data in frames
-                                  if name == "message" and data != "[DONE]")
+                visible = "".join(
+                    json.loads(data)["choices"][0]["delta"].get("content", "")
+                    for _, name, data in frames
+                    if name == "message" and data != "[DONE]"
+                )
                 self.assertLess(visible.count(row), 32)
 
     def test_inline_loop_is_stopped_before_upstream_completion(self):
@@ -367,10 +463,12 @@ class RelayTests(unittest.TestCase):
 
     def test_repetition_recovery_replaces_the_answer_from_clean_context(self):
         answer = "Here is the concise comparison with each feature listed once."
-        hermes, relay, port = self.boot([
-            [chunk("| | 249g | 187g |\n" * 42, "length"), "data: [DONE]"],
-            [chunk(answer, "stop"), "data: [DONE]"],
-        ])
+        hermes, relay, port = self.boot(
+            [
+                [chunk("| | 249g | 187g |\n" * 42, "length"), "data: [DONE]"],
+                [chunk(answer, "stop"), "data: [DONE]"],
+            ]
+        )
         self.start(port)
         run = self.finished(relay)
         _, frames = self.events(port)
@@ -379,31 +477,46 @@ class RelayTests(unittest.TestCase):
         self.assertEqual(names.count("jarvis.retry"), 1)
         self.assertNotIn("jarvis.continue", names)
         self.assertNotIn("249g", json.dumps(hermes.requests[1]["body"]))
-        self.assertEqual(hermes.requests[1]["body"]["messages"][:-1],
-                         hermes.requests[0]["body"]["messages"])
+        self.assertEqual(
+            hermes.requests[1]["body"]["messages"][:-1],
+            hermes.requests[0]["body"]["messages"],
+        )
         self.assertIn(answer, json.dumps(frames))
 
     def test_equal_values_with_distinct_row_labels_are_preserved(self):
-        answer = ("| Feature | A | B |\n|---|---|---|\n" +
-                  "".join(f"| Measurement {i} | 249g | 187g |\n" for i in range(42)) +
-                  "\n" + "Again, " * 3 + "these values match.\n```python\n" +
-                  "\n".join(f"result_{i} = calculate({i})" for i in range(40)) + "\n```")
+        answer = (
+            "| Feature | A | B |\n|---|---|---|\n"
+            + "".join(f"| Measurement {i} | 249g | 187g |\n" for i in range(42))
+            + "\n"
+            + "Again, " * 3
+            + "these values match.\n```python\n"
+            + "\n".join(f"result_{i} = calculate({i})" for i in range(40))
+            + "\n```"
+        )
         hermes, relay, port = self.boot([[chunk(answer, "stop"), "data: [DONE]"]])
         self.start(port)
         run = self.finished(relay)
         _, frames = self.events(port)
         self.assertEqual(run.outcome, "complete")
-        self.assertIn(answer, [json.loads(data)["choices"][0]["delta"].get("content")
-                              for _, name, data in frames if name == "message" and data != "[DONE]"])
+        self.assertIn(
+            answer,
+            [
+                json.loads(data)["choices"][0]["delta"].get("content")
+                for _, name, data in frames
+                if name == "message" and data != "[DONE]"
+            ],
+        )
         self.assertEqual(len(hermes.requests), 1)
 
     def test_loop_detection_carries_across_token_limit_continuations(self):
         row = "| | 249g | 187g |\n"
-        hermes, relay, port = self.boot([
-            [chunk(row * 7, "length"), "data: [DONE]"],
-            [chunk(row * 7, "length"), "data: [DONE]"],
-            [chunk("A fresh comparison.", "stop"), "data: [DONE]"],
-        ])
+        hermes, relay, port = self.boot(
+            [
+                [chunk(row * 7, "length"), "data: [DONE]"],
+                [chunk(row * 7, "length"), "data: [DONE]"],
+                [chunk("A fresh comparison.", "stop"), "data: [DONE]"],
+            ]
+        )
         self.start(port)
         run = self.finished(relay)
         _, frames = self.events(port)
@@ -414,10 +527,12 @@ class RelayTests(unittest.TestCase):
         self.assertNotIn("249g", json.dumps(hermes.requests[2]["body"]))
 
     def test_corrupt_answer_chunks_trigger_recovery_instead_of_false_success(self):
-        hermes, relay, port = self.boot([
-            [chunk("The answer is "), 'data: {"choices":broken}', "data: [DONE]"],
-            [chunk("42.", "stop"), "data: [DONE]"],
-        ])
+        hermes, relay, port = self.boot(
+            [
+                [chunk("The answer is "), 'data: {"choices":broken}', "data: [DONE]"],
+                [chunk("42.", "stop"), "data: [DONE]"],
+            ]
+        )
         self.start(port)
         run = self.finished(relay)
         _, frames = self.events(port)
@@ -438,10 +553,12 @@ class RelayTests(unittest.TestCase):
         ]
         for payload in malformed:
             with self.subTest(payload=payload):
-                hermes, relay, port = self.boot([
-                    ["data: " + json.dumps(payload), "data: [DONE]"],
-                    [chunk("A valid answer.", "stop"), "data: [DONE]"],
-                ])
+                hermes, relay, port = self.boot(
+                    [
+                        ["data: " + json.dumps(payload), "data: [DONE]"],
+                        [chunk("A valid answer.", "stop"), "data: [DONE]"],
+                    ]
+                )
                 self.start(port)
                 run = self.finished(relay)
                 _, frames = self.events(port)
@@ -451,7 +568,9 @@ class RelayTests(unittest.TestCase):
 
     def test_invalid_utf8_is_not_silently_replaced_inside_an_answer(self):
         _, relay, _ = self.boot([])
-        response = io.BytesIO(b'data: {"choices":[{"delta":{"content":"bad\xff"}}]}\n\n')
+        response = io.BytesIO(
+            b'data: {"choices":[{"delta":{"content":"bad\xff"}}]}\n\n'
+        )
         run = relay_module.Run(RUN, OWNER)
         run.connection = mock.Mock()
         seen = {"content": "", "answer": "", "tools": [], "approval": False}
@@ -463,10 +582,14 @@ class RelayTests(unittest.TestCase):
     def test_unfinished_stream_frames_are_bounded_before_parsing(self):
         _, relay, _ = self.boot([])
         for raw in [b"data: " + b"x" * 200, b"data: x\n" * 30]:
-            with self.subTest(raw=raw[:20]), mock.patch.object(relay_module, "FRAME_BYTES", 128):
+            with (
+                self.subTest(raw=raw[:20]),
+                mock.patch.object(relay_module, "FRAME_BYTES", 128),
+            ):
                 run = relay_module.Run(RUN, OWNER)
                 run.connection = mock.Mock()
                 seen = {"content": "", "answer": "", "tools": [], "approval": False}
+
                 class TrackedResponse(io.BytesIO):
                     bytes_read = 0
 
@@ -480,7 +603,9 @@ class RelayTests(unittest.TestCase):
                 self.assertTrue(seen["dropped"])
                 self.assertFalse(seen["finished"])
                 self.assertEqual(run.frames, [])
-                self.assertLessEqual(response.bytes_read, 136, "read stops near the frame budget")
+                self.assertLessEqual(
+                    response.bytes_read, 136, "read stops near the frame budget"
+                )
                 self.assertTrue(response.closed)
                 run.connection.close.assert_called_once()
 
@@ -577,7 +702,18 @@ class RelayTests(unittest.TestCase):
         self.assertEqual(hermes.requests, [])
 
     def test_guest_replies_go_to_the_provider_with_no_tools_and_stay_off_hermes(self):
-        guest = "web:guest:" + "a" * 8 + "-" + "b" * 4 + "-" + "c" * 4 + "-" + "d" * 4 + "-" + "e" * 12
+        guest = (
+            "web:guest:"
+            + "a" * 8
+            + "-"
+            + "b" * 4
+            + "-"
+            + "c" * 4
+            + "-"
+            + "d" * 4
+            + "-"
+            + "e" * 12
+        )
         hermes, relay, port = self.boot([])
         provider = FakeHermes([[chunk("Hello.", "stop"), "data: [DONE]"]])
         self.addCleanup(provider.close)
@@ -597,9 +733,17 @@ class RelayTests(unittest.TestCase):
 
     def test_guests_use_the_configured_router_without_tools_or_host_access(self):
         hermes, relay, port = self.boot([])
-        provider, _ = self.fast_provider(relay, [[chunk("No code was executed.", "stop"), "data: [DONE]"]])
-        with mock.patch.dict("os.environ", {"FREELLMAPI_URL": "https://router.example",
-                "FREELLMAPI_API_KEY": "router-key"}, clear=True):
+        provider, _ = self.fast_provider(
+            relay, [[chunk("No code was executed.", "stop"), "data: [DONE]"]]
+        )
+        with mock.patch.dict(
+            "os.environ",
+            {
+                "FREELLMAPI_URL": "https://router.example",
+                "FREELLMAPI_API_KEY": "router-key",
+            },
+            clear=True,
+        ):
             self.start(port, owner="web:guest:test")
             run = self.finished(relay)
         self.assertEqual(run.outcome, "complete")
@@ -616,9 +760,18 @@ class RelayTests(unittest.TestCase):
         router, _ = self.fast_provider(relay, [503])
         provider = FakeHermes([[chunk("Hello.", "stop"), "data: [DONE]"]])
         self.addCleanup(provider.close)
-        relay.guest_connect = lambda: http.client.HTTPConnection("127.0.0.1", provider.server.server_port, timeout=10)
-        with mock.patch.dict("os.environ", {"FREELLMAPI_URL": "https://router.example",
-                "FREELLMAPI_API_KEY": "router-key", "OPENROUTER_API_KEY": "or-key"}, clear=True):
+        relay.guest_connect = lambda: http.client.HTTPConnection(
+            "127.0.0.1", provider.server.server_port, timeout=10
+        )
+        with mock.patch.dict(
+            "os.environ",
+            {
+                "FREELLMAPI_URL": "https://router.example",
+                "FREELLMAPI_API_KEY": "router-key",
+                "OPENROUTER_API_KEY": "or-key",
+            },
+            clear=True,
+        ):
             self.start(port, owner="web:guest:test")
             run = self.finished(relay)
         self.assertEqual(run.outcome, "complete")
@@ -626,19 +779,26 @@ class RelayTests(unittest.TestCase):
         self.assertEqual(len(router.requests), 1)
         self.assertEqual(hermes.requests, [])
         self.assertEqual(provider.requests[0]["body"]["model"], "openrouter/free")
-        self.assertEqual(provider.requests[0]["headers"]["Authorization"], "Bearer or-key")
+        self.assertEqual(
+            provider.requests[0]["headers"]["Authorization"], "Bearer or-key"
+        )
         self.assertNotIn("tools", provider.requests[0]["body"])
 
     def start_fast(self, port, fast="You are Vaelo, briefly.", effort="minimal"):
-        return self.call(port, "POST", "/vaelo/runs", {
-            "id": RUN,
-            "messages": [
-                {"role": "system", "content": "full prompt"},
-                {"role": "user", "content": "hello"},
-            ],
-            "model_options": {"reasoning_effort": effort},
-            "fast": fast,
-        })
+        return self.call(
+            port,
+            "POST",
+            "/vaelo/runs",
+            {
+                "id": RUN,
+                "messages": [
+                    {"role": "system", "content": "full prompt"},
+                    {"role": "user", "content": "hello"},
+                ],
+                "model_options": {"reasoning_effort": effort},
+                "fast": fast,
+            },
+        )
 
     def fast_provider(self, relay, scripts):
         provider = FakeHermes(scripts)
@@ -647,15 +807,25 @@ class RelayTests(unittest.TestCase):
 
         def connect(host, port):
             targets.append((host, port))
-            return http.client.HTTPConnection("127.0.0.1", provider.server.server_port, timeout=10)
+            return http.client.HTTPConnection(
+                "127.0.0.1", provider.server.server_port, timeout=10
+            )
+
         relay.fast_connect = connect
         return provider, targets
 
-    def test_a_quick_reply_goes_to_the_router_as_chat_with_no_tools_and_stays_off_hermes(self):
+    def test_a_quick_reply_goes_to_the_router_as_chat_with_no_tools_and_stays_off_hermes(
+        self,
+    ):
         hermes, relay, port = self.boot([])
-        provider, targets = self.fast_provider(relay, [[chunk("Hi there.", "stop"), "data: [DONE]"]])
-        env = {"FREELLMAPI_URL": "https://router.example/v1", "FREELLMAPI_API_KEY": "fk",
-               "OPENROUTER_API_KEY": "or-key"}
+        provider, targets = self.fast_provider(
+            relay, [[chunk("Hi there.", "stop"), "data: [DONE]"]]
+        )
+        env = {
+            "FREELLMAPI_URL": "https://router.example/v1",
+            "FREELLMAPI_API_KEY": "fk",
+            "OPENROUTER_API_KEY": "or-key",
+        }
         with mock.patch.dict("os.environ", env):
             self.assertEqual(self.start_fast(port)[0], 202)
             run = self.finished(relay)
@@ -669,15 +839,22 @@ class RelayTests(unittest.TestCase):
         self.assertEqual(sent["headers"]["X-FreeLLM-Task-Type"], "chat")
         body = sent["body"]
         self.assertEqual(body["model"], "auto")
-        self.assertEqual(body["messages"][0], {"role": "system", "content": "You are Vaelo, briefly."})
+        self.assertEqual(
+            body["messages"][0],
+            {"role": "system", "content": "You are Vaelo, briefly."},
+        )
         self.assertEqual([m["role"] for m in body["messages"]], ["system", "user"])
         self.assertEqual(body["reasoning"], {"effort": "minimal"})
         self.assertNotIn("tools", body)
 
     def test_without_a_router_a_quick_reply_uses_openrouter_free(self):
         hermes, relay, port = self.boot([])
-        provider, targets = self.fast_provider(relay, [[chunk("Hi.", "stop"), "data: [DONE]"]])
-        with mock.patch.dict("os.environ", {"OPENROUTER_API_KEY": "or-key", "FREELLMAPI_URL": ""}):
+        provider, targets = self.fast_provider(
+            relay, [[chunk("Hi.", "stop"), "data: [DONE]"]]
+        )
+        with mock.patch.dict(
+            "os.environ", {"OPENROUTER_API_KEY": "or-key", "FREELLMAPI_URL": ""}
+        ):
             self.start_fast(port)
             run = self.finished(relay)
         self.assertEqual((run.outcome, run.route), ("complete", "openrouter"))
@@ -687,20 +864,32 @@ class RelayTests(unittest.TestCase):
         self.assertEqual(hermes.requests, [])
 
     def test_a_failing_fast_route_falls_back_to_hermes_with_the_full_prompt(self):
-        hermes, relay, port = self.boot([[chunk("From Hermes.", "stop"), "data: [DONE]"]])
+        hermes, relay, port = self.boot(
+            [[chunk("From Hermes.", "stop"), "data: [DONE]"]]
+        )
         provider, _ = self.fast_provider(relay, [503])
-        with mock.patch.dict("os.environ", {"OPENROUTER_API_KEY": "or-key", "FREELLMAPI_URL": ""}):
+        with mock.patch.dict(
+            "os.environ", {"OPENROUTER_API_KEY": "or-key", "FREELLMAPI_URL": ""}
+        ):
             self.start_fast(port)
             run = self.finished(relay)
         self.assertEqual((run.outcome, run.route), ("complete", "hermes"))
         self.assertEqual(len(provider.requests), 1)
-        self.assertEqual(hermes.requests[0]["body"]["messages"][0]["content"], "full prompt")
-        self.assertEqual(hermes.requests[0]["body"]["model_options"], {"reasoning_effort": "minimal"})
+        self.assertEqual(
+            hermes.requests[0]["body"]["messages"][0]["content"], "full prompt"
+        )
+        self.assertEqual(
+            hermes.requests[0]["body"]["model_options"], {"reasoning_effort": "minimal"}
+        )
 
     def test_an_empty_fast_reply_is_recovered_by_hermes_not_retried_fast(self):
-        hermes, relay, port = self.boot([[chunk("Written by Hermes.", "stop"), "data: [DONE]"]])
+        hermes, relay, port = self.boot(
+            [[chunk("Written by Hermes.", "stop"), "data: [DONE]"]]
+        )
         provider, _ = self.fast_provider(relay, [[chunk("", "stop"), "data: [DONE]"]])
-        with mock.patch.dict("os.environ", {"OPENROUTER_API_KEY": "or-key", "FREELLMAPI_URL": ""}):
+        with mock.patch.dict(
+            "os.environ", {"OPENROUTER_API_KEY": "or-key", "FREELLMAPI_URL": ""}
+        ):
             self.start_fast(port)
             run = self.finished(relay)
         self.assertEqual(run.outcome, "complete")
@@ -709,11 +898,16 @@ class RelayTests(unittest.TestCase):
 
     def test_a_partial_fast_answer_continues_without_agent_overhead(self):
         hermes, relay, port = self.boot([])
-        provider, _ = self.fast_provider(relay, [
-            [chunk("First half ")],
-            [chunk("second half.", "stop"), "data: [DONE]"],
-        ])
-        with mock.patch.dict("os.environ", {"OPENROUTER_API_KEY": "key", "FREELLMAPI_URL": ""}):
+        provider, _ = self.fast_provider(
+            relay,
+            [
+                [chunk("First half ")],
+                [chunk("second half.", "stop"), "data: [DONE]"],
+            ],
+        )
+        with mock.patch.dict(
+            "os.environ", {"OPENROUTER_API_KEY": "key", "FREELLMAPI_URL": ""}
+        ):
             self.start_fast(port)
             run = self.finished(relay)
         self.assertEqual(run.outcome, "complete")
@@ -721,24 +915,34 @@ class RelayTests(unittest.TestCase):
         self.assertEqual(hermes.requests, [])
         messages = provider.requests[1]["body"]["messages"]
         self.assertEqual(messages[-2], {"role": "assistant", "content": "First half "})
-        self.assertIn("Continue it from exactly where it stops", messages[-1]["content"])
+        self.assertIn(
+            "Continue it from exactly where it stops", messages[-1]["content"]
+        )
         self.assertNotIn("tools", provider.requests[1]["body"])
 
     def test_a_failed_direct_continuation_still_falls_back_to_hermes(self):
         hermes, relay, port = self.boot([[chunk("finished.", "stop")]])
         provider, _ = self.fast_provider(relay, [[chunk("Started ")], 503])
-        with mock.patch.dict("os.environ", {"OPENROUTER_API_KEY": "key", "FREELLMAPI_URL": ""}):
+        with mock.patch.dict(
+            "os.environ", {"OPENROUTER_API_KEY": "key", "FREELLMAPI_URL": ""}
+        ):
             self.start_fast(port)
             run = self.finished(relay)
         self.assertEqual(run.outcome, "complete")
         self.assertEqual(len(provider.requests), 2)
         self.assertEqual(len(hermes.requests), 1)
-        self.assertEqual(hermes.requests[0]["body"]["messages"][0]["content"], "full prompt")
+        self.assertEqual(
+            hermes.requests[0]["body"]["messages"][0]["content"], "full prompt"
+        )
 
     def test_an_empty_direct_continuation_escalates_to_hermes(self):
         hermes, relay, port = self.boot([[chunk("finished.", "stop")]])
-        provider, _ = self.fast_provider(relay, [[chunk("Started ")], [chunk("", "stop")]])
-        with mock.patch.dict("os.environ", {"OPENROUTER_API_KEY": "key", "FREELLMAPI_URL": ""}):
+        provider, _ = self.fast_provider(
+            relay, [[chunk("Started ")], [chunk("", "stop")]]
+        )
+        with mock.patch.dict(
+            "os.environ", {"OPENROUTER_API_KEY": "key", "FREELLMAPI_URL": ""}
+        ):
             self.start_fast(port)
             run = self.finished(relay)
         self.assertEqual(run.outcome, "complete")
@@ -746,14 +950,18 @@ class RelayTests(unittest.TestCase):
         self.assertEqual(len(hermes.requests), 1)
 
     def test_length_finish_is_continued_even_when_done_arrives(self):
-        hermes, relay, port = self.boot([
-            [chunk("Partial ", "length"), "data: [DONE]"],
-            [chunk("complete.", "stop"), "data: [DONE]"],
-        ])
+        hermes, relay, port = self.boot(
+            [
+                [chunk("Partial ", "length"), "data: [DONE]"],
+                [chunk("complete.", "stop"), "data: [DONE]"],
+            ]
+        )
         self.start(port)
         self.assertEqual(self.finished(relay).outcome, "complete")
         self.assertEqual(len(hermes.requests), 2)
-        self.assertEqual(hermes.requests[1]["body"]["messages"][-2]["content"], "Partial ")
+        self.assertEqual(
+            hermes.requests[1]["body"]["messages"][-2]["content"], "Partial "
+        )
 
     def test_exhausted_length_continuations_are_not_false_success(self):
         _, relay, port = self.boot([[chunk("Partial ", "length"), "data: [DONE]"]] * 3)
@@ -765,7 +973,9 @@ class RelayTests(unittest.TestCase):
         run = relay_module.Run(RUN, OWNER)
         response = mock.Mock()
         response.readline.side_effect = [
-            (chunk("Complete answer.", "stop") + "\n").encode(), b"\n", OSError("closed"),
+            (chunk("Complete answer.", "stop") + "\n").encode(),
+            b"\n",
+            OSError("closed"),
         ]
         with mock.patch.object(relay, "open", return_value=(response, None)) as opened:
             run.connection = mock.Mock()
@@ -775,16 +985,21 @@ class RelayTests(unittest.TestCase):
 
     def test_usage_is_counted_once_per_attempt_and_summed_across_recovery(self):
         usage = 'data: {"choices":[],"usage":{"prompt_tokens":100,"completion_tokens":20,"prompt_tokens_details":{"cached_tokens":80}}}'
-        hermes, relay, port = self.boot([
-            [chunk("Partial "), usage, usage],
-            [chunk("finished.", "stop"), usage, "data: [DONE]"],
-        ])
+        hermes, relay, port = self.boot(
+            [
+                [chunk("Partial "), usage, usage],
+                [chunk("finished.", "stop"), usage, "data: [DONE]"],
+            ]
+        )
         reports = []
         relay.report = reports.append
         relay.usage_reporter = mock.Mock()
         self.start(port)
         run = self.finished(relay)
-        self.assertEqual((run.prompt_tokens, run.completion_tokens, run.cached_tokens), (200, 40, 160))
+        self.assertEqual(
+            (run.prompt_tokens, run.completion_tokens, run.cached_tokens),
+            (200, 40, 160),
+        )
         self.assertEqual((run.usage_reports, run.upstream_requests), (2, 2))
         events = [call.args[0] for call in relay.usage_reporter.record.call_args_list]
         self.assertEqual(len(events), 2)
@@ -807,7 +1022,9 @@ class RelayTests(unittest.TestCase):
     def test_a_malformed_fast_prompt_is_ignored_and_hermes_answers(self):
         for fast in (42, "", "x" * (relay_module.FAST_SYSTEM_CHARS + 1)):
             with self.subTest(fast=type(fast).__name__):
-                hermes, relay, port = self.boot([[chunk("Hermes.", "stop"), "data: [DONE]"]])
+                hermes, relay, port = self.boot(
+                    [[chunk("Hermes.", "stop"), "data: [DONE]"]]
+                )
                 provider, _ = self.fast_provider(relay, [])
                 with mock.patch.dict("os.environ", {"OPENROUTER_API_KEY": "or-key"}):
                     self.start_fast(port, fast=fast)
@@ -818,30 +1035,60 @@ class RelayTests(unittest.TestCase):
 
     def test_guests_send_the_requested_reasoning_depth_never_none(self):
         guest = "web:guest:depth"
-        for effort, expected in (("low", {"effort": "low"}), ("none", {"effort": "minimal"}), (None, None)):
+        for effort, expected in (
+            ("low", {"effort": "low"}),
+            ("none", {"effort": "minimal"}),
+            (None, None),
+        ):
             with self.subTest(effort=effort):
                 _, relay, port = self.boot([])
                 provider = FakeHermes([[chunk("Hello.", "stop"), "data: [DONE]"]])
                 self.addCleanup(provider.close)
                 relay.guest_connect = lambda: http.client.HTTPConnection(
-                    "127.0.0.1", provider.server.server_port, timeout=10)
+                    "127.0.0.1", provider.server.server_port, timeout=10
+                )
                 with mock.patch.dict("os.environ", {"OPENROUTER_API_KEY": "or-key"}):
-                    self.call(port, "POST", "/vaelo/runs", {
-                        "id": RUN, "messages": [{"role": "user", "content": "hi"}],
-                        **({"model_options": {"reasoning_effort": effort}} if effort else {}),
-                    }, owner=guest)
+                    self.call(
+                        port,
+                        "POST",
+                        "/vaelo/runs",
+                        {
+                            "id": RUN,
+                            "messages": [{"role": "user", "content": "hi"}],
+                            **(
+                                {"model_options": {"reasoning_effort": effort}}
+                                if effort
+                                else {}
+                            ),
+                        },
+                        owner=guest,
+                    )
                     self.finished(relay)
-                self.assertEqual(provider.requests[0]["body"].get("reasoning"), expected)
+                self.assertEqual(
+                    provider.requests[0]["body"].get("reasoning"), expected
+                )
 
     def test_fast_route_prefers_an_https_router_and_needs_a_key(self):
         route = relay_module.fast_route
         self.assertIsNone(route({}))
         self.assertEqual(route({"OPENROUTER_API_KEY": "k"})["name"], "openrouter")
-        self.assertEqual(route({"FREELLMAPI_URL": "http://plain.example", "FREELLMAPI_API_KEY": "f",
-                                "OPENROUTER_API_KEY": "k"})["name"], "openrouter")
-        router = route({"FREELLMAPI_URL": "https://r.example:8443/", "FREELLMAPI_API_KEY": "f"})
-        self.assertEqual((router["host"], router["port"], router["path"]),
-                         ("r.example", 8443, "/v1/chat/completions"))
+        self.assertEqual(
+            route(
+                {
+                    "FREELLMAPI_URL": "http://plain.example",
+                    "FREELLMAPI_API_KEY": "f",
+                    "OPENROUTER_API_KEY": "k",
+                }
+            )["name"],
+            "openrouter",
+        )
+        router = route(
+            {"FREELLMAPI_URL": "https://r.example:8443/", "FREELLMAPI_API_KEY": "f"}
+        )
+        self.assertEqual(
+            (router["host"], router["port"], router["path"]),
+            ("r.example", 8443, "/v1/chat/completions"),
+        )
 
     def test_guests_are_limited_per_hour_and_at_once(self):
         _, relay, _ = self.boot([])
@@ -855,8 +1102,10 @@ class RelayTests(unittest.TestCase):
         self.assertEqual(relay.guest_admit("web:guest:w")["status"], 429)
 
     def test_devices_hear_at_once_when_a_conversation_or_reply_changes(self):
-        with mock.patch.object(relay_module, "FEED_SECONDS", 1), \
-                mock.patch.object(relay_module, "KEEPALIVE_SECONDS", 0.2):
+        with (
+            mock.patch.object(relay_module, "FEED_SECONDS", 1),
+            mock.patch.object(relay_module, "KEEPALIVE_SECONDS", 0.2),
+        ):
             _, relay, port = self.boot([[chunk("Hi.", "stop"), "data: [DONE]"]])
             status, text = self.call(port, "GET", "/vaelo/feed?after=-1")
             self.assertEqual(status, 200)
@@ -872,7 +1121,9 @@ class RelayTests(unittest.TestCase):
             _, text = self.call(port, "GET", "/vaelo/feed?after=0")
             self.assertIn('data: {"seq": 3}', text)
             # Another account hears nothing of it.
-            _, text = self.call(port, "GET", "/vaelo/feed?after=0", owner="web:someone-else")
+            _, text = self.call(
+                port, "GET", "/vaelo/feed?after=0", owner="web:someone-else"
+            )
             self.assertNotIn("event: feed", text)
 
     def test_a_reply_completes_and_is_kept_for_readers_who_come_later(self):
@@ -981,7 +1232,9 @@ class RelayTests(unittest.TestCase):
         self.finished(relay)
         self.assertEqual(len(hermes.requests), 1)
 
-    def test_retrying_a_completed_start_replays_the_answer_without_running_tools_again(self):
+    def test_retrying_a_completed_start_replays_the_answer_without_running_tools_again(
+        self,
+    ):
         hermes, relay, port = self.boot([[chunk("Once.", "stop"), "data: [DONE]"]])
         self.start(port)
         original = self.finished(relay)
@@ -1030,7 +1283,9 @@ class RelayTests(unittest.TestCase):
         self.assertEqual([name for _, name, _ in frames][-1], "jarvis.stopped")
 
     def test_a_stop_that_arrives_before_its_start_still_stops_the_run(self):
-        hermes, relay, port = self.boot([[chunk("Never sent.", "stop"), "data: [DONE]"]])
+        hermes, relay, port = self.boot(
+            [[chunk("Never sent.", "stop"), "data: [DONE]"]]
+        )
         # Someone else's stop for the same id changes nothing for this owner.
         self.call(port, "POST", f"/vaelo/runs/{RUN}/stop", owner="web:someone-else")
         status, _ = self.call(port, "POST", f"/vaelo/runs/{RUN}/stop")
@@ -1070,15 +1325,28 @@ class RelayTests(unittest.TestCase):
         self.assertEqual(names[-1], "jarvis.complete")
 
     def test_fresh_sources_are_fetched_before_generation_and_reused_on_recovery(self):
-        hermes, relay, port = self.boot([
-            [chunk("", "stop"), "data: [DONE]"],
-            [chunk("An answer with sources.", "stop"), "data: [DONE]"],
-        ])
-        evidence = {"role": "user", "content": "Live-source context: https://official.example/release"}
-        body = {"id": RUN, "messages": [{"role": "system", "content": "s"},
-                {"role": "user", "content": "Compare phone 15 and phone 18"}],
-                "freshness": "Compare phone 15 and phone 18", "fast": "short prompt"}
-        with mock.patch.object(relay_module, "source_context", return_value=evidence) as lookup:
+        hermes, relay, port = self.boot(
+            [
+                [chunk("", "stop"), "data: [DONE]"],
+                [chunk("An answer with sources.", "stop"), "data: [DONE]"],
+            ]
+        )
+        evidence = {
+            "role": "user",
+            "content": "Live-source context: https://official.example/release",
+        }
+        body = {
+            "id": RUN,
+            "messages": [
+                {"role": "system", "content": "s"},
+                {"role": "user", "content": "Compare phone 15 and phone 18"},
+            ],
+            "freshness": "Compare phone 15 and phone 18",
+            "fast": "short prompt",
+        }
+        with mock.patch.object(
+            relay_module, "source_context", return_value=evidence
+        ) as lookup:
             self.assertEqual(self.call(port, "POST", "/vaelo/runs", body)[0], 202)
             self.assertEqual(self.finished(relay).outcome, "complete")
             self.call(port, "POST", "/vaelo/runs", body)
@@ -1087,17 +1355,29 @@ class RelayTests(unittest.TestCase):
         first = hermes.requests[0]["body"]["messages"]
         self.assertEqual(len(first), 2, "evidence is not a separate trailing message")
         self.assertEqual(first[0], body["messages"][0])
-        self.assertTrue(first[-1]["content"].startswith("Compare phone 15 and phone 18"))
+        self.assertTrue(
+            first[-1]["content"].startswith("Compare phone 15 and phone 18")
+        )
         self.assertIn(evidence["content"], first[-1]["content"])
-        self.assertIn("official.example", hermes.requests[1]["body"]["messages"][-1]["content"])
+        self.assertIn(
+            "official.example", hermes.requests[1]["body"]["messages"][-1]["content"]
+        )
 
     def test_fresh_sources_stay_attached_to_a_request_with_an_attached_file(self):
         hermes, relay, port = self.boot([[chunk("Sized.", "stop"), "data: [DONE]"]])
-        request = ("I grow cotton near College Station. What size pump do I need?\n\n"
-                   "Attached file: season.csv\n```csv\ndate,et\n2026-04-15,0.21\n```")
-        evidence = {"role": "user", "content": "Live-source context: https://texasET.example"}
-        body = {"id": RUN, "messages": [{"role": "user", "content": request}],
-                "freshness": "irrigation pump College Station"}
+        request = (
+            "I grow cotton near College Station. What size pump do I need?\n\n"
+            "Attached file: season.csv\n```csv\ndate,et\n2026-04-15,0.21\n```"
+        )
+        evidence = {
+            "role": "user",
+            "content": "Live-source context: https://texasET.example",
+        }
+        body = {
+            "id": RUN,
+            "messages": [{"role": "user", "content": request}],
+            "freshness": "irrigation pump College Station",
+        }
         with mock.patch.object(relay_module, "source_context", return_value=evidence):
             self.assertEqual(self.call(port, "POST", "/vaelo/runs", body)[0], 202)
             self.assertEqual(self.finished(relay).outcome, "complete")
@@ -1109,39 +1389,86 @@ class RelayTests(unittest.TestCase):
     def test_stopping_during_source_lookup_prevents_generation(self):
         _, relay, _ = self.boot([])
         run = relay_module.Run(RUN, OWNER)
+
         def stopped(query):
             run.stopped = True
             return {"role": "user", "content": "evidence"}
-        with mock.patch.object(relay_module, "source_context", side_effect=stopped), \
-             mock.patch.object(relay, "open") as opened:
-            relay.execute(run, {"messages": [{"role": "user", "content": "latest phone"}],
-                                "freshness": "latest phone"})
+
+        with (
+            mock.patch.object(relay_module, "source_context", side_effect=stopped),
+            mock.patch.object(relay, "open") as opened,
+        ):
+            relay.execute(
+                run,
+                {
+                    "messages": [{"role": "user", "content": "latest phone"}],
+                    "freshness": "latest phone",
+                },
+            )
         self.assertEqual(run.outcome, "stopped")
         opened.assert_not_called()
 
     def test_weather_reply_is_durable_without_opening_a_model(self):
         _, relay, _ = self.boot([])
         run = relay_module.Run(RUN, OWNER)
-        with mock.patch('cloud.weather.weather_reply', return_value='Weather for today') as weather, mock.patch.object(relay, 'open') as opened:
-            relay.execute(run, {"messages": [{"role": "user", "content": "weather today"}], "place": {"lat":30,"lon":-96}})
+        with (
+            mock.patch(
+                "cloud.weather.weather_reply", return_value="Weather for today"
+            ) as weather,
+            mock.patch.object(relay, "open") as opened,
+        ):
+            relay.execute(
+                run,
+                {
+                    "messages": [{"role": "user", "content": "weather today"}],
+                    "place": {"lat": 30, "lon": -96},
+                },
+            )
         weather.assert_called_once()
         opened.assert_not_called()
-        self.assertEqual(run.outcome, 'complete')
-        self.assertEqual(run.route, 'weather')
-        self.assertTrue(any(b'Weather for today' in frame for frame in run.frames))
-        self.assertTrue(any(b'jarvis.complete' in frame for frame in run.frames))
+        self.assertEqual(run.outcome, "complete")
+        self.assertEqual(run.route, "weather")
+        self.assertTrue(any(b"Weather for today" in frame for frame in run.frames))
+        self.assertTrue(any(b"jarvis.complete" in frame for frame in run.frames))
+
+    def test_shared_place_reaches_the_weather_lookup_through_the_http_start(self):
+        _, relay, port = self.boot([])
+        place = {"lat": 41.88, "lon": -87.63, "city": "Chicago"}
+        with mock.patch(
+            "cloud.weather.weather_reply", return_value="Weather for Chicago"
+        ) as weather:
+            status, _ = self.call(
+                port,
+                "POST",
+                "/vaelo/runs",
+                {
+                    "id": RUN,
+                    "messages": [{"role": "user", "content": "weather today"}],
+                    "place": place,
+                },
+            )
+            self.assertEqual(status, 202)
+            self.assertEqual(self.finished(relay).route, "weather")
+        self.assertEqual(weather.call_args.args[1], place)
 
     def test_stop_during_weather_lookup_never_emits_the_forecast(self):
         _, relay, _ = self.boot([])
         run = relay_module.Run(RUN, OWNER)
+
         def stopped(*args):
             run.stopped = True
-            return 'Weather for today'
-        with mock.patch('cloud.weather.weather_reply', side_effect=stopped), mock.patch.object(relay, 'open') as opened:
-            relay.execute(run, {"messages": [{"role": "user", "content": "weather today"}]})
+            return "Weather for today"
+
+        with (
+            mock.patch("cloud.weather.weather_reply", side_effect=stopped),
+            mock.patch.object(relay, "open") as opened,
+        ):
+            relay.execute(
+                run, {"messages": [{"role": "user", "content": "weather today"}]}
+            )
         opened.assert_not_called()
-        self.assertEqual(run.outcome, 'stopped')
-        self.assertFalse(any(b'Weather for today' in frame for frame in run.frames))
+        self.assertEqual(run.outcome, "stopped")
+        self.assertFalse(any(b"Weather for today" in frame for frame in run.frames))
 
     def test_a_late_failure_is_held_back_while_the_recovery_runs(self):
         hermes, relay, port = self.boot(
@@ -1179,16 +1506,25 @@ class RelayTests(unittest.TestCase):
         self.assertEqual(frames[-1][1], "jarvis.complete")
 
     def test_an_answer_cut_off_partway_is_continued_from_where_it_stopped(self):
-        hermes, relay, port = self.boot([
-            [chunk("The first half of the answer, "),
-             'data: {"choices":[{"delta":{},"finish_reason":"error"}],"error":{"message":"provider failed"}}'],
-            [chunk("and the second half.", "stop"), "data: [DONE]"],
-        ])
+        hermes, relay, port = self.boot(
+            [
+                [
+                    chunk("The first half of the answer, "),
+                    'data: {"choices":[{"delta":{},"finish_reason":"error"}],"error":{"message":"provider failed"}}',
+                ],
+                [chunk("and the second half.", "stop"), "data: [DONE]"],
+            ]
+        )
         self.start(port)
         self.finished(relay)
         follow_up = hermes.requests[1]["body"]["messages"]
-        self.assertEqual(follow_up[-2], {"role": "assistant", "content": "The first half of the answer, "})
-        self.assertIn("Continue it from exactly where it stops", follow_up[-1]["content"])
+        self.assertEqual(
+            follow_up[-2],
+            {"role": "assistant", "content": "The first half of the answer, "},
+        )
+        self.assertIn(
+            "Continue it from exactly where it stops", follow_up[-1]["content"]
+        )
         _, frames = self.events(port)
         text = "".join(data for _, _, data in frames)
         self.assertNotIn("provider failed", text)  # the reader never sees the failure
@@ -1198,10 +1534,12 @@ class RelayTests(unittest.TestCase):
         self.assertIn("second half", text)
 
     def test_a_dropped_stream_mid_answer_is_continued_too(self):
-        hermes, relay, port = self.boot([
-            [chunk("Begun but never finished")],
-            [chunk(" and now finished.", "stop"), "data: [DONE]"],
-        ])
+        hermes, relay, port = self.boot(
+            [
+                [chunk("Begun but never finished")],
+                [chunk(" and now finished.", "stop"), "data: [DONE]"],
+            ]
+        )
         self.start(port)
         self.finished(relay)
         _, frames = self.events(port)
@@ -1306,7 +1644,10 @@ class RelayTests(unittest.TestCase):
         self.assertEqual(len(run.frames), 1)
 
     def test_a_runaway_answer_ends_the_run_with_a_clear_error(self):
-        frames = [chunk("y" * 200) for _ in range(200)] + [chunk(None, "stop"), "data: [DONE]"]
+        frames = [chunk("y" * 200) for _ in range(200)] + [
+            chunk(None, "stop"),
+            "data: [DONE]",
+        ]
         hermes, relay, port = self.boot([frames])
         with mock.patch.object(relay_module, "RUN_MAX_BYTES", 4000):
             self.start(port)
@@ -1329,7 +1670,10 @@ class RelayTests(unittest.TestCase):
 
     def test_every_guest_recovery_counts_against_the_hourly_allowance(self):
         guest = "web:guest:retry"
-        empty = ['data: {"choices":[{"delta":{},"finish_reason":"cancelled"}]}', "data: [DONE]"]
+        empty = [
+            'data: {"choices":[{"delta":{},"finish_reason":"cancelled"}]}',
+            "data: [DONE]",
+        ]
         provider, relay, port = self.boot_guest([empty, empty, empty])
         with mock.patch.dict("os.environ", {"OPENROUTER_API_KEY": "or-key"}):
             self.start(port, owner=guest)
@@ -1340,7 +1684,10 @@ class RelayTests(unittest.TestCase):
 
     def test_a_guest_out_of_allowance_gets_no_recovery_calls(self):
         guest = "web:guest:last"
-        empty = ['data: {"choices":[{"delta":{},"finish_reason":"cancelled"}]}', "data: [DONE]"]
+        empty = [
+            'data: {"choices":[{"delta":{},"finish_reason":"cancelled"}]}',
+            "data: [DONE]",
+        ]
         provider, relay, port = self.boot_guest([empty, empty, empty])
         relay.guest_log[guest] = [relay.clock()] * (relay_module.GUEST_PER_HOUR - 1)
         with mock.patch.dict("os.environ", {"OPENROUTER_API_KEY": "or-key"}):

@@ -1176,7 +1176,7 @@ def make_handler(relay):
                 run_id,
                 owner,
                 {"messages": messages, "model_options": body.get("model_options"), "fast": fast,
-                 "freshness": body.get("freshness")},
+                 "freshness": body.get("freshness"), "place": body.get("place")},
             )
             if run is None:
                 return self.send_json(409, {"error": "run belongs to another session"})
