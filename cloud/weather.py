@@ -1,6 +1,7 @@
 """Bounded weather lookups rendered from provider data, without a model turn."""
 
 from datetime import date, datetime, timedelta, timezone
+from functools import lru_cache
 import json
 import math
 import re
@@ -20,23 +21,25 @@ def user_text(message):
 
 
 def intent(messages):
-    users = [user_text(m) for m in messages if m.get("role") == "user"]
+    users = [user_text(m) for m in messages if m.get("role") == "user"][-8:]
     if not users:
         return None
     query = users[-1]
     if len(query) > 200 or UNSAFE.search(query):
         return None
+    previous_ask = intent(messages_from_users(users[:-1])) if len(users) > 1 else None
     if not re.search(r"\b(?:weather|forecast|temperature)\b", query, re.I):
-        if not re.fullmatch(r"(?:what|how) about (?:the )?" + DAY + r"[?.!]?", query, re.I):
+        if not re.fullmatch(r"(?:(?:what|how) about |and )?(?:the )?" + DAY + r"(?:\s+(?:in|at|for)\s+[\w .,'-]+)?[?.!]?", query, re.I):
             return None
-        # Only a directly preceding weather request supplies follow-up context.
-        if len(users) < 2 or not re.search(r"\b(?:weather|forecast|temperature)\b", users[-2], re.I) or UNSAFE.search(users[-2]):
+        # Resolve the contiguous weather conversation, including chained
+        # follow-ups. A topic change stops inheritance.
+        if previous_ask is None:
             return None
-        previous = users[-2]
-    else:
-        previous = ""
     # Avoid hijacking explanations, quoted examples, or compound requests.
     residue = re.sub(DAY, " ", query, flags=re.I)
+    residue = re.sub(r"°\s*[CF]\b", " ", residue, flags=re.I)
+    if not re.search(r"\b(?:weather|forecast|temperature)\b", query, re.I):
+        residue = re.sub(r"^and\b", " ", residue, flags=re.I)
     residue = re.split(r"\b(?:in|at|for)\s+(?!the\b)", residue, flags=re.I)[0]
     residue = re.sub(r"\b(?:what|whats|what's|is|are|was|will|be|how|about|the|weather|forecast|temperature|like|on|for|please|show|me|give|s|today's|right|now|celsius|fahrenheit)\b|[?.!,']", " ", residue, flags=re.I)
     if residue.strip():
@@ -46,7 +49,36 @@ def intent(messages):
         text = re.sub(r"\b(?:in celsius|in fahrenheit)\b", "", text, flags=re.I)
         match = re.search(r"\b(?:in|at|for)\s+([\w .,'-]+)", text, re.I)
         return match[1].strip(" .?!,") if match else None
-    return {"query": query, "location": location(query) or location(previous)}
+    inherited = previous_ask or {}
+    units = re.search(r"\b(celsius|fahrenheit)\b|°\s*([CF])\b", query, re.I)
+    return {"query": query, "location": location(query) or inherited.get("location"),
+            "unit": (units[1].lower() if units[1] else {"C": "celsius", "F": "fahrenheit"}[units[2].upper()]) if units else inherited.get("unit")}
+
+
+def messages_from_users(users):
+    return [{"role": "user", "content": text} for text in users]
+
+
+@lru_cache(maxsize=256)
+def us_city(lat, lon):
+    point = get(f"https://api.weather.gov/points/{lat:.4f},{lon:.4f}")
+    names = point["properties"]["relativeLocation"]["properties"]
+    if not names.get("city") or not names.get("state"):
+        raise ValueError("No municipality in point metadata")
+    return f'{names["city"]}, {names["state"]}'
+
+
+def shared_location_label(place):
+    """Name coordinate-only requests too; never geocode a census label back
+    into a different forecast point. NWS supplies the nearest US municipality.
+    A naming-service outage must not prevent the coordinate forecast."""
+    lat, lon = place["lat"], place["lon"]
+    if 18 <= lat <= 72 and -180 <= lon <= -65:
+        try:
+            return us_city(round(lat, 2), round(lon, 2))
+        except Exception:
+            pass
+    return ", ".join(str(place[k])[:80] for k in ("city", "region") if place.get(k)) or "Your shared location"
 
 
 def target_dates(query, today):
@@ -111,11 +143,11 @@ def weather_reply(messages, place=None, now=None):
             label = ", ".join(dict.fromkeys(str(point[k]) for k in ("name", "admin1", "country") if point.get(k)))
         elif isinstance(place, dict) and number(place.get("lat")) is not None and number(place.get("lon")) is not None and -90 <= place["lat"] <= 90 and -180 <= place["lon"] <= 180:
             lat, lon = place["lat"], place["lon"]
-            label = ", ".join(str(place[k])[:80] for k in ("city", "region") if place.get(k)) or f"{lat:.2f}, {lon:.2f}"
+            label = shared_location_label(place)
         else:
             return "Which city would you like the weather for? You can also share your approximate location in Settings."
         key = meteo_config()
-        unit = "celsius" if re.search(r"\bcelsius\b|°\s*C\b", ask["query"], re.I) else "fahrenheit" if re.search(r"\bfahrenheit\b|°\s*F\b", ask["query"], re.I) or (18 <= lat <= 72 and -180 <= lon <= -65) else "celsius"
+        unit = ask["unit"] or ("fahrenheit" if 18 <= lat <= 72 and -180 <= lon <= -65 else "celsius")
         params = {"latitude": lat, "longitude": lon, "timezone": "auto", "forecast_days": 16,
                   "temperature_unit": unit, "wind_speed_unit": "mph" if unit == "fahrenheit" else "kmh",
                   "current": "temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,is_day,wind_speed_10m,wind_direction_10m",
@@ -143,7 +175,8 @@ def weather_reply(messages, place=None, now=None):
                 if not stamp.startswith(day): continue
                 hours.append({"time": stamp, "temperature": number(at(hourly, "temperature_2m", j)), "rain": number(at(hourly, "precipitation_probability", j)), "condition": condition(at(hourly, "weather_code", j)), "isDay": at(hourly, "is_day", j) == 1})
             periods.append({"label": day, "high": number(at(daily, "temperature_2m_max", i)), "low": number(at(daily, "temperature_2m_min", i)), "condition": condition(at(daily, "weather_code", i)), "rain": number(at(daily, "precipitation_probability_max", i)), "wind": number(at(daily, "wind_speed_10m_max", i)), "uv": number(at(daily, "uv_index_max", i)), "sunrise": at(daily, "sunrise", i), "sunset": at(daily, "sunset", i), "hours": hours})
-        if not periods or not any(p["high"] is not None or p["low"] is not None for p in periods): return None
+        expected = [(start + timedelta(days=i)).isoformat() for i in range((end-start).days + 1)]
+        if [p["label"] for p in periods] != expected or not all(p["high"] is not None or p["low"] is not None for p in periods): return None
         # Current conditions are model estimates. Reject stale or undated data.
         try:
             observed = datetime.fromisoformat(current.get("time", ""))
@@ -151,7 +184,7 @@ def weather_reply(messages, place=None, now=None):
         except (TypeError, ValueError):
             fresh = False
         snapshot = {"time": current["time"], "temperature": number(current.get("temperature_2m")), "feels": number(current.get("apparent_temperature")), "humidity": number(current.get("relative_humidity_2m")), "wind": number(current.get("wind_speed_10m")), "condition": condition(current.get("weather_code")), "isDay": current.get("is_day") == 1} if fresh and start == local.date() else None
-        payload = {"version": 1, "title": label, "timezone": data["timezone"], "unit": temp_unit, "windUnit": wind_unit, "localTime": local.isoformat(timespec="minutes"), "retrieved": instant.isoformat(), "current": snapshot, "periods": periods}
+        payload = {"version": 1, "view": "week" if start != end else "day", "title": label, "timezone": data["timezone"], "unit": temp_unit, "windUnit": wind_unit, "localTime": local.isoformat(timespec="minutes"), "retrieved": instant.isoformat(), "current": snapshot, "periods": periods}
         fallback = f"Weather for {label}\n\n| Day | Conditions | High ({temp_unit}) | Low ({temp_unit}) |\n|---|---|---|---|\n"
         fallback += "\n".join(f"| {p['label']} | {p['condition']} | {p['high'] if p['high'] is not None else '—'} | {p['low'] if p['low'] is not None else '—'} |" for p in periods)
         return "```weather\n" + json.dumps(payload, ensure_ascii=False) + "\n```\n\n" + fallback + "\n\n[Open-Meteo](https://open-meteo.com/) · Model forecast; times are local to " + data["timezone"] + "."

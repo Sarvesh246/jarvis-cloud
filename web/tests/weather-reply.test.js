@@ -91,5 +91,13 @@ test('actual weather renderer shows bento cards, sources and streaming fallback'
     const detailed = render(weatherContent);
     for (const label of ['weather-detailed', 'College Station', '68°F', 'Feels like', 'Hourly forecast', 'Rain chance', 'UV index', 'Sunrise', 'Choose forecast day', 'Retrieved']) assert.ok(detailed.includes(label),label);
     assert.ok(!detailed.includes('language-weather'));
+    const weeklyForecast = { ...forecast, view: 'week', periods: Array.from({length: 7}, (_, i) => ({ ...forecast.periods[i % 3], label: `2026-10-${20 + i}` })) };
+    const weeklyContent = '```weather\n' + JSON.stringify(weeklyForecast) + '\n```';
+    const weekly = render(weeklyContent);
+    for (const label of ['7-day forecast', 'Weekly forecast', 'Week overview', 'Oct 26']) assert.ok(weekly.includes(label), label);
+    assert.equal((weekly.match(/class="weather-period"/g) || []).length, 7);
+    assert.ok(!weekly.includes('Current conditions'));
+    assert.ok(!weekly.includes('weather-now'));
+    assert.equal(weatherData('```weather\n' + JSON.stringify({...weeklyForecast,periods: weeklyForecast.periods.slice(0,1)}) + '\n```'), null);
   } finally { await server.close(); }
 });

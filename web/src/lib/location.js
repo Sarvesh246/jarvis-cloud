@@ -24,6 +24,20 @@ function position() {
   );
 }
 
+export function cityNames(data) {
+  const clean = value => typeof value === 'string' ? value.trim().slice(0, 80) : '';
+  // The provider's `city` can be a census subdivision (e.g. South Brazos).
+  // Prefer an actual municipality in its administrative hierarchy, not a
+  // nearby locality or an informative statistical division.
+  const municipality = data.localityInfo?.administrative?.find(entry =>
+    /^(?:city|town|village|municipality|borough)\b/i.test(entry.description || ''));
+  return {
+    city: clean(municipality?.name || data.city || data.locality),
+    region: clean(data.principalSubdivision),
+    country: clean(data.countryName),
+  };
+}
+
 async function cityOf(lat, lon) {
   try {
     const response = await fetch(`${GEOCODER}?latitude=${lat}&longitude=${lon}&localityLanguage=en`, {
@@ -31,12 +45,7 @@ async function cityOf(lat, lon) {
     });
     if (!response.ok) return {};
     const data = await response.json();
-    const clean = (value) => (typeof value === "string" ? value.trim().slice(0, 80) : "");
-    return {
-      city: clean(data.city || data.locality),
-      region: clean(data.principalSubdivision),
-      country: clean(data.countryName),
-    };
+    return cityNames(data);
   } catch {
     return {};
   }

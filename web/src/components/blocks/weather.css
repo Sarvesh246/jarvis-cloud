@@ -3,6 +3,7 @@
 .weather-bento > header > span { font: 500 1.45rem/1.2 var(--font-voice); }
 .weather-bento small { font-size: .8rem; color: var(--muted); }
 .weather-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr)); gap: .5rem; }
+.weather-week-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 8rem), 1fr)); }
 .weather-period { min-width: 0; padding: 1rem; border-radius: 1rem; background: color-mix(in srgb, var(--ink) 5%, transparent); }
 .weather-period:first-child { background: color-mix(in srgb, var(--accent, #ae8b50) 14%, transparent); }
 .weather-period-top { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }

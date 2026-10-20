@@ -1,6 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { locate, placeFor, cachedPlace, forgetPlace } from '../src/lib/location.js';
+import { locate, placeFor, cachedPlace, forgetPlace, cityNames } from '../src/lib/location.js';
+
+test('municipal administrative names take precedence over census subdivisions and nearby localities', () => {
+  assert.deepEqual(cityNames({ city: 'South Brazos', locality: 'Bryan', principalSubdivision: 'Texas', countryName: 'United States', localityInfo: { administrative: [
+    { name: 'Brazos County', description: 'county in Texas' },
+    { name: 'College Station', description: 'city in Brazos County, Texas, United States' },
+    { name: 'Bryan', description: 'city and county seat in Texas' },
+  ] } }), { city: 'College Station', region: 'Texas', country: 'United States' });
+  assert.equal(cityNames({ city: 'Paris' }).city, 'Paris');
+});
 
 test('a slow geocoder cannot lose granted coordinates and disabled sharing sends nothing', async () => {
   const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'navigator');

@@ -26,8 +26,10 @@ function Icon({ condition, isDay = true }) {
 }
 
 function DetailedWeather({ forecast: f }) {
-  const [selected, setSelected] = useState(0);
-  const p = f.periods[Math.min(selected, f.periods.length - 1)];
+  const weekly = f.view === 'week';
+  const [selected, setSelected] = useState(weekly ? null : 0);
+  const overview = weekly && selected === null;
+  const p = f.periods[Math.min(selected ?? 0, f.periods.length - 1)];
   const current = p.label === f.current?.time.slice(0,10) ? f.current : null;
   const temp = value => value == null ? '—' : `${rounded(value)}${f.unit}`;
   const hours = p.hours.filter(h => p.label !== f.localTime.slice(0,10) || h.time >= f.localTime.slice(0,13) + ':00');
@@ -45,8 +47,14 @@ function DetailedWeather({ forecast: f }) {
     ['Sunset', p.sunset ? clock(p.sunset) : null],
   ].filter(([,v]) => v !== null);
   return <section className="weather-bento weather-detailed" aria-label={`Weather for ${f.title}`}>
-    <header><div><h2>{f.title}</h2><p>{dateLabel(p.label)}</p></div><small>{current ? 'Current conditions' : 'Daily forecast'}</small></header>
-    <div className="weather-now">
+    <header><div><h2>{f.title}</h2><p>{overview ? `${dateLabel(f.periods[0].label)} – ${dateLabel(f.periods.at(-1).label)}` : dateLabel(p.label)}</p></div><small>{overview ? '7-day forecast' : current ? 'Current conditions' : 'Daily forecast'}</small></header>
+    {overview && <div className="weather-grid weather-week-grid" aria-label="Weekly forecast">{f.periods.map(day => <article className="weather-period" key={day.label}>
+      <div className="weather-period-top"><h3>{dateLabel(day.label)}</h3><Icon condition={day.condition} /></div>
+      <p className="weather-condition">{day.condition || 'Conditions unavailable'}</p>
+      <dl><div><dt>High</dt><dd>{temp(day.high)}</dd></div><div><dt>Low</dt><dd>{temp(day.low)}</dd></div></dl>
+      {day.rain != null && <small>{rounded(day.rain)}% rain</small>}
+    </article>)}</div>}
+    {!overview && <><div className="weather-now">
       <Icon condition={current?.condition || p.condition} isDay={current?.isDay ?? true} />
       <div><div className="weather-temperature">{temp(current?.temperature ?? p.high)}</div><p>{current?.condition || p.condition || 'Conditions unavailable'}</p>{current?.feels != null && <small>Feels like {temp(current.feels)}</small>}</div>
       <dl className="weather-range"><div><dt>High</dt><dd>{temp(p.high)}</dd></div><div><dt>Low</dt><dd>{temp(p.low)}</dd></div></dl>
@@ -58,7 +66,8 @@ function DetailedWeather({ forecast: f }) {
       <div className="weather-hours">{hours.map(h =><div className="weather-hour" key={h.time}><time dateTime={h.time}>{clock(h.time)}</time><Icon condition={h.condition} isDay={h.isDay} /><strong>{temp(h.temperature)}</strong><small>{h.condition || '—'}</small>{h.rain != null && <small>{rounded(h.rain)}% rain</small>}</div>)}</div>
       </div>
     </section>}
-    {f.periods.length > 1 && <div className="weather-days" role="group" aria-label="Choose forecast day">{f.periods.map((day,i) => <button key={day.label} aria-pressed={i === selected} onClick={() => setSelected(i)}><span>{dateLabel(day.label)}</span><Icon condition={day.condition} /><span>{temp(day.high)} / {temp(day.low)}</span></button>)}</div>}
-    <footer><a href="https://open-meteo.com/" target="_blank" rel="noreferrer">Open-Meteo</a><span>Model forecast · {f.timezone}</span><span>{current ? `Conditions at ${clock(current.time)} · ` : ''}Retrieved {dateLabel(f.retrieved.slice(0,10))}, {clock(f.retrieved)} UTC</span></footer>
+    </>}
+    {f.periods.length > 1 && <div className="weather-days" role="group" aria-label="Choose forecast day">{weekly && <button aria-pressed={overview} onClick={() => setSelected(null)}>Week overview</button>}{f.periods.map((day,i) => <button key={day.label} aria-pressed={i === selected} onClick={() => setSelected(i)}><span>{dateLabel(day.label)}</span><Icon condition={day.condition} /><span>{temp(day.high)} / {temp(day.low)}</span></button>)}</div>}
+    <footer><a href="https://open-meteo.com/" target="_blank" rel="noreferrer">Open-Meteo</a><span>Model forecast · {f.timezone}</span><span>{!overview && current ? `Conditions at ${clock(current.time)} · ` : ''}Retrieved {dateLabel(f.retrieved.slice(0,10))}, {clock(f.retrieved)} UTC</span></footer>
   </section>;
 }
