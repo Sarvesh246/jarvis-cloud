@@ -74,3 +74,64 @@ test('four resized images and a full text history fit the transport budget', () 
   assert.ok(Buffer.byteLength(JSON.stringify(request)) < LIMITS.body);
   assert.doesNotThrow(() => chatInput(request));
 });
+
+test('recovery reserves one shared text budget for a multipart user message', () => {
+  const image = { type: 'image_url', image_url: { url: 'data:image/png;base64,AA==' } };
+  const parts = [
+    { type: 'text', text: 'Keep this caption.' }, image,
+    { type: 'text', text: 'opening ' + 'x'.repeat(policy.messageChars - 40) + ' ending' },
+  ];
+  const request = { conversationId, messages: [{ role: 'user', content: parts, mode: { style: 'thorough' } }] };
+  const before = structuredClone(request);
+  assert.doesNotThrow(() => chatInput(request));
+  const recovered = retryRequest(request, ['Read the attachment'], 'new');
+  assert.doesNotThrow(() => chatInput(recovered));
+  assert.equal(recovered.messages[0].content[1], image);
+  assert.match(recovered.messages[0].content[0].text, /^Keep this caption\.\n\n\[Vaelo request/);
+  assert.match(recovered.messages[0].content[2].text, /^opening /);
+  assert.match(recovered.messages[0].content[2].text, / ending$/);
+  assert.match(recovered.messages[0].content[2].text, /omitted to save space/);
+  assert.deepEqual(recovered.messages[0].mode, { style: 'thorough' });
+  assert.deepEqual(request, before);
+});
+
+test('recovery bounds tool summaries before reserving room in the original question', () => {
+  const request = { conversationId, messages: [{ role: 'user', content: 'Keep my original question.' }] };
+  const recovered = retryRequest(request, Array(12).fill('large tool preview '.repeat(1_000)), 'new');
+  assert.doesNotThrow(() => chatInput(recovered));
+  assert.match(recovered.messages[0].content, /^Keep my original question\.\n\n\[Vaelo request/);
+  assert.match(recovered.messages[0].content, /large tool preview/);
+  assert.match(recovered.messages[0].content, /write the full answer; don't mention the interruption\.\]$/);
+  assert.ok(recovered.messages[0].content.length < 3_000);
+});
+
+test('recovery keeps short multipart text, all four images and request metadata intact', () => {
+  const image = { type: 'image_url', image_url: { url: 'data:image/png;base64,AA==' } };
+  for (const content of [
+    [image, image, image, image],
+    [{ type: 'text', text: 'First caption' }, image, { type: 'text', text: 'Second caption' }],
+  ]) {
+    const request = { conversationId, messages: [{ role: 'user', content }], work: { id: 'saved', revision: 'one' } };
+    const before = structuredClone(request);
+    const recovered = retryRequest(request, [], 'new');
+    assert.doesNotThrow(() => chatInput(recovered));
+    const sent = recovered.messages[0].content;
+    assert.deepEqual(sent.filter(part => part.type === 'image_url'), content.filter(part => part.type === 'image_url'));
+    assert.ok(sent.find(part => part.type === 'text').text.includes('[Vaelo request:'));
+    if (content.length === 3) assert.equal(sent.at(-1).text, 'Second caption');
+    assert.deepEqual(recovered.work, request.work);
+    assert.deepEqual(request, before);
+  }
+});
+
+test('repeated recovery remains valid with five text parts at the combined limit', () => {
+  const content = Array.from({ length: 5 }, (_, i) => ({ type: 'text', text: `${i}`.repeat(policy.messageChars / 5) }));
+  let request = { conversationId, messages: [{ role: 'user', content }] };
+  assert.doesNotThrow(() => chatInput(request));
+  for (let attempt = 0; attempt < 3; attempt++) {
+    request = retryRequest(request, ['tool '.repeat(2_000)], `attempt-${attempt}`);
+    assert.doesNotThrow(() => chatInput(request));
+    assert.equal(request.messages[0].content.length, 5);
+    assert.ok(request.messages[0].content.reduce((n, part) => n + part.text.length, 0) <= policy.messageChars);
+  }
+});

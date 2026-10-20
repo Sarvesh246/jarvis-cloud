@@ -81,7 +81,7 @@ export function continueRequest(request, answer, runId) {
    was written: the same question, with what was already looked into. */
 export function retryRequest(request, done, runId) {
   const used = done.length
-    ? ` You had already used: ${done.slice(0, 12).join("; ")}.`
+    ? ` You had already used: ${clipReply(done.slice(0, 12).join("; "), 2_000)}.`
     : "";
   const note = `[Vaelo request: your previous attempt at this message was interrupted before you wrote the answer.${used} Pick up from there and write the full answer; don't mention the interruption.]`;
   const messages = [...request.messages];
@@ -91,7 +91,21 @@ export function retryRequest(request, done, runId) {
   // was at its limit. Any shortened text keeps both ends and marks the gap.
   const room = CONTEXT_POLICY.messageChars - note.length - 2;
   if (typeof content === 'string') content = clipReply(content, room);
-  else content = content.map(part => part.type === 'text' ? { ...part, text: clipReply(part.text, room) } : part);
+  else {
+    // The API limits the sum of all text parts, not each part separately.
+    // Take any needed room from the longest part, leaving short captions and
+    // image ordering intact. A valid message has at most five parts, so the
+    // longest text always has room for this bounded recovery note.
+    let total = 0;
+    let longest = -1;
+    content.forEach((part, index) => {
+      if (part.type !== 'text') return;
+      total += part.text.length;
+      if (longest < 0 || part.text.length > content[longest].text.length) longest = index;
+    });
+    if (total > room) content = content.map((part, index) => index === longest
+      ? { ...part, text: clipReply(part.text, part.text.length - (total - room)) } : part);
+  }
   messages[at] = {
     ...messages[at],
     content: addNote(content, note),
