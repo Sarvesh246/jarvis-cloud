@@ -53,6 +53,13 @@ except ImportError:
         from source_quality import subjects, source_scope, relevant_sources
     except ModuleNotFoundError:
         from cloud.source_quality import subjects, source_scope, relevant_sources
+try:
+    from .image_gen import FreeLLMAPIImages
+except ImportError:
+    try:
+        from image_gen import FreeLLMAPIImages
+    except ModuleNotFoundError:
+        from cloud.image_gen import FreeLLMAPIImages
 
 REQUEST_TIMEOUT = 15
 # One page gets this long in all, across every provider tried and the direct read; a socket
@@ -772,3 +779,6 @@ class Research(WebSearchProvider):
 
 def register(ctx):
     ctx.register_web_search_provider(Research())
+    # Older Hermes builds have no image backends; research must still load there.
+    if hasattr(ctx, "register_image_gen_provider"):
+        ctx.register_image_gen_provider(FreeLLMAPIImages())

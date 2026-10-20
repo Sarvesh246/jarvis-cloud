@@ -60,6 +60,7 @@ import {
   composeContent,
   fitHistory,
   isImage,
+  placeImages,
   readAttachment,
   wireMessage,
 } from "./lib/attachments.js";
@@ -1527,6 +1528,7 @@ export function App() {
     let pendingApproval = false;
     let endedElsewhere = false;
     let seq = -1;
+    const generated = new Map();
     let fromScratch = Boolean(resumeFrom);
     const startedAt = resumeFrom?.startedAt || Date.now();
     const updateMessage = (patch) => updateChatMessage(chatId, id, patch);
@@ -1543,7 +1545,7 @@ export function App() {
     const flush = () => {
       frame = 0;
       received = normalizeReplySpacing(received);
-      updateMessage({ content: stripMemoryNotes(received), ...(reasoning && { reasoning: reasoning.slice(-12000) }) });
+      updateMessage({ content: placeImages(stripMemoryNotes(received), generated, succeeded), ...(reasoning && { reasoning: reasoning.slice(-12000) }) });
     };
     const schedule = () => {
       if (!frame) frame = requestAnimationFrame(flush);
@@ -1615,6 +1617,12 @@ export function App() {
         updateMessage({ content: "", reasoning: undefined, truncated: false, live: String(data.message || "").slice(0, 160) });
         setPhase(chatId, "thinking");
         announce("Vaelo is writing up what it found.");
+        return;
+      }
+      if (name === "jarvis.image") {
+        if (typeof data.ref === "string" && typeof data.src === "string")
+          generated.set(data.ref, /^data:image\/(png|jpeg|webp|gif);base64,/.test(data.src) ? data.src : "");
+        schedule();
         return;
       }
       if (name === "jarvis.status") {

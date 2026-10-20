@@ -76,6 +76,10 @@ def configuration(environ):
             "base_url": DEFAULT_BASE_URL, "api_key": "${OPENROUTER_API_KEY}",
             "api_mode": "chat_completions",
         })
+        # No chat model in the chain can draw; the router also fronts free FLUX image
+        # backends. Without the router there is no image tool, and SOUL.md says so plainly.
+        cfg["image_gen"] = {"provider": "vaelo-freellmapi"}
+        cfg["platform_toolsets"]["api_server"].append("image_gen")
     # Groq is deliberately absent. Its free tier caps tokens per minute below the size of a
     # single agent request (system prompt + tool schemas + history) and answers with HTTP 413.
     # Hermes reads any 413 as "conversation too large", compresses the history away and ends
@@ -138,7 +142,7 @@ def prepare_profile(home, environ):
     shutil.copy2(HERE / "research.py", plugin / "__init__.py")
     shutil.copy2(HERE / "source_quality.py", plugin / "source_quality.py")
     shutil.copy2(HERE / "data_sources.py", plugin / "data_sources.py")
-    for name in ("extended_sources.py", "news_sources.py", "api_directory.py", "api_operations.json", "api_directory.json"):
+    for name in ("extended_sources.py", "news_sources.py", "image_gen.py", "api_directory.py", "api_operations.json", "api_directory.json"):
         shutil.copy2(HERE / name, plugin / name)
     shutil.copy2(HERE / "research-plugin.yaml", plugin / "plugin.yaml")
     # An explicit cloud SOUL overrides the image's example personality.

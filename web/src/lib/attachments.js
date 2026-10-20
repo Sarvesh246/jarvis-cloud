@@ -130,8 +130,30 @@ export function clipReply(text, limit = REPLY_LIMIT) {
   return text.slice(0, head) + gap + text.slice(-(limit - gap.length - head));
 }
 
+/* A generated picture arrives twice: as a short vaelo-image reference written
+   into the words, and as the picture itself in a jarvis.image event. The
+   picture takes the reference's place. Once the reply is finished, a
+   reference that never got its picture says so instead of a broken frame. */
+const GENERATED = /!\[([^\]\n]*)\]\((vaelo-image:[0-9a-f]{24})\)/g;
+export function placeImages(text, images, finished = false) {
+  if (!text.includes("vaelo-image:")) return text;
+  return text.replace(GENERATED, (whole, alt, ref) => {
+    const src = images.get(ref);
+    if (src) return `![${alt}](${src})`;
+    if (!finished && !images.has(ref)) return whole;
+    return `*${alt.trim() || "The image"} could not be shown. Ask Vaelo to make it again.*`;
+  });
+}
+
+/* Earlier pictures stay on screen but never go back to the model: a few
+   hundred kilobytes of base64 would crowd out the conversation itself. */
+const INLINE_IMAGE = /!\[([^\]\n]*)\]\(data:image\/[a-z]+;base64,[A-Za-z0-9+/=]+\)/g;
+export function withoutInlineImages(text) {
+  return text.replace(INLINE_IMAGE, (_, alt) => `[Image generated earlier: ${alt.trim() || "untitled"}]`);
+}
+
 export function wireMessage(message, { latest = false, images = new Map() } = {}) {
-  if (message.role !== "user") return { role: message.role, content: clipReply(message.content || "") };
+  if (message.role !== "user") return { role: message.role, content: clipReply(withoutInlineImages(message.content || "")) };
   const attached = (message.attachments || []).filter((file) => file.kind === "image");
   const text = message.content || "";
   const mode = message.mode ? { mode: message.mode } : {};

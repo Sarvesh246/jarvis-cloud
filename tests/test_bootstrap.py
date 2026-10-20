@@ -18,11 +18,17 @@ spec.loader.exec_module(bootstrap)
 
 class BootstrapTests(unittest.TestCase):
     def test_multi_user_cloud_has_no_shared_memory_or_host_access_tools(self):
-        for environ in [{}, {"FREELLMAPI_URL": "https://router.example", "FREELLMAPI_API_KEY": "test"}]:
+        for environ, extra in [({}, set()),
+                               ({"FREELLMAPI_URL": "https://router.example", "FREELLMAPI_API_KEY": "test"}, {"image_gen"})]:
             cfg = bootstrap.configuration(environ)
-            self.assertEqual(set(cfg["platform_toolsets"]["api_server"]), {"web", "todo"})
+            self.assertEqual(set(cfg["platform_toolsets"]["api_server"]), {"web", "todo"} | extra)
             self.assertFalse(cfg["memory"]["memory_enabled"])
             self.assertFalse(cfg["memory"]["user_profile_enabled"])
+
+    def test_images_come_from_the_router_only_when_it_is_configured(self):
+        self.assertNotIn("image_gen", bootstrap.configuration({}))
+        cfg = bootstrap.configuration({"FREELLMAPI_URL": "https://router.example", "FREELLMAPI_API_KEY": "test"})
+        self.assertEqual(cfg["image_gen"], {"provider": "vaelo-freellmapi"})
 
     def test_installed_research_plugin_loads_its_packaged_source_checks(self):
         interface = types.ModuleType("agent.web_search_provider")
@@ -38,6 +44,7 @@ class BootstrapTests(unittest.TestCase):
                 spec.loader.exec_module(module)
                 self.assertEqual(module.subjects.__module__, "test_installed_research.source_quality")
                 self.assertEqual(module.data_search.__module__, "test_installed_research.data_sources")
+                self.assertEqual(module.FreeLLMAPIImages.__module__, "test_installed_research.image_gen")
                 self.assertIn("usweather", module.data_search('api:catalog {"query":"National Weather Service"}')["sources"])
                 self.assertEqual(module.subjects("iPhone 15 Pro vs 18 Pro Max"), ["iphone 15 pro", "iphone 18 pro max"])
 

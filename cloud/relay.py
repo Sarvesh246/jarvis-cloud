@@ -34,6 +34,10 @@ try:
     from freshness import source_context
 except ModuleNotFoundError:
     from cloud.freshness import source_context
+try:
+    from image_gen import REFERENCE as IMAGE_REFERENCE, data_uri
+except ModuleNotFoundError:
+    from cloud.image_gen import REFERENCE as IMAGE_REFERENCE, data_uri
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 
@@ -303,6 +307,7 @@ class Run:
         self.upstream_requests = 0
         self.usage_reports = 0
         self.prompt_tokens = self.completion_tokens = self.cached_tokens = 0
+        self.images = set()  # generated-image references already handed to the reader
 
     def emit(self, frame, optional=False, reserved=False):
         """Number and keep one SSE frame (without its trailing blank line). Relayed frames
@@ -851,6 +856,17 @@ class Relay:
         )
         for pending in pending_frames:
             run.emit(pending, optional=bool(thinking_only))
+        if isinstance(content, str) and "vaelo-image:" in seen["answer"]:
+            self.share_images(run, seen["answer"])
+
+    def share_images(self, run, answer):
+        """A generated picture is written into the reply as a short reference; the reader
+        gets the picture itself once, beside the words, to put in its place."""
+        for token in IMAGE_REFERENCE.findall(answer):
+            if token in run.images or len(run.images) >= 4:
+                continue
+            run.images.add(token)
+            run.event("jarvis.image", {"ref": "vaelo-image:" + token, "src": data_uri(token)})
 
     def execute(self, run, body):
         """Run the reply to a written answer. An attempt that ends with nothing written is
