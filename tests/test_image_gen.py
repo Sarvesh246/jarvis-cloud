@@ -1,5 +1,5 @@
 import base64
-from http.client import BadStatusLine, IncompleteRead
+from http.client import BadStatusLine, HTTPResponse, IncompleteRead
 import importlib.util
 import io
 import json
@@ -24,6 +24,8 @@ PIXEL = base64.b64decode(
 
 
 class Reply(io.BytesIO):
+    headers = {}
+
     def __enter__(self):
         return self
 
@@ -106,6 +108,55 @@ class ImageProviderTests(unittest.TestCase):
                     keep.assert_not_called()
         with patch.object(image_gen, "urlopen", return_value=Reply(PIXEL)):
             self.assertTrue(self.provider(answer).generate("a car")["success"])
+
+    def test_short_image_download_is_rejected_without_caching_and_can_recover(self):
+        answer = {"data": [{"url": "https://images.example/car.png"}]}
+
+        class Socket:
+            def makefile(self, *args):
+                return io.BytesIO(b"HTTP/1.1 200 OK\r\nContent-Length: "
+                                  + str(len(PIXEL) + 100).encode() + b"\r\n\r\n" + PIXEL)
+
+        # HTTPResponse.read(amount) returns these short bytes without raising
+        # IncompleteRead, even though the advertised body is not complete.
+        response = HTTPResponse(Socket())
+        response.begin()
+        with patch.object(image_gen, "urlopen", return_value=response), \
+                patch.object(image_gen, "keep") as keep:
+            result = self.provider(answer).generate("a car")
+        self.assertFalse(result["success"])
+        self.assertEqual(result["error_type"], "provider_error")
+        self.assertIsNone(result["image"])
+        keep.assert_not_called()
+        self.assertTrue(response.closed)
+        with patch.object(image_gen, "urlopen", return_value=Reply(PIXEL)):
+            self.assertTrue(self.provider(answer).generate("a car")["success"])
+
+    def test_download_length_checks_preserve_complete_and_unframed_images(self):
+        for declared in (str(len(PIXEL)), None, "invalid", "-1"):
+            with self.subTest(content_length=declared):
+                response = Reply(PIXEL)
+                response.headers = {} if declared is None else {"Content-Length": declared}
+                with patch.object(image_gen, "urlopen", return_value=response):
+                    self.assertEqual(image_gen.download("https://images.example/car.png"), PIXEL)
+        with patch.object(image_gen, "MAX_DOWNLOAD", len(PIXEL) - 1), \
+                patch.object(image_gen, "urlopen", return_value=Reply(PIXEL)):
+            with self.assertRaisesRegex(ValueError, "too large"):
+                image_gen.download("https://images.example/car.png")
+
+    def test_chunked_download_uses_chunk_framing_instead_of_content_length(self):
+        class Socket:
+            def makefile(self, *args):
+                return io.BytesIO(b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n"
+                                  b"Content-Length: 9999\r\n\r\n"
+                                  + format(len(PIXEL), "x").encode() + b"\r\n"
+                                  + PIXEL + b"\r\n0\r\n\r\n")
+
+        response = HTTPResponse(Socket())
+        response.begin()
+        with patch.object(image_gen, "urlopen", return_value=response):
+            self.assertEqual(image_gen.download("https://images.example/car.png"), PIXEL)
+        self.assertTrue(response.closed)
 
     def test_without_the_router_there_is_no_image_tool(self):
         provider = image_gen.FreeLLMAPIImages({"FREELLMAPI_URL": "http://insecure", "FREELLMAPI_API_KEY": "x"})

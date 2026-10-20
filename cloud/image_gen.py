@@ -136,9 +136,18 @@ def download(url):
     if not isinstance(url, str) or not url.startswith("https://"):
         raise ValueError("The router returned an image address that is not HTTPS.")
     with urlopen(Request(url, headers={"User-Agent": "Vaelo"}), timeout=TIMEOUT_SECONDS) as response:
+        try:
+            expected = int(response.headers.get("Content-Length", ""))
+        except ValueError:
+            expected = 0  # Missing/invalid lengths are also ignored by urllib.
+        if response.headers.get("Transfer-Encoding", "").lower() == "chunked":
+            expected = 0  # Chunk framing takes precedence over Content-Length.
         data = response.read(MAX_DOWNLOAD + 1)
     if len(data) > MAX_DOWNLOAD:
         raise ValueError("The generated image was too large.")
+    # Bounded HTTP reads do not raise IncompleteRead on an early EOF.
+    if len(data) < expected:
+        raise ValueError("The generated image download was incomplete.")
     return data
 
 
