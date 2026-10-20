@@ -305,6 +305,74 @@ test("a relay connection cut partway through a frame never sends half of it", as
   ]);
 });
 
+test("damaged relay UTF-8 is replayed instead of acknowledged as replacement text", async () => {
+  const encoder = new TextEncoder();
+  const kept = 'id: 0\ndata: {"choices":[{"delta":{"content":"Kept café"}}]}\n\n';
+  const prefix = 'id: 1\ndata: {"choices":[{"delta":{"content":"';
+  const suffix = '"}}]}\n\nid: 2\nevent: jarvis.complete\ndata: {"ok":true}\n\n: end\n\n';
+  for (const damaged of [Uint8Array.of(0xff), Uint8Array.of(0xe2, 0x82)]) {
+    const { req, res, events } = fakeExchange();
+    const finiteRequest = async () => new Response(new ReadableStream({
+      start(controller) {
+        for (const chunk of [encoder.encode(kept), encoder.encode(prefix), damaged, encoder.encode(suffix)])
+          controller.enqueue(chunk);
+        controller.close();
+      },
+    }));
+    await streamChat(req, res, cfg, user, { runId, after: -1 }, finiteRequest);
+    const seen = [];
+    await readEvents(new Response(res.chunks.join('')).body, (name, data, id) => seen.push({ name, data, id }));
+    assert.equal(seen[0].id, '0');
+    assert.equal(seen[0].data.choices[0].delta.content, 'Kept café');
+    assert.ok(!seen.some(event => event.id === '1' || event.id === '2'));
+    assert.equal(events().at(-1).name, 'jarvis.resume');
+    assert.doesNotMatch(res.chunks.join(''), /\uFFFD/);
+    // Retry the same run with clean relay bytes; no model run is created.
+    const recovered = fakeExchange();
+    const relay = fakeRelay({ frames: ['id: 1\ndata: {"choices":[{"delta":{"content":"Recovered 🌍"}}]}', 'id: 2\nevent: jarvis.complete\ndata: {"ok":true}'] });
+    await streamChat(recovered.req, recovered.res, cfg, user, { runId, after: 0 }, relay.request);
+    assert.match(recovered.res.chunks.join(''), /Recovered 🌍/);
+    assert.ok(relay.calls.every(call => !call.url.endsWith('/vaelo/runs')));
+  }
+});
+
+test("relay decoding preserves every split Unicode character and frame byte", async () => {
+  const text = 'id: 0\ndata: {"choices":[{"delta":{"content":"café 数学 🌍 \\n```js\\nconst x = 1;\\n```"}}]}\n\nid: 1\nevent: jarvis.complete\ndata: {"ok":true}\n\n: end\n\n';
+  const { req, res, events } = fakeExchange();
+  await streamChat(req, res, cfg, user, { runId, after: -1 }, async () => new Response(new ReadableStream({
+    start(controller) {
+      for (const byte of new TextEncoder().encode(text)) controller.enqueue(Uint8Array.of(byte));
+      controller.close();
+    },
+  })));
+  assert.equal(res.chunks.join(''), text);
+  assert.equal(events().at(-1).name, 'jarvis.complete');
+});
+
+test("relay decoder rejects incomplete UTF-8 and unfinished data after an end marker", async () => {
+  for (const tail of [Uint8Array.of(0xe2, 0x82), new TextEncoder().encode('id: 2\ndata: {')]) {
+    const { req, res, events } = fakeExchange();
+    await streamChat(req, res, cfg, user, { runId, after: -1 }, async () =>
+      new Response(new Blob([': end\n\n', tail])));
+    assert.equal(events().at(-1).name, 'jarvis.resume');
+    assert.doesNotMatch(res.chunks.join(''), /id: 2/);
+  }
+});
+
+test("rejecting corrupt relay bytes cancels the reader and releases response listeners", async () => {
+  const { req, res, events } = fakeExchange();
+  let cancelled = false;
+  await streamChat(req, res, cfg, user, { runId, after: -1 }, async () => new Response(new ReadableStream({
+    start(controller) { controller.enqueue(Uint8Array.of(0xff)); },
+    cancel() { cancelled = true; },
+  })));
+  assert.equal(cancelled, true);
+  assert.equal(res.ended, true);
+  assert.equal(events().at(-1).name, 'jarvis.resume');
+  for (const name of ['close', 'drain', 'error']) assert.equal(res.listenerCount(name), 0);
+  for (const name of ['aborted', 'error']) assert.equal(req.listenerCount(name), 0);
+});
+
 test("resuming takes a run id and a position, nothing else", () => {
   assert.deepEqual(resumeInput({ run: runId, after: "12" }), { runId, after: 12 });
   assert.deepEqual(resumeInput({ run: runId }), { runId, after: -1 });

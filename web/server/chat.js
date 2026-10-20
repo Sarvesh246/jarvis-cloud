@@ -450,7 +450,9 @@ async function followRun(res, cfg, user, runId, after, signal, request, deadline
     await response.body?.cancel();
     return "cut";
   }
-  const decoder = new TextDecoder();
+  // Reject damaged transport bytes before they can become valid replacement
+  // text in a numbered frame that the page would permanently acknowledge.
+  const decoder = new TextDecoder("utf-8", { fatal: true });
   let pending = "";
   let tail = "";
   try {
@@ -464,10 +466,13 @@ async function followRun(res, cfg, user, runId, after, signal, request, deadline
       tail = (tail + whole).slice(-64);
       if (!await writeChunk(res, whole, following)) return signal.aborted ? "left" : "cut";
     }
+    // Flush the decoder too: an incomplete multibyte sequence at EOF must
+    // reconnect even if the last complete frame looked like the end marker.
+    pending += decoder.decode();
   } catch {
     return signal.aborted ? "left" : "cut";
   }
-  return /: end\n\n$/.test(tail) ? "ended" : "cut";
+  return !pending && /: end\n\n$/.test(tail) ? "ended" : "cut";
 }
 
 export async function streamChat(req, res, cfg, user, input, request = fetch, { followMs = FOLLOW_MS } = {}) {
