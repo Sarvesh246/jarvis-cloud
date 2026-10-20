@@ -27,11 +27,15 @@ export function pcmWav(chunks, sampleRate, outputRate = 16000) {
 export class DesktopRecognition {
   constructor() { this.chunks = []; this.controller = new AbortController(); }
   async start() {
+    if (this.started || this.cancelled || this.stopping) return;
+    this.started = true;
     try {
       this.stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true } });
-      if (this.cancelled || this.stopping) { this.cleanup(); this.onend?.(); return; }
+      if (this.cancelled || this.stopping) { this.cleanup(); this.end(); return; }
       this.context = new AudioContext();
       await this.context.resume();
+      // Permission and resume can settle after Stop, Cancel or unmount.
+      if (this.cancelled || this.stopping) { this.cleanup(); this.end(); return; }
       this.source = this.context.createMediaStreamSource(this.stream);
       this.processor = this.context.createScriptProcessor(4096, 1, 1);
       this.processor.onaudioprocess = event => {
@@ -42,15 +46,23 @@ export class DesktopRecognition {
       this.source.connect(this.processor);
       this.processor.connect(this.context.destination);
     } catch (error) {
-      this.onerror?.({ error: error.name === "NotAllowedError" ? "not-allowed" : "audio-capture" });
+      if (!this.cancelled && !this.stopping)
+        this.onerror?.({ error: error.name === "NotAllowedError" ? "not-allowed" : "audio-capture" });
       this.abort();
     }
   }
+  end() {
+    if (this.ended) return;
+    this.ended = true;
+    this.onend?.();
+  }
   cleanup() {
-    if (this.processor) { this.processor.onaudioprocess = null; this.processor.disconnect(); }
-    this.source?.disconnect();
-    this.stream?.getTracks().forEach(track => track.stop());
-    this.context?.close().catch(() => {});
+    const { processor, source, stream, context } = this;
+    this.processor = this.source = this.stream = this.context = null;
+    if (processor) { processor.onaudioprocess = null; processor.disconnect(); }
+    source?.disconnect();
+    stream?.getTracks().forEach(track => track.stop());
+    context?.close().catch(() => {});
   }
   async stop() {
     if (this.stopping || this.cancelled) return;
@@ -58,7 +70,7 @@ export class DesktopRecognition {
     this.onprocessing?.();
     const rate = this.context?.sampleRate;
     this.cleanup();
-    if (!rate || !this.chunks.length) { this.onend?.(); return; }
+    if (!rate || !this.chunks.length) { this.end(); return; }
     try {
       const bytes = pcmWav(this.chunks, rate);
       this.chunks = [];
@@ -74,7 +86,7 @@ export class DesktopRecognition {
       if (!this.cancelled) this.onresult?.({ results: [[{ transcript: data.text }]] });
     } catch (error) {
       if (!this.cancelled) this.onerror?.({ error: "transcription", message: error.message });
-    } finally { this.onend?.(); }
+    } finally { this.end(); }
   }
-  abort() { this.cancelled = true; this.controller.abort(); this.cleanup(); this.chunks = []; this.onend?.(); }
+  abort() { this.cancelled = true; this.controller.abort(); this.cleanup(); this.chunks = []; this.end(); }
 }
