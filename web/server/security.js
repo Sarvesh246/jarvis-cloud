@@ -1,18 +1,17 @@
 import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { SignJWT, jwtVerify, createRemoteJWKSet } from "jose";
 import { revocations } from "./revocation.js";
+import { devices, deviceLabel, DEVICE_ID } from "./devices.js";
+import { HttpError } from "./http-error.js";
+export { HttpError };
 
 const googleKeys = createRemoteJWKSet(
   new URL("https://www.googleapis.com/oauth2/v3/certs"),
 );
 const duration = 7 * 24 * 60 * 60;
 const desktopAuth = Symbol("verified desktop session");
-export class HttpError extends Error {
-  constructor(status, message) {
-    super(message);
-    this.status = status;
-  }
-}
+const currentDevice = Symbol("device behind this session");
+export const deviceOf = (req) => req[currentDevice];
 
 export function settings(env = process.env) {
   const origin = env.APP_ORIGIN || "https://vaelochat.vercel.app";
@@ -92,12 +91,14 @@ function sessionKey(cfg) {
   return new TextEncoder().encode(cfg.secret);
 }
 
-export async function signSession(user, cfg, audience = "jarvis-web") {
+export async function signSession(user, cfg, audience = "jarvis-web", device = {}) {
   const signedOut = await (cfg.revocations || revocations).epoch(user.sub, audience);
+  // Written before the token exists: a failure here refuses the sign-in.
+  const did = await (cfg.devices || devices).register(user.sub, audience, device.label || deviceLabel("", audience));
   // NumericDate permits fractional seconds. A new sign-in must be strictly
   // newer than a sign-out even when both happen within the same clock tick.
   const issued = Math.max(Date.now() / 1000, signedOut + 0.001);
-  return new SignJWT({ email: user.email, name: user.name })
+  return new SignJWT({ email: user.email, name: user.name, ...(did && { did }) })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(user.sub)
     .setIssuer(cfg.origin)
@@ -118,6 +119,7 @@ export function sessionAudience(req) {
 
 export async function sessionUser(req, cfg) {
   delete req[desktopAuth];
+  delete req[currentDevice];
   const audience = sessionAudience(req);
   const desktop = audience === "vaelo-desktop";
   const token = desktop
@@ -133,6 +135,10 @@ export async function sessionUser(req, cfg) {
     if (!payload.sub || !cfg.email || payload.email !== cfg.email) return null;
     const signedOut = await (cfg.revocations || revocations).epoch(payload.sub, audience);
     if ((payload.iat || 0) <= signedOut) return null;
+    if (payload.did !== undefined && !DEVICE_ID.test(payload.did)) return null;
+    // A signed-out device is refused; an unreadable registry throws into the catch below.
+    if (!(await (cfg.devices || devices).verify(payload.sub, audience, payload.did, payload.iat || 0))) return null;
+    if (payload.did) req[currentDevice] = payload.did;
     if (desktop) req[desktopAuth] = true;
     return {
       sub: payload.sub,

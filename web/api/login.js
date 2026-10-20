@@ -12,6 +12,7 @@ import {
   fail,
   HttpError,
 } from "../server/security.js";
+import { deviceLabel } from "../server/devices.js";
 
 export default async function handler(req, res) {
   try {
@@ -38,7 +39,9 @@ export default async function handler(req, res) {
     );
     res.setHeader(
       "Set-Cookie",
-      cookie(cookieNames(cfg).session, await signSession(user, cfg), cfg),
+      cookie(cookieNames(cfg).session, await signSession(user, cfg, "jarvis-web", {
+        label: deviceLabel(req.headers["user-agent"], "jarvis-web"),
+      }), cfg),
     );
     json(res, 200, { user });
   } catch (error) {

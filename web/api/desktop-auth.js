@@ -1,4 +1,5 @@
 import { DesktopAuth } from "../server/desktop-auth.js";
+import { deviceLabel } from "../server/devices.js";
 import { settings, authorize, sameOrigin, readJson, json, fail, HttpError } from "../server/security.js";
 
 export function createDesktopAuthHandler({ configuration = settings, store = new DesktopAuth() } = {}) {
@@ -14,7 +15,7 @@ export function createDesktopAuthHandler({ configuration = settings, store = new
         sameOrigin(req, cfg);
         json(res, 200, { code: await store.grant(user, body.challenge) });
       } else if (body?.action === "exchange") {
-        json(res, 200, { token: await store.exchange(body.code, body.verifier, cfg) });
+        json(res, 200, { token: await store.exchange(body.code, body.verifier, cfg, deviceLabel(req.headers["user-agent"], "vaelo-desktop")) });
       } else throw new HttpError(400, "Invalid sign-in request.");
     } catch (error) { fail(res, error); }
   };

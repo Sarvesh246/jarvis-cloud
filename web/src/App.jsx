@@ -28,6 +28,8 @@ import { Workroom } from "./components/Workroom.jsx";
 import { SavedWork } from "./components/SavedWork.jsx";
 import { refreshWorkReferences, workContextFor, proposalDraft, chatToWorkspace, readWorkCache } from "./lib/workroom.js";
 import { getWorkspace } from "../shared/workspaces.js";
+import { memoryNotes, stripMemoryNotes } from "../shared/memory-notes.js";
+import { expiredChatIds } from "../shared/retention.js";
 import { getCheck } from "../shared/checks.js";
 import { Mark } from "./components/Mark.jsx";
 import { PresentationContext } from "./components/blocks/Blocks.jsx";
@@ -690,6 +692,38 @@ export function App() {
     if (chats.length && activeId && !chats.some((chat) => chat.id === activeId))
       setActiveId(chats[0].id);
   }, [chats, activeId]);
+
+  /* "Keep conversations for N days" lives on the account, so every device
+     follows it. Removing a conversation here removes it everywhere (the sync
+     turns it into a deletion), so the pass is slow, bounded, waits for the
+     first sync, and never takes the open, pinned or running conversations. */
+  const [retention, setRetention] = useState({ days: 0, skew: 0 });
+  const retentionOwner = session?.user && !session.user.guest && !session.offline ? session.user.sub : null;
+  useEffect(() => {
+    if (!retentionOwner) return undefined;
+    let gone = false;
+    request("/api/chats?resource=retention")
+      .then((result) => { if (!gone) setRetention({ days: result.days, skew: result.now - Date.now() }); })
+      .catch(() => {});
+    return () => { gone = true; };
+  }, [retentionOwner]);
+  const prune = useRef(null);
+  prune.current = () => {
+    const ids = expiredChatIds(chatsRef.current, retention.days, {
+      now: Date.now() + retention.skew, activeId, busyIds: [...runs.current.keys(), ...startingRuns.current.keys()],
+    });
+    if (!ids.length) return;
+    const gone = new Set(ids);
+    setChats((current) => current.filter((chat) => !gone.has(chat.id)));
+    ids.forEach((id) => pushChat(id));
+  };
+  useEffect(() => {
+    if (!retentionOwner || !retention.days) return undefined;
+    const pass = () => { if (!document.hidden) prune.current(); };
+    const first = setTimeout(pass, 30000);
+    const every = setInterval(pass, 6 * 60 * 60 * 1000);
+    return () => { clearTimeout(first); clearInterval(every); };
+  }, [retentionOwner, retention.days]);
 
   /* The free cloud sleeps when idle. Asking for its status wakes it, so the
      page asks as soon as you arrive or come back, and keeps asking quietly
@@ -1509,7 +1543,7 @@ export function App() {
     const flush = () => {
       frame = 0;
       received = normalizeReplySpacing(received);
-      updateMessage({ content: received, ...(reasoning && { reasoning: reasoning.slice(-12000) }) });
+      updateMessage({ content: stripMemoryNotes(received), ...(reasoning && { reasoning: reasoning.slice(-12000) }) });
     };
     const schedule = () => {
       if (!frame) frame = requestAnimationFrame(flush);
@@ -1868,6 +1902,28 @@ export function App() {
       if (!hasAnswer(received))
         throw new Error("The response ended before Vaelo delivered an answer.");
       succeeded = true;
+      /* Vaelo ends a reply with [[remember: …]] when it notes a lasting fact.
+         The marker is never shown. The note is saved here, on the device that
+         ran the reply, and the reply says truthfully what happened. Replies
+         that used tools (the web, files) never save anything. */
+      const noted = !mirror && !guest ? memoryNotes(received) : [];
+      received = stripMemoryNotes(received);
+      if (noted.length) {
+        const ranTools = Boolean(chatsRef.current.find((chat) => chat.id === chatId)?.messages.find((m) => m.id === id)?.activity?.length);
+        let line = "";
+        if (!ranTools) {
+          try {
+            const result = await request("/api/chats?resource=memory", { action: "note", notes: noted });
+            line = result.saved.length
+              ? `*Saved to memory: ${result.saved.map((text) => `“${text}”`).join(" · ")}. You can change this in Settings.*`
+              : result.full ? "*Memory is full, so I didn’t save that. You can delete notes in Settings.*" : "";
+          } catch (problem) {
+            line = /turned off/.test(problem.message) ? "" : "*I couldn’t save that to memory.*";
+          }
+        }
+        received = [received, line].filter(Boolean).join("\n\n");
+      }
+      flush();
     } catch (err) {
       controller.abort();
       releaseHeld();
@@ -2605,6 +2661,8 @@ export function App() {
           onTools={() => { setSettingsOpen(false); setUIToolsOpen(true); }}
           onWelcome={() => { setSettingsOpen(false); writeOnboarding("replay"); setOnboarding("replay"); }}
           onSignOut={() => { setSettingsOpen(false); logout(); }}
+          request={request}
+          onRetention={(days, now) => setRetention({ days, skew: now - Date.now() })}
           prefs={prefs}
           onChange={(patch) => setPrefs((current) => ({ ...current, ...patch }))}
           onClose={() => setSettingsOpen(false)}

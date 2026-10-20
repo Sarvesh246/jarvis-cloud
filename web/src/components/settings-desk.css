@@ -594,6 +594,78 @@
   }
 }
 
+/* Memory notes, device sign-out and history confirmation */
+.sd-notes {
+  display: flex;
+  flex-direction: column;
+  margin: var(--s-3) 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sd-memo {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  min-height: 3.5rem;
+  padding: var(--s-3) 0;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.sd-memo .sd-row-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.sd-memo .sd-row-title {
+  overflow-wrap: anywhere;
+}
+
+.sd-memo-edit,
+.sd-memo-add {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+.sd-memo-add {
+  margin-top: var(--s-3);
+}
+
+.sd-memo-edit .sd-input,
+.sd-memo-add .sd-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.sd-device + .sd-device,
+.sd-device + .sd-row,
+.sd-device + .sd-confirm {
+  margin-top: var(--s-3);
+}
+
+.sd-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  margin-top: var(--s-3);
+  padding: var(--s-4);
+  border: 1px solid var(--clay);
+  border-radius: var(--r-lg);
+  font-size: var(--t-md);
+  line-height: 1.5;
+}
+
+.sd-confirm p {
+  margin: 0;
+}
+
+.sd-button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
 :root[data-motion="reduce"] :is(.settings-desk[open], .sd-body) {
   animation: none;
 }

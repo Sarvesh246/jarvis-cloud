@@ -21,7 +21,7 @@ export class DesktopAuth {
     });
     return code;
   }
-  async exchange(code, verifier, cfg) {
+  async exchange(code, verifier, cfg, label) {
     if (!validProof(code) || !validProof(verifier)) throw new HttpError(400, "Invalid sign-in return.");
     const path = pathFor(code);
     const result = await this.storage.get(path, { access: "private", useCache: false });
@@ -39,6 +39,6 @@ export class DesktopAuth {
       });
     } catch { throw new HttpError(401, "That sign-in was already used. Try again."); }
     await this.storage.del(path).catch(() => {});
-    return signSession(data.user, cfg, "vaelo-desktop");
+    return signSession(data.user, cfg, "vaelo-desktop", { label });
   }
 }

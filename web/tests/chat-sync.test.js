@@ -1,4 +1,6 @@
 import test from "node:test";
+import { devices } from "../server/devices.js";
+import { memoryStorage as registryStorage } from "./helpers-storage.js";
 import assert from "node:assert/strict";
 import { BlobPreconditionFailedError } from "@vercel/blob";
 import { ChatStore, accountPath } from "../server/chat-store.js";
@@ -175,6 +177,8 @@ test("signed-in sync writes still require same-origin CSRF protection", async ()
     SESSION_SECRET: "s".repeat(64), DATABASE_URL: "postgres://unused" });
   const realStorage = revocations.storage;
   revocations.storage = { async get() { return null; } }; // never signed out
+  const realDevices = devices.record.storage;
+  devices.record.storage = registryStorage(); // the device registry needs a store too
   try {
     const cfg = settings();
     const token = await signSession({ sub: "owner", email: cfg.email, name: "Owner" }, cfg);
@@ -184,6 +188,8 @@ test("signed-in sync writes still require same-origin CSRF protection", async ()
     assert.equal(res.statusCode, 403);
   } finally {
     revocations.storage = realStorage;
+    devices.record.storage = realDevices;
+    devices.cache.clear();
     for (const key of ["APP_ORIGIN", "ALLOWED_EMAIL", "SESSION_SECRET", "DATABASE_URL"])
       if (previous[key] === undefined) delete process.env[key]; else process.env[key] = previous[key];
   }

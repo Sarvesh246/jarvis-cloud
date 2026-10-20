@@ -8,10 +8,12 @@ import {
   HttpError,
 } from "../server/security.js";
 import usageHandler from "../server/usage-api.js";
+import devicesHandler from "../server/devices-api.js";
 
 export default async function handler(req, res) {
-  if (new URL(req.url, "https://local").searchParams.get("resource") === "usage")
-    return usageHandler(req, res);
+  const resource = new URL(req.url, "https://local").searchParams.get("resource");
+  if (resource === "usage") return usageHandler(req, res);
+  if (resource === "devices") return devicesHandler(req, res);
   try {
     if (req.method !== "GET") throw new HttpError(405, "Method not allowed.");
     const cfg = settings();
