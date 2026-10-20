@@ -862,7 +862,11 @@ export function App() {
      the bottom. Runs before paint so following never visibly jumps. */
   useLayoutEffect(() => {
     const el = conversation.current;
-    if (el && pinned.current) el.scrollTop = el.scrollHeight;
+    if (!el) return;
+    /* The welcome has nothing to follow: when it is taller than the room it
+       has, it opens at the top, never scrolled down under the header. */
+    if (!messages.length) el.scrollTop = 0;
+    else if (pinned.current) el.scrollTop = el.scrollHeight;
   }, [messages, activeId]);
 
   /* Blocks can grow after their words arrive (a table settling, a font
@@ -877,7 +881,7 @@ export function App() {
     const thread = el?.firstElementChild;
     if (!thread || typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver(() => {
-      if (pinned.current && Date.now() < following.current) el.scrollTop = el.scrollHeight;
+      if (pinned.current && Date.now() < following.current) el.scrollTop = messages.length ? el.scrollHeight : 0;
     });
     observer.observe(thread);
     return () => observer.disconnect();
