@@ -14,7 +14,7 @@ function Fixture() {
   const [raster, setRaster] = useState("");
   useEffect(() => {
     let active = true;
-    fetch("/icons/vaelo-512-v5.png")
+    fetch("/icons/icon-512.png")
       .then((response) => response.blob())
       .then((blob) => {
         const reader = new FileReader();

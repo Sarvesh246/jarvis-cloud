@@ -377,7 +377,7 @@ async function tellReady(title, content) {
   }
   if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
   const body = content.replace(/```[\s\S]*?(```|$)|[#>*_`|[\]]/g, " ").replace(/\s+/g, " ").trim().slice(0, 140);
-  const options = { body, tag: "vaelo-reply", icon: "/icons/vaelo-192-v5.png", badge: "/icons/vaelo-192-v5.png" };
+  const options = { body, tag: "vaelo-reply", icon: "/icons/icon-192.png", badge: "/icons/icon-192.png" };
   try {
     const registration = await navigator.serviceWorker?.getRegistration();
     if (registration) await registration.showNotification(`Vaelo replied · ${title}`, options);
