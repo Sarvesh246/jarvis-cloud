@@ -8,8 +8,9 @@ import '../../src/design/tokens.css';
 import '../../src/design/base.css';
 import '../../src/design/personal.css';
 import { App } from '../../src/App.jsx';
+import { weatherContent } from './weather-data.js';
 
-const content = 'Weather for Chicago\n\n| Day | Conditions | High | Low |\n|---|---|---|---|\n| Today | Sunny | 82°F | 55°F |\n| Tomorrow | Partly cloudy | 79°F | 52°F |\n| Thursday | Rain | 68°F | — |\n\nWind NE 5 mph. [National Weather Service](https://weather.gov/)';
+const content = weatherContent;
 sessionStorage.setItem('vaelo-guest-chats', JSON.stringify([{ id: 'weather-fixture', title: 'Weather in Chicago', updated: Date.now(), messages: [
   { id: 'question', role: 'user', content: 'Weather today in Chicago' },
   { id: 'answer', role: 'assistant', content, at: Date.now() },

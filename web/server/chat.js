@@ -391,6 +391,7 @@ ${TEACHING_GUIDANCE}${richGuidanceFor(input.messages)}${placeNote(input.place)}$
     body: JSON.stringify({
       id: input.runId,
       messages: [system, ...input.messages],
+      ...(input.place && { place: input.place }),
       ...(effort && { model_options: { reasoning_effort: effort } }),
       ...(input.freshness && { freshness: input.freshness }),
       ...fast,

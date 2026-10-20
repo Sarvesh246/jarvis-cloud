@@ -5,7 +5,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { createServer } from 'vite';
 import { readEvents } from '../src/stream.js';
 import { cleanAnswer } from '../shared/answer-cleanup.js';
-import { weatherForecast } from '../src/lib/weather.js';
+import { weatherForecast, weatherData, weatherMarkdown } from '../src/lib/weather.js';
+import { forecast, weatherContent } from './fixtures/weather-data.js';
 import { localizedQuery } from '../server/freshness.js';
 
 const answer = 'Tomorrow’s high will be around 82 °F, with a clear sky and a light breeze from the northeast. The evening will drop to about 55 °F, staying mostly clear, and the week stays warm with highs of 86 °F on Thursday and 83 °F on Friday【untrusted_tool_result source="web_search"]';
@@ -40,6 +41,21 @@ test('local weather respects explicit destinations regardless of capitalization'
   assert.equal(localizedQuery('weather for tomorrow', place), 'weather for tomorrow in 41.88, -87.63');
 });
 
+test('detailed weather accepts bounded provider data and preserves readable fallback', () => {
+  const parsed = weatherForecast(weatherContent, 'what about Friday?');
+  assert.equal(parsed.current.temperature, 68);
+  assert.equal(parsed.periods[2].low, null);
+  assert.equal(parsed.periods[0].hours.length, 24);
+  assert.ok(!weatherMarkdown(weatherContent).includes('```weather'));
+  for (const request of ['weather as plain text', 'weather as a table', 'weather as JSON']) assert.equal(weatherForecast(weatherContent, request), null);
+  for (const change of [{ unit:'degrees' }, { periods: [{...forecast.periods[0],high:'hot'}] }, { current: {...forecast.current,temperature:{text:68}} }]) {
+    assert.equal(weatherData('```weather\n'+JSON.stringify({...forecast,...change})+'\n```'),null);
+  }
+  assert.equal(weatherData('```weather\n{}'),null);
+  const brokenTable = '| Day | Conditions | High | Low | Tue 10/20/26 | Clear sky / Sunny | 80 °F (26.9°C) | 55°F (13°C) |';
+  assert.equal(weatherForecast(brokenTable,'whats the weather today').periods[0].high,'80°F');
+});
+
 test('a terminal event finishes without waiting for the transport to close', async () => {
   let cancelled = false;
   const body = new ReadableStream({ start(c) {
@@ -72,5 +88,8 @@ test('actual weather renderer shows bento cards, sources and streaming fallback'
     assert.ok(html.includes('https://weather.gov/'));
     assert.ok(!render(table, true).includes('weather-bento'));
     assert.ok(!render(answer).includes('untrusted_tool_result'));
+    const detailed = render(weatherContent);
+    for (const label of ['weather-detailed', 'College Station', '68°F', 'Feels like', 'Hourly forecast', 'Rain chance', 'UV index', 'Sunrise', 'Choose forecast day', 'Retrieved']) assert.ok(detailed.includes(label),label);
+    assert.ok(!detailed.includes('language-weather'));
   } finally { await server.close(); }
 });

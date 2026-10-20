@@ -44,7 +44,7 @@ import { NumberExplorer } from "./LocalTools.jsx";
 import { bestTableCells, timelineLayout } from '../../lib/output-redesign.js';
 import { automaticPresentation } from '../../lib/automatic-presentation.js';
 import { cleanAnswer } from '../../../shared/answer-cleanup.js';
-import { weatherForecast } from '../../lib/weather.js';
+import { weatherForecast, weatherMarkdown } from '../../lib/weather.js';
 import { Weather } from './Weather.jsx';
 import { SourceIcon } from "./SourceIcon.jsx";
 import { Highlighted } from "./Highlighted.jsx";
@@ -1006,7 +1006,7 @@ export function Rendered({ content, sources, onOpen, mapped = false, live = fals
   const mathy = useMemo(() => hasMath(content), [content]);
   const weather = useMemo(() => !mapped && !live && presentation !== 'minimal' ? weatherForecast(content, requestText) : null, [mapped, live, presentation, content, requestText]);
   const automaticView = useMemo(() => !weather && !mapped && !live && !mathy && presentation !== 'minimal' ? automaticPresentation(content, requestText, attached) : null, [weather, mapped, live, mathy, presentation, requestText, content, attached]);
-  const shaped = automaticView?.markdown ?? content;
+  const shaped = automaticView?.markdown ?? weatherMarkdown(content);
   const { text: displayContent, pending } = useMemo(
     () => (mapped ? { text: shaped, pending: null } : live ? prepareLive(shaped) : { text: normalizeMath(shaped), pending: null }),
     [mapped, live, shaped],

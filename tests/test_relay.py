@@ -1102,6 +1102,30 @@ class RelayTests(unittest.TestCase):
         self.assertEqual(run.outcome, "stopped")
         opened.assert_not_called()
 
+    def test_weather_reply_is_durable_without_opening_a_model(self):
+        _, relay, _ = self.boot([])
+        run = relay_module.Run(RUN, OWNER)
+        with mock.patch('cloud.weather.weather_reply', return_value='Weather for today') as weather, mock.patch.object(relay, 'open') as opened:
+            relay.execute(run, {"messages": [{"role": "user", "content": "weather today"}], "place": {"lat":30,"lon":-96}})
+        weather.assert_called_once()
+        opened.assert_not_called()
+        self.assertEqual(run.outcome, 'complete')
+        self.assertEqual(run.route, 'weather')
+        self.assertTrue(any(b'Weather for today' in frame for frame in run.frames))
+        self.assertTrue(any(b'jarvis.complete' in frame for frame in run.frames))
+
+    def test_stop_during_weather_lookup_never_emits_the_forecast(self):
+        _, relay, _ = self.boot([])
+        run = relay_module.Run(RUN, OWNER)
+        def stopped(*args):
+            run.stopped = True
+            return 'Weather for today'
+        with mock.patch('cloud.weather.weather_reply', side_effect=stopped), mock.patch.object(relay, 'open') as opened:
+            relay.execute(run, {"messages": [{"role": "user", "content": "weather today"}]})
+        opened.assert_not_called()
+        self.assertEqual(run.outcome, 'stopped')
+        self.assertFalse(any(b'Weather for today' in frame for frame in run.frames))
+
     def test_a_late_failure_is_held_back_while_the_recovery_runs(self):
         hermes, relay, port = self.boot(
             [

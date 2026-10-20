@@ -900,6 +900,21 @@ class Relay:
         repetition_retried = False
         try:
             run.event("jarvis.status", {"message": "Vaelo is working…"})
+            # Keep weather inside the durable run so reconnects, Stop, and
+            # background readers use the same numbered frames as other replies.
+            try:
+                from weather import weather_reply
+            except ModuleNotFoundError:
+                from cloud.weather import weather_reply
+            weather = weather_reply(messages, body.get("place"))
+            if run.stopped:
+                return run.finish("stopped")
+            if weather is not None:
+                run.route = "weather"
+                run.first_answer = self.clock()
+                run.emit("data: " + json.dumps({"choices": [{"delta": {"content": weather}}]}))
+                run.event("jarvis.complete", {"ok": True})
+                return run.finish("complete")
             query = body.get("freshness")
             if isinstance(query, str) and query.strip() and len(query) <= 600:
                 run.event("jarvis.status", {"message": "Checking current sources…"})
