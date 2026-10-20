@@ -33,7 +33,9 @@ function DetailedWeather({ forecast: f }) {
   const hours = p.hours.filter(h => p.label !== f.localTime.slice(0,10) || h.time >= f.localTime.slice(0,13) + ':00');
   const points = hours.filter(h => h.temperature != null);
   const low = Math.min(...points.map(h => h.temperature)), high = Math.max(...points.map(h => h.temperature));
-  const path = points.map((h,i) => `${i * 100 / Math.max(1,points.length-1)},${36 - (h.temperature-low) * 28 / Math.max(1,high-low)}`).join(' ');
+  // The curve scrolls with the hour columns (6rem apart, 5.5rem wide), so each point sits over its own hour.
+  const columns = hours.length, step = 96;
+  const path = hours.flatMap((h,i) => h.temperature == null ? [] : [`${i * step + 44},${36 - (h.temperature-low) * 28 / Math.max(1,high-low)}`]).join(' ');
   const metrics = [
     ['Rain chance', p.rain == null ? null : `${rounded(p.rain)}%`],
     [current ? 'Wind' : 'Max wind', (current?.wind ?? p.wind) == null ? null : `${rounded(current?.wind ?? p.wind)} ${f.windUnit}`],
@@ -51,8 +53,10 @@ function DetailedWeather({ forecast: f }) {
     </div>
     <dl className="weather-metrics">{metrics.map(([label,value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
     {hours.length > 0 && <section className="weather-hourly" aria-label="Hourly forecast"><h3>Hourly forecast</h3>
-      {points.length > 1 && <svg className="weather-curve" viewBox="-1 0 102 42" preserveAspectRatio="none" role="img" aria-label={`Hourly temperatures from ${temp(points[0].temperature)} to ${temp(points.at(-1).temperature)}`}><polyline points={path} fill="none" vectorEffect="non-scaling-stroke" /></svg>}
-      <div className="weather-hours" tabIndex={0} aria-label="Scroll hourly forecast">{hours.map(h => <div className="weather-hour" key={h.time}><time dateTime={h.time}>{clock(h.time)}</time><Icon condition={h.condition} isDay={h.isDay} /><strong>{temp(h.temperature)}</strong><small>{h.condition || '—'}</small>{h.rain != null && <small>{rounded(h.rain)}% rain</small>}</div>)}</div>
+      <div className="weather-hours-scroll" tabIndex={0} aria-label="Scroll hourly forecast">
+      {points.length > 1 && <svg className="weather-curve" style={{ width: `${columns * 6 - .5}rem` }} viewBox={`0 0 ${columns * step - 8} 42`} preserveAspectRatio="none" role="img" aria-label={`Hourly temperatures from ${temp(points[0].temperature)} to ${temp(points.at(-1).temperature)}`}><polyline points={path} fill="none" vectorEffect="non-scaling-stroke" /></svg>}
+      <div className="weather-hours">{hours.map(h =><div className="weather-hour" key={h.time}><time dateTime={h.time}>{clock(h.time)}</time><Icon condition={h.condition} isDay={h.isDay} /><strong>{temp(h.temperature)}</strong><small>{h.condition || '—'}</small>{h.rain != null && <small>{rounded(h.rain)}% rain</small>}</div>)}</div>
+      </div>
     </section>}
     {f.periods.length > 1 && <div className="weather-days" role="group" aria-label="Choose forecast day">{f.periods.map((day,i) => <button key={day.label} aria-pressed={i === selected} onClick={() => setSelected(i)}><span>{dateLabel(day.label)}</span><Icon condition={day.condition} /><span>{temp(day.high)} / {temp(day.low)}</span></button>)}</div>}
     <footer><a href="https://open-meteo.com/" target="_blank" rel="noreferrer">Open-Meteo</a><span>Model forecast · {f.timezone}</span><span>{current ? `Conditions at ${clock(current.time)} · ` : ''}Retrieved {dateLabel(f.retrieved.slice(0,10))}, {clock(f.retrieved)} UTC</span></footer>

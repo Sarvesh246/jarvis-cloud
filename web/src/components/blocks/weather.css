@@ -27,9 +27,10 @@
 .weather-detailed dd { margin: .3rem 0 0; font-size: 1.1rem; }
 .weather-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.2rem 1rem; margin: 0; padding: 1.2rem 0; border-block: 1px solid var(--hairline); }
 .prose .weather-hourly h3 { margin: 1.3rem 0 1rem; font-size: 1.05rem; }
-.weather-curve { display: block; width: 100%; height: 3.5rem; color: var(--gilt); }
+.weather-hours-scroll { overflow-x: auto; scrollbar-width: thin; padding-bottom: .5rem; }
+.weather-curve { display: block; max-width: none; height: 3.5rem; margin-bottom: .25rem; color: var(--gilt); }
 .weather-curve polyline { stroke: currentColor; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
-.weather-hours { display: flex; overflow-x: auto; gap: .5rem; padding: .5rem 0 1rem; scrollbar-width: thin; }
+.weather-hours { display: flex; gap: .5rem; width: max-content; padding: .5rem 0; }
 .weather-hour { flex: 0 0 5.5rem; display: flex; align-items: center; flex-direction: column; gap: .45rem; text-align: center; }
 .weather-hour time { font-size: .8rem; color: var(--muted); }
 .weather-hour .weather-icon { font-size: 1.6rem; }
@@ -37,7 +38,7 @@
 .weather-days { display: flex; overflow-x: auto; gap: .5rem; margin-top: 1rem; padding-bottom: .5rem; }
 .weather-days button { flex: 0 0 8rem; display: flex; flex-direction: column; align-items: center; gap: .5rem; padding: .8rem; border-radius: .6rem; border: 1px solid var(--hairline); background: transparent; color: var(--ink); font: inherit; font-size: .8rem; cursor: pointer; }
 .weather-days button[aria-pressed=true], .weather-days button:hover { background: color-mix(in srgb, var(--ink) 7%, transparent); }
-.weather-days button:focus-visible, .weather-hours:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.weather-days button:focus-visible, .weather-hours-scroll:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 .weather-detailed footer { display: flex; flex-wrap: wrap; gap: .3rem .8rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--hairline); color: var(--muted); font-size: .73rem; line-height: 1.5; }
 .weather-detailed footer span:last-child { flex-basis: 100%; }
 @media (max-width: 540px) {

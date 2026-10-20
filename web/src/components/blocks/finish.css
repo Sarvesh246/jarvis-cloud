@@ -1,0 +1,67 @@
+/* Finishing pass from a visual review of every output type. Loads after the
+   other block sheets so it can settle spacing and alignment they left open. */
+
+/* Numeric headers sit over their right-aligned figures (row-reverse already
+   flips the axis, so flex-start is the right edge). */
+.prose.prose .table-block th[data-numeric] button {
+  width: 100%;
+  justify-content: flex-start;
+}
+
+/* A short phase keeps enough room to name itself. */
+.prose.prose .timeline-phases > button { min-width: 4.5rem; }
+
+/* Steps: breathing room between the step title and what follows it. */
+.after-step-card p + figure,
+.after-step-card p + .after-block { margin-top: var(--s-3); }
+
+/* Local widgets end with the same gap as every other card. */
+.prose > .local-explorer { margin-bottom: 24px; }
+.after-code-compare .local-note { margin-top: var(--s-3); }
+
+/* A picture and its caption read as one card. */
+.image-inline:has(.image-caption) { gap: 0; }
+.image-inline:has(.image-caption) .image-frame {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  box-shadow: none;
+}
+.image-inline:has(.image-caption) img { border-radius: 0; }
+.image-inline .image-caption { border-radius: 0 0 14px 14px; }
+
+/* An image that cannot load leaves a calm placeholder, not a broken glyph. */
+.after-image-stage > p[role="status"] {
+  display: grid;
+  place-content: center;
+  min-height: 12rem;
+  margin: 0;
+  padding: var(--s-5);
+  text-align: center;
+  color: var(--muted);
+  font: 14px/1.5 var(--font-ui);
+}
+.after-masonry img {
+  min-height: 5rem;
+  background: var(--sunken);
+  color: transparent;
+}
+.after-compare-note,
+.after-image-compare ~ p[role="status"] { color: var(--muted); font: 14px/1.5 var(--font-ui); }
+
+/* Phones: tool buttons keep their icon and lose the word, so a bar stays on
+   one line. Their aria-labels still name them. */
+@media (max-width: 560px) {
+  .code .block-bar .block-tool:not([aria-pressed]) > span,
+  .table-block .block-bar .block-tool:not(.segmented .block-tool) > span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .code .block-bar .block-tool:not([aria-pressed]),
+  .table-block .block-bar .block-tool:not(.segmented .block-tool) { padding-inline: var(--s-2); }
+  .code .block-bar .block-tools { flex: 1 1 auto; justify-content: flex-end; gap: 0; }
+  .table-block .block-bar .block-tools { flex: 1 1 auto; justify-content: flex-start; gap: 0; }
+}

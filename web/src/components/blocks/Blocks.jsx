@@ -57,6 +57,7 @@ import "./output-layout.css";
 import "./output-polish.css";
 import "./after.css";
 import "./math.css";
+import "./finish.css";
 import '@fontsource/jetbrains-mono/400.css';
 import '@fontsource/jetbrains-mono/500.css';
 import { DESKTOP, copyText, saveDesktopFile } from "../../lib/desktop.js";
