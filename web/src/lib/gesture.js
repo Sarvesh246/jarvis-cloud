@@ -24,6 +24,15 @@ export function dragProps({ axis = "x", slop = 6, start, claim, move, end, cance
         return;
       }
       g.claimed = true;
+      // Capturing a press before it becomes a drag retargets the eventual
+      // click to this container, swallowing buttons and inputs inside it.
+      if (event.pointerId !== undefined) {
+        try {
+          g.target.setPointerCapture(event.pointerId);
+        } catch {
+          /* capture is a convenience */
+        }
+      }
     }
     move?.(dx, dy, event);
   };
@@ -38,11 +47,6 @@ export function dragProps({ axis = "x", slop = 6, start, claim, move, end, cance
     onPointerDown(event) {
       if (event.pointerType === "touch" || event.button > 0) return;
       begin(event.clientX, event.clientY, event);
-      try {
-        event.currentTarget.setPointerCapture(event.pointerId);
-      } catch {
-        /* capture is a convenience */
-      }
     },
     onPointerMove(event) {
       if (event.pointerType !== "touch") update(event.clientX, event.clientY, event);
