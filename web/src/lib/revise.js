@@ -38,7 +38,7 @@ export async function requestRevision({ csrf, source, start, end, instruction, s
     held = "";
   };
   await readEvents(response.body, (name, data) => {
-    if (name === "jarvis.complete") { release(); completed = true; }
+    if (name === "jarvis.complete") { release(); completed = true; return false; }
     // The relay numbers every frame, so "[DONE]" arrives as data that isn't JSON.
     if (data == null) return;
     if (name === "jarvis.error") throw new Error(data.message || "Vaelo couldn’t revise that.");
@@ -62,7 +62,7 @@ export async function requestRevision({ csrf, source, start, end, instruction, s
     }
     if (choice?.finish_reason === "error" || (data.error && choice?.finish_reason !== "length"))
       throw new Error(data.error?.message || "Vaelo stopped before finishing.");
-  });
+  }, undefined, signal);
   const revised = cleanRevision(normalizeReplySpacing(text));
   if (!completed || !revised) throw new Error("Vaelo didn’t send a revision back. Try again.");
   return revised;

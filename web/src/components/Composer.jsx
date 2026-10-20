@@ -907,7 +907,7 @@ export const Composer = forwardRef(function Composer(
               aria-label={busy ? "Stop" : "Send"}
               data-tip={busy ? "Stop (Esc)" : "Send"}
               disabled={!busy && (!ready || over || reading || offline)}
-              onClick={busy ? onStop : undefined}
+              onClick={busy ? () => onStop() : undefined}
             >
               <ArrowUp className="send-arrow" size={20} weight="bold" />
               <Stop className="send-stop" size={16} weight="fill" />

@@ -170,6 +170,42 @@ class FakeHermes:
 
 
 class RelayTests(unittest.TestCase):
+    def test_keepalive_only_streams_recover_but_approval_waits_remain_open(self):
+        for approval in (False, True):
+            with self.subTest(approval=approval):
+                _, relay, _ = self.boot([])
+                ticks = iter([0, 121, 122, 123, 124])
+                relay.clock = lambda: next(ticks, 125)
+                response = io.BytesIO(b": keepalive\n\n: keepalive\n\n")
+                run = relay_module.Run(RUN, OWNER)
+                run.connection = mock.Mock()
+                seen = {"content": "", "answer": "", "tools": [], "approval": approval}
+                relay.relay(run, response, seen)
+                self.assertEqual(seen["dropped"], not approval)
+                self.assertTrue(response.closed)
+
+    def test_done_finishes_while_provider_keeps_connection_open(self):
+        release = threading.Event()
+        self.addCleanup(release.set)
+
+        def held_open(handler):
+            handler.send_response(200)
+            handler.send_header("Content-Type", "text/event-stream")
+            handler.end_headers()
+            for frame in [chunk("Finished answer.", "stop"), 'data: {"usage":{"prompt_tokens":12,"completion_tokens":5}}', "data: [DONE]"]:
+                handler.wfile.write((frame + "\n\n").encode())
+                handler.wfile.flush()
+            release.wait(4)
+
+        _, relay, port = self.boot([held_open])
+        self.start(port)
+        try:
+            run = self.finished(relay, timeout=2)
+            self.assertEqual(run.outcome, "complete")
+            self.assertEqual(run.completion_tokens, 5)
+        finally:
+            release.set()
+
     def test_error_frame_tool_text_is_discarded_without_poisoning_recovery(self):
         bad = '{"name":"web_extract","arguments":{}}'
         hermes, relay, port = self.boot([

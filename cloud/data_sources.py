@@ -528,7 +528,12 @@ def natural_query(query):
         return "currency", {"base": m[1], "quote": m[2]}
     m = re.fullmatch(r"(?:(?:what(?:'?s| is)|how is)\s+(?:the\s+)?)?(weather|forecast|temperature|air quality|aqi)(?:\s+(?:today|tomorrow|this week))?\s+(?:in|for|at)\s+([\w\s,.'-]{2,100}?)(?:\s+(?:today|tomorrow|this week))?[?.!]?", q, re.I)
     if m:
-        return ("airquality" if m[1].lower() in ("air quality", "aqi") else "weather"), {"location": m[2].strip()}
+        source = "airquality" if m[1].lower() in ("air quality", "aqi") else "weather"
+        coordinates = re.fullmatch(r"(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)", m[2].strip())
+        if coordinates:
+            lat, lon = map(float, coordinates.groups())
+            return (source, {"latitude": lat, "longitude": lon}) if abs(lat) <= 90 and abs(lon) <= 180 else None
+        return source, {"location": m[2].strip()}
     for pattern, source, key in (
         (r"(?:define|definition of|meaning of)\s+([A-Za-z'-]+)[?.!]?", "dictionary", "word"),
         (r"(?:find|search|look up)\s+(?:books?|book metadata)\s+(?:about|on|for|called|titled)\s+(.+?)[?.!]?", "books", "query"),

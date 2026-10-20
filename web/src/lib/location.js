@@ -48,16 +48,20 @@ export function locate({ force = false } = {}) {
   if (!locationSupport()) return Promise.reject(new Error("unsupported"));
   if (!force && cached && Date.now() - cached.at < FRESH_MS) return Promise.resolve(cached.place);
   pending ??= position()
-    .then(async ({ coords }) => {
+    .then(({ coords }) => {
       const lat = round(coords.latitude);
       const lon = round(coords.longitude);
       const place = {
         lat,
         lon,
         tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        ...(await cityOf(lat, lon)),
       };
       cached = { place, at: Date.now() };
+      // Coordinates are usable immediately. A slow city lookup must never
+      // discard a browser permission grant or delay a local weather request.
+      void cityOf(lat, lon).then(names => {
+        if (cached?.place === place) cached = { ...cached, place: { ...place, ...names } };
+      });
       return place;
     })
     .finally(() => {
@@ -70,10 +74,15 @@ export function locate({ force = false } = {}) {
    long, and never fails a reply because location was unavailable. */
 export async function placeFor(prefs) {
   if (!prefs?.location) return null;
+  let timer;
   try {
-    return await Promise.race([locate(), new Promise((resolve) => setTimeout(resolve, 3500, null))]);
+    return await Promise.race([locate(), new Promise((resolve) => {
+      timer = setTimeout(() => resolve(cachedPlace(prefs)), 10500);
+    })]);
   } catch {
-    return null;
+    return cachedPlace(prefs);
+  } finally {
+    clearTimeout(timer);
   }
 }
 

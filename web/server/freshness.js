@@ -38,7 +38,7 @@ export function placeLabel(place) {
 }
 
 export function localizedQuery(query, place) {
-  if (!query || !place || !LOCAL.test(query) || /\b(?:in|at|near|for)\s+(?:the\s+)?[A-Z][\p{L}]+/u.test(query)) return query;
+  if (!query || !place || !LOCAL.test(query) || /\b(?:in|at|near|for)\s+(?!(?:me|here|today|tonight|tomorrow|this|my|the)\b)[\p{L}][\p{L} .'-]+/iu.test(query)) return query;
   return `${query} in ${placeLabel(place)}`.slice(0, 600);
 }
 

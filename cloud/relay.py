@@ -53,6 +53,9 @@ EARLY_STOPS = 256
 RUN_LIMIT_SECONDS = 15 * 60
 # Hermes sends a keepalive every 10s, so this much silence means the stream is dead.
 UPSTREAM_SILENCE_SECONDS = 90
+# Keepalive comments prove the connection is alive, not that the model is
+# progressing. Recover a reply that only pings instead of waiting 15 minutes.
+UPSTREAM_PROGRESS_SECONDS = 120
 # Memory bounds on a 512 MB instance. A long answer is one to two megabytes of frames.
 RUN_BYTES = 6 * 1024 * 1024
 # Past RUN_BYTES only thinking is dropped; this is the hard stop for answer frames too, so a
@@ -692,7 +695,7 @@ class Relay:
         """Keep Hermes's frames as they are, reading only enough to know whether an answer
         arrived and how the attempt ended. Failure frames are held back, so a recovery or a
         continuation can still take their place."""
-        seen.update(finished=False, failed=False, dropped=False, held=None, truncated=False,
+        seen.update(finished=False, protocol_done=False, failed=False, dropped=False, held=None, truncated=False,
                     attempt_answer=False, repetitive=False, invalid_output=False)
         seen["output_guard"] = ToolOutputGuard(seen.get("request", []))
         seen["repetition_guard"] = RepetitionGuard(seen["answer"])
@@ -702,6 +705,7 @@ class Relay:
         usage_id = str(uuid.uuid4())
         usage_at = datetime.now(timezone.utc).isoformat()
         lines, frame_bytes = [], 0
+        progressed_at = self.clock()
         try:
             for raw in iter(lambda: response.readline(FRAME_BYTES + 1), b""):
                 if run.stopped:
@@ -710,12 +714,18 @@ class Relay:
                 if frame_bytes > FRAME_BYTES:
                     raise ValueError("Upstream stream frame exceeded its limit")
                 line = raw.decode("utf-8").rstrip("\r\n")
+                if line.startswith("data:"):
+                    progressed_at = self.clock()
+                elif not seen["approval"] and self.clock() - progressed_at > UPSTREAM_PROGRESS_SECONDS:
+                    seen["dropped"] = True
+                    break
                 if line:
                     lines.append(line)
                     continue
                 if lines:
                     self.inspect(run, "\n".join(lines), seen)
-                    if seen["repetitive"] or seen["invalid_output"]:
+                    if seen["repetitive"] or seen["invalid_output"] or seen.get("protocol_done"):
+                        lines = []
                         break
                 lines, frame_bytes = [], 0
             if lines and not run.stopped and not seen["repetitive"] and not seen["invalid_output"]:
@@ -755,6 +765,7 @@ class Relay:
             return  # keepalive comments: readers get their own
         text = "\n".join(data)
         if text == "[DONE]":
+            seen["protocol_done"] = True
             seen["finished"] = True
             for pending in seen["output_guard"].feed(frame, final=True):
                 run.emit(pending)

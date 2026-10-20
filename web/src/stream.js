@@ -2,11 +2,17 @@
    reader can pick up after the last frame it saw. `onBytes` hears every
    arrival, keepalive comments included, so the page can tell a quiet model
    from a connection that has gone dead. */
-export async function readEvents(body, onEvent, onBytes) {
+export async function readEvents(body, onEvent, onBytes, signal) {
   const reader = body.getReader();
   const decoder = new TextDecoder("utf-8", { fatal: true });
   let buffer = "";
   let ended = false;
+  let terminal = false;
+  const abort = () => { void reader.cancel().catch(() => {}); };
+  const checkAbort = () => {
+    if (signal?.aborted) throw new DOMException("Stopped", "AbortError");
+  };
+  signal?.addEventListener("abort", abort, { once: true });
   const frameLimit = 1024 * 1024;
   function consume(final = false) {
     let boundary;
@@ -48,7 +54,7 @@ export async function readEvents(body, onEvent, onBytes) {
             choice.delta?.[key] != null && typeof choice.delta[key] !== "string")
         )) throw new Error("The response stream contained an invalid answer event.");
       }
-      onEvent(name, payload, id);
+      if (onEvent(name, payload, id) === false) { terminal = true; return; }
     }
     if (buffer.length > frameLimit) throw new Error("The response stream frame exceeded its limit.");
     if (final && buffer.split("\n").some(line => line.trim() && !line.startsWith(":")))
@@ -56,18 +62,22 @@ export async function readEvents(body, onEvent, onBytes) {
   }
   try {
     while (true) {
+      checkAbort();
       const { done, value } = await reader.read();
+      checkAbort();
       if (done) { ended = true; break; }
       onBytes?.();
       buffer += decoder.decode(value, { stream: true });
       // The upstream emits LF; preserve CR split across transport chunks too.
       buffer = buffer.replace(/\r\n|\r(?!$)/g, "\n");
       consume();
+      if (terminal) return;
     }
     buffer = (buffer + decoder.decode()).replace(/\r\n|\r/g, "\n");
     consume(true);
   } finally {
-    if (!ended) await reader.cancel().catch(() => {});
+    signal?.removeEventListener("abort", abort);
+    if (!ended) void reader.cancel().catch(() => {});
     reader.releaseLock();
   }
 }

@@ -12,6 +12,11 @@ from cloud.research import Research
 
 
 class DataSourceTests(unittest.TestCase):
+    def test_shared_coordinates_use_weather_adapter_without_city_geocoding(self):
+        self.assertEqual(data.natural_query("What's the weather today in 41.88, -87.63"),
+                         ("weather", {"latitude": 41.88, "longitude": -87.63}))
+        self.assertIsNone(data.natural_query("weather in 200, -87"))
+
     def setUp(self):
         with data._lock:
             data._cache.clear()

@@ -8,6 +8,7 @@ import React, {
 } from "react";
 import { ArrowDown, FileArrowUp, IconContext, Quotes } from "@phosphor-icons/react";
 import { readEvents } from "./stream.js";
+import { cleanAnswer } from "../shared/answer-cleanup.js";
 import { normalizeReplySpacing, normalizeSavedReplySpacing } from "./lib/reply-spacing.js";
 import { requestForReply, imagesForReply } from "./lib/adaptive-ui.js";
 import { fullImages } from "./lib/image-store.js";
@@ -1551,7 +1552,7 @@ export function App() {
     const flush = () => {
       frame = 0;
       received = normalizeReplySpacing(received);
-      updateMessage({ content: placeImages(stripMemoryNotes(received), generated, succeeded), ...(reasoning && { reasoning: reasoning.slice(-12000) }) });
+      updateMessage({ content: placeImages(cleanAnswer(stripMemoryNotes(received)), generated, succeeded), ...(reasoning && { reasoning: reasoning.slice(-12000) }) });
     };
     const schedule = () => {
       if (!frame) frame = requestAnimationFrame(flush);
@@ -1818,10 +1819,12 @@ export function App() {
                 return;
               }
               if (data !== null) onEvent(name, data);
+              if (completed) return false;
             },
             () => {
               heardAt = Date.now();
             },
+            attempt.signal,
           );
         } catch (err) {
           if (controller.signal.aborted || err.stoppedElsewhere) throw err;

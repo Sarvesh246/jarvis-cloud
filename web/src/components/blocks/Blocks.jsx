@@ -43,6 +43,9 @@ import { InlinePreview } from "./InlinePreview.jsx";
 import { NumberExplorer } from "./LocalTools.jsx";
 import { bestTableCells, timelineLayout } from '../../lib/output-redesign.js';
 import { automaticPresentation } from '../../lib/automatic-presentation.js';
+import { cleanAnswer } from '../../../shared/answer-cleanup.js';
+import { weatherForecast } from '../../lib/weather.js';
+import { Weather } from './Weather.jsx';
 import { SourceIcon } from "./SourceIcon.jsx";
 import { Highlighted } from "./Highlighted.jsx";
 import { Rolling } from "../Rolling.jsx";
@@ -997,10 +1000,12 @@ export function useSources(content) {
 }
 
 export function Rendered({ content, sources, onOpen, mapped = false, live = false, stateKey, requestText = "", attached }) {
+  content = cleanAnswer(content);
   const preference = useContext(PresentationContext);
   const presentation = wantsPlainReply(requestText) ? "minimal" : preference;
   const mathy = useMemo(() => hasMath(content), [content]);
-  const automaticView = useMemo(() => !mapped && !live && !mathy && presentation !== 'minimal' ? automaticPresentation(content, requestText, attached) : null, [mapped, live, mathy, presentation, requestText, content, attached]);
+  const weather = useMemo(() => !mapped && !live && presentation !== 'minimal' ? weatherForecast(content, requestText) : null, [mapped, live, presentation, content, requestText]);
+  const automaticView = useMemo(() => !weather && !mapped && !live && !mathy && presentation !== 'minimal' ? automaticPresentation(content, requestText, attached) : null, [weather, mapped, live, mathy, presentation, requestText, content, attached]);
   const shaped = automaticView?.markdown ?? content;
   const { text: displayContent, pending } = useMemo(
     () => (mapped ? { text: shaped, pending: null } : live ? prepareLive(shaped) : { text: normalizeMath(shaped), pending: null }),
@@ -1021,21 +1026,17 @@ export function Rendered({ content, sources, onOpen, mapped = false, live = fals
     }),
     [sources, onOpen, presentation, displayContent, live, stateKey, mapped, requestText],
   );
+  const markdown = <Markdown remarkPlugins={mapped ? mappedRemarkPlugins : remarkPlugins} rehypePlugins={mapped ? mappedPlugins : rehypeMath} components={components} urlTransform={urlTransform}>{displayContent}</Markdown>;
   return (
     <BlockContext.Provider value={value}>
       <BlockBoundary content={content}>
+        {weather && <Weather forecast={weather} />}
+        {weather?.notes && <Markdown remarkPlugins={remarkPlugins} components={components} urlTransform={urlTransform}>{weather.notes}</Markdown>}
         {automaticView?.block && <RichUI source={JSON.stringify(automaticView.block)} enabled stateKey={stateKey} />}
         {automaticView?.language === 'metrics' && <Metrics source={automaticView.source} settled />}
         {automaticView?.language === 'timeline' && <Timeline source={automaticView.source} settled />}
         {automaticView?.explorer && <NumberExplorer columns={automaticView.explorer.columns} rows={automaticView.explorer.rows} initialFactor={automaticView.explorer.factor} />}
-        <Markdown
-          remarkPlugins={mapped ? mappedRemarkPlugins : remarkPlugins}
-          rehypePlugins={mapped ? mappedPlugins : rehypeMath}
-          components={components}
-          urlTransform={urlTransform}
-        >
-          {displayContent}
-        </Markdown>
+        {weather ? <details className="weather-details"><summary>Forecast details and sources</summary>{markdown}</details> : markdown}
         {pending && <p className="math-pending" role="status">{pending === "math" ? "Typesetting…" : "Building the table…"}</p>}
       </BlockBoundary>
     </BlockContext.Provider>
