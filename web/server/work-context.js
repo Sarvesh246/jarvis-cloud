@@ -42,7 +42,10 @@ export function buildWorkContext(record, texts, { budget = WORK_LIMITS.contextCh
     workspace.brief && `Brief:\n${workspace.brief.slice(0, WORK_LIMITS.brief)}`,
     record.notes && `The person's notes:\n${record.notes.slice(0, WORK_LIMITS.notes)}`,
     ...plan.documents.map(doc => {
-      const fence = doc.text.includes("```") ? "````" : "```";
+      // Documents can themselves contain Markdown examples with long fences.
+      // Keep every such example inside this document's surrounding block.
+      const longest = (doc.text.match(/`{3,}/g) || []).reduce((max, run) => Math.max(max, run.length), 2);
+      const fence = "`".repeat(longest + 1);
       const size = doc.trimmed ? `${numberWord(doc.chars)} characters, shortened to about ${numberWord(doc.keep)} to fit` : `${numberWord(doc.chars)} characters`;
       return `Document: ${doc.name} (${doc.label}; ${size})\n${fence}\n${excerpt(doc.text, doc.keep)}\n${fence}`;
     }),

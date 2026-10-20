@@ -9,6 +9,7 @@ import { ChatStore } from "../server/chat-store.js";
 import { WorkStore } from "../server/work-store.js";
 import { getWorkspace } from "../shared/workspaces.js";
 import { WORK_LIMITS, contextBudget } from "../shared/work-records.js";
+import { markdownFences } from "../src/lib/markdown-fences.js";
 
 const input = () => chatInput({conversationId:"123e4567-e89b-12d3-a456-426614174000",messages:[{role:"user",content:"Tailor my CV"}],work:{id:"record-1",revision:"revision-1"}});
 const record = (extra = {}) => ({ id:"record-1", revision:"revision-1", workspaceId:"job-application", title:"Apply to Acme", scope:"work",
@@ -35,6 +36,47 @@ test("custom workspaces send their own brief; missing or retired work is refused
   await assert.rejects(() => withSelectedWork(input(), { sub: "one" }, async () => ({ record: record(), documents: { ["a".repeat(64)]: "cv" } })), e => e.status === 409 && /posting\.txt/.test(e.message));
   await assert.rejects(() => withSelectedWork(input(), { sub: "one" }, async () => ({ record: record({ workspaceId: "retired", documents: [] }), documents: {} })), e => e.status === 400);
   await assert.rejects(() => withSelectedWork(input(), { sub: "one" }, async () => ({ record: record({ revision: "newer" }), documents: texts })), e => e.status === 409);
+});
+
+test('workspace documents cannot close their surrounding fence with nested Markdown examples', () => {
+  for (const length of [3, 4, 5, 32]) {
+    const marker = '`'.repeat(length);
+    const body = `Guide\n${marker}markdown\nExample\n${marker}\nKeep this inside the document.\nEnd`;
+    const docs = [{ id: 'guide', slot: 'cv', name: 'guide.md', sha: 'a'.repeat(64), chars: body.length }];
+    const { text, trimmed } = buildWorkContext(record({ documents: docs }), { ['a'.repeat(64)]: body });
+    const blocks = markdownFences(text);
+    assert.equal(trimmed, false);
+    assert.equal(blocks.length, 1, `one document block for a ${length}-backtick example`);
+    assert.equal(blocks[0].closed, true);
+    assert.equal(blocks[0].source, body);
+    assert.ok(blocks[0].marker.length > length);
+  }
+});
+
+test('shortened workspace documents retain closed fences and independent document boundaries', async () => {
+  const body = 'Opening\n````markdown\nExample\n````\n' + 'x'.repeat(120_000) + '\nClosing';
+  const docs = [{ id: 'guide', slot: 'cv', name: 'guide.md', sha: 'a'.repeat(64), chars: body.length },
+    { id: 'short', slot: 'posting', name: 'short.txt', sha: 'b'.repeat(64), chars: 5 }];
+  const loaded = { record: record({ documents: docs }), documents: { ['a'.repeat(64)]: body, ['b'.repeat(64)]: 'Short' } };
+  const { text, trimmed } = buildWorkContext(loaded.record, loaded.documents, { budget: 10_000 });
+  const blocks = markdownFences(text);
+  assert.equal(trimmed, true);
+  assert.equal(blocks.length, 2);
+  assert.ok(blocks.every(block => block.closed));
+  assert.match(blocks[0].source, /^Opening\n````markdown/);
+  assert.match(blocks[0].source, /left out to fit/);
+  assert.match(blocks[0].source, /Closing$/);
+  assert.equal(blocks[1].source, 'Short');
+
+  const source = input();
+  source.messages.at(-1).content = [{ type: 'text', text: 'Review' },
+    { type: 'image_url', image_url: { url: 'data:image/png;base64,AA==' } }];
+  const before = structuredClone(source);
+  const result = await withSelectedWork(source, { sub: 'one' }, async () => loaded);
+  const sent = result.messages.at(-1).content;
+  assert.deepEqual(sent.slice(0, 2), source.messages.at(-1).content);
+  assert.deepEqual(markdownFences(sent.at(-1).text).map(block => block.source), [body, 'Short']);
+  assert.deepEqual(source, before);
 });
 
 test("long documents are shortened fairly to the context budget and say so", () => {
