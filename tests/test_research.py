@@ -188,6 +188,64 @@ class ResearchTests(unittest.TestCase):
         self.assertNotIn("var x", page["content"])
         self.assertNotIn("Menu", page["content"])
 
+    def test_extraction_skips_malformed_rows_before_usable_page(self):
+        mod = self.module
+        valid = {"title": "Reference", "text": "Usable page text", "publishedDate": "2026-10-20"}
+        for name in ("exa", "tavily"):
+            for bad in (None, 7, "bad", [], {"text": 42}):
+                with self.subTest(provider=name, row=bad), patch.object(mod, "post", return_value={"results": [bad, valid]}):
+                    self.assertEqual(mod.Research().read(name, "https://example.com"),
+                                     ("Reference", "Usable page text", "2026-10-20"))
+
+    def test_extraction_preserves_text_with_malformed_metadata_and_content_fields(self):
+        mod = self.module
+        for name in ("exa", "tavily", "firecrawl"):
+            for metadata in (None, [], "bad", 42):
+                row = {"text": {"error": "bad field"}, "raw_content": "Usable page text", "metadata": metadata}
+                response = {"success": True, "data": row} if name == "firecrawl" else {"results": [row]}
+                with self.subTest(provider=name, metadata=metadata), patch.object(mod, "post", return_value=response):
+                    self.assertEqual(mod.Research().read(name, "https://example.com"), ("", "Usable page text", ""))
+
+    def test_extraction_rejects_unusable_provider_payload_and_keeps_fallback(self):
+        mod = self.module
+        for payload in ({"results": None}, {"results": {}}, {"results": [None, {"text": 42}]}):
+            research = mod.Research()
+            with self.subTest(payload=payload), patch.dict(mod.os.environ, {"EXA_API_KEY": "k", "TAVILY_API_KEY": "k"}, clear=True), \
+                 patch.object(mod, "post", side_effect=[payload, {"results": [{"content": "Fallback page", "metadata": {"title": "Reference", "publishedTime": "2026-10-20"}}]}]) as post:
+                page = research.extract_one("https://example.com")
+            self.assertEqual(page["provider"], "tavily")
+            self.assertEqual(page["content"], "Fallback page")
+            self.assertEqual(page["title"], "Reference")
+            self.assertEqual(page["published"], "2026-10-20")
+            self.assertEqual(post.call_count, 2)
+
+    def test_extraction_preserves_field_precedence_metadata_and_literal_content(self):
+        mod = self.module
+        content = "# Reference\n\n| Unit | Value |\n| --- | --- |\n| USD | 12 |\n\n```python\nprint('$x$')\n```\n\nUnicode: café 日本語; equation: $x^2$."
+        fields = ("text", "raw_content", "content", "markdown")
+        for name in ("exa", "tavily", "firecrawl"):
+            for index, field in enumerate(fields):
+                row = {key: " \n " for key in fields[:index]}
+                row.update({key: "Lower precedence" for key in fields[index + 1:]})
+                row.update({field: content, "title": "Primary title", "publishedDate": "2026-10-20",
+                            "metadata": {"title": "Metadata title", "publishedTime": "2026-10-19"}})
+                response = {"success": True, "data": row} if name == "firecrawl" else {"results": [row]}
+                with self.subTest(provider=name, field=field), patch.object(mod, "post", return_value=response):
+                    self.assertEqual(mod.Research().read(name, "https://example.com"),
+                                     ("Primary title", content, "2026-10-20"))
+
+    def test_mixed_page_results_do_not_trigger_extra_provider_requests(self):
+        mod = self.module
+        response = {"results": [None, {"text": 42}, {"text": "# Reference\n\nUsable evidence", "metadata": "bad"}]}
+        with patch.dict(mod.os.environ, {"EXA_API_KEY": "k", "TAVILY_API_KEY": "k"}, clear=True), \
+             patch.object(mod, "post", return_value=response) as post, patch.object(mod, "fetch_page") as direct:
+            pages = asyncio.run(mod.Research().extract(["https://example.com", "https://example.com"]))
+        self.assertEqual(len(pages), 1)
+        self.assertEqual(pages[0]["provider"], "exa")
+        self.assertEqual(pages[0]["content"], "# Reference\n\nUsable evidence")
+        post.assert_called_once()
+        direct.assert_not_called()
+
     def test_a_page_that_trickles_in_is_given_up_on_in_time(self):
         mod = self.module
         clock = iter(range(0, 1000, 5))  # five seconds pass between reads

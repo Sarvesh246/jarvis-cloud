@@ -713,20 +713,21 @@ class Research(WebSearchProvider):
             rows = [data.get("data", {})] if data.get("success") else []
         else:
             rows = [fetch_page(url, timeout)]
+        if not isinstance(rows, list):
+            raise LookupError("invalid page results")
         for item in rows:
-            content = (
-                item.get("text")
-                or item.get("raw_content")
-                or item.get("content")
-                or item.get("markdown")
-            )
-            if isinstance(content, str) and content.strip():
-                title = item.get("title") or (item.get("metadata") or {}).get(
-                    "title", ""
-                )
+            if not isinstance(item, dict):
+                continue
+            # One damaged field/row must not hide another usable page passage.
+            content = next((item.get(key) for key in ("text", "raw_content", "content", "markdown")
+                            if isinstance(item.get(key), str) and item[key].strip()), None)
+            if content is not None:
+                metadata = item.get("metadata")
+                metadata = metadata if isinstance(metadata, dict) else {}
+                title = item.get("title") or metadata.get("title", "")
                 published = day(
                     item.get("publishedDate")
-                    or (item.get("metadata") or {}).get("publishedTime")
+                    or metadata.get("publishedTime")
                 )
                 return str(title), content, published
         raise LookupError("empty page")
