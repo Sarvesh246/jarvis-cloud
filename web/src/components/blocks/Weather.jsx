@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useLayoutEffect, useRef, useState } from 'react';
 import { weatherIcon } from '../../lib/weather.js';
 import './weather.css';
 
 export function Weather({ forecast }) {
-  if (forecast.detailed) return <DetailedWeather forecast={forecast} />;
+  if (forecast.detailed) return <WeatherFit><DetailedWeather forecast={forecast} /></WeatherFit>;
   return <section className="weather-bento" aria-label="Weather forecast">
     <header><span>{forecast.title}</span><small>Forecast · Highs & lows</small></header>
     <div className="weather-grid">{forecast.periods.map((period, i) => <article className="weather-period" key={`${period.label}-${i}`}>
@@ -23,6 +23,73 @@ const clock = value => {
 const rounded = value => value == null ? '—' : Math.round(value);
 function Icon({ condition, isDay = true }) {
   return <span className="weather-icon" aria-hidden="true">{!isDay && /clear|partly/i.test(condition) ? '🌙' : weatherIcon(condition)}</span>;
+}
+
+// Scale the existing design as one unit. Measure the actual conversation
+// viewport, which already excludes the header and composer. Sources and
+// reply actions below the card must not force its text smaller still.
+function WeatherFit({ children }) {
+  const root = useRef(null);
+  const content = useRef(null);
+  useLayoutEffect(() => {
+    const box = root.current;
+    const card = content.current;
+    if (!card) return;
+    const conversation = card.closest('.conversation');
+    const message = card.closest('.message');
+    let frame;
+    let disposed = false;
+    let settle;
+    const measure = (force = false) => {
+      const height = card.offsetHeight;
+      if (!height) return;
+      const viewport = conversation?.clientHeight || window.innerHeight;
+      const available = Math.max(160, viewport - 64);
+      // Floor keeps text legible on short viewports; the conversation scrolls
+      // past the remainder instead of shrinking the card further.
+      const scale = Math.max(.7, Math.min(.82, available / height));
+      box.style.height = `${Math.ceil(height * scale)}px`;
+      card.style.transform = `scale(${scale})`;
+      card.style.left = `${(1 - scale) * 50}%`;
+      // Chat normally follows the very end of a reply, including its source
+      // and action rows. Keep a newly fitted last card in view above the dock.
+      if (conversation && message?.dataset.last === 'true') {
+        const bounds = card.getBoundingClientRect();
+        const view = conversation.getBoundingClientRect();
+        if (force || (bounds.bottom > view.top && bounds.top < view.bottom)) {
+          const tooTall = bounds.height > view.height - 48;
+          if (bounds.top < view.top + 24) conversation.scrollTop -= view.top + 24 - bounds.top;
+          else if (!tooTall && bounds.bottom > view.bottom - 24) conversation.scrollTop += bounds.bottom - view.bottom + 24;
+        }
+      }
+    };
+    const schedule = () => {
+      if (disposed) return;
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => measure());
+    };
+    const observer = new ResizeObserver(schedule);
+    observer.observe(card);
+    if (conversation) observer.observe(conversation);
+    if (message) observer.observe(message);
+    window.addEventListener('resize', schedule);
+    document.fonts?.ready.then(schedule);
+    measure();
+    // Chat follows the end of a reply for a moment after it lands. Once that
+    // settles, bring a card still scrolled out of sight to the top of the view.
+    settle = setTimeout(() => {
+      const end = conversation && conversation.scrollHeight - conversation.scrollTop - conversation.clientHeight < 2;
+      if (end) measure(true);
+    }, 1700);
+    return () => {
+      disposed = true;
+      clearTimeout(settle);
+      observer.disconnect();
+      cancelAnimationFrame(frame);
+      window.removeEventListener('resize', schedule);
+    };
+  }, []);
+  return <div ref={root} className="weather-fit"><div ref={content} className="weather-fit-content">{children}</div></div>;
 }
 
 function DetailedWeather({ forecast: f }) {

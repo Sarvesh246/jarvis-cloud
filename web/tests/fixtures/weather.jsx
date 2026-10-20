@@ -8,11 +8,17 @@ import '../../src/design/tokens.css';
 import '../../src/design/base.css';
 import '../../src/design/personal.css';
 import { App } from '../../src/App.jsx';
-import { weatherContent } from './weather-data.js';
+import { forecast, weatherContent } from './weather-data.js';
 
-const content = weatherContent;
-sessionStorage.setItem('vaelo-guest-chats', JSON.stringify([{ id: 'weather-fixture', title: 'Weather in Chicago', updated: Date.now(), messages: [
-  { id: 'question', role: 'user', content: 'Weather today in Chicago' },
+const view = new URLSearchParams(location.search).get('view');
+const days = view === 'week' ? 7 : 1;
+const periods = Array.from({length:days}, (_,i) => {
+  const day = `2026-10-${20+i}`, source = forecast.periods[i % forecast.periods.length];
+  return {...source,label:day,hours:source.hours.map(hour=>({...hour,time:day+hour.time.slice(10)}))};
+});
+const content = view ? `\`\`\`weather\n${JSON.stringify({...forecast,view:view==='week'?'week':'day',periods})}\n\`\`\`\n\nWeather for College Station\n\n[Open-Meteo](https://open-meteo.com/)` : weatherContent;
+sessionStorage.setItem('vaelo-guest-chats', JSON.stringify([{ id: 'weather-fixture', title: 'Weather in College Station', updated: Date.now(), messages: [
+  { id: 'question', role: 'user', content: view==='week'?'How about this week?':'Weather today in College Station' },
   { id: 'answer', role: 'assistant', content, at: Date.now() },
 ] }]));
 const originalFetch = window.fetch.bind(window);

@@ -1,4 +1,7 @@
 .weather-bento { margin: 1rem 0; color: var(--ink); }
+.weather-fit { position: relative; margin: 1rem 0; overflow: clip; }
+.weather-fit-content { position: absolute; top: 0; width: 100%; transform-origin: top left; }
+.weather-fit .weather-bento { margin: 0; }
 .weather-bento > header { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; margin-bottom: .7rem; }
 .weather-bento > header > span { font: 500 1.45rem/1.2 var(--font-voice); }
 .weather-bento small { font-size: .8rem; color: var(--muted); }
