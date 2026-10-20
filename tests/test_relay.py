@@ -1085,9 +1085,26 @@ class RelayTests(unittest.TestCase):
         lookup.assert_called_once_with(body["freshness"])
         self.assertEqual(len(hermes.requests), 2)
         first = hermes.requests[0]["body"]["messages"]
-        self.assertEqual(first[:2], body["messages"], "first user and system retain session identity")
-        self.assertEqual(first[-1], evidence)
+        self.assertEqual(len(first), 2, "evidence is not a separate trailing message")
+        self.assertEqual(first[0], body["messages"][0])
+        self.assertTrue(first[-1]["content"].startswith("Compare phone 15 and phone 18"))
+        self.assertIn(evidence["content"], first[-1]["content"])
         self.assertIn("official.example", hermes.requests[1]["body"]["messages"][-1]["content"])
+
+    def test_fresh_sources_stay_attached_to_a_request_with_an_attached_file(self):
+        hermes, relay, port = self.boot([[chunk("Sized.", "stop"), "data: [DONE]"]])
+        request = ("I grow cotton near College Station. What size pump do I need?\n\n"
+                   "Attached file: season.csv\n```csv\ndate,et\n2026-04-15,0.21\n```")
+        evidence = {"role": "user", "content": "Live-source context: https://texasET.example"}
+        body = {"id": RUN, "messages": [{"role": "user", "content": request}],
+                "freshness": "irrigation pump College Station"}
+        with mock.patch.object(relay_module, "source_context", return_value=evidence):
+            self.assertEqual(self.call(port, "POST", "/vaelo/runs", body)[0], 202)
+            self.assertEqual(self.finished(relay).outcome, "complete")
+        sent = hermes.requests[0]["body"]["messages"]
+        self.assertEqual(len(sent), 1)
+        self.assertTrue(sent[0]["content"].startswith(request))
+        self.assertIn("texasET.example", sent[0]["content"])
 
     def test_stopping_during_source_lookup_prevents_generation(self):
         _, relay, _ = self.boot([])

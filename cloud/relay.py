@@ -918,11 +918,18 @@ class Relay:
             query = body.get("freshness")
             if isinstance(query, str) and query.strip() and len(query) <= 600:
                 run.event("jarvis.status", {"message": "Checking current sources…"})
-                # A separate context message keeps the first user message and
-                # Hermes session identity stable. Reuse this evidence on recovery.
-                # The web asks for a direct answer only when one search result is
-                # enough; otherwise it already cleared "fast" for the full agent.
-                messages = [*messages, source_context(query)]
+                # The evidence rides inside the person's own newest message. Hermes
+                # treats the last user message as the active task and, when a long
+                # tool run forces compaction, summarises everything before it away.
+                # As a separate trailing message the evidence became the "task"
+                # and the real request (with any attached file) was lost, so the
+                # model answered "I don't see your request". Reuse this evidence
+                # on recovery. The web asks for a direct answer only when one
+                # search result is enough; otherwise it already cleared "fast"
+                # for the full agent.
+                evidence = source_context(query)
+                messages = [*messages[:-1], {**messages[-1], "content": with_note(
+                    messages[-1]["content"], evidence["content"])}]
             if run.stopped:
                 return run.finish("stopped")
             request = messages
