@@ -7,6 +7,11 @@ import { chatInput, guestInput, streamChat } from "../server/chat.js";
 const conversationId = "123e4567-e89b-12d3-a456-426614174000";
 const question = "Compare the iPhone 15 Pro and iPhone 18 Pro Max";
 
+test("public data requests fetch evidence while private transformations stay offline", () => {
+  for (const text of ["Define serendipity", "Find books about astronomy", "Find research papers on battery recycling", "npm package react", "Food barcode 3017620422003", "Air quality in Chicago", "top Hacker News stories", "Product Hunt launches", "search One Piece on MangaDex", "pokemon pikachu", "UK postcode SW1A 1AA"]) assert.equal(freshnessQuery(text), text);
+  for (const text of ["Rewrite: Define serendipity", "Don't browse. Find books about astronomy", "Only use my provided text. Define serendipity", "Translate: Product Hunt launches", "Don't search One Piece on MangaDex"]) assert.equal(freshnessQuery(text), null);
+});
+
 test("product freshness applies to every style and role without a research toggle", () => {
   for (const style of ["balanced", "concise", "thorough"]) {
     for (const role of ["none", "tutor", "skeptic", "advocate", "guide"]) {
@@ -117,7 +122,7 @@ const chicago = { lat: 41.884, lon: -87.632, tz: "America/Chicago", city: "Chica
 const ask = (content, extra = {}, options) => chatInput({ conversationId, messages: [{ role: "user", content }], ...extra }, options);
 
 test("a one-fact look-up is searched first and answered directly, not worked out by an agent", () => {
-  for (const text of ["whats the weather today", "what's the score of the Bulls game", "price of bitcoin today"]) {
+  for (const text of ["whats the weather today", "what's the score of the Bulls game", "price of bitcoin today", "Product Hunt launches", "Show today’s Product Hunt launches", "top Hacker News stories"]) {
     const input = ask(text);
     assert.ok(input.freshness, text);
     assert.equal(input.fast, true, text);
@@ -125,6 +130,9 @@ test("a one-fact look-up is searched first and answered directly, not worked out
   assert.equal(ask("whats the weather today", { research: true }).fast, false);
   assert.equal(ask("Compare the iPhone 15 Pro and iPhone 18 Pro Max").fast, false);
   assert.equal(ask("Can I take ibuprofen while pregnant? weather today").fast, false);
+  assert.equal(ask("Explain how Hacker News works").fast, false);
+  assert.equal(ask("Product Hunt launches", { research: true }).fast, false);
+  assert.equal(ask("Product Hunt launches", { style: "thorough" }).fast, false);
 });
 
 test("a shared place localises weather searches and is passed as data, never trusted blindly", () => {

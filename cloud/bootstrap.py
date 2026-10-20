@@ -42,6 +42,15 @@ def freellmapi_url(environ):
 def configuration(environ):
     cfg = json.loads((HERE / "profile.json").read_text(encoding="utf-8"))
     window = CONTEXT_POLICY["windowTokens"]
+    # One reply at a time keeps the free 512 MB instance safe. Setting
+    # VAELO_MAX_CONCURRENT_RUNS=2 lets two conversations generate together;
+    # it costs memory, not money, and has not been measured on Render yet.
+    try:
+        runs = min(3, max(1, int(environ.get("VAELO_MAX_CONCURRENT_RUNS", "1"))))
+    except ValueError:
+        runs = 1
+    cfg["gateway"]["max_concurrent_runs"] = runs
+    cfg["gateway"]["api_server"]["max_concurrent_runs"] = runs
     cfg["model"]["context_length"] = CONTEXT_POLICY["openrouterWindowTokens"]
     cfg["providers"]["cloud-openrouter"]["context_length"] = CONTEXT_POLICY["openrouterWindowTokens"]
     cfg["compression"].update({
@@ -128,6 +137,9 @@ def prepare_profile(home, environ):
     plugin.mkdir(parents=True, exist_ok=True)
     shutil.copy2(HERE / "research.py", plugin / "__init__.py")
     shutil.copy2(HERE / "source_quality.py", plugin / "source_quality.py")
+    shutil.copy2(HERE / "data_sources.py", plugin / "data_sources.py")
+    for name in ("extended_sources.py", "news_sources.py", "api_directory.py", "api_operations.json", "api_directory.json"):
+        shutil.copy2(HERE / name, plugin / name)
     shutil.copy2(HERE / "research-plugin.yaml", plugin / "plugin.yaml")
     # An explicit cloud SOUL overrides the image's example personality.
     shutil.copy2(HERE / "SOUL.md", home / "SOUL.md")

@@ -26,6 +26,9 @@ import {
 import { diffLines, diffWordsWithSpace } from "diff";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
+import { KATEX_OPTIONS, normalizeMath, remarkMathDisplay } from "../../lib/math.js";
 import { plainLine } from "../../lib/structured.js";
 import { parseRichUI, fileTree } from "../../lib/rich-ui.js";
 import { blockKey } from "../../lib/intelligent-ui.js";
@@ -130,10 +133,10 @@ export function StepPlayer({ items, render = (x) => x }) {
     return split ? (
       <>
         <h3>{plainLine(split[1])}</h3>
-        <Markdown remarkPlugins={[remarkGfm]}>{split[2]}</Markdown>
+        <Markdown remarkPlugins={[remarkGfm, [remarkMath, { singleDollarTextMath: false }], remarkMathDisplay]} rehypePlugins={[[rehypeKatex, KATEX_OPTIONS]]}>{normalizeMath(split[2])}</Markdown>
       </>
     ) : (
-      <Markdown remarkPlugins={[remarkGfm]}>{item}</Markdown>
+      <Markdown remarkPlugins={[remarkGfm, [remarkMath, { singleDollarTextMath: false }], remarkMathDisplay]} rehypePlugins={[[rehypeKatex, KATEX_OPTIONS]]}>{normalizeMath(item)}</Markdown>
     );
   };
   return (

@@ -2,6 +2,10 @@ import React, { createContext, useContext, useEffect, useMemo, useState } from "
 import { createPortal } from 'react-dom';
 import Markdown, { defaultUrlTransform } from "react-markdown";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
+import "katex/dist/katex.min.css";
+import { KATEX_OPTIONS, hasMath, normalizeMath, prepareLive, rehypeMathBlock, remarkMathDisplay } from "../../lib/math.js";
 import {
   ArrowSquareOut,
   ArrowCounterClockwise,
@@ -49,6 +53,7 @@ import "./blocks.css";
 import "./output-layout.css";
 import "./output-polish.css";
 import "./after.css";
+import "./math.css";
 import '@fontsource/jetbrains-mono/400.css';
 import '@fontsource/jetbrains-mono/500.css';
 import { DESKTOP, copyText, saveDesktopFile } from "../../lib/desktop.js";
@@ -876,11 +881,37 @@ function Checklist({ storageKey, defaults, tasks, autoActive, items, original, o
 function RichParagraph({ node, children, "data-src": src, ...props }) {
   const { presentation, stateKey, requestText, live, content } = useContext(BlockContext);
   const source = content.slice(node.position?.start?.offset, node.position?.end?.offset).trim();
-  if (presentation !== 'minimal' && !live && source.startsWith('{') && richPayload(source, '', requestText)) return <div data-src={src}><RichUI source={source} enabled stateKey={stateKey} /></div>;
+  if (presentation !== 'minimal' && source.startsWith('{')) {
+    const payload = richPayload(source, '', requestText);
+    // Math and emphasis inside JSON are data until the complete object is
+    // decoded. Recover completed bare objects even while a reply streams.
+    if (payload) return <div data-src={src}><RichUI source={source} enabled stateKey={stateKey} /></div>;
+    if (live && pendingRichPayload(source, '', requestText)) return <div data-src={src}><RichUI source={source} enabled pending stateKey={stateKey} /></div>;
+  }
   return <p {...props} data-src={src}>{children}</p>;
 }
 
+/* A displayed equation scrolls sideways on a narrow screen instead of
+   spilling out, and can be copied as the LaTeX the model wrote. */
+function MathBlock({ tex, children }) {
+  const [done, copy] = useCopy();
+  return (
+    <span className="math-block">
+      <span className="math-scroll" tabIndex={0} role="group" aria-label="Equation">{children}</span>
+      {tex && (
+        <button className="block-tool icon-only math-copy" aria-label={done ? "Copied LaTeX" : "Copy LaTeX"} data-tip={done ? "Copied" : "Copy LaTeX"} onClick={() => copy(tex)}>
+          {done ? <Check size={15} /> : <Copy size={15} />}
+        </button>
+      )}
+    </span>
+  );
+}
+
 const components = {
+  span: ({ node, className, "data-tex": tex, children, ...props }) =>
+    typeof className === "string" && className.split(" ").includes("math-block")
+      ? <MathBlock tex={tex}>{children}</MathBlock>
+      : <span className={className} {...props}>{children}</span>,
   p: RichParagraph,
   a: ({ href, children }) => <SourceLink href={href}>{children}</SourceLink>,
   img: ImageRef,
@@ -902,7 +933,13 @@ function remarkCodeFilename() {
     visit(tree);
   };
 }
-const remarkPlugins = [remarkGfm, remarkCodeFilename];
+/* One dollar never opens math here: normalizeMath rewrites the formulas it
+   believes in as $$$ … $$$, so a price keeps its "$" in the source (tables and
+   charts read that source). A mapped document is not rewritten at all, since
+   its selections are traced back to the original; there only $$ … $$ is math. */
+const remarkPlugins = [remarkGfm, [remarkMath, { singleDollarTextMath: false }], remarkMathDisplay, remarkCodeFilename];
+const mappedRemarkPlugins = remarkPlugins;
+const rehypeMath = [rehypeMathBlock, [rehypeKatex, KATEX_OPTIONS]];
 
 /* Markdown's own filter drops every data: URL, which would leave the images
    Hermes makes with nothing to show. Raster images inline are let through
@@ -932,7 +969,7 @@ function rehypeSourceMap() {
   };
 }
 
-const mappedPlugins = [rehypeSourceMap];
+const mappedPlugins = [rehypeSourceMap, ...rehypeMath];
 
 /* A block that fails to render stays a local problem: the reply's words
    are still shown as plain text and the rest of the conversation is intact. */
@@ -962,8 +999,13 @@ export function useSources(content) {
 export function Rendered({ content, sources, onOpen, mapped = false, live = false, stateKey, requestText = "", attached }) {
   const preference = useContext(PresentationContext);
   const presentation = wantsPlainReply(requestText) ? "minimal" : preference;
-  const automaticView = useMemo(() => !mapped && !live && presentation !== 'minimal' ? automaticPresentation(content, requestText, attached) : null, [mapped, live, presentation, requestText, content, attached]);
-  const displayContent = automaticView?.markdown ?? content;
+  const mathy = useMemo(() => hasMath(content), [content]);
+  const automaticView = useMemo(() => !mapped && !live && !mathy && presentation !== 'minimal' ? automaticPresentation(content, requestText, attached) : null, [mapped, live, mathy, presentation, requestText, content, attached]);
+  const shaped = automaticView?.markdown ?? content;
+  const { text: displayContent, pending } = useMemo(
+    () => (mapped ? { text: shaped, pending: null } : live ? prepareLive(shaped) : { text: normalizeMath(shaped), pending: null }),
+    [mapped, live, shaped],
+  );
   const value = useMemo(
     () => ({
       sources,
@@ -987,13 +1029,14 @@ export function Rendered({ content, sources, onOpen, mapped = false, live = fals
         {automaticView?.language === 'timeline' && <Timeline source={automaticView.source} settled />}
         {automaticView?.explorer && <NumberExplorer columns={automaticView.explorer.columns} rows={automaticView.explorer.rows} initialFactor={automaticView.explorer.factor} />}
         <Markdown
-          remarkPlugins={remarkPlugins}
-          rehypePlugins={mapped ? mappedPlugins : undefined}
+          remarkPlugins={mapped ? mappedRemarkPlugins : remarkPlugins}
+          rehypePlugins={mapped ? mappedPlugins : rehypeMath}
           components={components}
           urlTransform={urlTransform}
         >
           {displayContent}
         </Markdown>
+        {pending && <p className="math-pending" role="status">{pending === "math" ? "Typesetting…" : "Building the table…"}</p>}
       </BlockBoundary>
     </BlockContext.Provider>
   );

@@ -9,7 +9,7 @@ rather than whatever happens to sit in the first ten thousand characters.
 
 import asyncio
 from collections import OrderedDict
-from concurrent.futures import ThreadPoolExecutor, wait
+from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
 from email.utils import parsedate_to_datetime
 from html.parser import HTMLParser
 import ipaddress
@@ -18,6 +18,7 @@ import math
 import os
 import re
 import socket
+import threading
 import time
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from http.client import HTTPConnection, HTTPSConnection
@@ -39,6 +40,13 @@ except ModuleNotFoundError as exc:
         raise
     WebSearchProvider = object
 try:
+    from .data_sources import search as data_search, natural_query
+except ImportError:
+    try:
+        from data_sources import search as data_search, natural_query
+    except ModuleNotFoundError:
+        from cloud.data_sources import search as data_search, natural_query
+try:
     from .source_quality import subjects, source_scope, relevant_sources
 except ImportError:
     try:
@@ -51,6 +59,22 @@ REQUEST_TIMEOUT = 15
 # timeout alone only bounds each wait, and a server can trickle bytes just under it.
 PAGE_SECONDS = 25
 SEARCH_TIMEOUT = 12
+# At most four concurrent structured lookups/web races per process, without an
+# unbounded executor queue during provider outages. Sockets have their own limits.
+_route_pool = ThreadPoolExecutor(max_workers=8, thread_name_prefix="data-route")
+_route_slots = threading.BoundedSemaphore(8)
+
+
+def route_job(call):
+    if not _route_slots.acquire(blocking=False):
+        return None
+    try:
+        job = _route_pool.submit(call)
+    except Exception:
+        _route_slots.release()
+        return None
+    job.add_done_callback(lambda _: _route_slots.release())
+    return job
 RESPONSE_BYTES = 512 * 1024
 PAGE_BYTES = 1024 * 1024
 PAGE_CHARS = 10000
@@ -563,7 +587,8 @@ class Research(WebSearchProvider):
         self.found_by = OrderedDict()
 
     def is_available(self):
-        return any(configured(name) for name in KEYS)
+        # Public API operations remain useful without a paid search-index key.
+        return True
 
     def supports_extract(self):
         return True
@@ -577,6 +602,35 @@ class Research(WebSearchProvider):
 
     def search(self, query, limit=5):
         limit = max(1, min(int(limit), SEARCH_LIMIT))
+        if str(query).startswith("api:"):
+            structured = data_search(query)
+            # Explicit API arguments must never be forwarded to a search index.
+            if structured and structured.get("success") and "data" in structured:
+                structured["data"]["web"] = structured["data"]["web"][:limit]
+            return structured or {"success": False, "error": "Invalid API query"}
+        if not natural_query(query):
+            return self.web_search(query, limit)
+        # Start the fallback concurrently so an eight-second API timeout never
+        # precedes a second, full web-search wait. First usable evidence wins.
+        jobs = [job for job in (route_job(lambda: data_search(query)),
+                                route_job(lambda: self.web_search(query, limit))) if job is not None]
+        deadline = time.monotonic() + SEARCH_TIMEOUT + 3
+        pending = set(jobs)
+        while pending:
+            done, pending = wait(pending, timeout=max(0, deadline - time.monotonic()), return_when=FIRST_COMPLETED)
+            if not done:
+                break
+            for job in done:
+                try:
+                    result = job.result()
+                    if result and result.get("success"):
+                        result["data"]["web"] = result["data"]["web"][:limit]
+                        return result
+                except Exception:
+                    pass
+        return {"success": False, "error": "No current source available within the research deadline"}
+
+    def web_search(self, query, limit=5):
         names = [name for name in INDEXES if configured(name)]
         rankings, answered = [], []
         if names:
