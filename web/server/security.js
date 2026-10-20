@@ -243,7 +243,20 @@ export async function verifyGoogle(credential, nonce, cfg) {
 }
 
 export async function readJson(req, limit = 256000) {
+  const parseBytes = bytes => {
+    try {
+      // Reject damaged transport bytes rather than saving replacement characters.
+      // Keep BOM handling consistent with JSON.parse on string request bodies.
+      return JSON.parse(new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes));
+    } catch {
+      throw new HttpError(400, "Invalid JSON request.");
+    }
+  };
   if (req.body !== undefined) {
+    if (Buffer.isBuffer(req.body)) {
+      if (req.body.length > limit) throw new HttpError(413, "That message is too large.");
+      return parseBytes(req.body);
+    }
     if (
       Buffer.byteLength(
         typeof req.body === "string" ? req.body : JSON.stringify(req.body),
@@ -260,15 +273,12 @@ export async function readJson(req, limit = 256000) {
   let size = 0;
   const chunks = [];
   for await (const chunk of req) {
-    size += chunk.length;
+    const bytes = typeof chunk === "string" ? Buffer.from(chunk) : chunk;
+    size += bytes.length;
     if (size > limit) throw new HttpError(413, "That message is too large.");
-    chunks.push(chunk);
+    chunks.push(bytes);
   }
-  try {
-    return JSON.parse(Buffer.concat(chunks).toString());
-  } catch {
-    throw new HttpError(400, "Invalid JSON request.");
-  }
+  return parseBytes(Buffer.concat(chunks));
 }
 
 export function json(res, status, data) {

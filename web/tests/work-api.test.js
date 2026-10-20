@@ -79,3 +79,29 @@ test("missing Blob configuration honestly returns 503 and never invokes storage"
   const res = response(); await handler(await request(await signSession(user, cfg), { method: "GET" }), res);
   assert.equal(res.statusCode, 503); assert.match(res.body.error, /isn’t set up yet/); assert.equal(reached, false);
 });
+
+test("work API rejects damaged request bytes before saving and preserves valid Unicode", async () => {
+  const app = setup(), token = await signSession(user, cfg);
+  const invoke = async chunks => {
+    const req = await request(token, { body: undefined });
+    req[Symbol.asyncIterator] = async function* () { yield* chunks; };
+    const res = response(); await app.handler(req, res); return res;
+  };
+  const payload = { action: "save", record: { id: "unicode", workspaceId: "refund", title: "日本語 🌦️", documents: [] } };
+  const text = JSON.stringify(payload);
+  const bad = Buffer.concat([Buffer.from(text.slice(0, text.indexOf("日本語"))), Buffer.from([0xff]), Buffer.from(text.slice(text.indexOf("日本語") + 3))]);
+  const rejected = await invoke([bad]);
+  assert.equal(rejected.statusCode, 400);
+  assert.match(rejected.body.error, /Invalid JSON/);
+  const before = response();
+  await app.handler(await request(token, { method: "GET" }), before);
+  assert.deepEqual(before.body.records, []);
+  const good = Buffer.from(text);
+  const saved = await invoke([...good].map(byte => Buffer.from([byte])));
+  assert.equal(saved.statusCode, 200);
+  assert.equal(saved.body.record.title, payload.record.title);
+  const after = response();
+  await app.handler(await request(token, { method: "GET" }), after);
+  assert.equal(after.body.records.length, 1);
+  assert.equal(after.body.records[0].title, payload.record.title);
+});
