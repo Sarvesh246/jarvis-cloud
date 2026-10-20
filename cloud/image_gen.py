@@ -132,7 +132,7 @@ def data_uri(token, environ=os.environ):
 
 
 def download(url):
-    if not url.startswith("https://"):
+    if not isinstance(url, str) or not url.startswith("https://"):
         raise ValueError("The router returned an image address that is not HTTPS.")
     with urlopen(Request(url, headers={"User-Agent": "Vaelo"}), timeout=TIMEOUT_SECONDS) as response:
         data = response.read(MAX_DOWNLOAD + 1)
@@ -207,14 +207,19 @@ class FreeLLMAPIImages(ImageGenProvider):
                            prompt, aspect_ratio)
         except (URLError, TimeoutError, OSError, ValueError):
             return failure(OFFLINE, "router_offline", prompt, aspect_ratio)
-        first = (reply.get("data") or [{}])[0] if isinstance(reply, dict) else {}
+        images = reply.get("data") if isinstance(reply, dict) else None
+        first = images[0] if isinstance(images, list) and images else {}
         try:
             if isinstance(first, dict) and first.get("b64_json"):
+                if not isinstance(first["b64_json"], str):
+                    raise ValueError("invalid image encoding")
                 data = base64.b64decode(first["b64_json"], validate=False)
             elif isinstance(first, dict) and first.get("url"):
                 data = download(first["url"])
             else:
                 raise ValueError("no image")
+            if len(data) > MAX_DOWNLOAD:
+                raise ValueError("image too large")
         except (ValueError, URLError, OSError):
             return failure("The image router answered without a usable image. Say plainly "
                            "that the image could not be made.", "provider_error",
@@ -223,7 +228,12 @@ class FreeLLMAPIImages(ImageGenProvider):
         if not mime(data):
             return failure("The image router returned something that is not an image.",
                            "provider_error", prompt, aspect_ratio)
-        reference = keep(data, self.environ)
+        try:
+            reference = keep(data, self.environ)
+        except OSError:
+            return failure("The generated image could not be saved. Say plainly that the "
+                           "image is unavailable and suggest trying again later.",
+                           "provider_error", prompt, aspect_ratio)
         model = str(reply.get("model") or "auto")
         return {
             "success": True, "image": reference, "model": model, "prompt": prompt,

@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 from urllib.error import HTTPError, URLError
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -79,6 +80,46 @@ class ImageProviderTests(unittest.TestCase):
     def test_an_answer_without_an_image_is_an_error(self):
         result = self.provider({"data": [{"b64_json": base64.b64encode(b"not an image").decode()}]}).generate("x")
         self.assertFalse(result["success"])
+
+    def test_malformed_router_payloads_fail_without_raising(self):
+        answers = [None, [], "error", {"data": 1}, {"data": {"image": "x"}},
+                   {"data": "image"}, {"data": []}, {"data": [None]},
+                   {"data": [{"b64_json": "%%%"}]}, {"data": [{"b64_json": "é"}]},
+                   {"data": [{"b64_json": 42}]}, {"data": [{"b64_json": [1]}]},
+                   {"data": [{"url": 42}]}, {"data": [{"url": ["https://example.com"]}]}]
+        for answer in answers:
+            with self.subTest(answer=answer):
+                result = self.provider(answer).generate("a car")
+                self.assertFalse(result["success"])
+                self.assertEqual(result["error_type"], "provider_error")
+                self.assertIsNone(result["image"])
+
+    def test_inline_images_obey_the_download_size_limit(self):
+        answer = {"data": [{"b64_json": base64.b64encode(PIXEL).decode()}]}
+        with patch.object(image_gen, "MAX_DOWNLOAD", len(PIXEL) - 1), \
+                patch.object(image_gen, "shrink") as shrink:
+            result = self.provider(answer).generate("a car")
+        self.assertFalse(result["success"])
+        self.assertEqual(result["error_type"], "provider_error")
+        shrink.assert_not_called()
+        with patch.object(image_gen, "MAX_DOWNLOAD", len(PIXEL)):
+            self.assertTrue(self.provider(answer).generate("a car")["success"])
+
+    def test_image_url_responses_still_produce_a_reference(self):
+        with patch.object(image_gen, "download", return_value=PIXEL) as download:
+            result = self.provider({"data": [{"url": "https://images.example/car.png"}]}).generate("a car")
+        self.assertTrue(result["success"])
+        self.assertRegex(result["image"], r"^vaelo-image:[0-9a-f]{24}$")
+        download.assert_called_once_with("https://images.example/car.png")
+
+    def test_cache_failure_returns_an_error_and_a_later_request_can_succeed(self):
+        answer = {"data": [{"b64_json": base64.b64encode(PIXEL).decode()}]}
+        with patch.object(image_gen, "keep", side_effect=OSError("disk full")):
+            result = self.provider(answer).generate("a car")
+        self.assertFalse(result["success"])
+        self.assertEqual(result["error_type"], "provider_error")
+        self.assertNotIn("disk full", result["error"])
+        self.assertTrue(self.provider(answer).generate("a car")["success"])
 
     def test_unknown_or_malformed_references_give_nothing(self):
         self.assertEqual(image_gen.data_uri("0" * 24, self.environ), "")
