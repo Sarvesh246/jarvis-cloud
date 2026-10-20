@@ -1,6 +1,7 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   BellSimple,
+  ArrowLeft,
   Devices,
   Desktop,
   Keyboard,
@@ -20,7 +21,7 @@ import { DesktopUpdates } from "./DesktopUpdates.jsx";
 import { Mark } from "./Mark.jsx";
 import "./settings-desk.css";
 
-/* Settings for a wide screen: a two-part page in a dialog. Sections down the
+/* Settings for a wide screen: a full page. Sections down the
    left, the chosen one on the right. Appearance shows a live preview, so a
    choice is judged by looking, not by guessing. Every control here is real:
    each one changes something on this device or what Vaelo is told. */
@@ -70,7 +71,8 @@ const Switch = ({ id, label, checked, onChange }) => (
 );
 
 const Segment = ({ label, value, options, onChange }) => (
-  <div className="sd-seg" role="radiogroup" aria-label={label}>
+  <div className="sd-seg" role="radiogroup" aria-label={label} style={{ "--choices": options.length, "--choice": Math.max(0, options.findIndex(([id]) => id === value)) }}>
+    <span className="sd-seg-indicator" aria-hidden="true" />
     {options.map(([id, text]) => (
       <button key={id} type="button" role="radio" aria-checked={value === id} onClick={() => onChange(id)}>
         {text}
@@ -81,7 +83,7 @@ const Segment = ({ label, value, options, onChange }) => (
 
 const Head = ({ title, line }) => (
   <header className="sd-head">
-    <h2>{title}</h2>
+    <h2 id="settings-section-title">{title}</h2>
     <p>{line}</p>
   </header>
 );
@@ -532,16 +534,40 @@ function Keys({ prefs, onChange }) {
 }
 
 export function SettingsDesk({ open, user, prefs, onChange, onClose, onTools, onWelcome, onSignOut, notify, place, desktop, store, request, onRetention }) {
-  const dialog = useRef(null);
+  const page = useRef(null);
+  const body = useRef(null);
+  const returnFocus = useRef(null);
+  const wasOpen = useRef(false);
+  const [present, setPresent] = useState(open);
   const [section, setSection] = useState("appearance");
   const [query, setQuery] = useState("");
 
   useEffect(() => {
-    const el = dialog.current;
-    if (!el) return;
-    if (open && !el.open) el.showModal();
-    if (!open && el.open) el.close();
+    if (open) {
+      returnFocus.current = document.activeElement;
+      setPresent(true);
+      wasOpen.current = true;
+    } else if (wasOpen.current) {
+      queueMicrotask(() => returnFocus.current?.focus?.({ preventScroll: true }));
+      const timer = setTimeout(() => setPresent(false), 480);
+      return () => clearTimeout(timer);
+    }
   }, [open]);
+
+  useEffect(() => {
+    if (open && present) page.current?.focus({ preventScroll: true });
+  }, [open, present]);
+
+  useEffect(() => {
+    if (!open) return;
+    const keys = (event) => {
+      if (event.key !== "Escape" || event.defaultPrevented || document.querySelector("dialog[open], .sheet-layer")) return;
+      event.preventDefault();
+      onClose();
+    };
+    addEventListener("keydown", keys);
+    return () => removeEventListener("keydown", keys);
+  }, [open, onClose]);
 
   const words = query.trim().toLowerCase();
   const matches = (item) => !words || `${item.label} ${item.words}`.toLowerCase().includes(words);
@@ -549,6 +575,18 @@ export function SettingsDesk({ open, user, prefs, onChange, onClose, onTools, on
   const current = visible.flatMap((group) => group.items).some((item) => item.id === section)
     ? section
     : visible[0]?.items[0]?.id;
+
+  const [shown, setShown] = useState(current);
+  useLayoutEffect(() => {
+    if (body.current) body.current.scrollTop = 0;
+  }, [shown]);
+  const leaving = current !== shown;
+  useEffect(() => {
+    if (!leaving) return;
+    const reduced = prefs.motion === "reduce" || matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const timer = setTimeout(() => setShown(current), reduced ? 0 : 110);
+    return () => clearTimeout(timer);
+  }, [current, leaving, prefs.motion]);
 
   const panels = {
     appearance: <Appearance prefs={prefs} onChange={onChange} />,
@@ -561,16 +599,26 @@ export function SettingsDesk({ open, user, prefs, onChange, onClose, onTools, on
     keys: <Keys prefs={prefs} onChange={onChange} />,
   };
 
+  if (!present) return null;
+
   return (
-    <dialog
-      ref={dialog}
+    <main
+      ref={page}
       className="settings-desk"
+      data-open={open}
       aria-labelledby="settings-title"
-      onClose={onClose}
-      onClick={(event) => {
-        if (event.target === dialog.current) onClose();
-      }}
+      tabIndex={-1}
+      inert={open ? undefined : true}
     >
+      <header className="sd-topbar">
+        <button type="button" className="sd-back" onClick={onClose}>
+          <ArrowLeft size={20} aria-hidden="true" /> Back to Vaelo
+        </button>
+        <span className="sd-autosave">Changes save automatically</span>
+        <button type="button" className="icon-button sd-close" aria-label="Close settings" onClick={onClose}>
+          <X size={21} aria-hidden="true" />
+        </button>
+      </header>
       <nav className="sd-nav" aria-label="Settings sections">
         <h1 id="settings-title">Settings</h1>
         <label className="sd-search">
@@ -581,7 +629,7 @@ export function SettingsDesk({ open, user, prefs, onChange, onClose, onTools, on
           <div key={group.group} className="sd-nav-group">
             <span className="sd-label">{group.group}</span>
             {group.items.map((item) => (
-              <button key={item.id} type="button" aria-current={current === item.id ? "page" : undefined} className="sd-nav-item" onClick={() => setSection(item.id)}>
+              <button key={item.id} type="button" aria-current={current === item.id ? "page" : undefined} aria-controls="settings-content" className="sd-nav-item" onClick={() => setSection(item.id)}>
                 <item.icon size={18} aria-hidden="true" />
                 {item.label}
               </button>
@@ -591,12 +639,11 @@ export function SettingsDesk({ open, user, prefs, onChange, onClose, onTools, on
         {!visible.length && <p className="sd-note">Nothing matches “{query}”.</p>}
         <p className="sd-foot">Appearance is kept on this device. What you tell Vaelo about yourself is sent with your messages.</p>
       </nav>
-      <div className="sd-body" key={current}>
-        {panels[current]}
+      <div ref={body} className="sd-body" id="settings-content">
+        <div className="sd-content" key={shown} data-leaving={leaving} inert={leaving ? true : undefined}>
+          {panels[shown] || <div className="sd-page"><Head title="No matching settings" line="Try a different search to find a setting." /></div>}
+        </div>
       </div>
-      <button className="icon-button sd-close" aria-label="Close settings" onClick={onClose}>
-        <X size={19} />
-      </button>
-    </dialog>
+    </main>
   );
 }

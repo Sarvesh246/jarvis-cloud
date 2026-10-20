@@ -307,9 +307,24 @@ export function Settings(props) {
 }
 
 function WideSettings({ open, user, prefs, onChange, onClose, onTools, onWelcome, onSignOut, request, onRetention }) {
+  const surface = useRef(null);
+  useEffect(() => {
+    if (!open) return;
+    const title = document.title;
+    document.title = "Settings · Vaelo";
+    const siblings = [...(surface.current?.parentElement?.children || [])]
+      .filter((node) => node !== surface.current);
+    const previous = siblings.map((node) => node.inert);
+    siblings.forEach((node) => { node.inert = true; });
+    return () => {
+      document.title = title;
+      siblings.forEach((node, index) => { node.inert = previous[index]; });
+    };
+  }, [open]);
   const notify = useNotify(prefs, onChange);
   const place = useLocate(prefs, onChange);
   return (
+    <div ref={surface} className="settings-surface">
     <SettingsDesk
       open={open}
       user={user}
@@ -326,5 +341,6 @@ function WideSettings({ open, user, prefs, onChange, onClose, onTools, onWelcome
       request={request}
       onRetention={onRetention}
     />
+    </div>
   );
 }

@@ -24,6 +24,7 @@ import { Message, liveLine } from "./components/Message.jsx";
 import { Composer } from "./components/Composer.jsx";
 import { Workspace } from "./components/Workspace.jsx";
 import { Settings } from "./components/Settings.jsx";
+import { useSettingsPage } from "./lib/use-settings-page.js";
 import { Workroom } from "./components/Workroom.jsx";
 import { SavedWork } from "./components/SavedWork.jsx";
 import { refreshWorkReferences, workContextFor, proposalDraft, chatToWorkspace, readWorkCache } from "./lib/workroom.js";
@@ -459,7 +460,7 @@ export function App() {
   const [announcement, setAnnouncement] = useState({ id: 0, text: "" });
   const [online, setOnline] = useState(() => navigator.onLine !== false);
   const [prefs, setPrefs] = useState(readPrefs);
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useSettingsPage(!phone);
   const [workroomOpen, setWorkroomOpen] = useState(false);
   /* Saved work is a page of its own in the chat area; choosing any
      conversation, or the desk, leaves it. */
@@ -890,6 +891,7 @@ export function App() {
   useEffect(() => {
     function onKey(event) {
       if (event.defaultPrevented || event.isComposing) return;
+      if (!phone && settingsOpen) return;
       const typing = /^(INPUT|TEXTAREA)$/.test(document.activeElement?.tagName);
       if (session?.user && (event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && event.key.toLowerCase() === "k") {
         event.preventDefault();
