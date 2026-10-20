@@ -14,6 +14,7 @@ vision tools) to shrink the picture to a JPEG small enough to keep in a conversa
 """
 
 import base64
+from http.client import HTTPException
 import io
 import json
 import os
@@ -205,7 +206,7 @@ class FreeLLMAPIImages(ImageGenProvider):
             return failure(f"The image router refused this request (HTTP {error.code}). Say "
                            "plainly that the image could not be made.", "provider_error",
                            prompt, aspect_ratio)
-        except (URLError, TimeoutError, OSError, ValueError):
+        except (URLError, TimeoutError, OSError, ValueError, HTTPException):
             return failure(OFFLINE, "router_offline", prompt, aspect_ratio)
         images = reply.get("data") if isinstance(reply, dict) else None
         first = images[0] if isinstance(images, list) and images else {}
@@ -220,7 +221,7 @@ class FreeLLMAPIImages(ImageGenProvider):
                 raise ValueError("no image")
             if len(data) > MAX_DOWNLOAD:
                 raise ValueError("image too large")
-        except (ValueError, URLError, OSError):
+        except (ValueError, URLError, OSError, HTTPException):
             return failure("The image router answered without a usable image. Say plainly "
                            "that the image could not be made.", "provider_error",
                            prompt, aspect_ratio)

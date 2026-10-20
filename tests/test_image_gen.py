@@ -1,4 +1,5 @@
 import base64
+from http.client import BadStatusLine, IncompleteRead
 import importlib.util
 import io
 import json
@@ -71,6 +72,40 @@ class ImageProviderTests(unittest.TestCase):
     def test_spent_allowance_is_not_called_offline(self):
         result = self.provider(HTTPError("u", 429, "busy", {}, None)).generate("a car")
         self.assertEqual(result["error_type"], "rate_limited")
+
+    def test_router_protocol_failures_return_offline_and_allow_recovery(self):
+        for error in (IncompleteRead(b'{"data":'), BadStatusLine("invalid status")):
+            for during_read in (False, True):
+                with self.subTest(error=type(error).__name__, during_read=during_read):
+                    provider = self.provider(error)
+                    if during_read:
+                        provider = self.provider({})
+                        with patch.object(Reply, "read", side_effect=error):
+                            result = provider.generate("a car")
+                    else:
+                        result = provider.generate("a car")
+                    self.assertEqual(result["error_type"], "router_offline")
+                    self.assertIsNone(result["image"])
+        answer = {"data": [{"b64_json": base64.b64encode(PIXEL).decode()}]}
+        self.assertTrue(self.provider(answer).generate("a car")["success"])
+
+    def test_image_download_protocol_failures_do_not_cache_partial_images(self):
+        answer = {"data": [{"url": "https://images.example/car.png"}]}
+        for error in (IncompleteRead(PIXEL[:12]), BadStatusLine("invalid status")):
+            for during_read in (False, True):
+                with self.subTest(error=type(error).__name__, during_read=during_read), \
+                        patch.object(image_gen, "keep") as keep:
+                    with patch.object(image_gen, "urlopen") as opener:
+                        if during_read:
+                            opener.return_value.__enter__.return_value.read.side_effect = error
+                        else:
+                            opener.side_effect = error
+                        result = self.provider(answer).generate("a car")
+                    self.assertEqual(result["error_type"], "provider_error")
+                    self.assertIsNone(result["image"])
+                    keep.assert_not_called()
+        with patch.object(image_gen, "urlopen", return_value=Reply(PIXEL)):
+            self.assertTrue(self.provider(answer).generate("a car")["success"])
 
     def test_without_the_router_there_is_no_image_tool(self):
         provider = image_gen.FreeLLMAPIImages({"FREELLMAPI_URL": "http://insecure", "FREELLMAPI_API_KEY": "x"})
