@@ -1131,6 +1131,19 @@ class RelayTests(unittest.TestCase):
         self.assertTrue(any(b'Weather for today' in frame for frame in run.frames))
         self.assertTrue(any(b'jarvis.complete' in frame for frame in run.frames))
 
+    def test_shared_place_reaches_the_weather_lookup_through_the_http_start(self):
+        _, relay, port = self.boot([])
+        place = {"lat": 41.88, "lon": -87.63, "city": "Chicago"}
+        with mock.patch('cloud.weather.weather_reply', return_value='Weather for Chicago') as weather:
+            status, _ = self.call(port, "POST", "/vaelo/runs", {
+                "id": RUN,
+                "messages": [{"role": "user", "content": "weather today"}],
+                "place": place,
+            })
+            self.assertEqual(status, 202)
+            self.assertEqual(self.finished(relay).route, 'weather')
+        self.assertEqual(weather.call_args.args[1], place)
+
     def test_stop_during_weather_lookup_never_emits_the_forecast(self):
         _, relay, _ = self.boot([])
         run = relay_module.Run(RUN, OWNER)
