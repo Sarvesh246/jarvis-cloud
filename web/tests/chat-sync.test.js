@@ -225,6 +225,37 @@ test("a streaming local reply is not replaced by a remote edit", async () => {
 const reply = (extra = {}) => ({ id: "reply-one", role: "assistant", content: "", run: "reply-one",
   running: true, startedAt: Date.now(), ...extra });
 
+test("a conflicting live upload backs off and does not block independent chats", async () => {
+  const { device, request } = setup();
+  const original = { ...chat(), messages: [...chat().messages, reply()] };
+  const a = device([original, chat("independent")]);
+  a.sync.busy = () => true;
+  a.sync.forced.add(original.id);
+  let commits = 0;
+  a.sync.request = async (path, body) => {
+    if (body?.action === "commit" && body.id === original.id) {
+      commits++;
+      throw Object.assign(new Error("Concurrent edit"), { status: 409 });
+    }
+    return request(path, body);
+  };
+  await a.sync.tick();
+  assert.equal(commits, 1);
+  assert.equal(a.sync.dirty("independent"), false);
+  assert.ok(a.sync.forced.has(original.id));
+  assert.ok(a.sync.retryAt > Date.now());
+  a.sync.observe([original, chat("independent")]);
+  await a.sync.tick();
+  assert.equal(commits, 1, "stream updates cannot retrigger a conflicting upload immediately");
+  a.sync.request = request;
+  a.sync.busy = () => false;
+  a.sync.retryAt = 0;
+  await a.sync.tick();
+  assert.equal(a.sync.dirty(original.id), false);
+  assert.equal(a.sync.forced.has(original.id), false);
+  a.sync.stop();
+});
+
 test("concurrent reply version selections keep both histories instead of discarding the local choice", async () => {
   const { device } = setup();
   const versions = [{ content: "First answer" }, { content: "Second answer" }];

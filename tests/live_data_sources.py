@@ -6,6 +6,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from cloud.data_sources import lookup
+from cloud.extended_sources import SPECS
 
 CASES = {
     "currency": {"base": "USD", "quote": "INR"},
@@ -47,6 +48,13 @@ def check(pair):
 
 
 if __name__ == "__main__":
+    # Deliberate HTTP checks, never part of the offline unit suite. Secrets are
+    # read from the environment; provider bodies and key values are not printed.
+    if "--extended" in sys.argv:
+        CASES.update({name: spec["sample"] for name, spec in SPECS.items() if not spec.get("credential")})
+        CASES["hackernews"] = {"feed": "top"}
+    if "--configured-news" in sys.argv:
+        CASES.update({"gnews": {"query": "NASA"}, "producthunt": {}})
     with ThreadPoolExecutor(max_workers=4) as pool:
         results = list(pool.map(check, CASES.items()))
     print(json.dumps(results, indent=2))

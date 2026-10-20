@@ -37,6 +37,14 @@ test('every rich type renders through actual Markdown with common model fence va
       assert.match(render(json), /class="after-block"/, `bare ${sample.type}`);
     }
     const json = JSON.stringify({type:'overview',title:'Trip Budget',items:[{label:'Hotel',value:'$480'},{label:'Food',value:'$160'},{label:'Travel',value:'$75'},{label:'Total',value:'$715'}]});
+    const steps = JSON.stringify({type:'steps', title:'Solve the mixing problem', items:['Volume is \\(V(t)=100+10t\\).', 'Use **concentration**.']});
+    for (const content of [steps, steps + '\n\nThe final answer follows.']) {
+      assert.match(render(content, {live:true}), /class="after-steps"/);
+      assert.match(render(content, {live:true}), /class="katex"/);
+      assert.doesNotMatch(render(content, {live:true}), /&quot;type&quot;|\{"type"/);
+    }
+    assert.match(render('{"type":"steps","items":[', {live:true}), /Preparing this view/);
+    assert.doesNotMatch(render(steps, {live:true,requestText:'Return only JSON.'}), /class="after-steps"/);
     const screenshot = render(`Here's your trip bento overview:\n\n\`\`\`\n${json}\n\`\`\``);
     assert.match(screenshot, /Overview cards/);
     assert.ok(screenshot.indexOf('Trip Budget · Total') < screenshot.indexOf('<dt>Hotel'));

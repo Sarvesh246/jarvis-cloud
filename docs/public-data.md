@@ -1,8 +1,8 @@
 # Public data in Vaelo
 
-Vaelo's cloud research backend exposes 33 focused, read-only data adapters through
+Vaelo's cloud research backend exposes 227 bounded, read-only operations through
 the existing web-search tool. It keeps Exa/Tavily/Firecrawl for broad research,
-news, recommendations and gaps in structured data. No new model provider, model
+recommendations, current news and gaps in structured data. No new model provider, model
 classification request, browser dependency or vendor SDK is added.
 
 The pasted public API directory is a discovery list, not a single free service or
@@ -11,15 +11,26 @@ This integration selects useful data capabilities rather than adding duplicate
 gateways, random test data, placeholder images or services that repeat the model's
 writing/translation functions. Personal-account actions, bookings, payments,
 messages, uploads and paid media generation are outside these read-only adapters.
-Other entries in the directory have not all received individual integrations or
-live validation; this is not a claim that all 1,824 entries were implemented.
+The full shortlist is tracked in [the coverage ledger](api-coverage.md). It contains
+517 shortlisted entries plus Hacker News, Product Hunt and NewsAPI. GNews was
+already shortlisted, giving 520 distinct directory entries. Read adapters cover
+220 directory entries plus PyPI; several operations share one provider.
+**This is not 517 or 522 active API integrations.** Pending contracts and per-user
+account connections remain unfinished and are explicitly labeled.
 
 ## Coverage and validation
 
-On October 19, 2026, the explicit smoke check retrieved records from all 27
-enabled adapters. Six optional adapters have schema/credential-gate tests but
-have not been verified live with the deployment's credentials. This is local
+On October 19, 2026, an explicit live pass returned usable final tool records from
+136 declarative operations. Failed and unconfigured sources remain visible in the
+coverage ledger. The original 27 public operations were checked earlier. Hacker
+News, GNews and Product Hunt each returned five records using the supplied keys.
+Credentialed operations have offline schema/gate tests; most keys were not supplied. This is local
 HTTP evidence, not proof of a Render deployment or a completed model chat.
+
+The core operations are below. Another 191 fixed-host read operations are defined
+in `cloud/api_operations.json` and executed by `cloud/extended_sources.py`; four
+news adapters are in `cloud/news_sources.py`. The coverage ledger lists every
+provider and remaining requirement. This table is not the full operation catalog.
 
 | Tool source | Provider / useful data | State |
 | --- | --- | --- |
@@ -51,7 +62,6 @@ HTTP evidence, not proof of a Render deployment or a completed model chat.
 | transit | Swiss public transport connections | Live checked |
 | aviation | NOAA aviation METAR observations | Live checked |
 | country | REST Countries v5 geography/demographics | Needs REST_COUNTRIES_API_KEY |
-| stocks | Alpha Vantage dated stock quote | Needs ALPHA_VANTAGE_API_KEY |
 | crypto | CoinGecko price and last-update timestamp | Needs COINGECKO_API_KEY (Demo API) |
 | movies | TMDB movie metadata | Needs TMDB_READ_TOKEN |
 | space | NASA APOD metadata, date and copyright | Needs NASA_API_KEY |
@@ -61,14 +71,17 @@ REST Countries' old v3.1 endpoint redirected during validation; the adapter uses
 the documented authenticated v5 API instead. No shared demo credential is used.
 
 Provider documentation and qualifications are maintained in
-`cloud/data_sources.py` and returned by the tool's catalog operation.
+`cloud/data_sources.py`, `cloud/api_operations.json` and `cloud/news_sources.py`.
+The paginated catalog returns implemented operations; the separate directory
+includes unfinished entries with their exact statuses. A directory listing is
+coverage metadata, not evidence for factual answers.
 
 ## How it reaches answers
 
 The cloud SOUL tells the full agent how to use the actual web-search tool:
 
 ```text
-api:catalog {}
+api:catalog {"query":"weather"}
 api:currency {"base":"USD","quote":"INR"}
 api:books {"query":"Dune Frank Herbert"}
 api:papers {"query":"battery recycling"}
@@ -79,11 +92,31 @@ api:usobservation {"station":"KORD"}
 api:worldbank {"country":"US","indicator":"SP.POP.TOTL"}
 ```
 
+Additional examples:
+
+```text
+api:directory {"query":"transport"}
+api:directory {"id":81}
+api:catalog {"query":"manga"}
+api:mangadex {"query":"One Piece"}
+api:hackernews {"feed":"top"}
+api:producthunt {"days":1}
+api:gnews {"query":"space exploration","language":"en"}
+```
+
+Directory pages contain five entries; catalog pages contain 12 and accept an
+offset. Missing keys, pending contracts and user connections are unavailable.
+Only listed callable operations have read adapters. The bootstrap installs all
+modules and JSON contracts in the Hermes plugin.
+
 These strings are internal tool arguments; people ask ordinary questions in chat.
 Exact currency pairs, definitions, book/paper searches, package names, VINs,
 barcodes and simple city weather/AQI requests also route deterministically before
 generation. More complex requests use the agent's existing tool-selection turn.
-This adds no separate classifier/model request. It does not guarantee that a
+Hacker News, Product Hunt, Pokemon and explicit searches on named supported
+providers also route deterministically. Short Hacker News and Product Hunt feed requests also use the existing fast
+summary route after retrieval, respecting research and thorough modes. This adds
+no separate classifier/model request. It does not guarantee that a
 tool-using conversation has the same total number of model calls as a direct
 answer without tools.
 
@@ -92,8 +125,38 @@ retrieval timestamps. It bypasses product-name relevance heuristics that could
 otherwise reject package identifiers. Existing web relevance checks remain in
 place for general search. Explicit API failures never forward their structured
 arguments to general search; failed ordinary lookups can fall back to web search.
+Automatically recognized API and web retrieval start concurrently. First usable
+evidence wins within a bounded research deadline; there is no serial API-timeout
+penalty before web fallback begins. The worker pool and queue are bounded.
+**Network retrieval still adds latency.** Original download timestamps survive
+cache hits. Automatic current evidence checks actual observation/publication
+ages, including modeled weather UTC offsets. Stale or undated observations use
+web research; historical records remain dated. A dataset catalog edit time is
+not a measurement date. Dataset discovery metadata is not a statistical answer.
+
 Offline instructions, supplied conversion rates and text transformations retain
 their existing behavior.
+
+## News configuration and limits
+
+Hacker News uses its official public API. Product Hunt uses only fixed public
+GraphQL read queries and requires `PRODUCTHUNT_TOKEN`. Its API secret is not
+needed. Product Hunt and GNews are gated to noncommercial use. GNews requires
+`GNEWS_API_KEY`; its free feed delays articles by 12 hours. Automatic current-news
+requests use web research instead of spending quota on known-delayed articles.
+Explicit reads preserve original publisher links and publication dates.
+
+NewsAPI Developer is local-development only, including for nonprofit apps. It
+requires `NEWSAPI_LOCAL_DEVELOPMENT=1`; a Render/Vercel/cloud environment blocks
+the Developer route regardless of that switch. No paid entitlement is assumed
+from a key alone and no production subscription is purchased.
+
+Configure production secrets in Render environment variables. `render.yaml`
+declares GNews and Product Hunt as unsynced secrets; a Git push does not upload
+ignored local keys. Local HTTP tests do not prove production configuration.
+GNews and NewsAPI are conservatively capped at 45 requests/day per process,
+allowing for the existing relay/Hermes pair; Guardian is capped at 200. Counters
+are ephemeral and provider quotas remain authoritative.
 
 ## Weather configuration and attribution
 
@@ -162,6 +225,9 @@ retrieval. Public responses are untrusted evidence and cannot authorize actions.
 ```powershell
 python -m unittest discover -s tests -q
 python tests/live_data_sources.py
+# Deliberate broader checks (some sources require keys or are unavailable):
+python tests/live_data_sources.py --extended
+python tests/live_data_sources.py --configured-news
 cd web
 node --test --test-concurrency=1 tests/*.test.js
 npm run build

@@ -19,6 +19,13 @@ from urllib.error import HTTPError
 from urllib.parse import quote, urlencode, urlsplit
 from urllib.request import HTTPSHandler, HTTPRedirectHandler, ProxyHandler, Request, build_opener
 
+try:
+    from .extended_sources import CATALOG as EXTENDED, adapter as extended_adapter, intent as extended_intent
+    from .news_sources import intent as news_intent
+except ImportError:
+    from extended_sources import CATALOG as EXTENDED, adapter as extended_adapter, intent as extended_intent
+    from news_sources import intent as news_intent
+
 
 MAX_BYTES = 512 * 1024
 TIMEOUT = 8
@@ -53,13 +60,13 @@ CATALOG = {
     "usalerts": ("National Weather Service active US alerts", "latitude longitude", "https://www.weather.gov/documentation/services-web-api", "Free US active alerts; retain sent, effective, expires and instructions. An empty response is point-specific and time-specific."),
     "usobservation": ("National Weather Service latest station observations", "station", "https://www.weather.gov/documentation/services-web-api", "Station observations may be delayed. Preserve observation timestamp, nulls and quantitative unit codes."),
     "music": ("MusicBrainz artist discovery", "query", "https://musicbrainz.org/doc/MusicBrainz_API", "Requires MUSICBRAINZ_ENABLED=1 after reviewing commercial terms; metadata only."),
-    "stocks": ("Alpha Vantage stock quotes", "symbol", "https://www.alphavantage.co/documentation/", "Requires ALPHA_VANTAGE_API_KEY; quote date may be delayed. No real-time entitlement requested."),
     "crypto": ("CoinGecko coin prices", "coin currency", "https://docs.coingecko.com/reference/simple-price", "Requires COINGECKO_API_KEY (Demo API); retain last_updated_at; attribute CoinGecko."),
     "movies": ("TMDB movie search", "query", "https://developer.themoviedb.org/reference/search-movie", "Requires TMDB_READ_TOKEN; attribute TMDB. Not regional streaming availability."),
     "space": ("NASA astronomy picture metadata", "date", "https://api.nasa.gov/", "Requires NASA_API_KEY; image copyright can differ from NASA metadata."),
     "transit": ("Swiss public transport connections", "from to", "https://transport.opendata.ch/docs.html", "Switzerland only; schedules can change; not a booking."),
     "aviation": ("NOAA aviation METAR observations", "station", "https://aviationweather.gov/data/api/", "ICAO station code; observations, not flight status or an aviation briefing."),
 }
+CATALOG.update(EXTENDED)
 
 
 class Invalid(ValueError):
@@ -90,7 +97,21 @@ def geocode(location):
     if key:
         params["apikey"] = key
     host = "customer-geocoding-api" if key else "geocoding-api"
-    return get(f"https://{host}.open-meteo.com/v1/search", params).get("results", [])
+    url = f"https://{host}.open-meteo.com/v1/search"
+    rows = get(url, params).get("results", [])
+    if rows or "," not in location:
+        return rows
+    # GeoNames doesn't consistently understand comma-qualified country names.
+    # Preserve the requested qualifier when retrying the city, never silently
+    # choose a namesake from a different country or region.
+    city, qualifier = (part.strip() for part in location.rsplit(",", 1))
+    country = {"uk": "GB", "united kingdom": "GB", "gb": "GB", "us": "US", "usa": "US", "united states": "US"}.get(qualifier.lower())
+    params.update(name=city, count=20)
+    if country:
+        params["countryCode"] = country
+    rows = get(url, params).get("results", [])
+    return [r for r in rows if (country and r.get("country_code") == country) or
+            (not country and qualifier.casefold() in {str(r.get(k, "")).casefold() for k in ("admin1", "country", "country_code")})][:3]
 
 
 def text(args, name, pattern=None, default=None):
@@ -147,11 +168,12 @@ class PublicHTTPS(HTTPSHandler):
         return self.do_open(PublicConnection, req, context=self._context)
 
 
-def fetch(url, headers=None):
+def fetch(url, headers=None, payload=None):
     # URLs are constructed only inside adapters. Never accept one from a query.
     if (urlsplit(url).hostname or "").endswith(".open-meteo.com"):
         meteo_budget()
-    req = Request(url, headers={"User-Agent": USER_AGENT, "Accept": "application/json", "Accept-Encoding": "identity", **(headers or {})})
+    req = Request(url, data=json.dumps(payload).encode() if payload is not None else None,
+                  headers={"User-Agent": USER_AGENT, "Accept": "application/json", "Accept-Encoding": "identity", **(headers or {})})
     deadline = time.monotonic() + TIMEOUT
     opener = build_opener(ProxyHandler({}), PublicHTTPS(), NoRedirect())
     with opener.open(req, timeout=TIMEOUT) as response:
@@ -182,6 +204,8 @@ def get(base, params=None, headers=None):
 
 def adapter(source, a):
     """Return up to five citation-bearing records, preserving provider units/dates."""
+    if source in EXTENDED:
+        return extended_adapter(source, a, get=get, fetch=fetch, text=text, credential=credential, item=item, unavailable=Unavailable)
     if source == "currency":
         base, target = (text(a, k, r"[A-Za-z]{3}").upper() for k in ("base", "quote"))
         url = f"https://api.frankfurter.dev/v2/rate/{base}/{target}"
@@ -343,12 +367,6 @@ def adapter(source, a):
             raise Unavailable("MusicBrainz requires explicit configuration after reviewing its usage terms")
         data = get("https://musicbrainz.org/ws/2/artist/", {"query": text(a, "query"), "fmt": "json", "limit": 5})
         return [item(r["name"], "https://musicbrainz.org/artist/" + r["id"], select(r, "id name type country disambiguation life-span")) for r in data["artists"][:5]]
-    if source == "stocks":
-        symbol = text(a, "symbol", r"[A-Za-z0-9.^:-]{1,24}")
-        data = get("https://www.alphavantage.co/query", {"function": "GLOBAL_QUOTE", "symbol": symbol, "apikey": credential("ALPHA_VANTAGE_API_KEY")})
-        if not data.get("Global Quote"):
-            raise Unavailable("Stock quote not available under the configured quota or entitlement")
-        return [item(symbol + " stock quote", "https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=" + quote(symbol), data["Global Quote"])]
     if source == "crypto":
         coin = text(a, "coin", r"[a-z0-9-]{1,80}")
         currency = text(a, "currency", r"[a-z]{3,5}", default="usd")
@@ -380,6 +398,22 @@ _cache = OrderedDict()
 _next = {}
 _meteo_minute = deque()
 _meteo_usage = {"day": "", "month": "", "daily": 0, "monthly": 0}
+_daily_usage = {}
+
+
+def source_budget(source):
+    # Two current cloud processes share free keys. Keep each below half of the
+    # daily allowance; providers also enforce their own hard free-plan quota.
+    caps = {"gnews": 45, "newsapi": 45, "guardian": 200}
+    if source not in caps:
+        return
+    day = datetime.now(timezone.utc).date().isoformat()
+    with _lock:
+        stamp, used = _daily_usage.get(source, (day, 0))
+        used = used if stamp == day else 0
+        if used >= caps[source]:
+            raise Unavailable("Free provider request budget exhausted; use web research")
+        _daily_usage[source] = (day, used + 1)
 
 
 def meteo_budget():
@@ -405,15 +439,15 @@ def meteo_budget():
         _meteo_usage["monthly"] += 1
 
 
-def bounded(value, depth=0):
+def bounded(value, depth=0, compact=False):
     """Project bounded JSON rather than slicing serialized JSON mid-record."""
-    if depth > 7:
+    if depth > (5 if compact else 7):
         return "[nested data omitted]"
     if isinstance(value, dict):
-        return {str(k)[:100]: bounded(v, depth + 1) for k, v in list(value.items())[:50]}
+        return {str(k)[:100]: bounded(v, depth + 1, compact) for k, v in list(value.items())[:20 if compact else 50]}
     if isinstance(value, list):
-        return [bounded(v, depth + 1) for v in value[:40]]
-    return value[:1200] if isinstance(value, str) else value
+        return [bounded(v, depth + 1, compact) for v in value[:5 if compact else 40]]
+    return value[:600 if compact else 1200] if isinstance(value, str) else value
 
 
 def lookup(source, args):
@@ -429,15 +463,24 @@ def lookup(source, args):
         return {"success": False, "error": "Parameters exceed size limit"}
     now = time.monotonic()
     with _lock:
-        if identity in _cache and now - _cache[identity][0] < (60 if source in ("usalerts", "usobservation") else 300):
+        if identity in _cache and now - _cache[identity][0] < (60 if source in ("usalerts", "usobservation", "hackernews", "gnews", "newsapi", "mempool", "carbonintensity") else 300):
             return json.loads(_cache[identity][1])
         if _next.get(source, 0) > now:
             return {"success": False, "error": "Provider is cooling down; use web search or retry later"}
-        _next[source] = now + 1.1
+        _next[source] = now + {"nvd": 6.1, "jobicy": 60, "music": 2.2}.get(source, 1.1)
     try:
+        source_budget(source)
         rows = adapter(source, args)
         # Only actual returned HTTP(S) links can become citations.
-        rows = [{**bounded(r), "truncated": bounded(r) != r} for r in rows[:5] if isinstance(r, dict) and isinstance(r.get("url"), str) and r["url"].startswith("https://")]
+        projected = []
+        for row in rows[:5]:
+            if not isinstance(row, dict) or not isinstance(row.get("url"), str) or not row["url"].startswith("https://"):
+                continue
+            record = bounded(row)
+            if len(json.dumps(record, ensure_ascii=False)) > 14000:
+                record = bounded(row, compact=True)
+            projected.append({**record, "truncated": record != row})
+        rows = projected
         stamp = datetime.now(timezone.utc).isoformat()
         hits = [{"title": r["title"], "url": r["url"], "description": json.dumps({"data": r["data"], "qualification": CATALOG[source][3], "truncated": r["truncated"]}, ensure_ascii=False), "retrieved_at": stamp, "source": source} for r in rows]
         # Keep total evidence bounded even for very verbose records.
@@ -474,10 +517,16 @@ def natural_query(query):
     # Never turn transformation requests or quoted examples into network lookups.
     if re.search(r"\b(?:don't|dont|do not|without|no)\s+(?:web\s+)?(?:search|browse|internet|lookup)|\b(?:translate|rewrite|proofread|summarize|summarise)\b", q, re.I):
         return None
+    news = news_intent(q)
+    if news:
+        return news
+    extended = extended_intent(q)
+    if extended:
+        return extended
     m = re.fullmatch(r"(?:please\s+)?(?:convert\s+)?(?:\d+(?:[.,]\d+)*\s+)?([A-Za-z]{3})\s+(?:to|into|in)\s+([A-Za-z]{3})[?.!]?", q, re.I)
     if m:
         return "currency", {"base": m[1], "quote": m[2]}
-    m = re.fullmatch(r"(?:(?:what(?:'s| is)|how is)\s+(?:the\s+)?)?(weather|forecast|temperature|air quality|aqi)(?:\s+(?:today|tomorrow|this week))?\s+(?:in|for|at)\s+([\w\s,.'-]{2,100}?)(?:\s+(?:today|tomorrow|this week))?[?.!]?", q, re.I)
+    m = re.fullmatch(r"(?:(?:what(?:'?s| is)|how is)\s+(?:the\s+)?)?(weather|forecast|temperature|air quality|aqi)(?:\s+(?:today|tomorrow|this week))?\s+(?:in|for|at)\s+([\w\s,.'-]{2,100}?)(?:\s+(?:today|tomorrow|this week))?[?.!]?", q, re.I)
     if m:
         return ("airquality" if m[1].lower() in ("air quality", "aqi") else "weather"), {"location": m[2].strip()}
     for pattern, source, key in (
@@ -499,7 +548,7 @@ def search(query):
     if not isinstance(query, str):
         return None
     if query.startswith("api:"):
-        match = re.fullmatch(r"api:([a-z]+)\s+(\{.*\})", query.strip(), re.S)
+        match = re.fullmatch(r"api:([a-z][a-z0-9_]*)\s+(\{.*\})", query.strip(), re.S)
         if not match or len(query) > 1200:
             return {"success": False, "error": "Use api:source followed by a JSON parameter object"}
         source = match[1]
@@ -507,9 +556,95 @@ def search(query):
             args = json.loads(match[2])
         except ValueError:
             return {"success": False, "error": "Invalid JSON parameters"}
+        if source == "directory":
+            try:
+                from .api_directory import search as directory_search
+            except ImportError:
+                from api_directory import search as directory_search
+            return directory_search(args)
         if source == "catalog":
+            if not isinstance(args, dict) or set(args) - {"query", "offset"}:
+                return {"success": False, "error": "Catalog accepts only an optional query"}
             sources = {k: {"description": v[0], "parameters": v[1], "documentation": v[2], "qualification": v[3]} for k, v in CATALOG.items()}
-            return {"success": True, "sources": sources, "data": {"web": [{"title": "Vaelo public-data tool catalog", "url": "https://vaelo.app", "description": json.dumps(sources)}]}}
+            if "query" in args:
+                if not isinstance(args["query"], str) or not 1 <= len(args["query"]) <= 120:
+                    return {"success": False, "error": "Provide a short catalog query"}
+                terms = args["query"].lower().split()
+                sources = {k: v for k, v in sources.items() if all(t in (k + " " + v["description"]).lower() for t in terms)}
+            offset = args.get("offset", 0)
+            if type(offset) is not int or not 0 <= offset <= len(sources):
+                return {"success": False, "error": "Invalid catalog offset"}
+            total = len(sources)
+            sources = dict(list(sources.items())[offset:offset + 12])
+            return {"success": True, "sources": sources, "total": total, "offset": offset,
+                    "data": {"web": [{"title": "Vaelo public-data tool catalog", "url": "https://vaelochat.vercel.app", "description": json.dumps({"sources": sources, "total": total, "offset": offset})}]}}
         return lookup(source, args)
     intent = natural_query(query)
-    return lookup(*intent) if intent else None
+    if not intent:
+        return None
+    source, args = intent
+    # Free GNews articles are delayed 12h. Don't spend quota trying to answer an
+    # urgent/current query from a feed known in advance to be too old.
+    if source == "gnews":
+        return {"success": False, "error": "Use live web news; the configured free feed is delayed 12 hours"}
+    result = lookup(source, args)
+    return fresh_result(source, result)
+
+
+def timestamp(value):
+    try:
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            return datetime.fromtimestamp(value / 1000 if value > 10**11 else value, timezone.utc)
+        stamp = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        return stamp.replace(tzinfo=timezone.utc) if stamp.tzinfo is None else stamp.astimezone(timezone.utc)
+    except (ValueError, TypeError, OverflowError, OSError):
+        return None
+
+
+def fresh_result(source, result):
+    """Observation/publication age, never download age. Static metadata has no TTL here."""
+    rules = {
+        "hackernews": ("time", 48 * 3600), "producthunt": ("createdAt", 48 * 3600),
+        "usobservation": ("timestamp", 2 * 3600), "currency": ("date", 4 * 86400),
+    }
+    if not result.get("success"):
+        return result
+    hits = result.get("data", {}).get("web", [])
+    kept = []
+    now = datetime.now(timezone.utc)
+    for hit in hits:
+        try:
+            record = json.loads(hit["description"])["data"]
+            rule = rules.get(source)
+            if source == "weather":
+                if record.get("provider") == "National Weather Service":
+                    rule = ("generatedAt", 24 * 3600)
+                else:
+                    record = record.get("current", {})
+                    # Open-Meteo's timezone=auto returns local wall time. Use the
+                    # parent utc_offset_seconds; never pretend that time is UTC.
+                    parent = json.loads(hit["description"])["data"]
+                    raw = timestamp(record.get("time"))
+                    if raw:
+                        from datetime import timedelta
+                        raw -= timedelta(seconds=parent.get("utc_offset_seconds", 0))
+                    if not raw or not -300 <= (now - raw).total_seconds() <= 2 * 3600:
+                        continue
+            if source == "airquality":
+                parent = record
+                raw = timestamp(record.get("current", {}).get("time"))
+                if raw:
+                    from datetime import timedelta
+                    raw -= timedelta(seconds=parent.get("utc_offset_seconds", 0))
+                if not raw or not -3600 <= (now - raw).total_seconds() <= 3 * 3600:
+                    continue
+            if rule:
+                observed = timestamp(record.get(rule[0]))
+                if not observed or not -300 <= (now - observed).total_seconds() <= rule[1]:
+                    continue
+            kept.append(hit)
+        except (ValueError, TypeError, KeyError):
+            continue
+    if hits and not kept:
+        return {"success": False, "provider": source, "error": "Provider records are stale or undated; use live web research"}
+    return {**result, "data": {"web": kept}}

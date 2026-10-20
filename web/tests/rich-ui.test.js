@@ -13,6 +13,14 @@ import { richGuidanceFor } from "../shared/rich-ui-guidance.js";
 import { parseFences } from '../src/lib/library.js';
 
 const parse = (data) => parseRichUI(JSON.stringify(data));
+
+test('worked mathematics uses streaming Markdown instead of a JSON step card', () => {
+  const prompt = 'How do I solve this: a mixing tank gains 10 gallons per minute. Find the concentration C(t) and its horizontal and vertical asymptotes.';
+  const guidance = richGuidanceFor([{role:'user',content:prompt}]);
+  assert.match(guidance, /ordinary Markdown with LaTeX/);
+  assert.doesNotMatch(guidance, /REQUIRED field|Schema illustration/);
+  assert.match(richGuidanceFor([{role:'user',content:'How do I organize my desk?'}]), /"type":"steps"/);
+});
 test('data fences tolerate model labels without intercepting requested source or executable code', () => {
   const payload = JSON.stringify({type:'overview',items:[{label:'Hotel',value:'$480'}]});
   for (const language of ['', 'json', 'application/json', 'ui', 'vaelo-ui', 'overview', 'bento']) assert.ok(richPayload(payload, language));
@@ -194,6 +202,7 @@ test('production policy permits HTTPS previews while preserving execution bounda
   assert.ok(directives.get('connect-src').includes('https:'));
   assert.ok(directives.get('connect-src').includes('blob:'));
   assert.deepEqual(directives.get('worker-src'), ["'self'", 'blob:']);
+  assert.deepEqual(directives.get('font-src'), ["'self'", 'data:']);
   assert.deepEqual(directives.get('script-src'), ["'self'", "'wasm-unsafe-eval'", 'https://accounts.google.com/gsi/client']);
   assert.deepEqual(directives.get('frame-src'), ["'self'", 'https://accounts.google.com']);
   assert.deepEqual(directives.get('object-src'), ["'none'"]);

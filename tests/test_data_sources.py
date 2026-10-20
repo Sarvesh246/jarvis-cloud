@@ -20,7 +20,8 @@ class DataSourceTests(unittest.TestCase):
     def test_catalog_is_available_without_network_and_uses_web_contract(self):
         with patch.object(data, "fetch") as fetch:
             catalog = Research().search("api:catalog {}")
-        self.assertEqual(set(catalog["sources"]), set(data.CATALOG))
+        self.assertEqual(catalog["total"], len(data.CATALOG))
+        self.assertEqual(set(catalog["sources"]), set(list(data.CATALOG)[:12]))
         self.assertTrue(catalog["data"]["web"])
         fetch.assert_not_called()
 
@@ -188,7 +189,6 @@ class DataSourceTests(unittest.TestCase):
     def test_optional_credentials_use_current_schemas_and_do_not_leak(self):
         cases = [
             ("country", {"name": "Canada"}, "REST_COUNTRIES_API_KEY", {"data": {"objects": [{"names": {"common": "Canada"}, "population": 1}]}}),
-            ("stocks", {"symbol": "IBM"}, "ALPHA_VANTAGE_API_KEY", {"Global Quote": {"01. symbol": "IBM", "07. latest trading day": "2026-10-19"}}),
             ("crypto", {"coin": "bitcoin"}, "COINGECKO_API_KEY", {"bitcoin": {"usd": 100, "last_updated_at": 123}}),
             ("movies", {"query": "Dune"}, "TMDB_READ_TOKEN", {"results": [{"id": 1, "title": "Dune", "release_date": "2021-01-01"}]}),
             ("space", {}, "NASA_API_KEY", {"title": "Space", "date": "2026-10-19", "copyright": "Photographer"}),

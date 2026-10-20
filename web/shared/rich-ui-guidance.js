@@ -1,5 +1,9 @@
 import { seriesTable, suppliedFigures } from "./supplied-data.js";
 
+// Worked mathematics belongs in ordinary Markdown/LaTeX, where each line
+// can stream and be typeset. A generic "how do I" must not force UI JSON.
+const mathRequest = (text) => /\b(?:solve|equation|integral|derivative|differentiate|asymptotes?|polynomial|concentration|mixing tank)\b|\\(?:frac|int|sum)\b/i.test(text);
+
 // Shared by the normal and direct routes. Selection adds no model request.
 export const RICH_UI_GUIDANCE = [
   "Choose these cards automatically when the answer benefits from them, even without a UI request. Use one fenced vaelo-ui block containing valid JSON for a shape Markdown cannot express.",
@@ -22,6 +26,7 @@ export const RICH_UI_GUIDANCE = [
 ].join(" ");
 
 export function richPresentationFor(text = "") {
+  if (mathRequest(text)) return null;
   if (/\b(?:in|as|into) (?:a |the )?table\b/i.test(text)) return null;
   if (
     /\b(?:write|implement|generate|build)\b.{0,28}\b(?:code|script|program|function|component)\b|\breturn\b.{0,16}\bsource code\b/is.test(
@@ -234,6 +239,8 @@ export function richGuidanceFor(messages = []) {
     )
   )
     return "";
+  if (mathRequest(text))
+    return "\n\nFor this worked mathematics answer, use ordinary Markdown with LaTeX equations and numbered working. Do not wrap the explanation in a vaelo-ui JSON block or repeat it as a summary card.";
   const selected = richPresentationFor(text);
   const hint = selected ? "" : shapeHint(text);
   if (hint) return `\n\n${RICH_UI_GUIDANCE}\n\nPresentation for this reply: ${hint}`;

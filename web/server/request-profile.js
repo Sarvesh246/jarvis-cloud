@@ -262,11 +262,17 @@ export function profileRequest(content, {
   if (research || style === "thorough" || role === "skeptic" || role === "advocate") tier = "deep";
   else if (deep(shape, text, raw, { images, attachments })) tier = "deep";
   else if (!answering && !images && !attachments && !work && role === "none" && quick(shape, text)) tier = "quick";
+  // A bounded, self-contained calculation needs reasoning, but not an agent
+  // bootstrap and tool schemas. Keep its effort tier on the direct route.
+  const directMath = shape === "math" && raw.length <= 1800 &&
+    !images && !attachments && !work && !research && role === "none" &&
+    !HARD.test(text) && !RISKY.test(text) && !CURRENT.test(text) &&
+    !TOOL_WORDS.test(text.replace(/\bfind\b/g, ""));
   return {
     shape: explicit ? "explicit" : shape,
     explicit,
     tier,
-    fast: tier === "quick" && style !== "thorough",
+    fast: (tier === "quick" || directMath) && style !== "thorough",
   };
 }
 
