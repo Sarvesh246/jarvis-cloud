@@ -39,6 +39,13 @@ except ModuleNotFoundError as exc:
         raise
     WebSearchProvider = object
 try:
+    from .data_sources import search as data_search
+except ImportError:
+    try:
+        from data_sources import search as data_search
+    except ModuleNotFoundError:
+        from cloud.data_sources import search as data_search
+try:
     from .source_quality import subjects, source_scope, relevant_sources
 except ImportError:
     try:
@@ -577,6 +584,12 @@ class Research(WebSearchProvider):
 
     def search(self, query, limit=5):
         limit = max(1, min(int(limit), SEARCH_LIMIT))
+        structured = data_search(query)
+        if structured is not None and (structured.get("success") or str(query).startswith("api:")):
+            # Explicit API arguments must never be forwarded to a search index.
+            if structured.get("success") and "data" in structured:
+                structured["data"]["web"] = structured["data"]["web"][:limit]
+            return structured
         names = [name for name in INDEXES if configured(name)]
         rankings, answered = [], []
         if names:

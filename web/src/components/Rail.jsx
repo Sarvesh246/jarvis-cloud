@@ -29,7 +29,7 @@ const WORK_KINDS = { document: "Document", code: "Code", table: "Table" };
 
 /* The things Vaelo has made, newest first, each a way back into the
    workspace and the conversation it came from. */
-function Library({ items, query, activeId, busy, onOpen, onDelete }) {
+function Library({ items, query, activeId, onOpen, onDelete }) {
   const shown = searchWork(items, query).slice(0, 80);
   if (!items.length)
     return (
@@ -55,9 +55,6 @@ function Library({ items, query, activeId, busy, onOpen, onDelete }) {
               <button
                 className="work-row"
                 data-active={entry.chatId === activeId || undefined}
-                /* Like the conversation rows: a reply in progress keeps you
-                   in its conversation. */
-                disabled={busy && entry.chatId !== activeId}
                 onClick={() => onOpen(entry)}
               >
                 <Icon size={17} aria-hidden="true" className="work-icon" />
@@ -136,13 +133,14 @@ function useSwipe(id, openId, setOpenId) {
   return { open, x: x ?? rest, dragging: x !== null, handlers };
 }
 
-function Row({ chat, active, busy, excerpt, openId, setOpenId, onSelect, onDelete, onPin }) {
+function Row({ chat, active, busy, running, excerpt, openId, setOpenId, onSelect, onDelete, onPin }) {
   const swipe = useSwipe(chat.id, openId, setOpenId);
   const settle = () => setOpenId(null);
   return (
     <div
       className="rail-row"
       data-active={active}
+      data-running={running || undefined}
       data-excerpt={excerpt ? true : undefined}
       data-swiped={swipe.open || undefined}
       {...swipe.handlers}
@@ -184,11 +182,11 @@ function Row({ chat, active, busy, excerpt, openId, setOpenId, onSelect, onDelet
         <button
           title={chat.pinned ? "Drag to reorder this chat" : undefined}
           className="rail-link"
-          disabled={busy}
           aria-current={active ? "page" : undefined}
           onClick={() => onSelect(chat.id)}
         >
           <span className="rail-title">{chat.title}</span>
+          {running && <span className="rail-running" role="img" aria-label="Vaelo is replying here" />}
           {excerpt && <span className="rail-excerpt">{excerpt}</span>}
         </button>
         <button
@@ -224,6 +222,7 @@ function WideRail({
   chats,
   activeId,
   busy,
+  running = {},
   open,
   phone = false,
   collapsed,
@@ -266,7 +265,7 @@ function WideRail({
      again, focus goes back to the button that opens it, unless choosing
      something in it already moved focus on. */
   const aside = useRef(null);
-  const reorder = usePinnedReorder({ aside, ids: pinned, setOrder: setPinOrder, saveOrder, chats, disabled: busy || !!query || view !== 'chats' });
+  const reorder = usePinnedReorder({ aside, ids: pinned, setOrder: setPinOrder, saveOrder, chats, disabled: !!query || view !== 'chats' });
   const close = useRef(null);
   const wasOpen = useRef(open);
   useEffect(() => {
@@ -336,7 +335,7 @@ function WideRail({
         </button>
       </div>
 
-      <button className="rail-new rail-new-conversation" onClick={onNew} disabled={busy || pristine}>
+      <button className="rail-new rail-new-conversation" onClick={onNew} disabled={pristine}>
         <Plus size={16} />
         <span>New conversation</span>
       </button>
@@ -400,7 +399,7 @@ function WideRail({
         aria-label={view === "library" ? "Library" : results ? "Search results" : "Past conversations"}
       >
         {view === "library" ? (
-          <Library items={work} query={query} activeId={activeId} busy={busy} onOpen={onOpenWork} onDelete={onDeleteWork} />
+          <Library items={work} query={query} activeId={activeId} onOpen={onOpenWork} onDelete={onDeleteWork} />
         ) : results ? (
           <section>
             <h2 className="label" aria-live="polite">
@@ -414,7 +413,8 @@ function WideRail({
                 chat={chat}
                 excerpt={excerpt}
                 active={chat.id === activeId}
-                busy={busy}
+                busy={Boolean(running[chat.id])}
+                running={Boolean(running[chat.id])}
                 onSelect={(id) => {
                   setQuery("");
                   onSelect(id);
@@ -442,7 +442,8 @@ function WideRail({
                   key={chat.id}
                   chat={chat}
                   active={chat.id === activeId}
-                  busy={busy}
+                  busy={Boolean(running[chat.id])}
+                  running={Boolean(running[chat.id])}
                   onSelect={onSelect}
                   openId={openRow}
                   setOpenId={setOpenRow}

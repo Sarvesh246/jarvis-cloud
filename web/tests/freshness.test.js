@@ -7,6 +7,11 @@ import { chatInput, guestInput, streamChat } from "../server/chat.js";
 const conversationId = "123e4567-e89b-12d3-a456-426614174000";
 const question = "Compare the iPhone 15 Pro and iPhone 18 Pro Max";
 
+test("public data requests fetch evidence while private transformations stay offline", () => {
+  for (const text of ["Define serendipity", "Find books about astronomy", "Find research papers on battery recycling", "npm package react", "Food barcode 3017620422003", "Air quality in Chicago"]) assert.equal(freshnessQuery(text), text);
+  for (const text of ["Rewrite: Define serendipity", "Don't browse. Find books about astronomy", "Only use my provided text. Define serendipity"]) assert.equal(freshnessQuery(text), null);
+});
+
 test("product freshness applies to every style and role without a research toggle", () => {
   for (const style of ["balanced", "concise", "thorough"]) {
     for (const role of ["none", "tutor", "skeptic", "advocate", "guide"]) {

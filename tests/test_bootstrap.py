@@ -37,6 +37,8 @@ class BootstrapTests(unittest.TestCase):
                     "agent": types.ModuleType("agent"), "agent.web_search_provider": interface}):
                 spec.loader.exec_module(module)
                 self.assertEqual(module.subjects.__module__, "test_installed_research.source_quality")
+                self.assertEqual(module.data_search.__module__, "test_installed_research.data_sources")
+                self.assertIn("usweather", module.data_search("api:catalog {}")["sources"])
                 self.assertEqual(module.subjects("iPhone 15 Pro vs 18 Pro Max"), ["iphone 15 pro", "iphone 18 pro max"])
 
     def test_context_policy_stays_consistent_across_cloud_routes_and_web(self):
@@ -92,6 +94,10 @@ class BootstrapTests(unittest.TestCase):
             self.assertNotIn(secret, text)
             cfg = json.loads(text)
             self.assertEqual(cfg["gateway"]["api_server"]["max_concurrent_runs"], 1)
+            for raw, expected in (("2", 2), ("9", 3), ("0", 1), ("two", 1)):
+                tuned = bootstrap.configuration({"VAELO_MAX_CONCURRENT_RUNS": raw, "OPENROUTER_API_KEY": secret})
+                self.assertEqual(tuned["gateway"]["max_concurrent_runs"], expected)
+                self.assertEqual(tuned["gateway"]["api_server"]["max_concurrent_runs"], expected)
             self.assertEqual(cfg["model"]["default"], "openrouter/free")
             self.assertGreaterEqual(cfg["model"]["context_length"], 64000)
             self.assertEqual(cfg["model"]["context_length"], cfg["providers"]["cloud-openrouter"]["context_length"])

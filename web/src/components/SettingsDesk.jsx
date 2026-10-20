@@ -1,7 +1,8 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   BellSimple,
   Devices,
+  Desktop,
   Keyboard,
   Lock,
   MagnifyingGlass,
@@ -12,6 +13,7 @@ import {
   User,
   X,
 } from "@phosphor-icons/react";
+import { RETENTION_CHOICES } from "../../shared/retention.js";
 import { listVoices, onVoices, speak, speechSupport, stopSpeaking } from "../lib/speech.js";
 import { InstallSteps } from "./Onboarding.jsx";
 import { DesktopUpdates } from "./DesktopUpdates.jsx";
@@ -29,13 +31,13 @@ const SECTIONS = [
     { id: "replies", label: "Replies", icon: TextAa, words: "richness adaptive minimal send enter greeting" },
   ] },
   { group: "You", items: [
-    { id: "you", label: "Personalization", icon: User, words: "name call about profile remember" },
+    { id: "you", label: "Personalization", icon: User, words: "name call about profile remember memory notes forget" },
     { id: "voice", label: "Voice", icon: Microphone, words: "read aloud speech voice speed" },
     { id: "notify", label: "Notifications", icon: BellSimple, words: "notification quiet hours reply ready" },
   ] },
   { group: "System", items: [
-    { id: "devices", label: "Devices and help", icon: Devices, words: "device desktop updates install home screen welcome guide sign out" },
-    { id: "privacy", label: "Privacy", icon: Lock, words: "location place privacy" },
+    { id: "devices", label: "Devices and help", icon: Devices, words: "device devices desktop updates install home screen welcome guide sign out signed in sessions" },
+    { id: "privacy", label: "Privacy", icon: Lock, words: "location place privacy history delete retention keep conversations days" },
     { id: "keys", label: "Shortcuts", icon: Keyboard, words: "keyboard shortcuts keys send" },
   ] },
 ];
@@ -90,6 +92,31 @@ const Group = ({ title, children }) => (
     {children}
   </section>
 );
+
+/* Server-backed settings (devices, memory, history). `request` is the app's
+   own fetch helper; it changes identity every render, so it is kept in a ref. */
+function useAccount(request, path) {
+  const send = useRef(request);
+  send.current = request;
+  const [state, setState] = useState({ status: "loading", data: null, error: "" });
+  const load = useCallback(async () => {
+    try { setState({ status: "ready", data: await send.current(path), error: "" }); }
+    catch (error) { setState((last) => ({ status: "failed", data: last.data, error: error.message })); }
+  }, [path]);
+  useEffect(() => { load(); }, [load]);
+  const post = useCallback((body) => send.current(path, body), [path]);
+  const set = useCallback((data) => setState({ status: "ready", data, error: "" }), []);
+  return { ...state, load, post, set };
+}
+
+const ago = (time, now = Date.now()) => {
+  const minutes = Math.round((now - time) / 60000);
+  if (minutes < 2) return "just now";
+  if (minutes < 60) return `${minutes} minutes ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 36) return hours === 1 ? "an hour ago" : `${hours} hours ago`;
+  return `${Math.round(hours / 24)} days ago`;
+};
 
 function Appearance({ prefs, onChange }) {
   const mini = (id) => ({ light: ["#f7f2ea", "#efe7da", "#d6c8b2", "#1c1614"], dark: ["#16110f", "#0e0a09", "#3b302a", "#f6eee3"], system: null }[id]);
@@ -192,7 +219,62 @@ function Replies({ prefs, onChange }) {
   );
 }
 
-function Personal({ prefs, onChange }) {
+function Memory({ request }) {
+  const memory = useAccount(request, "/api/chats?resource=memory");
+  const [draft, setDraft] = useState("");
+  const [editing, setEditing] = useState(null);
+  const [problem, setProblem] = useState("");
+  const [busy, setBusy] = useState(false);
+  const run = async (body) => {
+    setBusy(true); setProblem("");
+    try { memory.set(await memory.post(body)); return true; }
+    catch (error) { setProblem(error.message); return false; }
+    finally { setBusy(false); }
+  };
+  if (memory.status === "loading") return <Group title="Memory"><p className="sd-note" role="status">Loading what Vaelo has noted…</p></Group>;
+  if (!memory.data) return <Group title="Memory"><p className="sd-note" data-tone="problem" role="alert">{memory.error || "Memory is unavailable right now."}</p><button type="button" className="sd-button" onClick={memory.load}>Try again</button></Group>;
+  const { enabled, items } = memory.data;
+  return (
+    <Group title="Memory">
+      <Row title="Let Vaelo note lasting facts" help="When you say “remember that…” or share something that will stay true, Vaelo saves one short note and says so in its reply. Never from replies that used the web or your files." htmlFor="sd-memory">
+        <Switch id="sd-memory" label="Let Vaelo note lasting facts" checked={enabled} onChange={(next) => run({ action: "enable", enabled: next })} />
+      </Row>
+      <p className="sd-note">Notes are kept with your account, so every device shares them, and they are sent with your messages while this is on. {items.length} of 40 used.</p>
+      {!items.length && <p className="sd-note">Nothing noted yet.</p>}
+      <ul className="sd-notes">
+        {items.map((item) => (
+          <li key={item.id} className="sd-memo">
+            {editing?.id === item.id ? (
+              <form className="sd-memo-edit" onSubmit={async (event) => { event.preventDefault(); if (await run({ action: "edit", id: item.id, text: editing.text })) setEditing(null); }}>
+                <label className="sr-only" htmlFor={`sd-edit-${item.id}`}>Edit note</label>
+                <input id={`sd-edit-${item.id}`} className="sd-input" type="text" maxLength={280} value={editing.text} autoFocus onChange={(event) => setEditing({ id: item.id, text: event.target.value })} />
+                <button type="submit" className="sd-button" disabled={busy}>Save</button>
+                <button type="button" className="sd-button" onClick={() => setEditing(null)}>Cancel</button>
+              </form>
+            ) : (
+              <>
+                <span className="sd-row-text">
+                  <span className="sd-row-title">{item.text}</span>
+                  <span className="sd-row-help">{item.source === "vaelo" ? "Noted by Vaelo" : "Added by you"} · {ago(item.updated)}</span>
+                </span>
+                <button type="button" className="sd-button" onClick={() => setEditing({ id: item.id, text: item.text })}>Edit</button>
+                <button type="button" className="sd-button" data-tone="clay" disabled={busy} aria-label={`Delete note: ${item.text}`} onClick={() => run({ action: "remove", id: item.id })}>Delete</button>
+              </>
+            )}
+          </li>
+        ))}
+      </ul>
+      <form className="sd-memo-add" onSubmit={async (event) => { event.preventDefault(); if (draft.trim() && await run({ action: "add", text: draft })) setDraft(""); }}>
+        <label className="sr-only" htmlFor="sd-memo-new">Add a note</label>
+        <input id="sd-memo-new" className="sd-input" type="text" maxLength={280} value={draft} placeholder="Add something for Vaelo to remember" onChange={(event) => setDraft(event.target.value)} />
+        <button type="submit" className="sd-button" disabled={busy || !draft.trim()}>Add</button>
+      </form>
+      {problem && <p className="sd-note" data-tone="problem" role="alert">{problem}</p>}
+    </Group>
+  );
+}
+
+function Personal({ prefs, onChange, request, guest }) {
   return (
     <div className="sd-page">
       <Head title="Personalization" line="What Vaelo knows about you, and how it speaks to you." />
@@ -207,6 +289,7 @@ function Personal({ prefs, onChange }) {
           <span className="sd-note">{prefs.about.length} of 600. Sent with each message you write, and never shown back to you. Kept on this device.</span>
         </div>
       </Group>
+      {!guest && <Memory request={request} />}
     </div>
   );
 }
@@ -284,7 +367,54 @@ function Notify({ prefs, onChange, notify }) {
   );
 }
 
-function DevicesHelp({ user, desktop, store, onTools, onWelcome, onSignOut }) {
+function DeviceList({ request }) {
+  const devices = useAccount(request, "/api/session?resource=devices");
+  const [busy, setBusy] = useState("");
+  const [sure, setSure] = useState(false);
+  const [problem, setProblem] = useState("");
+  const act = async (body) => {
+    setBusy(body.id || "others"); setProblem("");
+    try { await devices.post(body); setSure(false); await devices.load(); }
+    catch (error) { setProblem(error.message); }
+    finally { setBusy(""); }
+  };
+  if (devices.status === "loading") return <p className="sd-note" role="status">Looking for signed-in devices…</p>;
+  if (!devices.data) return <><p className="sd-note" data-tone="problem" role="alert">{devices.error || "Devices are unavailable right now."}</p><button type="button" className="sd-button" onClick={devices.load}>Try again</button></>;
+  if (!devices.data.available) return <p className="sd-note">This Vaelo doesn’t keep a list of devices.</p>;
+  const { current, devices: list } = devices.data;
+  const others = list.filter((device) => !device.current);
+  return (
+    <>
+      {!current && <p className="sd-note">This session started before devices were listed. Sign out and back in on this device to see and manage the others.</p>}
+      {list.map((device) => (
+        <div className="sd-device" key={device.id}>
+          <span className="sd-device-icon" aria-hidden="true">{device.kind === "desktop" ? <Desktop size={24} /> : <Devices size={24} />}</span>
+          <span className="sd-row-text">
+            <span className="sd-row-title">{device.label}{device.current ? " · this device" : ""}</span>
+            <span className="sd-row-help">Signed in {ago(device.created)} · {device.current ? "active now" : `last active ${ago(device.seen)}`}</span>
+          </span>
+          {!device.current && (
+            <button type="button" className="sd-button" data-tone="clay" disabled={Boolean(busy)} aria-label={`Sign out ${device.label}`} onClick={() => act({ action: "revoke", id: device.id })}>
+              {busy === device.id ? "Signing out…" : "Sign out"}
+            </button>
+          )}
+        </div>
+      ))}
+      {current && others.length > 0 && (sure ? (
+        <div className="sd-confirm" role="alert">
+          <p>Every other device will be asked to sign in again. This one stays signed in.</p>
+          <div className="sd-inline">
+            <button type="button" className="sd-button" data-tone="clay" disabled={Boolean(busy)} onClick={() => act({ action: "revoke-others" })}>{busy === "others" ? "Signing out…" : "Sign out all others"}</button>
+            <button type="button" className="sd-button" onClick={() => setSure(false)}>Cancel</button>
+          </div>
+        </div>
+      ) : <Row title="Sign out everywhere else" help="Ends every other session. Other devices notice within a few seconds."><button type="button" className="sd-button" data-tone="clay" onClick={() => setSure(true)}>Sign out others</button></Row>)}
+      {problem && <p className="sd-note" data-tone="problem" role="alert">{problem}</p>}
+    </>
+  );
+}
+
+function DevicesHelp({ user, desktop, store, request, onTools, onWelcome, onSignOut }) {
   const guest = !!user?.guest;
   return (
     <div className="sd-page">
@@ -299,6 +429,7 @@ function DevicesHelp({ user, desktop, store, onTools, onWelcome, onSignOut }) {
           <button type="button" className="sd-button" data-tone="clay" onClick={onSignOut}>{guest ? "Leave guest mode" : "Sign out"}</button>
         </div>
       </Group>
+      {!guest && <Group title="Signed-in devices"><DeviceList request={request} /><p className="sd-note">“Sign out” above ends every session of this kind on every device, so use it if a device is lost and you can’t tell which one it was.</p></Group>}
       {desktop && <Group title="Updates"><DesktopUpdates store={store} /></Group>}
       {!desktop && (
         <Group title="Add to home screen">
@@ -314,7 +445,44 @@ function DevicesHelp({ user, desktop, store, onTools, onWelcome, onSignOut }) {
   );
 }
 
-function Privacy({ prefs, place }) {
+function History({ request, onRetention }) {
+  const history = useAccount(request, "/api/chats?resource=retention");
+  const [pending, setPending] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState("");
+  const save = async (days, confirm) => {
+    setBusy(true); setProblem("");
+    try {
+      const saved = await history.post({ days, ...(confirm && { confirm: true }) });
+      history.set(saved); setPending(null); onRetention?.(saved.days, saved.now);
+    } catch (error) { setProblem(error.message); }
+    finally { setBusy(false); }
+  };
+  if (history.status === "loading") return <Group title="Conversation history"><p className="sd-note" role="status">Loading…</p></Group>;
+  if (!history.data) return <Group title="Conversation history"><p className="sd-note" data-tone="problem" role="alert">{history.error || "History settings are unavailable right now."}</p><button type="button" className="sd-button" onClick={history.load}>Try again</button></Group>;
+  const days = history.data.days;
+  return (
+    <Group title="Conversation history">
+      <Row title="Keep conversations for" help={days ? `Older than ${days} days are deleted` : "Nothing is deleted automatically"}>
+        <Segment label="Keep conversations for" value={String(pending ?? days)} options={[["0", "Forever"], ...RETENTION_CHOICES.map((choice) => [String(choice), `${choice} days`])]}
+          onChange={(value) => { const next = Number(value); if (next === 0) { setPending(null); if (days) save(0); } else setPending(next === days ? null : next); }} />
+      </Row>
+      {pending && (
+        <div className="sd-confirm" role="alert">
+          <p><strong>This deletes conversations for good.</strong> Anything not touched in {pending} days is removed from this device, from every other device you’re signed in on, and from the cloud copy. It can’t be undone. Pinned conversations, the one you have open and any reply being written are always kept.</p>
+          <div className="sd-inline">
+            <button type="button" className="sd-button" data-tone="clay" disabled={busy} onClick={() => save(pending, true)}>{busy ? "Saving…" : `Delete after ${pending} days`}</button>
+            <button type="button" className="sd-button" onClick={() => setPending(null)}>Cancel</button>
+          </div>
+        </div>
+      )}
+      {problem && <p className="sd-note" data-tone="problem" role="alert">{problem}</p>}
+      <p className="sd-note">Checked in the background while Vaelo is open, a few at a time, oldest first. Every device follows the same choice.</p>
+    </Group>
+  );
+}
+
+function Privacy({ prefs, place, request, guest, onRetention }) {
   return (
     <div className="sd-page">
       <Head title="Privacy" line="What Vaelo may know about where you are." />
@@ -328,6 +496,7 @@ function Privacy({ prefs, place }) {
         )}
         {place.problem && <p className="sd-note" data-tone="problem" role="alert">{place.problem}</p>}
       </Group>
+      {!guest && <History request={request} onRetention={onRetention} />}
     </div>
   );
 }
@@ -362,7 +531,7 @@ function Keys({ prefs, onChange }) {
   );
 }
 
-export function SettingsDesk({ open, user, prefs, onChange, onClose, onTools, onWelcome, onSignOut, notify, place, desktop, store }) {
+export function SettingsDesk({ open, user, prefs, onChange, onClose, onTools, onWelcome, onSignOut, notify, place, desktop, store, request, onRetention }) {
   const dialog = useRef(null);
   const [section, setSection] = useState("appearance");
   const [query, setQuery] = useState("");
@@ -384,11 +553,11 @@ export function SettingsDesk({ open, user, prefs, onChange, onClose, onTools, on
   const panels = {
     appearance: <Appearance prefs={prefs} onChange={onChange} />,
     replies: <Replies prefs={prefs} onChange={onChange} />,
-    you: <Personal prefs={prefs} onChange={onChange} />,
+    you: <Personal prefs={prefs} onChange={onChange} request={request} guest={!!user?.guest} />,
     voice: <Voice prefs={prefs} onChange={onChange} />,
     notify: <Notify prefs={prefs} onChange={onChange} notify={notify} />,
-    devices: <DevicesHelp user={user} desktop={desktop} store={store} onTools={onTools} onWelcome={onWelcome} onSignOut={onSignOut} />,
-    privacy: <Privacy prefs={prefs} place={place} />,
+    devices: <DevicesHelp user={user} desktop={desktop} store={store} request={request} onTools={onTools} onWelcome={onWelcome} onSignOut={onSignOut} />,
+    privacy: <Privacy prefs={prefs} place={place} request={request} guest={!!user?.guest} onRetention={onRetention} />,
     keys: <Keys prefs={prefs} onChange={onChange} />,
   };
 

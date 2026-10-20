@@ -1,3 +1,4 @@
+import { memoryApi, retentionApi } from "../server/account-api.js";
 import { ChatStore } from "../server/chat-store.js";
 import { notifyFeed } from "../server/chat.js";
 import { storageConfigured } from "../server/kv-storage.js";
@@ -9,6 +10,9 @@ export default async function handler(req, res) {
     const user = await authorize(req, cfg);
     if (!storageConfigured())
       throw new HttpError(503, "Conversation sync is not configured.");
+    const resource = new URL(req.url, cfg.origin).searchParams.get("resource");
+    if (resource === "memory") return await memoryApi(req, res, cfg, user);
+    if (resource === "retention") return await retentionApi(req, res, cfg, user);
     const store = new ChatStore(user.sub);
     if (req.method === "GET") {
       const url = new URL(req.url, cfg.origin);

@@ -8,6 +8,7 @@ const DECISION = /\b(?:compar\w*|vs\.?|versus|better|best|buy|upgrade|worth|reco
 const FOLLOWUP = /\b(?:which|what about|how about|does it|is it|has it|battery|camera|faster|cheaper|better|price|cost)\b/i;
 const SUBJECT = /\b(?:iphone|ipad|macbook|imac|airpods|apple watch|galaxy|pixel|oneplus|playstation|xbox|nintendo|geforce|radeon|ryzen|snapdragon|surface|thinkpad|python|react|vue|postgresql|mysql|windows|android|ios|chatgpt|claude|gemini)\b|\b[a-z]{2,}[- ]?\d+(?:\.\d+)*\b|\b(?:compare|vs|versus|buy|recommend\w*|specs?|specifications?|latest)\b/i;
 const LOOKUP = /\b(?:search (?:the )?(?:web|internet|online)|browse|look (?:it |this |that )?up|look up|find (?:sources|citations)|fact[- ]check)\b/i;
+const PUBLIC_DATA = /^(?:define|definition of|meaning of)\s|\b(?:find|search)\s+(?:books?|research papers|scholarly papers|journal articles)\s+(?:about|on|for|called|titled)\s|\b(?:npm package|pypi package|decode VIN|food barcode|barcode \d{8,14}|air quality|aqi)\b/i;
 const HEALTH = /\b(?:medication|medicine|prescription|ibuprofen|acetaminophen|paracetamol|aspirin|antibiotics?|insulin|dosage|dose|symptoms?|treatment|pregnan\w*|chest pain)\b/i;
 const LAW_MONEY = /\b(?:legal|laws?|landlord|evict\w*|lease|tax(?:es)?|visa|immigration|invest\w*|stocks?|mortgage|insurance|retirement|401k|roth|ira)\b/i;
 const ADVICE = /\b(?:should|can i|can my|can you|safe|safety|take|taking|mix|combine|stop|treat|manage|relieve|dose|dosage|how (?:do|can|much|many)|allowed|rights?|required|eligible|deduct|recommend\w*|best)\b/i;
@@ -60,7 +61,7 @@ export function freshnessQuery(content, previous = "") {
     }
   }
   const consequential = ADVICE.test(text) && (HEALTH.test(text) || LAW_MONEY.test(text));
-  if (!VOLATILE.test(text) && !LOOKUP.test(text) && !consequential && !currencyLookup(text) &&
+  if (!VOLATILE.test(text) && !LOOKUP.test(text) && !PUBLIC_DATA.test(text) && !consequential && !currencyLookup(text) &&
       !(PRODUCTS.test(text) && DECISION.test(text)) && !followup) return null;
   // Keep the newest constraints even when earlier context fills the budget.
   const current = text.replace(/\s+/g, " ");

@@ -306,7 +306,7 @@ export function Settings(props) {
   return phone ? <PhoneSettings {...props} /> : <WideSettings {...props} />;
 }
 
-function WideSettings({ open, user, prefs, onChange, onClose, onTools, onWelcome, onSignOut }) {
+function WideSettings({ open, user, prefs, onChange, onClose, onTools, onWelcome, onSignOut, request, onRetention }) {
   const notify = useNotify(prefs, onChange);
   const place = useLocate(prefs, onChange);
   return (
@@ -323,6 +323,8 @@ function WideSettings({ open, user, prefs, onChange, onClose, onTools, onWelcome
       place={{ ...place, note: LOCATION_NOTE }}
       desktop={DESKTOP}
       store={STORE_BUILD}
+      request={request}
+      onRetention={onRetention}
     />
   );
 }

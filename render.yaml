@@ -9,6 +9,10 @@ services:
     dockerContext: .
     healthCheckPath: /health
     envVars:
+      - key: OPEN_METEO_NONCOMMERCIAL
+        value: "1"
+      - key: VAELO_MAX_CONCURRENT_RUNS
+        value: "2"
       - key: API_SERVER_KEY
         sync: false
       - key: OPENROUTER_API_KEY
