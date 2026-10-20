@@ -150,6 +150,10 @@ export class ChatSync {
           continue;
         }
         if (this.stopped) return;
+        // A reply may have started while the remote parts were downloading.
+        // Defer that revision just as we do before downloading, keeping the
+        // active run attached to its original conversation until it finishes.
+        if (this.busy() && this.dirty(id)) { blocked.add(id); continue; }
         const local = this.current.get(id);
         let next = chat;
         if (this.dirty(id) && fingerprint(local) !== fingerprint(chat)) {

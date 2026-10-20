@@ -225,6 +225,112 @@ test("a streaming local reply is not replaced by a remote edit", async () => {
 const reply = (extra = {}) => ({ id: "reply-one", role: "assistant", content: "", run: "reply-one",
   running: true, startedAt: Date.now(), ...extra });
 
+for (const size of [20, 600_000]) {
+  test(`a reply started during a ${size}-character remote download stays on its original conversation`, async () => {
+    const { device } = setup();
+    const original = chat("chat-one", "x".repeat(size));
+    const desktop = device([original]), phone = device();
+    try {
+      await desktop.sync.tick(); await phone.sync.tick();
+      const baseline = { ...phone.sync.base[original.id] };
+      desktop.sync.observe([{ ...original, title: "Remote rename" }]);
+      await desktop.sync.tick();
+
+      let release, downloaded;
+      const gate = new Promise(resolve => { release = resolve; });
+      const reading = new Promise(resolve => { downloaded = resolve; });
+      const request = phone.sync.request;
+      phone.sync.request = async (path, body) => {
+        const result = await request(path, body);
+        if (path.includes("id=chat-one") && path.includes("part=0")) {
+          downloaded();
+          await gate;
+        }
+        return result;
+      };
+      const pending = phone.sync.tick();
+      await reading;
+      const started = { ...original, messages: [...original.messages, reply({ content: "Local words" })] };
+      phone.sync.busy = () => true;
+      phone.sync.observe([started]);
+      phone.sync.forced.add(original.id);
+      release();
+      await pending;
+
+      assert.deepEqual(phone.sync.current.get(original.id), started,
+        "the live run must retain its conversation ID and words");
+      assert.deepEqual(phone.sync.base[original.id], baseline,
+        "the deferred remote revision must not be acknowledged");
+      assert.equal(phone.sync.forced.has(original.id), true);
+      assert.equal(phone.conflicts, 0);
+      assert.equal(phone.chats.length, 1);
+
+      phone.sync.request = request;
+      phone.sync.busy = () => false;
+      const finished = { ...started, messages: [...original.messages,
+        { ...started.messages.at(-1), running: undefined, content: "Finished local answer" }] };
+      // The retained forced save makes observe start the recovery pass itself.
+      const settled = new Promise(resolve => { phone.sync.onStatus = resolve; });
+      phone.sync.observe([finished]);
+      await settled;
+      assert.equal(phone.conflicts, 1);
+      assert.equal(phone.chats.find(c => c.id === original.id).title, "Remote rename");
+      assert.deepEqual(phone.chats.find(c => c.id !== original.id).messages, finished.messages);
+      const third = device();
+      try {
+        await third.sync.tick();
+        assert.equal(third.chats.length, 2, "both histories remain durable after the reply finishes");
+      } finally { third.sync.stop(); }
+    } finally { phone.sync.stop(); desktop.sync.stop(); }
+  });
+}
+
+test("an idle edit during a remote download still preserves both conflicting histories", async () => {
+  const { device } = setup();
+  const desktop = device([chat()]), phone = device();
+  try {
+    await desktop.sync.tick(); await phone.sync.tick();
+    desktop.sync.observe([{ ...chat(), title: "Desktop rename" }]);
+    await desktop.sync.tick();
+    const request = phone.sync.request;
+    phone.sync.request = async (path, body) => {
+      const result = await request(path, body);
+      if (path.includes("id=chat-one")) phone.sync.observe([{ ...chat(), title: "Phone rename" }]);
+      return result;
+    };
+    await phone.sync.tick();
+    assert.equal(phone.conflicts, 1);
+    assert.deepEqual(phone.chats.map(c => c.title).sort(), ["Desktop rename", "Phone rename (device copy)"]);
+  } finally { phone.sync.stop(); desktop.sync.stop(); }
+});
+
+test("a busy reply does not defer a clean remote conversation or an independent local upload", async () => {
+  const { device } = setup();
+  const desktop = device([chat()]), phone = device();
+  try {
+    await desktop.sync.tick(); await phone.sync.tick();
+    desktop.sync.observe([{ ...chat(), title: "Remote rename" }]);
+    await desktop.sync.tick();
+    const request = phone.sync.request;
+    const independent = chat("independent");
+    phone.sync.request = async (path, body) => {
+      const result = await request(path, body);
+      if (path.includes("id=chat-one")) {
+        phone.sync.busy = () => true;
+        phone.sync.observe([chat(), independent]);
+      }
+      return result;
+    };
+    await phone.sync.tick();
+    assert.equal(phone.sync.current.get("chat-one").title, "Remote rename");
+    assert.equal(phone.sync.dirty("chat-one"), false);
+    assert.equal(phone.sync.dirty(independent.id), false);
+    assert.equal(phone.conflicts, 0);
+    await desktop.sync.tick();
+    assert.ok(desktop.chats.some(c => c.id === independent.id));
+  } finally { phone.sync.stop(); desktop.sync.stop(); }
+});
+
 test("a conflicting live upload backs off and does not block independent chats", async () => {
   const { device, request } = setup();
   const original = { ...chat(), messages: [...chat().messages, reply()] };
