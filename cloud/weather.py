@@ -29,7 +29,22 @@ SCHEMA = {
         "output": {"type": "string", "enum": ["widget", "text", "data"], "default": "widget", "description": "Use widget by default, including all ordinary natural-language questions. Use text ONLY for an explicit request for plain text or a Markdown table. Use data for a specific format such as JSON/CSV that the model must compose from returned values."},
     }, "additionalProperties": False},
 }
-REFERENCE = re.compile(r"\[\[vaelo-weather:([0-9a-f]{24})\]\]")
+# Models sometimes drop or add a bracket when they copy the reference back, so
+# accept any bracketing of the exact 24-hex token. The token is the credential.
+REFERENCE = re.compile(r"\[{0,2}vaelo-weather:([0-9a-f]{24})\]{0,2}")
+
+
+def widget_reference(arguments, result):
+    """The reference a widget forecast stored for this very call, or None.
+    The relay executes the tool itself, so it knows which forecast belongs to
+    the run even when the model fails to repeat the reference."""
+    if (arguments or {}).get("output", "widget") != "widget":
+        return None
+    try:
+        found = REFERENCE.search(str(json.loads(result).get("reference") or ""))
+    except (TypeError, ValueError, AttributeError):
+        return None
+    return found.group(1) if found else None
 
 
 def validate(ask):

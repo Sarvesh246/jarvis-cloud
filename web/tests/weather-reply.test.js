@@ -19,6 +19,11 @@ test('trust delimiters never replace real citations or code examples', () => {
   assert.equal(cleanAnswer('`[untrusted_tool_result]`'), '`[untrusted_tool_result]`');
   assert.equal(cleanAnswer('[[vaelo-weather:' + 'a'.repeat(24) + ']]\nForecast'), '\nForecast');
   assert.equal(cleanAnswer('[[vaelo-weather:abcdef'), '');
+  // Models drop or add brackets when copying the reference; none may reach the reader.
+  for (const marker of ['[vaelo-weather:' + 'c'.repeat(24) + ']', 'vaelo-weather:' + 'c'.repeat(24), '[[vaelo-weather:' + 'c'.repeat(24) + ']']) {
+    assert.equal(cleanAnswer('Chicago is overcast.\n\n' + marker).trim(), 'Chicago is overcast.');
+  }
+  assert.equal(cleanAnswer('Warm and dry.\n\n[Vaelo request: reference]'), 'Warm and dry.\n\n');
   assert.equal(cleanAnswer('`[[vaelo-weather:' + 'a'.repeat(24) + ']]`'), '`[[vaelo-weather:' + 'a'.repeat(24) + ']]`');
 });
 

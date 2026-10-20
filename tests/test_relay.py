@@ -1448,6 +1448,32 @@ class RelayTests(unittest.TestCase):
         self.assertNotIn('tools', provider.requests[1]['body'])
         self.assertEqual(provider.requests[1]['body']['messages'][-1]['role'], 'tool')
 
+    def test_widget_forecast_is_shown_when_the_model_drops_or_mangles_the_reference(self):
+        token = 'c'*24
+        args = json.dumps({'days':7})
+        call = 'data: ' + json.dumps({'choices':[{'delta':{'tool_calls':[{'index':0,'function':{'name':'weather_forecast','arguments':args}}]},'finish_reason':'tool_calls'}]})
+        for answer in ('Mostly overcast this week.\n\n[Vaelo request: reference]', '[vaelo-weather:' + token + ']', ''):
+            _, relay, port = self.boot([])
+            self.fast_provider(relay, [[call, 'data: [DONE]'], [chunk(answer or 'Here you go.', 'stop'), 'data: [DONE]']])
+            result = json.dumps({'success':True,'reference':'[[vaelo-weather:' + token + ']]'})
+            with mock.patch.dict('os.environ', {'FREELLMAPI_URL':'https://router.example','FREELLMAPI_API_KEY':'test'}), mock.patch.object(relay_module,'weather_tool',return_value=result), mock.patch.object(relay_module,'read_forecast',return_value='VERIFIED WEEK') as read:
+                self.call(port, 'POST', '/vaelo/runs', {'id': RUN, 'messages':[{'role':'user','content':'And the week?'}], 'fast':'You are Vaelo.'})
+                self.assertEqual(self.finished(relay).outcome, 'complete')
+            read.assert_called_once()
+            self.assertEqual(read.call_args.args, (token,))
+            _, frames = self.events(port)
+            self.assertEqual(json.dumps(frames).count('VERIFIED WEEK'), 1)
+
+    def test_text_and_data_weather_outputs_are_not_forced_into_widgets(self):
+        _, relay, port = self.boot([])
+        call = lambda out: 'data: ' + json.dumps({'choices':[{'delta':{'tool_calls':[{'index':0,'function':{'name':'weather_forecast','arguments':json.dumps({'output':out})}}]},'finish_reason':'tool_calls'}]})
+        self.fast_provider(relay, [[call('text'), 'data: [DONE]'], [chunk('| Day | High |', 'stop'), 'data: [DONE]']])
+        result = json.dumps({'success':True,'reference':'[[vaelo-weather:' + 'd'*24 + ']]'})
+        with mock.patch.dict('os.environ', {'FREELLMAPI_URL':'https://router.example','FREELLMAPI_API_KEY':'test'}), mock.patch.object(relay_module,'weather_tool',return_value=result), mock.patch.object(relay_module,'read_forecast') as read:
+            self.call(port, 'POST', '/vaelo/runs', {'id': RUN, 'messages':[{'role':'user','content':'Table please'}], 'fast':'You are Vaelo.'})
+            self.assertEqual(self.finished(relay).outcome, 'complete')
+        read.assert_not_called()
+
     def test_stop_during_weather_tool_never_emits_forecast(self):
         _, relay, port = self.boot([])
         call = 'data: ' + json.dumps({'choices':[{'delta':{'tool_calls':[{'index':0,'function':{'name':'weather_forecast','arguments':'{}'}}]},'finish_reason':'tool_calls'}]})

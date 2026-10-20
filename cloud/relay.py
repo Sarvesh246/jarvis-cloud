@@ -39,9 +39,9 @@ try:
 except ModuleNotFoundError:
     from cloud.image_gen import REFERENCE as IMAGE_REFERENCE, data_uri
 try:
-    from weather import SCHEMA as WEATHER_SCHEMA, REFERENCE as WEATHER_REFERENCE, weather_tool, read_forecast
+    from weather import SCHEMA as WEATHER_SCHEMA, REFERENCE as WEATHER_REFERENCE, weather_tool, read_forecast, widget_reference
 except ModuleNotFoundError:
-    from cloud.weather import SCHEMA as WEATHER_SCHEMA, REFERENCE as WEATHER_REFERENCE, weather_tool, read_forecast
+    from cloud.weather import SCHEMA as WEATHER_SCHEMA, REFERENCE as WEATHER_REFERENCE, weather_tool, read_forecast, widget_reference
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 
@@ -947,7 +947,7 @@ class Relay:
         timer.daemon = True
         timer.start()
         seen = {"content": "", "answer": "", "approval": False, "tools": [], "held": None,
-                "finished": False, "failed": False, "dropped": False}
+                "finished": False, "failed": False, "dropped": False, "forecasts": []}
         repetition_retried = False
         try:
             run.event("jarvis.status", {"message": "Vaelo is working…"})
@@ -991,6 +991,9 @@ class Relay:
                         result = weather_tool(arguments)
                         if run.stopped:
                             return run.finish("stopped")
+                        token = widget_reference(arguments, result)
+                        if token and token not in seen["forecasts"]:
+                            seen["forecasts"].append(token)
                         call_id = f"weather_lookup_{i}"
                         tool_calls.append({"id": call_id, "type": "function", "function": {"name": "weather_forecast", "arguments": json.dumps(arguments)}})
                         results.append({"role": "tool", "tool_call_id": call_id, "content": result})
@@ -1076,7 +1079,10 @@ class Relay:
                 return run.finish("error")
             # Hermes returns only a small opaque reference. Append the exact
             # stored tool result so the model cannot alter forecast numbers.
-            for token in dict.fromkeys(WEATHER_REFERENCE.findall(seen["answer"])):
+            # The model is asked to repeat the reference but may mangle or omit it.
+            # Forecasts this run fetched itself are shown regardless, so a widget
+            # request never degrades to a hand-written table or a stray marker.
+            for token in dict.fromkeys([*WEATHER_REFERENCE.findall(seen["answer"]), *seen["forecasts"]]):
                 forecast = read_forecast(token, not_before=forecast_started)
                 if not forecast:
                     run.event("jarvis.error", {"message": "The forecast could not be loaded. Please try again."})
