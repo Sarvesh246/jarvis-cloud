@@ -51,6 +51,23 @@ export class DeviceRegistry {
     return data;
   }
 
+  invalidate(sub) {
+    // Keep an identity even for a cold cache: an older read must notice that
+    // a local write completed while it was waiting for storage.
+    this.cache.set(sub, {});
+  }
+
+  async read(sub) {
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const hit = this.cache.get(sub);
+      if (hit?.data && this.now() - hit.at < CACHE_MS) return hit.data;
+      const { data } = await this.record.read(sub);
+      if (this.cache.get(sub) !== hit) continue;
+      return this.remember(sub, data);
+    }
+    throw new Error("Device record changed repeatedly. Try again.");
+  }
+
   /* Entries older than a token can live are dead weight. */
   live(data) {
     const cutoff = this.now() / 1000 - SESSION_SECONDS;
@@ -60,7 +77,7 @@ export class DeviceRegistry {
   async register(sub, audience, label) {
     if (!this.enabled()) return undefined;
     const id = randomBytes(12).toString("base64url");
-    const data = await this.record.update(sub, record => {
+    await this.record.update(sub, record => {
       const devices = this.live(record);
       devices[id] = { label: String(label || "Unknown device").slice(0, 60), audience, issued: this.now() / 1000, seen: this.now() };
       // Past the cap the longest-idle devices drop off, which signs them out.
@@ -68,7 +85,9 @@ export class DeviceRegistry {
       for (const [old] of extra) delete devices[old];
       return { ...record, devices };
     });
-    this.remember(sub, data);
+    // A later write can finish before this one returns. Never cache a write's
+    // snapshot; only a fresh read may repopulate the authorization cache.
+    this.invalidate(sub);
     return id;
   }
 
@@ -77,23 +96,27 @@ export class DeviceRegistry {
      unless "sign out other devices" has been used since it was issued. */
   async verify(sub, audience, id, issuedAt) {
     if (!this.enabled()) return true;
-    let hit = this.cache.get(sub);
-    if (!hit || this.now() - hit.at >= CACHE_MS) hit = { data: this.remember(sub, (await this.record.read(sub)).data) };
-    if (id === undefined) return issuedAt > hit.data.legacyBefore;
-    const entry = hit.data.devices[id];
+    let data = await this.read(sub);
+    if (id === undefined) return issuedAt > data.legacyBefore;
+    const entry = data.devices[id];
     if (!entry || entry.audience !== audience) return false;
-    if (this.now() - entry.seen > TOUCH_MS) await this.touch(sub, id);
+    if (this.now() - entry.seen > TOUCH_MS) {
+      await this.touch(sub, id);
+      data = await this.read(sub);
+      if (data.devices[id]?.audience !== audience) return false;
+    }
     return true;
   }
 
   // Last-seen is a courtesy; failing to record it never ends a session.
   async touch(sub, id) {
     try {
-      this.remember(sub, await this.record.update(sub, record => {
+      await this.record.update(sub, record => {
         if (!record.devices[id]) return undefined;
         record.devices[id].seen = this.now();
         return record;
-      }));
+      });
+      this.invalidate(sub);
     } catch { /* keep the session */ }
   }
 
@@ -103,18 +126,20 @@ export class DeviceRegistry {
   }
 
   async revoke(sub, id) {
-    this.remember(sub, await this.record.update(sub, record => {
+    await this.record.update(sub, record => {
       if (!record.devices[id]) return undefined;
       delete record.devices[id];
       return record;
-    }));
+    });
+    this.invalidate(sub);
   }
 
   async revokeOthers(sub, keep) {
-    this.remember(sub, await this.record.update(sub, record => ({
+    await this.record.update(sub, record => ({
       devices: record.devices[keep] ? { [keep]: record.devices[keep] } : {},
       legacyBefore: Math.max(record.legacyBefore, this.now() / 1000),
-    })));
+    }));
+    this.invalidate(sub);
   }
 }
 

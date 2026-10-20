@@ -162,3 +162,115 @@ test("without storage nothing changes: no registry, no device id in the token", 
   assert.equal(JSON.parse(Buffer.from(token.split(".")[1], "base64url")).did, undefined);
   assert.ok(await sessionUser(asWeb(token), cfg));
 });
+
+function pauseOnce(object, method, matches = () => true) {
+  const original = object[method].bind(object);
+  let release, entered, paused = false;
+  const gate = new Promise(resolve => { release = resolve; });
+  const waiting = new Promise(resolve => { entered = resolve; });
+  object[method] = async (...args) => {
+    const result = await original(...args);
+    if (!paused && matches(...args)) { paused = true; entered(); await gate; }
+    return result;
+  };
+  return { waiting, release };
+}
+
+for (const others of [false, true]) test(`a delayed device read cannot restore ${others ? 'other devices or legacy tokens' : 'a revoked device'}`, async () => {
+  const { cfg, store, advance } = world();
+  const here = await signIn(cfg, "Here");
+  const other = await signIn(cfg, "Other", "vaelo-desktop");
+  const listed = await cfg.devices.list(owner.sub);
+  const hereId = listed.find(d => d.label === "Here").id;
+  const otherId = listed.find(d => d.label === "Other").id;
+  const legacy = await legacyToken(cfg, Math.floor(Date.now() / 1000) - 60);
+  advance(11_000); // Expire the local cache before starting the old read.
+  const pause = pauseOnce(store, "get", path => path.startsWith("devices/"));
+  const pending = sessionUser(asDesktop(other), cfg);
+  await pause.waiting;
+  try {
+    if (others) await cfg.devices.revokeOthers(owner.sub, hereId);
+    else await cfg.devices.revoke(owner.sub, otherId);
+  } finally { pause.release(); }
+  assert.equal(await pending, null, "the request must re-read after local revocation");
+  assert.equal(await sessionUser(asDesktop(other), cfg), null, "later requests must not inherit the stale cache");
+  if (others) assert.equal(await sessionUser(asWeb(legacy), cfg), null);
+  assert.ok(await sessionUser(asWeb(here), cfg), "the retained device still works");
+});
+
+for (const operation of ["register", "touch"]) test(`a delayed ${operation} result cannot restore a revoked device`, async () => {
+  const { cfg, store, advance } = world();
+  const token = await signIn(cfg, "Other");
+  const id = (await cfg.devices.list(owner.sub))[0].id;
+  advance(16 * 60 * 1000);
+  const pause = pauseOnce(store, "put", path => path.startsWith("devices/"));
+  const pending = operation === "register"
+    ? cfg.devices.register(owner.sub, "jarvis-web", "New browser")
+    : cfg.devices.touch(owner.sub, id);
+  await pause.waiting; // The write committed, but its old snapshot has not returned.
+  try { await cfg.devices.revoke(owner.sub, id); }
+  finally { pause.release(); }
+  const result = await pending;
+  assert.equal(await sessionUser(asWeb(token), cfg), null);
+  if (operation === "register")
+    assert.equal(await cfg.devices.verify(owner.sub, "jarvis-web", result, Date.now() / 1000), true);
+});
+
+test("a last-seen refresh that observes remote revocation refuses that request", async () => {
+  const { cfg, store, clock, advance } = world();
+  const token = await signIn(cfg, "Other");
+  const id = (await cfg.devices.list(owner.sub))[0].id;
+  advance(16 * 60 * 1000);
+  const pause = pauseOnce(store, "get", path => path.startsWith("devices/"));
+  const pending = sessionUser(asWeb(token), cfg);
+  await pause.waiting;
+  try { await new DeviceRegistry(store, clock).revoke(owner.sub, id); }
+  finally { pause.release(); }
+  assert.equal(await pending, null, "touch must not accept the entry it just learned was removed");
+  assert.equal(await sessionUser(asWeb(token), cfg), null);
+});
+
+test("a cold registry read cannot outlive a local revocation", async () => {
+  const { cfg, store, clock } = world();
+  const token = await signIn(cfg, "Other");
+  const id = (await cfg.devices.list(owner.sub))[0].id;
+  cfg.devices = new DeviceRegistry(store, clock);
+  const pause = pauseOnce(store, "get", path => path.startsWith("devices/"));
+  const pending = sessionUser(asWeb(token), cfg);
+  await pause.waiting;
+  try { await cfg.devices.revoke(owner.sub, id); }
+  finally { pause.release(); }
+  assert.equal(await pending, null, "invalidation must be visible even without a prior cache entry");
+});
+
+test("unchanged registry reads stay cached and a failed last-seen write keeps a valid session", async () => {
+  const { cfg, store, advance } = world();
+  const token = await signIn(cfg, "Here");
+  const get = store.get.bind(store);
+  let reads = 0;
+  store.get = async path => { if (path.startsWith("devices/")) reads++; return get(path); };
+  assert.ok(await sessionUser(asWeb(token), cfg));
+  const afterLoad = reads;
+  assert.ok(await sessionUser(asWeb(token), cfg));
+  assert.equal(reads, afterLoad, "normal requests retain the existing cache lifetime");
+  advance(11_000);
+  assert.ok(await sessionUser(asWeb(token), cfg));
+  assert.equal(reads, afterLoad + 1);
+  advance(16 * 60 * 1000);
+  store.put = async () => { throw new Error("last-seen write unavailable"); };
+  assert.ok(await sessionUser(asWeb(token), cfg), "last-seen bookkeeping remains best effort");
+});
+
+test("repeated registry changes fail closed without looping indefinitely", async () => {
+  const { cfg, store } = world();
+  const token = await signIn(cfg, "Here");
+  const get = store.get.bind(store);
+  let reads = 0;
+  store.get = async path => {
+    const result = await get(path);
+    if (path.startsWith("devices/")) { reads++; cfg.devices.invalidate(owner.sub); }
+    return result;
+  };
+  assert.equal(await sessionUser(asWeb(token), cfg), null);
+  assert.equal(reads, 5);
+});
