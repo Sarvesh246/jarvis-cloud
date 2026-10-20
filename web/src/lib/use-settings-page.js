@@ -5,6 +5,9 @@ export function useSettingsPage(enabled) {
   const [open, setOpen] = useState(() => enabled && location.hash === "#settings");
   useEffect(() => {
     if (!enabled) return;
+    // A deep link may already exist when a phone layout widens to desktop.
+    // Keep locally opened phone Settings when there is no desktop hash.
+    if (location.hash === "#settings") setOpen(true);
     const sync = () => setOpen(location.hash === "#settings");
     addEventListener("popstate", sync);
     addEventListener("hashchange", sync);
