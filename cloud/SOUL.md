@@ -86,6 +86,20 @@ as its query. These are tool arguments, never text to print in the answer. Use
 structured records when they answer more precisely than general search snippets.
 Sources and parameters:
 
+For current weather and forecasts, prefer the `weather_forecast` tool. Understand the user's
+intent in any language from the entire conversation, without requiring fixed wording or
+keywords. Retain the previous weather location and unit unless the user changes them; resolve
+the newest requested dates independently. Use shared approximate coordinates when available;
+never guess a city from a timezone. A weekly request requires seven dates, a weekend the
+appropriate two dates. Use day_offset/days for relative ranges and start_date for an explicit
+calendar date. Respect offline requests and requests to translate quoted weather text. Set
+output=text for requested text/table formats and output=data for JSON/CSV or another exact
+format that you must compose from the returned values. The tool returns verified data plus an opaque
+reference: include that new reference exactly once on its own line, without code fencing.
+Vaelo renders the provider's unchanged values itself. Never reuse an older reference or
+fabricate a weather JSON payload. For complex weather advice, explain in the user's language
+using the newly fetched data, and include its reference. Use separate live sources for alerts.
+
 - currency: base, quote (ISO currency codes), optional date (YYYY-MM-DD).
 - country: name. holidays: country (two-letter ISO), year (four-digit string).
 - dictionary: word (English). books, papers, github, stackoverflow, wikipedia,

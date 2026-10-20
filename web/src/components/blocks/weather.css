@@ -7,6 +7,7 @@
 .weather-period { min-width: 0; padding: 1rem; border-radius: 1rem; background: color-mix(in srgb, var(--ink) 5%, transparent); }
 .weather-period:first-child { background: color-mix(in srgb, var(--accent, #ae8b50) 14%, transparent); }
 .weather-period-top { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
+.weather-week-grid .weather-period-top { flex-direction: column-reverse; align-items: flex-start; }
 .prose .weather-period h3 { margin: 0; font: 600 1rem/1.3 var(--font-body, inherit); text-transform: capitalize; }
 .weather-icon { font-size: 2rem; line-height: 1.2; }
 .prose .weather-condition { margin: .4rem 0 1rem; font-size: .88rem; line-height: 1.4; text-transform: capitalize; }

@@ -38,6 +38,10 @@ try:
     from image_gen import REFERENCE as IMAGE_REFERENCE, data_uri
 except ModuleNotFoundError:
     from cloud.image_gen import REFERENCE as IMAGE_REFERENCE, data_uri
+try:
+    from weather import SCHEMA as WEATHER_SCHEMA, REFERENCE as WEATHER_REFERENCE, weather_tool, read_forecast
+except ModuleNotFoundError:
+    from cloud.weather import SCHEMA as WEATHER_SCHEMA, REFERENCE as WEATHER_REFERENCE, weather_tool, read_forecast
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 
@@ -74,7 +78,8 @@ FRAME_BYTES = 512 * 1024
 RECOVERY_MIN_SECONDS = 60
 ATTEMPTS = 3
 # Guests (the web app's "Continue as guest") are answered by the model provider directly,
-# never by Hermes, so they get no terminal, files, memory or saved work. They are limited
+# never by Hermes, so they get no terminal, files, memory or saved work. Only the
+# bounded public weather function is exposed. They are limited
 # so one visitor can't use up the free provider allowance.
 GUEST_OWNER = "web:guest:"
 GUEST_CONCURRENT = 2
@@ -82,9 +87,18 @@ GUEST_PER_HOUR = 20
 GUEST_ALL_PER_HOUR = 120
 GUEST_MAX_TOKENS = 1500
 GUEST_BUSY = "Guest mode is busy or has reached its hourly limit. Try again later, or sign in."
+WEATHER_GUIDANCE = ("\n\nFor current weather or forecasts, use weather_forecast rather than answering from "
+    "memory, old messages or search snippets. Interpret natural wording in any language using the whole "
+    "conversation: retain location and units unless changed, and replace the time range with the newest "
+    "request. Do not require a keyword or a fixed phrase. For relative dates use day_offset and days. "
+    "A week needs seven dates; a weekend needs the appropriate two dates. Respect offline/translation/"
+    "format requests. Set output=widget unless the user EXPLICITLY asks for plain text, a table or another "
+    "specific format. Ordinary questions in any language still use widget. Preserve the prior forecast's "
+    "temperature unit; changing language does not change units. Never invent a city or treat the timezone as a city. If no city or shared coordinates "
+    "are available, ask which city. The tool renders verified values; do not invent weather JSON.")
 # A greeting or a self-contained small ask (the web decides, and sends a short system prompt
-# for it) is answered straight from a fast model with no tool schemas, so the router can pick
-# for speed instead of for agent capability. Anything that goes wrong on that route falls back
+# for it) is answered straight from a fast model with only the bounded weather schema.
+# Anything that goes wrong on that route falls back
 # to Hermes, so it can only ever save time, never lose a reply.
 FAST_MAX_TOKENS = 4000
 FAST_SECONDS = 45
@@ -444,19 +458,21 @@ class Relay:
             self.guest_active = max(0, self.guest_active - 1)
 
     def open_fast(self, run, messages, body):
-        """Ask a fast model directly with the web's short system prompt and no tools; the
+        """Ask a fast model with the short prompt and a bounded public-weather tool; the
         response to stream, or None to let Hermes answer instead."""
         route = fast_route(os.environ)
         if route is None:
             return None
         payload = {
             "model": route["model"],
-            "messages": [{"role": "system", "content": body["fast"]},
+            "messages": [{"role": "system", "content": body["fast"] + WEATHER_GUIDANCE},
                          *[m for m in messages if m.get("role") != "system"]],
             "stream": True,
             "stream_options": {"include_usage": True},
             "max_tokens": FAST_MAX_TOKENS,
         }
+        if not body.get("no_weather_tools"):
+            payload["tools"] = [{"type": "function", "function": WEATHER_SCHEMA}]
         reasoning = direct_reasoning(body)
         if reasoning:
             payload["reasoning"] = reasoning
@@ -481,18 +497,20 @@ class Relay:
         return None
 
     def open_guest(self, run, messages, body=None):
-        """Ask the model provider directly, with no tools, in the same streamed shape."""
+        """Ask the provider with only the public-weather tool, in the same streamed shape."""
         route = fast_route(os.environ)
         key = os.environ.get("OPENROUTER_API_KEY", "")
         if route is None:
             return None, {"message": "Guest mode is not available right now.", "status": 503}
         payload = {
             "model": route["model"],
-            "messages": messages,
+            "messages": [{"role": "system", "content": WEATHER_GUIDANCE}, *messages],
             "stream": True,
             "stream_options": {"include_usage": True},
             "max_tokens": GUEST_MAX_TOKENS,
         }
+        if not (body or {}).get("no_weather_tools"):
+            payload["tools"] = [{"type": "function", "function": WEATHER_SCHEMA}]
         reasoning = direct_reasoning(body or {})
         if reasoning:
             payload["reasoning"] = reasoning
@@ -696,7 +714,7 @@ class Relay:
         arrived and how the attempt ended. Failure frames are held back, so a recovery or a
         continuation can still take their place."""
         seen.update(finished=False, protocol_done=False, failed=False, dropped=False, held=None, truncated=False,
-                    attempt_answer=False, repetitive=False, invalid_output=False)
+                    attempt_answer=False, repetitive=False, invalid_output=False, weather_call={}, weather_request=None)
         seen["output_guard"] = ToolOutputGuard(seen.get("request", []))
         seen["repetition_guard"] = RepetitionGuard(seen["answer"])
         usage = {"prompt_tokens": 0, "completion_tokens": 0, "cached_tokens": 0}
@@ -823,11 +841,43 @@ class Relay:
             seen["failed"] = True
             return
         content = delta.get("content")
+        calls = delta.get("tool_calls")
+        if calls is not None:
+            # The direct model interprets language and context via a real tool
+            # call. Only this read-only function is exposed, never host tools.
+            if run.route not in ("router", "openrouter") or not isinstance(calls, list):
+                seen["invalid_output"] = True
+                return
+            for part in calls:
+                if not isinstance(part, dict) or type(part.get("index", 0)) is not int or not 0 <= part.get("index", 0) < 4 or not isinstance(part.get("function", {}), dict):
+                    seen["invalid_output"] = True
+                    return
+                call = seen["weather_call"].setdefault(part.get("index", 0), {})
+                function = part.get("function", {})
+                for key in ("name", "arguments"):
+                    value = function.get(key, "")
+                    if not isinstance(value, str) or len(call.get(key, "")) + len(value) > (80 if key == "name" else 4096):
+                        seen["invalid_output"] = True
+                        return
+                    call[key] = call.get(key, "") + value
+            if choice.get("finish_reason") not in ("tool_calls", "function_call"):
+                return  # never publish raw tool arguments to the conversation
         if isinstance(content, str) and seen["repetition_guard"].feed(content):
             seen["repetitive"] = True
             return  # do not publish the frame that establishes the loop
         finish = choice.get("finish_reason")
         if finish in ("tool_calls", "function_call"):
+            calls = seen["weather_call"]
+            if run.route in ("router", "openrouter") and calls and all(call.get("name") == "weather_forecast" for call in calls.values()):
+                try:
+                    arguments = [json.loads(calls[i].get("arguments", "")) for i in sorted(calls)]
+                    if not all(isinstance(args, dict) for args in arguments):
+                        raise ValueError("Invalid weather arguments")
+                    seen["weather_request"] = arguments
+                    seen["finished"] = True
+                    return
+                except ValueError:
+                    pass
             # A terminal tool request is not an executed lookup or a final answer.
             seen["invalid_output"] = True
             return
@@ -884,6 +934,7 @@ class Relay:
         asked again for the write-up; one cut off partway (a provider failing mid-answer, a
         dropped stream) is continued from where it stopped. The reader sees one reply."""
         started = self.clock()
+        forecast_started = time.time()
         messages = body["messages"]
         guest = run.owner.startswith(GUEST_OWNER)
         if guest:
@@ -900,21 +951,6 @@ class Relay:
         repetition_retried = False
         try:
             run.event("jarvis.status", {"message": "Vaelo is working…"})
-            # Keep weather inside the durable run so reconnects, Stop, and
-            # background readers use the same numbered frames as other replies.
-            try:
-                from weather import weather_reply
-            except ModuleNotFoundError:
-                from cloud.weather import weather_reply
-            weather = weather_reply(messages, body.get("place"))
-            if run.stopped:
-                return run.finish("stopped")
-            if weather is not None:
-                run.route = "weather"
-                run.first_answer = self.clock()
-                run.emit("data: " + json.dumps({"choices": [{"delta": {"content": weather}}]}))
-                run.event("jarvis.complete", {"ok": True})
-                return run.finish("complete")
             query = body.get("freshness")
             if isinstance(query, str) and query.strip() and len(query) <= 600:
                 run.event("jarvis.status", {"message": "Checking current sources…"})
@@ -945,6 +981,27 @@ class Relay:
                 run.model_started = True
                 seen["request"] = body["messages"]
                 self.relay(run, response, seen)
+                if seen["weather_request"] is not None and not run.stopped:
+                    tool_calls, results = [], []
+                    for i, original in enumerate(seen["weather_request"]):
+                        arguments = dict(original)
+                        place = body.get("place")
+                        if not any(k in arguments for k in ("location", "latitude", "longitude")) and isinstance(place, dict):
+                            arguments.update(latitude=place.get("lat"), longitude=place.get("lon"))
+                        result = weather_tool(arguments)
+                        if run.stopped:
+                            return run.finish("stopped")
+                        call_id = f"weather_lookup_{i}"
+                        tool_calls.append({"id": call_id, "type": "function", "function": {"name": "weather_forecast", "arguments": json.dumps(arguments)}})
+                        results.append({"role": "tool", "tool_call_id": call_id, "content": result})
+                    # The same interpreting model writes the response after
+                    # seeing real results. Failures cannot reuse old forecasts,
+                    # and compound questions can include grounded explanations.
+                    request = [*messages, {"role": "assistant", "content": None, "tool_calls": tool_calls}, *results]
+                    messages = request  # retain executed evidence on recovery/continuation
+                    body = {**body, "continue_fast": True, "no_weather_tools": True}
+                    seen.update(content="", answer="")
+                    continue
                 if seen["invalid_output"] and not run.stopped:
                     run.event("jarvis.retry", {"message": "Recovering the answer…"})
                     seen.update(content="", answer="")
@@ -1017,6 +1074,14 @@ class Relay:
                                         or not seen["attempt_answer"]):
                 run.event("jarvis.error", {"message": "Vaelo’s server stopped before the answer finished. What arrived is kept; please retry or continue."})
                 return run.finish("error")
+            # Hermes returns only a small opaque reference. Append the exact
+            # stored tool result so the model cannot alter forecast numbers.
+            for token in dict.fromkeys(WEATHER_REFERENCE.findall(seen["answer"])):
+                forecast = read_forecast(token, not_before=forecast_started)
+                if not forecast:
+                    run.event("jarvis.error", {"message": "The forecast could not be loaded. Please try again."})
+                    return run.finish("error")
+                run.emit("data: " + json.dumps({"choices": [{"delta": {"content": "\n\n" + forecast}}]}))
             run.event("jarvis.complete", {"ok": True})
             run.finish("complete")
         except Exception:

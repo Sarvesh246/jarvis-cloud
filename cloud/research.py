@@ -780,6 +780,9 @@ class Research(WebSearchProvider):
 
 def register(ctx):
     ctx.register_web_search_provider(Research())
+    from .weather import SCHEMA, weather_tool
+    ctx.register_tool(name="weather_forecast", toolset="web", schema=SCHEMA,
+                      handler=weather_tool, description="Verified local weather and forecast dates")
     # Older Hermes builds have no image backends; research must still load there.
     if hasattr(ctx, "register_image_gen_provider"):
         ctx.register_image_gen_provider(FreeLLMAPIImages())

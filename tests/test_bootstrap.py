@@ -42,6 +42,12 @@ class BootstrapTests(unittest.TestCase):
             with unittest.mock.patch.dict(sys.modules, {"test_installed_research": module,
                     "agent": types.ModuleType("agent"), "agent.web_search_provider": interface}):
                 spec.loader.exec_module(module)
+                context = unittest.mock.Mock()
+                module.register(context)
+                registered = context.register_tool.call_args.kwargs
+                self.assertEqual(registered['name'], 'weather_forecast')
+                self.assertEqual(registered['toolset'], 'web')
+                self.assertEqual(registered['handler'].__module__, 'test_installed_research.weather')
                 self.assertEqual(module.subjects.__module__, "test_installed_research.source_quality")
                 self.assertEqual(module.data_search.__module__, "test_installed_research.data_sources")
                 self.assertEqual(module.FreeLLMAPIImages.__module__, "test_installed_research.image_gen")

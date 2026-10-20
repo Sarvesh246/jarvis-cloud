@@ -17,6 +17,9 @@ test('trust delimiters never replace real citations or code examples', () => {
   assert.equal(cleanAnswer('[untrusted_tool_result source="web_search"]82°F[/untrusted_tool_result] [NWS](https://weather.gov/)'), '82°F [NWS](https://weather.gov/)');
   assert.equal(cleanAnswer('82°F【untrusted_tool_res'), '82°F');
   assert.equal(cleanAnswer('`[untrusted_tool_result]`'), '`[untrusted_tool_result]`');
+  assert.equal(cleanAnswer('[[vaelo-weather:' + 'a'.repeat(24) + ']]\nForecast'), '\nForecast');
+  assert.equal(cleanAnswer('[[vaelo-weather:abcdef'), '');
+  assert.equal(cleanAnswer('`[[vaelo-weather:' + 'a'.repeat(24) + ']]`'), '`[[vaelo-weather:' + 'a'.repeat(24) + ']]`');
 });
 
 test('weather cards retain exact units and never supply missing lows or conditions', () => {

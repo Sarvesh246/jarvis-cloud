@@ -1,63 +1,110 @@
-"""Bounded weather lookups rendered from provider data, without a model turn."""
+"""Model-interpreted weather requests; provider-owned forecast values and dates."""
 
 from datetime import date, datetime, timedelta, timezone
 from functools import lru_cache
 import json
 import math
 import re
+import os
+import secrets
+import time
+from pathlib import Path
 
 try:
+    from .data_sources import get, geocode, meteo_config
+except ImportError:
     from data_sources import get, geocode, meteo_config
-except ModuleNotFoundError:
-    from cloud.data_sources import get, geocode, meteo_config
 
-DAY = r"(?:today|tonight|tomorrow(?: night)?|yesterday|this week|next week|(?:next |this )?(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)|\d{4}-\d{2}-\d{2}|(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?) \d{1,2}(?:st|nd|rd|th)?(?:,? \d{4})?)"
-UNSAFE = re.compile(r"\b(?:plain text|text only|no widgets|json|csv|table|code|explain|why|how does|write|rewrite|translate|summari[sz]e|research|compare|climate|historical|safe|hurricane|tornado|alerts?|warning|travel|pack|wear|should|advice|and also|without|don't|do not|no search)\b", re.I)
-
-
-def user_text(message):
-    value = message.get("content", "")
-    return value.split("\n\n[Vaelo request:", 1)[0].strip().replace("’", "'") if isinstance(value, str) else ""
-
-
-def intent(messages):
-    users = [user_text(m) for m in messages if m.get("role") == "user"][-8:]
-    if not users:
-        return None
-    query = users[-1]
-    if len(query) > 200 or UNSAFE.search(query):
-        return None
-    previous_ask = intent(messages_from_users(users[:-1])) if len(users) > 1 else None
-    if not re.search(r"\b(?:weather|forecast|temperature)\b", query, re.I):
-        if not re.fullmatch(r"(?:(?:what|how) about |and )?(?:the )?" + DAY + r"(?:\s+(?:in|at|for)\s+[\w .,'-]+)?[?.!]?", query, re.I):
-            return None
-        # Resolve the contiguous weather conversation, including chained
-        # follow-ups. A topic change stops inheritance.
-        if previous_ask is None:
-            return None
-    # Avoid hijacking explanations, quoted examples, or compound requests.
-    residue = re.sub(DAY, " ", query, flags=re.I)
-    residue = re.sub(r"°\s*[CF]\b", " ", residue, flags=re.I)
-    if not re.search(r"\b(?:weather|forecast|temperature)\b", query, re.I):
-        residue = re.sub(r"^and\b", " ", residue, flags=re.I)
-    residue = re.split(r"\b(?:in|at|for)\s+(?!the\b)", residue, flags=re.I)[0]
-    residue = re.sub(r"\b(?:what|whats|what's|is|are|was|will|be|how|about|the|weather|forecast|temperature|like|on|for|please|show|me|give|s|today's|right|now|celsius|fahrenheit)\b|[?.!,']", " ", residue, flags=re.I)
-    if residue.strip():
-        return None
-    def location(text):
-        text = re.sub(DAY, " ", text, flags=re.I)
-        text = re.sub(r"\b(?:in celsius|in fahrenheit)\b", "", text, flags=re.I)
-        match = re.search(r"\b(?:in|at|for)\s+([\w .,'-]+)", text, re.I)
-        return match[1].strip(" .?!,") if match else None
-    inherited = previous_ask or {}
-    units = re.search(r"\b(celsius|fahrenheit)\b|°\s*([CF])\b", query, re.I)
-    return {"query": query, "location": location(query) or inherited.get("location"),
-            "unit": (units[1].lower() if units[1] else {"C": "celsius", "F": "fahrenheit"}[units[2].upper()]) if units else inherited.get("unit")}
+SCHEMA = {
+    "name": "weather_forecast",
+    "description": "Fetch verified current weather and daily/hourly forecasts. Interpret the user's natural language in ANY language and resolve omitted location, units and changed dates from the conversation. Never require fixed phrases. For example a follow-up can change just the period or destination. Prefer this tool over general search for forecasts. Use shared approximate coordinates when no destination is specified; never invent a location. Relative offsets use the forecast location's local date. Use start_date for explicit dates; day_offset for relative dates. Supply the entire requested range, e.g. days=7 for a week. Set output=text when the user wants plain text or a table; otherwise widget. Do not call for offline requests, translations, quoted examples, or explanations of weather as a concept.",
+    "parameters": {"type": "object", "properties": {
+        "location": {"type": "string", "description": "Explicit city, region and country, or destination retained from prior weather turns. Omit when using shared coordinates."},
+        "latitude": {"type": "number", "minimum": -90, "maximum": 90},
+        "longitude": {"type": "number", "minimum": -180, "maximum": 180},
+        "day_offset": {"type": "integer", "minimum": 0, "maximum": 15, "description": "Start relative to location-local today: 0 today, 1 tomorrow, etc."},
+        "start_date": {"type": "string", "description": "YYYY-MM-DD for a specific calendar date. Overrides day_offset."},
+        "days": {"type": "integer", "minimum": 1, "maximum": 16, "description": "Number of consecutive forecast dates requested, not the number of prior messages."},
+        "unit": {"type": "string", "enum": ["celsius", "fahrenheit"], "description": "Preserve the prior forecast's units unless the user explicitly changes them. Do not switch units merely because the user changes language. Omit for the location's default on the first request."},
+        "output": {"type": "string", "enum": ["widget", "text", "data"], "default": "widget", "description": "Use widget by default, including all ordinary natural-language questions. Use text ONLY for an explicit request for plain text or a Markdown table. Use data for a specific format such as JSON/CSV that the model must compose from returned values."},
+    }, "additionalProperties": False},
+}
+REFERENCE = re.compile(r"\[\[vaelo-weather:([0-9a-f]{24})\]\]")
 
 
-def messages_from_users(users):
-    return [{"role": "user", "content": text} for text in users]
+def validate(ask):
+    if not isinstance(ask, dict) or set(ask) - set(SCHEMA["parameters"]["properties"]):
+        raise ValueError("Unsupported forecast arguments")
+    for key, low, high in (("day_offset", 0, 15), ("days", 1, 16)):
+        if key in ask and (type(ask[key]) is not int or not low <= ask[key] <= high):
+            raise ValueError("Invalid forecast range")
+    for key, low, high in (("latitude", -90, 90), ("longitude", -180, 180)):
+        if key in ask and (number(ask[key]) is None or not low <= ask[key] <= high):
+            raise ValueError("Invalid coordinates")
+    if ("latitude" in ask) != ("longitude" in ask):
+        raise ValueError("Both coordinates are required")
+    if "location" in ask and (not isinstance(ask["location"], str) or not 1 <= len(ask["location"].strip()) <= 120):
+        raise ValueError("Invalid location")
+    if "start_date" in ask:
+        if not isinstance(ask["start_date"], str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", ask["start_date"]):
+            raise ValueError("Invalid date")
+        date.fromisoformat(ask["start_date"])
+    if "unit" in ask and ask["unit"] not in ("celsius", "fahrenheit"):
+        raise ValueError("Invalid temperature unit")
+    if "output" in ask and ask["output"] not in ("widget", "text", "data"):
+        raise ValueError("Invalid output format")
 
+
+def folder():
+    return Path(os.environ.get("HERMES_HOME") or "/opt/data") / "cache" / "vaelo-weather"
+
+
+def keep(reply):
+    if len(reply.encode("utf-8")) > 60000:
+        raise ValueError("Forecast exceeds presentation limit")
+    where = folder()
+    where.mkdir(parents=True, exist_ok=True)
+    files = sorted(where.glob("*.txt"), key=lambda p: p.stat().st_mtime, reverse=True)
+    for i, path in enumerate(files):
+        if re.fullmatch(r"[0-9a-f]{24}\.txt", path.name) and (i >= 63 or time.time() - path.stat().st_mtime > 3600):
+            path.unlink(missing_ok=True)
+    token = secrets.token_hex(12)
+    target = where / (token + ".txt")
+    temporary = target.with_suffix(".tmp")
+    temporary.write_text(reply, encoding="utf-8")
+    temporary.replace(target)
+    return f"[[vaelo-weather:{token}]]"
+
+
+def read_forecast(token, *, not_before=0):
+    if not isinstance(token, str) or not re.fullmatch(r"[0-9a-f]{24}", token):
+        return ""
+    try:
+        path = folder() / (token + ".txt")
+        metadata = path.stat()
+        if metadata.st_size > 60000 or metadata.st_mtime < not_before or time.time() - metadata.st_mtime > 3600:
+            return ""
+        return path.read_text(encoding="utf-8")
+    except (OSError, UnicodeError):
+        return ""
+
+
+def weather_tool(arguments, **kwargs):
+    try:
+        validate(arguments)
+        place = {"lat": arguments.get("latitude"), "lon": arguments.get("longitude")}
+        reply = weather_reply(arguments, place)
+        if not reply:
+            return json.dumps({"success": False, "error": "Forecast unavailable for those coordinates, location or dates. Ask for a city if none was provided; otherwise use live research. Never reuse an earlier forecast as new evidence."})
+        fallback = reply.split("\n```\n\n", 1)[-1]
+        if arguments.get("output") == "data":
+            return json.dumps({"success": True, "forecast": fallback, "instruction": "Return these verified values in exactly the user's requested format. Do not include a forecast widget or reference."})
+        reference = keep(fallback if arguments.get("output") == "text" else reply)
+        return json.dumps({"success": True, "reference": reference,
+                           "forecast": fallback,
+                           "instruction": "Include reference EXACTLY once in your final answer, on its own line without backticks. Vaelo renders the verified forecast itself. Do not copy or invent a weather JSON block. Answer in the user's language. For a simple forecast, the reference is sufficient. Add grounded advice only if asked. Never copy a reference from a prior turn; use this fresh result."})
+    except (ValueError, TypeError, OSError):
+        return json.dumps({"success": False, "error": "Invalid or unavailable forecast request; correct the tool arguments or use live research."})
 
 @lru_cache(maxsize=256)
 def us_city(lat, lon):
@@ -81,37 +128,6 @@ def shared_location_label(place):
     return ", ".join(str(place[k])[:80] for k in ("city", "region") if place.get(k)) or "Your shared location"
 
 
-def target_dates(query, today):
-    match = re.search(DAY, query, re.I)
-    value = match[0].lower() if match else "today"
-    count = 7 if value in ("this week", "next week") else 1
-    if value == "next week":
-        start = today + timedelta(days=7)
-    elif value in ("today", "tonight", "this week"):
-        start = today
-    elif value.startswith("tomorrow"):
-        start = today + timedelta(days=1)
-    elif value == "yesterday":
-        start = today - timedelta(days=1)
-    elif re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
-        start = date.fromisoformat(value)
-    elif re.search(r"\d", value):
-        value = re.sub(r"(\d)(?:st|nd|rd|th)", r"\1", value).replace(",", "")
-        parts = value.split()
-        month = datetime.strptime(parts[0][:3], "%b").month
-        start = date(int(parts[2]) if len(parts) > 2 else today.year, month, int(parts[1]))
-        if len(parts) == 2 and start < today:
-            start = start.replace(year=today.year + 1)
-    else:
-        name = value.split()[-1]
-        weekday = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"].index(name)
-        offset = (weekday - today.weekday()) % 7
-        if value.startswith("next ") and offset == 0:
-            offset = 7
-        start = today + timedelta(days=offset)
-    return start, start + timedelta(days=count - 1)
-
-
 def condition(code):
     if code == 0: return "Clear sky"
     if code in (1, 2): return "Partly cloudy"
@@ -128,13 +144,11 @@ def number(value):
     return value if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) else None
 
 
-def weather_reply(messages, place=None, now=None):
-    """None leaves complex/unsupported requests on the normal research path."""
-    ask = intent(messages)
-    if ask is None:
-        return None
+def weather_reply(ask, place=None, now=None):
+    """Execute validated model tool arguments, never parse the user's wording."""
     try:
-        if ask["location"]:
+        validate(ask)
+        if ask.get("location"):
             rows = geocode(ask["location"])
             if not rows:
                 return None
@@ -145,9 +159,9 @@ def weather_reply(messages, place=None, now=None):
             lat, lon = place["lat"], place["lon"]
             label = shared_location_label(place)
         else:
-            return "Which city would you like the weather for? You can also share your approximate location in Settings."
+            return None
         key = meteo_config()
-        unit = ask["unit"] or ("fahrenheit" if 18 <= lat <= 72 and -180 <= lon <= -65 else "celsius")
+        unit = ask.get("unit") or ("fahrenheit" if 18 <= lat <= 72 and -180 <= lon <= -65 else "celsius")
         params = {"latitude": lat, "longitude": lon, "timezone": "auto", "forecast_days": 16,
                   "temperature_unit": unit, "wind_speed_unit": "mph" if unit == "fahrenheit" else "kmh",
                   "current": "temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,is_day,wind_speed_10m,wind_direction_10m",
@@ -158,7 +172,8 @@ def weather_reply(messages, place=None, now=None):
         current = data.get("current", {})
         instant = now or datetime.now(timezone.utc)
         local = (instant + timedelta(seconds=int(data["utc_offset_seconds"]))).replace(tzinfo=None)
-        start, end = target_dates(ask["query"], local.date())
+        start = date.fromisoformat(ask["start_date"]) if ask.get("start_date") else local.date() + timedelta(days=ask.get("day_offset", 0))
+        end = start + timedelta(days=ask.get("days", 1) - 1)
         if start < local.date() or end > local.date() + timedelta(days=15):
             return None  # Historical and longer-range requests retain live research.
         daily, hourly = data["daily"], data["hourly"]
@@ -184,9 +199,9 @@ def weather_reply(messages, place=None, now=None):
         except (TypeError, ValueError):
             fresh = False
         snapshot = {"time": current["time"], "temperature": number(current.get("temperature_2m")), "feels": number(current.get("apparent_temperature")), "humidity": number(current.get("relative_humidity_2m")), "wind": number(current.get("wind_speed_10m")), "condition": condition(current.get("weather_code")), "isDay": current.get("is_day") == 1} if fresh and start == local.date() else None
-        payload = {"version": 1, "view": "week" if start != end else "day", "title": label, "timezone": data["timezone"], "unit": temp_unit, "windUnit": wind_unit, "localTime": local.isoformat(timespec="minutes"), "retrieved": instant.isoformat(), "current": snapshot, "periods": periods}
+        payload = {"version": 1, "view": "day" if start == end else "week" if len(periods) == 7 else "range", "title": label, "timezone": data["timezone"], "unit": temp_unit, "windUnit": wind_unit, "localTime": local.isoformat(timespec="minutes"), "retrieved": instant.isoformat(), "current": snapshot, "periods": periods}
         fallback = f"Weather for {label}\n\n| Day | Conditions | High ({temp_unit}) | Low ({temp_unit}) |\n|---|---|---|---|\n"
         fallback += "\n".join(f"| {p['label']} | {p['condition']} | {p['high'] if p['high'] is not None else '—'} | {p['low'] if p['low'] is not None else '—'} |" for p in periods)
         return "```weather\n" + json.dumps(payload, ensure_ascii=False) + "\n```\n\n" + fallback + "\n\n[Open-Meteo](https://open-meteo.com/) · Model forecast; times are local to " + data["timezone"] + "."
     except Exception:
-        return None  # Provider failures use the existing source/recovery path.
+        return None  # A failed lookup is evidence of unavailability, never a forecast.

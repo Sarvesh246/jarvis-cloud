@@ -701,7 +701,7 @@ class RelayTests(unittest.TestCase):
         self.assertEqual(relay.runs, {})
         self.assertEqual(hermes.requests, [])
 
-    def test_guest_replies_go_to_the_provider_with_no_tools_and_stay_off_hermes(self):
+    def test_guest_replies_expose_only_public_weather_and_stay_off_hermes(self):
         guest = (
             "web:guest:"
             + "a" * 8
@@ -728,10 +728,10 @@ class RelayTests(unittest.TestCase):
         sent = provider.requests[0]
         self.assertEqual(sent["path"], "/api/v1/chat/completions")
         self.assertEqual(sent["headers"]["Authorization"], "Bearer or-key")
-        self.assertNotIn("tools", sent["body"])
+        self.assertEqual([tool["function"]["name"] for tool in sent["body"]["tools"]], ["weather_forecast"])
         self.assertEqual(relay.guest_active, 0)
 
-    def test_guests_use_the_configured_router_without_tools_or_host_access(self):
+    def test_guests_use_the_router_with_only_public_weather_and_no_host_access(self):
         hermes, relay, port = self.boot([])
         provider, _ = self.fast_provider(
             relay, [[chunk("No code was executed.", "stop"), "data: [DONE]"]]
@@ -753,7 +753,7 @@ class RelayTests(unittest.TestCase):
         self.assertEqual(sent["body"]["model"], "auto")
         self.assertEqual(sent["headers"]["X-FreeLLM-Task-Type"], "chat")
         self.assertEqual(sent["body"]["max_tokens"], relay_module.GUEST_MAX_TOKENS)
-        self.assertNotIn("tools", sent["body"])
+        self.assertEqual([tool["function"]["name"] for tool in sent["body"]["tools"]], ["weather_forecast"])
 
     def test_guest_router_failure_falls_back_to_openrouter_without_hermes(self):
         hermes, relay, port = self.boot([])
@@ -782,7 +782,7 @@ class RelayTests(unittest.TestCase):
         self.assertEqual(
             provider.requests[0]["headers"]["Authorization"], "Bearer or-key"
         )
-        self.assertNotIn("tools", provider.requests[0]["body"])
+        self.assertEqual([tool["function"]["name"] for tool in provider.requests[0]["body"]["tools"]], ["weather_forecast"])
 
     def start_fast(self, port, fast="You are Vaelo, briefly.", effort="minimal"):
         return self.call(
@@ -814,7 +814,7 @@ class RelayTests(unittest.TestCase):
         relay.fast_connect = connect
         return provider, targets
 
-    def test_a_quick_reply_goes_to_the_router_as_chat_with_no_tools_and_stays_off_hermes(
+    def test_a_quick_reply_exposes_only_public_weather_and_stays_off_hermes(
         self,
     ):
         hermes, relay, port = self.boot([])
@@ -841,11 +841,11 @@ class RelayTests(unittest.TestCase):
         self.assertEqual(body["model"], "auto")
         self.assertEqual(
             body["messages"][0],
-            {"role": "system", "content": "You are Vaelo, briefly."},
+            {"role": "system", "content": "You are Vaelo, briefly." + relay_module.WEATHER_GUIDANCE},
         )
         self.assertEqual([m["role"] for m in body["messages"]], ["system", "user"])
         self.assertEqual(body["reasoning"], {"effort": "minimal"})
-        self.assertNotIn("tools", body)
+        self.assertEqual([tool["function"]["name"] for tool in body["tools"]], ["weather_forecast"])
 
     def test_without_a_router_a_quick_reply_uses_openrouter_free(self):
         hermes, relay, port = self.boot([])
@@ -918,7 +918,7 @@ class RelayTests(unittest.TestCase):
         self.assertIn(
             "Continue it from exactly where it stops", messages[-1]["content"]
         )
-        self.assertNotIn("tools", provider.requests[1]["body"])
+        self.assertEqual([t["function"]["name"] for t in provider.requests[1]["body"]["tools"]], ["weather_forecast"])
 
     def test_a_failed_direct_continuation_still_falls_back_to_hermes(self):
         hermes, relay, port = self.boot([[chunk("finished.", "stop")]])
@@ -1408,67 +1408,82 @@ class RelayTests(unittest.TestCase):
         self.assertEqual(run.outcome, "stopped")
         opened.assert_not_called()
 
-    def test_weather_reply_is_durable_without_opening_a_model(self):
-        _, relay, _ = self.boot([])
-        run = relay_module.Run(RUN, OWNER)
-        with (
-            mock.patch(
-                "cloud.weather.weather_reply", return_value="Weather for today"
-            ) as weather,
-            mock.patch.object(relay, "open") as opened,
-        ):
-            relay.execute(
-                run,
-                {
-                    "messages": [{"role": "user", "content": "weather today"}],
-                    "place": {"lat": 30, "lon": -96},
-                },
-            )
-        weather.assert_called_once()
-        opened.assert_not_called()
-        self.assertEqual(run.outcome, "complete")
-        self.assertEqual(run.route, "weather")
-        self.assertTrue(any(b"Weather for today" in frame for frame in run.frames))
-        self.assertTrue(any(b"jarvis.complete" in frame for frame in run.frames))
+    def test_weather_requests_always_reach_language_model_interpretation(self):
+        for prompt in ('Give me the outlook for the coming seven days', '¿Y el resto de la semana?', 'इस हफ्ते मौसम कैसा रहेगा?', '这周呢？'):
+            hermes, relay, port = self.boot([[chunk('A model interpreted the request.', 'stop'), 'data: [DONE]']])
+            self.start(port, content=prompt)
+            self.assertEqual(self.finished(relay).outcome, 'complete')
+            self.assertIn(prompt, json.dumps(hermes.requests[0]['body'], ensure_ascii=False))
 
-    def test_shared_place_reaches_the_weather_lookup_through_the_http_start(self):
+    def test_hermes_weather_reference_appends_exact_provider_result(self):
+        marker = '[[vaelo-weather:' + 'a'*24 + ']]'
+        _, relay, port = self.boot([[chunk(marker, 'stop'), 'data: [DONE]']])
+        with mock.patch.object(relay_module, 'read_forecast', return_value='VERIFIED FORECAST') as read:
+            self.start(port, content='And for the whole week?')
+            self.assertEqual(self.finished(relay).outcome, 'complete')
+        self.assertEqual(read.call_args.args, ('a'*24,))
+        self.assertGreater(read.call_args.kwargs['not_before'], 0)
+        _, frames = self.events(port)
+        self.assertIn('VERIFIED FORECAST', json.dumps(frames))
+
+    def test_direct_weather_tool_calls_are_executed_not_printed(self):
+        args = json.dumps({'days':7})
+        pieces = [
+            'data: ' + json.dumps({'choices':[{'delta':{'tool_calls':[{'index':0,'function':{'name':'weather_forecast','arguments':args[:5]}}]}}]}),
+            'data: ' + json.dumps({'choices':[{'delta':{'tool_calls':[{'index':0,'function':{'arguments':args[5:]}}]},'finish_reason':'tool_calls'}]}),
+            'data: [DONE]',
+        ]
         _, relay, port = self.boot([])
-        place = {"lat": 41.88, "lon": -87.63, "city": "Chicago"}
-        with mock.patch(
-            "cloud.weather.weather_reply", return_value="Weather for Chicago"
-        ) as weather:
-            status, _ = self.call(
-                port,
-                "POST",
-                "/vaelo/runs",
-                {
-                    "id": RUN,
-                    "messages": [{"role": "user", "content": "weather today"}],
-                    "place": place,
-                },
-            )
-            self.assertEqual(status, 202)
-            self.assertEqual(self.finished(relay).route, "weather")
-        self.assertEqual(weather.call_args.args[1], place)
+        marker = '[[vaelo-weather:' + 'b'*24 + ']]'
+        provider, _ = self.fast_provider(relay, [pieces, [chunk(marker, 'stop'), 'data: [DONE]']])
+        with mock.patch.dict('os.environ', {'FREELLMAPI_URL':'https://router.example','FREELLMAPI_API_KEY':'test'}), mock.patch.object(relay_module,'weather_tool',return_value=json.dumps({'success':True,'reference':marker})) as tool, mock.patch.object(relay_module,'read_forecast',return_value='SEVEN VERIFIED DAYS'):
+            self.call(port, 'POST', '/vaelo/runs', {'id': RUN, 'messages':[{'role':'user','content':'¿Y esta semana?'}], 'fast':'You are Vaelo.', 'place':{'lat':30.6,'lon':-96.3}})
+            run = self.finished(relay)
+        tool.assert_called_once_with({'days':7,'latitude':30.6,'longitude':-96.3})
+        self.assertEqual(run.outcome, 'complete')
+        _, frames = self.events(port)
+        self.assertIn('SEVEN VERIFIED DAYS', json.dumps(frames))
+        self.assertNotIn('tool_calls', json.dumps(frames))
+        self.assertEqual(len(provider.requests), 2)
+        self.assertNotIn('tools', provider.requests[1]['body'])
+        self.assertEqual(provider.requests[1]['body']['messages'][-1]['role'], 'tool')
 
-    def test_stop_during_weather_lookup_never_emits_the_forecast(self):
-        _, relay, _ = self.boot([])
-        run = relay_module.Run(RUN, OWNER)
-
+    def test_stop_during_weather_tool_never_emits_forecast(self):
+        _, relay, port = self.boot([])
+        call = 'data: ' + json.dumps({'choices':[{'delta':{'tool_calls':[{'index':0,'function':{'name':'weather_forecast','arguments':'{}'}}]},'finish_reason':'tool_calls'}]})
+        self.fast_provider(relay, [[call,'data: [DONE]']])
         def stopped(*args):
-            run.stopped = True
-            return "Weather for today"
+            relay.runs[RUN].stopped = True
+            return '{}'
+        with mock.patch.dict('os.environ', {'FREELLMAPI_URL':'https://router.example','FREELLMAPI_API_KEY':'test'}), mock.patch.object(relay_module,'weather_tool',side_effect=stopped):
+            self.start_fast(port)
+            run = self.finished(relay)
+        self.assertEqual(run.outcome,'stopped')
+        self.assertFalse(any(b'jarvis.complete' in frame for frame in run.frames))
 
-        with (
-            mock.patch("cloud.weather.weather_reply", side_effect=stopped),
-            mock.patch.object(relay, "open") as opened,
-        ):
-            relay.execute(
-                run, {"messages": [{"role": "user", "content": "weather today"}]}
-            )
-        opened.assert_not_called()
-        self.assertEqual(run.outcome, "stopped")
-        self.assertFalse(any(b"Weather for today" in frame for frame in run.frames))
+    def test_failed_weather_tool_is_given_back_to_model_without_old_forecast(self):
+        _, relay, port = self.boot([])
+        call = 'data: ' + json.dumps({'choices':[{'delta':{'tool_calls':[{'index':0,'function':{'name':'weather_forecast','arguments':'{}'}}]},'finish_reason':'tool_calls'}]})
+        provider, _ = self.fast_provider(relay, [[call, 'data: [DONE]'], [chunk('Which city would you like?', 'stop'), 'data: [DONE]']])
+        result = json.dumps({'success':False,'error':'No location supplied'})
+        with mock.patch.dict('os.environ', {'FREELLMAPI_URL':'https://router.example','FREELLMAPI_API_KEY':'test'}), mock.patch.object(relay_module,'weather_tool',return_value=result), mock.patch.object(relay_module,'read_forecast') as read:
+            self.start_fast(port)
+            run = self.finished(relay)
+        self.assertEqual(run.outcome,'complete')
+        read.assert_not_called()
+        self.assertEqual(provider.requests[1]['body']['messages'][-1]['content'], result)
+        self.assertNotIn('tools',provider.requests[1]['body'])
+
+    def test_direct_model_can_request_multiple_forecast_locations(self):
+        _, relay, port = self.boot([])
+        call = 'data: ' + json.dumps({'choices':[{'delta':{'tool_calls':[{'index':i,'function':{'name':'weather_forecast','arguments':json.dumps({'location':city,'days':2})}} for i,city in enumerate(['Paris','London'])]},'finish_reason':'tool_calls'}]})
+        provider, _ = self.fast_provider(relay, [[call,'data: [DONE]'], [chunk('Both forecasts were checked.','stop'),'data: [DONE]']])
+        with mock.patch.dict('os.environ', {'FREELLMAPI_URL':'https://router.example','FREELLMAPI_API_KEY':'test'}), mock.patch.object(relay_module,'weather_tool',return_value=json.dumps({'success':False,'error':'Unavailable'})) as tool:
+            self.start_fast(port)
+            run = self.finished(relay)
+        self.assertEqual(run.outcome,'complete')
+        self.assertEqual([call.args[0]['location'] for call in tool.call_args_list], ['Paris','London'])
+        self.assertEqual([m['role'] for m in provider.requests[1]['body']['messages']][-3:], ['assistant','tool','tool'])
 
     def test_a_late_failure_is_held_back_while_the_recovery_runs(self):
         hermes, relay, port = self.boot(

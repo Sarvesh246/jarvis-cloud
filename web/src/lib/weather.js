@@ -75,7 +75,7 @@ export function weatherData(content = '') {
   if (!fence) return null;
   try {
     const data = JSON.parse(fence[1]);
-    if (data.view !== undefined && !['day', 'week'].includes(data.view)) return null;
+    if (data.view !== undefined && !['day', 'week', 'range'].includes(data.view)) return null;
     if (data.view === 'week' && data.periods?.length !== 7) return null;
     const text = (v, max = 160) => typeof v === 'string' && v.length <= max;
     const numeric = v => v === null || (typeof v === 'number' && Number.isFinite(v));
