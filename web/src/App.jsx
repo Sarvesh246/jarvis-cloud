@@ -2389,6 +2389,7 @@ export function App() {
             )}
             <Composer
               ref={textarea}
+              conversationId={activeId}
               draft={draft}
               busy={busy}
               offline={!online || !!session.offline}

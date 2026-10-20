@@ -86,7 +86,7 @@ const Recognition =
    each take only ever writes its own words after the text it began with. */
 const FINISH_WAIT = 1500;
 
-function useDictation(draft, onChange) {
+function useDictation(draft, onChange, conversationId) {
   const [listening, setListening] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [problem, setProblem] = useState("");
@@ -94,15 +94,24 @@ function useDictation(draft, onChange) {
   const finishing = useRef(null);
   const queued = useRef(0);
   const latest = useRef(draft);
+  const conversation = useRef(conversationId);
   latest.current = draft;
+  conversation.current = conversationId;
 
   useEffect(
-    () => () => {
-      clearTimeout(queued.current);
-      live.current?.abort();
-      finishing.current?.abort();
+    () => {
+      setListening(false);
+      setProcessing(false);
+      setProblem("");
+      return () => {
+        clearTimeout(queued.current);
+        queued.current = 0;
+        const takes = [live.current, finishing.current];
+        live.current = finishing.current = null;
+        takes.forEach(take => take?.abort());
+      };
     },
-    [],
+    [conversationId],
   );
 
   function begin() {
@@ -113,8 +122,9 @@ function useDictation(draft, onChange) {
     const base = latest.current ? `${latest.current.replace(/\s+$/, "")} ` : "";
     /* A finishing take may still deliver its last words, but never once a
        newer take is listening */
-    const current = () => live.current === r || (finishing.current === r && !live.current);
-    r.onprocessing = () => { setListening(false); setProcessing(true); };
+    const current = () => conversation.current === conversationId &&
+      (live.current === r || (finishing.current === r && !live.current));
+    r.onprocessing = () => { if (current()) { setListening(false); setProcessing(true); } };
     r.onresult = (event) => {
       if (!current()) return;
       let text = "";
@@ -132,6 +142,7 @@ function useDictation(draft, onChange) {
         setProblem("Dictation stopped. Try again.");
     };
     r.onend = () => {
+      if (!current()) return;
       if (DESKTOP) setProcessing(false);
       if (finishing.current === r) {
         finishing.current = null;
@@ -191,11 +202,11 @@ function useDictation(draft, onChange) {
   function cancel() {
     clearTimeout(queued.current);
     queued.current = 0;
-    const take = live.current;
-    live.current = null;
+    const takes = [live.current, finishing.current];
+    live.current = finishing.current = null;
     setListening(false);
     setProcessing(false);
-    take?.abort();
+    takes.forEach(take => take?.abort());
   }
 
   return { supported: !!Recognition, listening, processing, problem, toggle, cancel };
@@ -555,6 +566,7 @@ export const Composer = forwardRef(function Composer(
     onRemoveFile,
     onOptions,
     onDictating,
+    conversationId,
     guest = false,
     workContext,
     onClearWork,
@@ -568,7 +580,7 @@ export const Composer = forwardRef(function Composer(
   const photos = useRef(null);
   const camera = useRef(null);
   const toolsButton = useRef(null);
-  const dictation = useDictation(draft, onChange);
+  const dictation = useDictation(draft, onChange, conversationId);
   const voice = useVoice(dictation.listening, phone ? PHONE_BAR_WEIGHTS : BAR_WEIGHTS);
   const over = length > MESSAGE_LIMIT;
   const reading = attachments.some((file) => file.state === "reading");
