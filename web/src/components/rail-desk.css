@@ -1,0 +1,180 @@
+/* The rail's sections: actions at the top, a short list of places to go,
+   projects, then the conversations. Rules and tone, not boxes, except for the
+   one primary action and the way into Find. */
+
+.rail-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+
+.rail-actions .rail-new,
+.rail-find {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  min-height: 2.75rem;
+  padding: 0 var(--s-4);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  font-size: var(--t-base);
+  font-weight: var(--w-ui);
+  color: var(--ink);
+  transition:
+    background var(--dur-1) var(--ease),
+    border-color var(--dur-2) var(--ease),
+    color var(--dur-1) var(--ease);
+}
+
+.rail-actions .rail-new svg {
+  color: var(--gilt);
+}
+
+.rail-find {
+  border-color: var(--hairline);
+  background: transparent;
+  font-weight: 400;
+  color: var(--muted);
+  text-align: left;
+}
+
+.rail-find {
+  gap: var(--s-2);
+  padding: 0 var(--s-3);
+  font-size: var(--t-sm);
+}
+
+.rail-find span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-style: italic;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rail-find kbd {
+  flex: none;
+}
+
+.rail-find kbd {
+  padding: 1px 7px;
+  border: 1px solid var(--hairline);
+  border-radius: 6px;
+  font-family: var(--font-voice);
+  font-size: var(--t-xs);
+  font-style: normal;
+  letter-spacing: 0.04em;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .rail-actions .rail-new:hover:not(:disabled),
+  .rail-find:hover {
+    border-color: var(--gilt);
+    background: var(--gilt-wash);
+    color: var(--ink);
+  }
+}
+
+.rail-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: calc(var(--s-2) * -1);
+}
+
+.rail-nav-item,
+.rail-project {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  min-height: 2.625rem;
+  padding: 0 var(--s-3);
+  border-radius: var(--r-md);
+  font-size: var(--t-base);
+  color: var(--ink-soft);
+  text-align: left;
+  transition: background var(--dur-1) var(--ease), color var(--dur-1) var(--ease);
+}
+
+.rail-nav-item svg {
+  flex: none;
+  color: var(--muted);
+  transition: color var(--dur-1) var(--ease);
+}
+
+.rail-nav-item[aria-current="page"] {
+  background: var(--gilt-wash);
+  color: var(--ink);
+  font-weight: var(--w-strong);
+}
+
+.rail-nav-item[aria-current="page"] svg {
+  color: var(--gilt);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .rail-nav-item:hover,
+  .rail-project:hover {
+    background: var(--gilt-wash);
+    color: var(--ink);
+  }
+}
+
+.rail-nav-count {
+  margin-left: auto;
+  font-size: var(--t-xs);
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.rail-projects {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rail-projects .label {
+  margin: 0 0 var(--s-1);
+  padding: 0 var(--s-3);
+}
+
+.rail-project {
+  min-height: 2.375rem;
+}
+
+.rail-project-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rail-project-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--gilt);
+}
+
+.rail-project-dot[data-tone="1"] {
+  background: var(--sage);
+}
+
+.rail-project-dot[data-tone="2"] {
+  background: var(--clay);
+}
+
+/* the account row reads as a name, not an icon */
+.rail-avatar {
+  font-size: var(--t-sm);
+  font-weight: var(--w-ui);
+  letter-spacing: 0.02em;
+}
+
+:root[data-density="compact"] .rail-nav-item,
+:root[data-density="compact"] .rail-project {
+  min-height: 2.25rem;
+}

@@ -15,7 +15,7 @@ import { SourceIcon } from "./blocks/SourceIcon.jsx";
 import { Highlighted } from "./blocks/Highlighted.jsx";
 import { SOURCE_KINDS, kindLabel } from "../lib/sources.js";
 import { isNumericColumn, isSectionRow, tableView, toCSV, toTSV } from "../lib/table.js";
-import { currentContent, docTitle } from "../lib/library.js";
+import { currentContent, docTitle, isLongReply, parseTables } from "../lib/library.js";
 import { DocumentWork } from "./DocumentWork.jsx";
 import { requestForReply } from "../lib/adaptive-ui.js";
 import "./workspace.css";
@@ -261,6 +261,19 @@ export function Workspace({
   );
   const work = item?.kind === "document" ? works?.[item.messageId] : undefined;
   const documentText = currentContent(work, message?.content ?? "");
+  const sourceCount = useSources(message?.content).length;
+  /* One reply can be read as a document, as the sources behind it, or as its
+     table; the tabs move between them without leaving the reply. */
+  const views = useMemo(() => {
+    const content = message?.content;
+    if (!content) return [];
+    const list = [];
+    if (isLongReply(content) || works?.[message.id]) list.push({ id: "document", label: "Document", open: { kind: "document" } });
+    if (sourceCount) list.push({ id: "sources", label: "Sources", count: sourceCount, open: { kind: "sources" } });
+    const table = parseTables(content)[0];
+    if (table) list.push({ id: "table", label: "Table", open: { kind: "table", columns: table.columns, rows: table.rows, title: `Table · ${table.rows.length} rows` } });
+    return list;
+  }, [message, works, sourceCount]);
 
   /* Focus moves in when the panel opens and back to whatever opened it when
      it closes. As an overlay, Tab stays inside it. */
@@ -417,6 +430,21 @@ export function Workspace({
           </button>
         </div>
       </header>
+      {views.length > 1 && views.some((view) => view.id === item.kind) && (
+        <div className="ws-views" role="tablist" aria-label="Views of this reply">
+          {views.map((view) => (
+            <button
+              key={view.id}
+              role="tab"
+              aria-selected={view.id === item.kind}
+              onClick={() => view.id !== item.kind && onOpen(view.open)}
+            >
+              {view.label}
+              {view.count ? <span>{view.count}</span> : null}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="ws-body">
         {item.kind === "code" && <CodeView key={item.source} item={item} />}
         {item.kind === "sources" && <SourcesView message={message} focus={item.focus} />}

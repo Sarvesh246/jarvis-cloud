@@ -25,7 +25,8 @@ import { Composer } from "./components/Composer.jsx";
 import { Workspace } from "./components/Workspace.jsx";
 import { Settings } from "./components/Settings.jsx";
 import { Workroom } from "./components/Workroom.jsx";
-import { refreshWorkReferences, workContextFor, proposalDraft, chatToWorkspace } from "./lib/workroom.js";
+import { SavedWork } from "./components/SavedWork.jsx";
+import { refreshWorkReferences, workContextFor, proposalDraft, chatToWorkspace, readWorkCache } from "./lib/workroom.js";
 import { getWorkspace } from "../shared/workspaces.js";
 import { getCheck } from "../shared/checks.js";
 import { Mark } from "./components/Mark.jsx";
@@ -457,6 +458,17 @@ export function App() {
   const [prefs, setPrefs] = useState(readPrefs);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [workroomOpen, setWorkroomOpen] = useState(false);
+  /* Saved work is a page of its own in the chat area; choosing any
+     conversation, or the desk, leaves it. */
+  const [saved, setSaved] = useState(false);
+  const projects = useMemo(() => {
+    const sub = session?.user?.sub;
+    if (!sub || session.user.guest) return [];
+    return readWorkCache(sub)
+      .filter((record) => record.kind === "project")
+      .slice(0, 6)
+      .map((record) => ({ id: record.id, title: record.title, count: chats.filter((chat) => chat.workContext?.id === record.id).length }));
+  }, [session?.user?.sub, workroomOpen, chats]);
   /* A draft for the Workroom to open with: a proposal from a reply, a
      document to verify, or a conversation saved as a workspace. */
   const [workDraft, setWorkDraft] = useState(null);
@@ -906,6 +918,26 @@ export function App() {
     selectChat(chat.id);
   }
 
+  /* The desk: the empty conversation, ready to write in. */
+  function goDesk() {
+    setSaved(false);
+    newChat();
+  }
+
+  /* A project opens in its latest conversation, or in the Workroom when
+     nothing has been said in it yet. */
+  function openProject(project) {
+    const latest = chats
+      .filter((chat) => chat.workContext?.id === project.id && chat.messages.length)
+      .sort((a, b) => (b.updated || 0) - (a.updated || 0))[0];
+    if (latest) selectChat(latest.id);
+    else {
+      setMenu(false);
+      setWorkDraft(null);
+      setWorkroomOpen(true);
+    }
+  }
+
   function selectChat(id) {
     pinned.current = true;
     setAway(false);
@@ -921,6 +953,7 @@ export function App() {
       setAttachments(kept?.attachments || []);
     }
     setActiveId(id);
+    setSaved(false);
     setError("");
     setMenu(false);
     setWorkspace(null);
@@ -1009,6 +1042,7 @@ export function App() {
 
   /* From the library: go to the conversation, then open the work beside it */
   function openWork(entry) {
+    setSaved(false);
     if (entry.chatId !== activeId) selectChat(entry.chatId);
     setMenu(false);
     setWorkspace(entry.item);
@@ -2213,167 +2247,9 @@ export function App() {
       />
     );
 
-  return (
-    <IconContext.Provider value={{ weight: "light", size: 20 }}>
-      <PresentationContext.Provider value={prefs.presentation}>
-      <div
-        className="shell"
-        ref={setShell}
-        data-collapsed={collapsed}
-        data-workspace={workspace ? "open" : undefined}
-        data-menu={phone ? menu : undefined}
-      >
-        <Rail
-          chats={chats}
-          activeId={activeId}
-          busy={anyBusy}
-          running={live}
-          open={menu}
-          phone={phone}
-          collapsed={collapsed}
-          user={session.user}
-          onClose={() => setMenu(false)}
-          onToggle={toggleRail}
-          onFind={() => setCommandOpen(true)}
-          onNew={newChat}
-          onSelect={selectChat}
-          onDelete={removeChat}
-          onPin={togglePin}
-          onSettings={() => {
-            setMenu(false);
-            setSettingsOpen(true);
-          }}
-          onSignOut={logout}
-          onOpenWork={openWork}
-          onDeleteWork={deleteWork}
-          onWorkroom={() => { setMenu(false); setWorkDraft(null); setWorkroomOpen(true); }}
-          onTask={(item) => {
-            /* A tile in the drawer opens that task, ready to fill in */
-            setMenu(false);
-            setWorkDraft({ draft: blankDraft(item, getCheck), panel: "setup", message: "" });
-            setWorkroomOpen(true);
-          }}
-          workroomOpen={workroomOpen}
-        />
-
-        <main
-          className="stage"
-          /* Behind the open phone drawer, the page is out of reach of
-             keyboards and screen readers, as it is out of reach of touch. */
-          inert={phone && menu ? true : undefined}
-          onDragEnter={(event) => {
-            if (event.dataTransfer?.types?.includes("Files")) {
-              event.preventDefault();
-              setDragging(true);
-            }
-          }}
-          onDragOver={(event) => {
-            if (event.dataTransfer?.types?.includes("Files")) event.preventDefault();
-          }}
-          onDragLeave={(event) => {
-            if (!event.currentTarget.contains(event.relatedTarget)) setDragging(false);
-          }}
-          onDrop={(event) => {
-            if (!event.dataTransfer?.files?.length) return;
-            event.preventDefault();
-            setDragging(false);
-            addFiles([...event.dataTransfer.files]);
-          }}
-        >
-          <Header
-            onFind={() => setCommandOpen(true)}
-            title={displayChatTitle(active)}
-            kicker={active?.workContext?.title}
-            meta={messages.length ? `${messages.length} ${messages.length === 1 ? "message" : "messages"}` : undefined}
-            canRename={messages.length > 0 && !busy}
-            onRename={renameChat}
-            onOpenRail={() => {
-              buzz();
-              setMenu(true);
-            }}
-            onToggleRail={toggleRail}
-            onSaveAsWorkspace={messages.length > 0 && session?.user && !guest ? saveChatAsWorkspace : undefined}
-            onMenu={() => {
-              if (!messages.length) showToast({ text: "Start writing. This conversation isn’t saved yet." });
-              else setSheet({ type: "menu" });
-            }}
-          />
-          {syncIssue && <Notice>{syncIssue}</Notice>}
-
-          <div
-            className="conversation"
-            ref={conversation}
-            onScroll={onScroll}
-            onWheel={onWheel}
-            onMouseUp={checkSelection}
-            onKeyUp={(event) => event.shiftKey && checkSelection()}
-          >
-            <div className="edge-blur" data-edge="top" aria-hidden="true">
-              <span />
-              <span />
-              <span />
-            </div>
-            {!messages.length ? (
-              <Welcome
-                name={prefs.callMe || session.user.name}
-                phase={phase}
-                recent={chats
-                  .filter((chat) => chat.id !== activeId && chat.messages.length)
-                  .sort((a, b) => (b.updated || 0) - (a.updated || 0))
-                  .slice(0, 3)}
-                onOpen={selectChat}
-                plain={!prefs.greet}
-                onPick={(text, picked) => {
-                  setDraft(text);
-                  if (picked) setOptions((current) => ({ ...current, ...picked }));
-                  textarea.current?.focus();
-                }}
-              />
-            ) : (
-              <div className="thread">
-                {messages.map((message, index) => {
-                  const last = index === messages.length - 1;
-                  const mine = message.role === "user";
-                  const live = busy && last && !mine;
-                  return (
-                    <Message
-                      key={message.id}
-                      message={message}
-                      requestText={requestForReply(messages, index)}
-                      requestImages={imagesForReply(messages, index)}
-                      fresh={fresh.current.has(message.id)}
-                      busy={busy}
-                      phase={live ? livePhase : undefined}
-                      live={live}
-                      streaming={live && !!message.content}
-                      isLast={last && !mine}
-                      edited={(active.works?.[message.id]?.versions?.length || 0) > 1}
-                      onAction={onAction}
-                      phone={phone}
-                    />
-                  );
-                })}
-              </div>
-            )}
-            <div className="edge-blur" data-edge="bottom" aria-hidden="true">
-              <span />
-              <span />
-              <span />
-            </div>
-          </div>
-
-          {quote && (
-            <button
-              className="quote-ask"
-              data-below={quote.below || undefined}
-              style={{ left: quote.x, top: quote.y }}
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={askAbout}
-            >
-              <Quotes size={15} weight="fill" /> Ask Vaelo about this
-            </button>
-          )}
-
+  /* The message box and what travels with it. Under a conversation it sits at
+     the foot; on the desk it sits inside the page, under the greeting. */
+  const dockNode = (
           <div className="dock">
             {active?.workContext && (
               <div className="selected-work-context" role="status">
@@ -2455,6 +2331,205 @@ export function App() {
                 ? {...chat,updated:Date.now(),workContext:undefined} : chat))}
             />
           </div>
+  );
+
+  return (
+    <IconContext.Provider value={{ weight: "light", size: 20 }}>
+      <PresentationContext.Provider value={prefs.presentation}>
+      <div
+        className="shell"
+        ref={setShell}
+        data-collapsed={collapsed}
+        data-workspace={workspace ? "open" : undefined}
+        data-menu={phone ? menu : undefined}
+      >
+        <Rail
+          chats={chats}
+          activeId={activeId}
+          busy={anyBusy}
+          running={live}
+          open={menu}
+          phone={phone}
+          collapsed={collapsed}
+          user={session.user}
+          onClose={() => setMenu(false)}
+          onToggle={toggleRail}
+          onFind={() => setCommandOpen(true)}
+          page={saved ? "saved" : "chat"}
+          onDesk={goDesk}
+          onSaved={() => { setMenu(false); setWorkspace(null); setSaved(true); }}
+          projects={projects}
+          onProject={openProject}
+          onNew={newChat}
+          onSelect={selectChat}
+          onDelete={removeChat}
+          onPin={togglePin}
+          onSettings={() => {
+            setMenu(false);
+            setSettingsOpen(true);
+          }}
+          onSignOut={logout}
+          onOpenWork={openWork}
+          onDeleteWork={deleteWork}
+          onWorkroom={() => { setMenu(false); setWorkDraft(null); setWorkroomOpen(true); }}
+          onTask={(item) => {
+            /* A tile in the drawer opens that task, ready to fill in */
+            setMenu(false);
+            setWorkDraft({ draft: blankDraft(item, getCheck), panel: "setup", message: "" });
+            setWorkroomOpen(true);
+          }}
+          workroomOpen={workroomOpen}
+        />
+
+        <main
+          className="stage"
+          /* Behind the open phone drawer, the page is out of reach of
+             keyboards and screen readers, as it is out of reach of touch. */
+          inert={phone && menu ? true : undefined}
+          onDragEnter={(event) => {
+            if (event.dataTransfer?.types?.includes("Files")) {
+              event.preventDefault();
+              setDragging(true);
+            }
+          }}
+          onDragOver={(event) => {
+            if (event.dataTransfer?.types?.includes("Files")) event.preventDefault();
+          }}
+          onDragLeave={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget)) setDragging(false);
+          }}
+          onDrop={(event) => {
+            if (!event.dataTransfer?.files?.length) return;
+            event.preventDefault();
+            setDragging(false);
+            addFiles([...event.dataTransfer.files]);
+          }}
+        >
+          {saved ? (
+            <SavedWork
+              chats={chats}
+              onOpen={openWork}
+              onReply={(entry) => {
+                openWork({ ...entry, item: null });
+                setWorkspace(null);
+                setTimeout(() => revealMessage(entry.item.messageId), 120);
+              }}
+              onDelete={deleteWork}
+            />
+          ) : (
+          <>
+          <Header
+            onFind={() => setCommandOpen(true)}
+            title={displayChatTitle(active)}
+            kicker={active?.workContext?.title}
+            meta={messages.length ? `${messages.length} ${messages.length === 1 ? "message" : "messages"}` : undefined}
+            canRename={messages.length > 0 && !busy}
+            onRename={renameChat}
+            onOpenRail={() => {
+              buzz();
+              setMenu(true);
+            }}
+            onToggleRail={toggleRail}
+            onSaveAsWorkspace={messages.length > 0 && session?.user && !guest ? saveChatAsWorkspace : undefined}
+            onMenu={() => {
+              if (!messages.length) showToast({ text: "Start writing. This conversation isn’t saved yet." });
+              else setSheet({ type: "menu" });
+            }}
+          />
+          {syncIssue && <Notice>{syncIssue}</Notice>}
+
+          <div
+            className="conversation"
+            ref={conversation}
+            onScroll={onScroll}
+            onWheel={onWheel}
+            onMouseUp={checkSelection}
+            onKeyUp={(event) => event.shiftKey && checkSelection()}
+          >
+            <div className="edge-blur" data-edge="top" aria-hidden="true">
+              <span />
+              <span />
+              <span />
+            </div>
+            {!messages.length ? (
+              <Welcome
+                name={prefs.callMe || session.user.name}
+                phase={phase}
+                recent={chats
+                  .filter((chat) => chat.id !== activeId && chat.messages.length)
+                  .sort((a, b) => (b.updated || 0) - (a.updated || 0))
+                  .slice(0, 3)}
+                onOpen={selectChat}
+                plain={!prefs.greet}
+                dock={dockNode}
+                status={
+                  guest || session.offline || !online
+                    ? undefined
+                    : cloud === "Connected"
+                      ? { tone: "ok", text: "Vaelo is awake" }
+                      : cloud === "Unavailable"
+                        ? { tone: "slow", text: "Taking longer than usual to wake" }
+                        : { tone: "slow", text: "Vaelo is waking up" }
+                }
+                waiting={chats
+                  .filter((chat) => chat.messages.at(-1)?.approval?.state === "pending")
+                  .map((chat) => ({ id: chat.id, title: chat.title, what: chat.messages.at(-1).approval.description || "" }))}
+                onWorkroom={guest ? undefined : () => { setWorkDraft(null); setWorkroomOpen(true); }}
+                onPick={(text, picked) => {
+                  setDraft(text);
+                  if (picked) setOptions((current) => ({ ...current, ...picked }));
+                  textarea.current?.focus();
+                }}
+              />
+            ) : (
+              <div className="thread">
+                {messages.map((message, index) => {
+                  const last = index === messages.length - 1;
+                  const mine = message.role === "user";
+                  const live = busy && last && !mine;
+                  return (
+                    <Message
+                      key={message.id}
+                      message={message}
+                      requestText={requestForReply(messages, index)}
+                      requestImages={imagesForReply(messages, index)}
+                      fresh={fresh.current.has(message.id)}
+                      busy={busy}
+                      phase={live ? livePhase : undefined}
+                      live={live}
+                      streaming={live && !!message.content}
+                      isLast={last && !mine}
+                      edited={(active.works?.[message.id]?.versions?.length || 0) > 1}
+                      onAction={onAction}
+                      phone={phone}
+                    />
+                  );
+                })}
+              </div>
+            )}
+            <div className="edge-blur" data-edge="bottom" aria-hidden="true">
+              <span />
+              <span />
+              <span />
+            </div>
+          </div>
+
+          {quote && (
+            <button
+              className="quote-ask"
+              data-below={quote.below || undefined}
+              style={{ left: quote.x, top: quote.y }}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={askAbout}
+            >
+              <Quotes size={15} weight="fill" /> Ask Vaelo about this
+            </button>
+          )}
+
+          {messages.length > 0 && dockNode}
+
+          </>
+          )}
 
           {dragging && (
             <div className="drop-veil" aria-hidden="true">

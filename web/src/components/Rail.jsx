@@ -2,80 +2,26 @@ import { usePinnedReorder } from "../lib/use-pinned-reorder.js";
 import { movePinned } from "../lib/rich-ui.js";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Code,
-  FileText,
+  BookmarkSimple,
   GearSix,
+  House,
   MagnifyingGlass,
-  Table,
   Plus,
   PushPin,
   PushPinSlash,
   SidebarSimple,
   SignOut,
   Trash,
-  User,
   X,
 } from "@phosphor-icons/react";
 import { BrandWordmark, Mark } from "./Mark.jsx";
 import { WorkroomIcon } from "./WorkroomIcon.jsx";
 import { PhoneRail } from "./RailPhone.jsx";
-import { groupChats, searchChats } from "../lib/format.js";
-import { collectWork, searchWork } from "../lib/library.js";
+import { groupChats } from "../lib/format.js";
+import { collectWork } from "../lib/library.js";
 import "./rail.css";
 import "./rail-fluid.css";
-
-const WORK_ICONS = { document: FileText, code: Code, table: Table };
-const WORK_KINDS = { document: "Document", code: "Code", table: "Table" };
-
-/* The things Vaelo has made, newest first, each a way back into the
-   workspace and the conversation it came from. */
-function Library({ items, query, activeId, onOpen, onDelete }) {
-  const shown = searchWork(items, query).slice(0, 80);
-  if (!items.length)
-    return (
-      <p className="rail-empty">
-        Documents, longer code and tables Vaelo makes will gather here, so the final version is
-        never lost in a conversation.
-      </p>
-    );
-  return (
-    <section>
-      <h2 className="label" aria-live="polite">
-        {query.trim()
-          ? shown.length
-            ? `${shown.length} ${shown.length === 1 ? "match" : "matches"}`
-            : "Nothing matches"
-          : "Made with Vaelo"}
-      </h2>
-      <ul className="work-list">
-        {shown.map((entry) => {
-          const Icon = WORK_ICONS[entry.kind];
-          return (
-            <li key={entry.id} className="library-row">
-              <button
-                className="work-row"
-                data-active={entry.chatId === activeId || undefined}
-                onClick={() => onOpen(entry)}
-              >
-                <Icon size={17} aria-hidden="true" className="work-icon" />
-                <span className="work-text">
-                  <span className="work-title">{entry.title}</span>
-                  <span className="work-meta">
-                    {WORK_KINDS[entry.kind]}
-                    {entry.edited && " · edited"} · {entry.chatTitle}
-                  </span>
-                </span>
-              </button>
-              <button className="icon-button library-delete" aria-label={`Delete ${entry.title} from library`} data-tip="Delete from library" onClick={() => onDelete(entry)}>
-                <Trash size={17} />
-              </button>
-            </li>
-          );
-        })}
-      </ul>
-    </section>
-  );
-}
+import "./rail-desk.css";
 
 /* On a touch screen a row slides left to show its actions, the way a
    letter is slid aside to read the one beneath. Only one row is open at a
@@ -235,21 +181,17 @@ function WideRail({
   onPin,
   onSettings,
   onSignOut,
-  onOpenWork,
-  onDeleteWork,
   onWorkroom,
   onToggle,
   onFind,
+  page = "chat",
+  onDesk,
+  onSaved,
+  projects = [],
+  onProject,
 }) {
-  const [query, setQuery] = useState("");
-  const [view, setView] = useState("chats");
   const [openRow, setOpenRow] = useState(null);
-  const field = useRef(null);
   const work = useMemo(() => collectWork(chats), [chats]);
-  const results = searchChats(
-    chats.filter((chat) => chat.messages.length),
-    query,
-  );
   const orderKey = `vaelo-pin-order:${user?.sub || 'guest'}`;
   const [pinOrder, setPinOrder] = useState([]);
   const [arranging, setArranging] = useState(false);
@@ -265,7 +207,7 @@ function WideRail({
      again, focus goes back to the button that opens it, unless choosing
      something in it already moved focus on. */
   const aside = useRef(null);
-  const reorder = usePinnedReorder({ aside, ids: pinned, setOrder: setPinOrder, saveOrder, chats, disabled: !!query || view !== 'chats' });
+  const reorder = usePinnedReorder({ aside, ids: pinned, setOrder: setPinOrder, saveOrder, chats, disabled: false });
   const close = useRef(null);
   const wasOpen = useRef(open);
   useEffect(() => {
@@ -304,6 +246,9 @@ function WideRail({
             <MagnifyingGlass size={20} />
           </button>
         )}
+        <button className="rail-mini-btn" onClick={onSaved} aria-label="Saved work" data-tip="Saved work">
+          <BookmarkSimple size={20} />
+        </button>
         {!user.guest && (
           <button className="rail-mini-btn" onClick={onWorkroom} aria-label="Workroom" data-tip="Workroom" aria-haspopup="dialog">
             <WorkroomIcon open={workroomOpen} size={20} />
@@ -335,99 +280,52 @@ function WideRail({
         </button>
       </div>
 
-      <button className="rail-new rail-new-conversation" onClick={onNew} disabled={pristine}>
-        <Plus size={16} />
-        <span>New conversation</span>
-      </button>
-
-      <label className="rail-search">
-        <MagnifyingGlass size={16} aria-hidden="true" />
-        <input
-          ref={field}
-          type="search"
-          value={query}
-          placeholder={view === "library" ? "Search the library" : "Search conversations"}
-          aria-label={view === "library" ? "Search the library" : "Search conversations"}
-          onChange={(event) => setQuery(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Escape" && query) {
-              event.stopPropagation();
-              setQuery("");
-            }
-          }}
-        />
-        {query && (
-          <button
-            type="button"
-            className="rail-search-clear"
-            aria-label="Clear search"
-            onClick={() => {
-              setQuery("");
-              field.current?.focus();
-            }}
-          >
-            <X size={14} />
+      <div className="rail-actions">
+        <button className="rail-new rail-new-conversation" onClick={onNew} disabled={pristine}>
+          <Plus size={16} />
+          <span>New conversation</span>
+        </button>
+        {onFind && (
+          <button className="rail-find" onClick={onFind} aria-keyshortcuts="Control+k Meta+k">
+            <MagnifyingGlass size={16} aria-hidden="true" />
+            <span>Find or do something</span>
           </button>
         )}
-      </label>
-
-      <div className="rail-views" role="tablist" aria-label="Show">
-        {[
-          ["chats", "Conversations"],
-          ["library", "Library"],
-        ].map(([id, label]) => (
-          <button
-            key={id}
-            role="tab"
-            id={`rail-tab-${id}`}
-            aria-selected={view === id}
-            aria-controls="rail-panel"
-            className="rail-view"
-            onClick={() => setView(id)}
-          >
-            {label}
-            {id === "library" && work.length > 0 && <span className="chip-count">{work.length}</span>}
-          </button>
-        ))}
       </div>
 
-      <nav
-        className="rail-list"
-        id="rail-panel"
-        role="tabpanel"
-        aria-labelledby={`rail-tab-${view}`}
-        aria-label={view === "library" ? "Library" : results ? "Search results" : "Past conversations"}
-      >
-        {view === "library" ? (
-          <Library items={work} query={query} activeId={activeId} onOpen={onOpenWork} onDelete={onDeleteWork} />
-        ) : results ? (
-          <section>
-            <h2 className="label" aria-live="polite">
-              {results.length
-                ? `${results.length} ${results.length === 1 ? "match" : "matches"}`
-                : "Nothing matches"}
-            </h2>
-            {results.map(({ chat, excerpt }) => (
-              <Row
-                key={chat.id}
-                chat={chat}
-                excerpt={excerpt}
-                active={chat.id === activeId}
-                busy={Boolean(running[chat.id])}
-                running={Boolean(running[chat.id])}
-                onSelect={(id) => {
-                  setQuery("");
-                  onSelect(id);
-                }}
-                openId={openRow}
-                setOpenId={setOpenRow}
-                onDelete={onDelete}
-                onPin={onPin}
-              />
-            ))}
-          </section>
-        ) : (
-          groups.map((group) => (
+      <nav className="rail-nav" aria-label="Sections">
+        <button className="rail-nav-item" aria-current={page === "chat" && chats.find((chat) => chat.id === activeId)?.messages.length === 0 ? "page" : undefined} onClick={onDesk}>
+          <House size={19} aria-hidden="true" />
+          <span>Desk</span>
+        </button>
+        <button className="rail-nav-item" aria-current={page === "saved" ? "page" : undefined} onClick={onSaved}>
+          <BookmarkSimple size={19} aria-hidden="true" />
+          <span>Saved work</span>
+          {work.length > 0 && <span className="rail-nav-count">{work.length}</span>}
+        </button>
+        {!user.guest && (
+          <button className="rail-nav-item" onClick={onWorkroom} aria-haspopup="dialog" aria-expanded={workroomOpen}>
+            <WorkroomIcon open={workroomOpen} size={19} />
+            <span>Workroom</span>
+          </button>
+        )}
+      </nav>
+
+      {projects.length > 0 && (
+        <section className="rail-projects" aria-label="Projects">
+          <h2 className="label">Projects</h2>
+          {projects.map((project, index) => (
+            <button key={project.id} className="rail-project" onClick={() => onProject?.(project)}>
+              <span className="rail-project-dot" data-tone={index % 3} aria-hidden="true" />
+              <span className="rail-project-name">{project.title}</span>
+              {project.count > 0 && <span className="rail-nav-count">{project.count}</span>}
+            </button>
+          ))}
+        </section>
+      )}
+
+      <nav className="rail-list" aria-label="Past conversations">
+        {groups.map((group) => (
             <section key={group.label}>
               <h2 className="label">{group.label}{group.label === 'Pinned' && group.items.length > 1 && <button className="pin-arrange" aria-pressed={arranging} onClick={() => setArranging(v => !v)}>{arranging ? 'Done' : 'Reorder'}</button>}</h2>
               {group.label === 'Pinned' && group.items.length > 1 && <p className="pin-hint">Drag a chat to reorder<span> · hold to drag on touch</span></p>}
@@ -453,24 +351,18 @@ function WideRail({
                 </div>
               ))}
             </section>
-          ))
-        )}
+          ))}
       </nav>
 
       <p className="sr-only" role="status" aria-live="polite">{reorder.announcement}</p>
       {reorder.drag && <div className="pin-drag-ghost" aria-hidden="true" style={{left:Math.max(8, Math.min(window.innerWidth - 250, reorder.drag.x + 14)),top:Math.min(window.innerHeight - 70, reorder.drag.y + 14)}}>⠿ <span>{reorder.drag.title}</span></div>}
       <div className="rail-foot">
-        {!user.guest && (
-          <button className="rail-new rail-workroom" onClick={onWorkroom} aria-haspopup="dialog" aria-expanded={workroomOpen}>
-            <WorkroomIcon open={workroomOpen} size={20} /><span>Workroom</span>
-          </button>
-        )}
         <p className="rail-note">
           {user.guest ? "Guest chat. Nothing is saved after you close this tab." : "Private conversations and saved work."}
         </p>
         <div className="rail-account">
           <span className="rail-avatar" aria-hidden="true">
-            <User size={22} weight="duotone" />
+            {(user.name || "?").trim().charAt(0).toUpperCase()}
           </span>
           <span className="rail-name">{user.name}</span>
           <button

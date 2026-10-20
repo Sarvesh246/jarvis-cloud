@@ -668,3 +668,46 @@ body.resizing iframe {
 .ws-actions { flex-wrap: wrap; justify-content: flex-end; }
 .ws-grid { padding-inline: var(--s-4); scroll-padding-inline: var(--s-4); }
 .ws-grid:focus-visible { outline-offset: -2px; }
+
+/* Views of one reply: document, sources, table. A quiet segmented strip under
+   the header, the chosen one lifted onto paper. */
+.ws-views {
+  display: flex;
+  flex: none;
+  gap: 2px;
+  align-self: flex-start;
+  margin: var(--s-3) var(--s-5) 0;
+  padding: 3px;
+  border-radius: var(--r-md);
+  background: var(--sunken);
+}
+
+.ws-views button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-height: 2.25rem;
+  padding: 0 var(--s-4);
+  border-radius: 8px;
+  font-size: var(--t-sm);
+  font-weight: var(--w-ui);
+  color: var(--muted);
+  transition: background var(--dur-2) var(--ease), color var(--dur-1) var(--ease), box-shadow var(--dur-2) var(--ease);
+}
+
+.ws-views button span {
+  font-size: var(--t-xs);
+  font-weight: 400;
+}
+
+.ws-views button[aria-selected="true"] {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 10%);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .ws-views button[aria-selected="false"]:hover {
+    color: var(--ink);
+  }
+}

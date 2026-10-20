@@ -40,7 +40,7 @@ export function previewOf(chat) {
     const message = chat.messages[i];
     const raw = String(message.role === "user" ? message.text ?? message.content ?? "" : message.content ?? "");
     const text = raw
-      .replace(/```[\s\S]*?(```|$)/g, " ")
+      .replace(/(```|~~~)[\s\S]*?(\1|$)/g, " ")
       .replace(/\]\([^)]*\)/g, "]")
       .replace(/[#*_`>[\]|]/g, "")
       .replace(/\s+/g, " ")
