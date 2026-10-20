@@ -1,7 +1,21 @@
-Vaelo 0.1.6 for Windows, macOS, and Linux.
+Vaelo 0.1.7 for Windows, macOS, and Linux.
 
 These notes cover the changes since 0.1.2, including the updates shipped in
-0.1.3, 0.1.4, and 0.1.5.
+0.1.3 through 0.1.6.
+
+## Replies look better
+
+Every reply type was reviewed on desktop and phone, in light and dark.
+
+- The hourly temperature curve now scrolls with its hours and lines up with each one.
+- Bar charts keep each label beside its bar on phones, and checklist headers no
+  longer clip at the card edge.
+- Numeric table headers line up with their figures, and short timeline phases
+  keep their names.
+- A generated image and its caption read as one card, and an image that cannot
+  load leaves a calm placeholder instead of a broken glyph.
+- Code, table, metric and timeline toolbars stay on fewer rows on phones, and
+  sideways scrollers use a quieter track.
 
 ## Weather
 
