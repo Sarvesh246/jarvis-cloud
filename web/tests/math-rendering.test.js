@@ -41,6 +41,53 @@ test('hasMath only flags real delimiters', () => {
   assert.ok(!hasMath('It costs $5 and $10.'));
 });
 
+test('math normalization preserves inline link and image destinations and titles', () => {
+  const links = [
+    '[cost](/cost/$a_b$/view)',
+    '![plot](./plots/$x^2$.png "Example $a_b$ and \\(literal\\)")',
+    '[nested](./docs/(cost)/$a_b$)',
+    '[angle](<./folder with spaces/$a_b$> \'Price $x_y$\')',
+    '[escaped](./docs/\\(literal\\)/$a_b$)',
+    '[title](./docs/$x_y$ (Price $x_y$))',
+  ];
+  for (const link of links) {
+    assert.equal(normalizeMath(link), link);
+    assert.deepEqual(prepareLive(link), { text: link, pending: null });
+  }
+  assert.equal(normalizeMath('[$x^2$](/cost/$a_b$) then \\(y\\).'),
+    '[$$$x^2$$$](/cost/$a_b$) then $$$y$$$.');
+  assert.equal(normalizeMath('[unfinished](./docs\n\nNow \\(y\\).'),
+    '[unfinished](./docs\n\nNow $$$y$$$.');
+  assert.equal(normalizeMath('Unmatched ]($x^2$) and \\[x\\].'),
+    'Unmatched ]($$$x^2$$$) and $$x$$.');
+  assert.equal(normalizeMath('[invalid](not a link $x^2$)'), '[invalid](not a link $$$x^2$$$)');
+  assert.equal(normalizeMath('[invalid](<unfinished $x^2$)'), '[invalid](<unfinished $$$x^2$$$)');
+});
+
+test('live formatting leaves nested closing code fences intact', () => {
+  for (const prefix of ['> ', '    ', '> > ']) {
+    const content = `${prefix}\`\`\`tex\n${prefix}\\(x\\) and $a_b$\n${prefix}\`\`\``;
+    assert.deepEqual(prepareLive(content), { text: content, pending: null });
+  }
+});
+
+test('relative links and nested code keep their source through the real renderer', async () => {
+  const server = await createServer({ server: { middlewareMode: true }, appType: 'custom' });
+  try {
+    const { Rendered } = await server.ssrLoadModule('/src/components/blocks/Blocks.jsx');
+    const render = (content, live) => renderToStaticMarkup(React.createElement(Rendered,
+      { content, sources: [], onOpen() {}, live, requestText: 'Use plain text.' }));
+    for (const live of [false, true]) {
+      const html = render('[cost](/cost/$a_b$/view) and \\(x^2\\).', live);
+      assert.match(html, /href="\/cost\/\$a_b\$\/view"/);
+      assert.equal((html.match(/class="katex"/g) || []).length, 1);
+      const code = render('> ```tex\n> \\(x\\) and $a_b$\n> ```', live);
+      assert.match(code, /\\\(x\\\) and \$a_b\$/);
+      assert.doesNotMatch(code, /katex|\$\$\$/);
+    }
+  } finally { await server.close(); }
+});
+
 test('streaming holds back unfinished formulas, table headers and closes emphasis', () => {
   assert.deepEqual(prepareLive('Solve this:\n\n$$\n\\frac{10t + \\fr'), { text: 'Solve this:', pending: 'math' });
   assert.deepEqual(prepareLive('So \\(x^2 +'), { text: 'So', pending: 'math' });

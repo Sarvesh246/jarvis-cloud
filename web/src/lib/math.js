@@ -83,6 +83,50 @@ function codeSpanEnd(text, i) {
   return -1;
 }
 
+/* The suffix of an inline link/image is Markdown data, not prose. Keep its
+   destination and optional title byte-for-byte, including balanced URL
+   parentheses, angle destinations, escapes, and quoted titles. */
+function linkSuffixEnd(text, i) {
+  let j = i + 2;
+  const whitespace = () => {
+    const start = j;
+    while (j < text.length && /\s/.test(text[j])) j++;
+    return !/\n[^\S\n]*\n/.test(text.slice(start, j));
+  };
+  if (!whitespace()) return -1;
+  if (text[j] === '<') {
+    j++;
+    while (j < text.length && text[j] !== '>') {
+      if (/[\n<]/.test(text[j])) return -1;
+      if (text[j] === '\\') j++;
+      j++;
+    }
+    if (text[j++] !== '>') return -1;
+  } else {
+    let depth = 0;
+    for (; j < text.length; j++) {
+      const c = text[j];
+      if (c === '\\') { j++; continue; }
+      if (/\s/.test(c)) break;
+      if (c === '(') depth++;
+      if (c === ')' && depth-- === 0) return j + 1;
+    }
+    if (depth !== 0) return -1;
+  }
+  if (text[j] === ')') return j + 1;
+  if (!/\s/.test(text[j] || '') || !whitespace()) return -1;
+  if (text[j] === ')') return j + 1;
+  const quote = text[j] === '(' ? ')' : text[j];
+  if (!['"', "'", ')'].includes(quote)) return -1;
+  const titleStart = ++j;
+  for (; j < text.length && text[j] !== quote; j++) {
+    if (text[j] === '\\') j++;
+  }
+  if (text[j] !== quote || /\n[^\S\n]*\n/.test(text.slice(titleStart, j))) return -1;
+  j++;
+  return whitespace() && text[j] === ')' ? j + 1 : -1;
+}
+
 const looksLikeProse = (tex) => !/[\\^_{}=+<>]/.test(tex) && (tex.match(/[A-Za-z]{3,}/g) || []).length >= 3;
 
 /* Index of the "$" that closes the one at `i`, or -1 when this "$" is not a
@@ -130,6 +174,7 @@ function displayMath(tex, indent, flow) {
 function scan(text) {
   let out = "";
   let unclosed = -1;
+  let brackets = 0;
   let i = 0;
   const n = text.length;
   const mark = (at) => { if (unclosed < 0) unclosed = at; };
@@ -165,6 +210,18 @@ function scan(text) {
       out += text.slice(i, end);
       i = end;
       continue;
+    }
+    if (c === '[') brackets++;
+    if (c === ']' && brackets > 0) {
+      brackets--;
+      if (text[i + 1] === '(') {
+        const end = linkSuffixEnd(text, i);
+        if (end >= 0) {
+          out += text.slice(i, end);
+          i = end;
+          continue;
+        }
+      }
     }
     if ((c === "h" && /^https?:\/\//.test(text.slice(i, i + 8))) || (c === "<" && /^<[a-z][\w+.-]*:/i.test(text.slice(i, i + 24)))) {
       const end = text.slice(i).search(c === "<" ? /[>\s]/ : /[\s)>\]]/);
@@ -239,6 +296,9 @@ export function normalizeMath(content) {
    line only, so "**Result" shows as bold while it arrives. */
 function closeInline(line) {
   if (/^\s*(?:[-*+]|\d+[.)])\s*$/.test(line)) return line;
+  // Container fences may be indented or quoted. A fence is not an unfinished
+  // inline span: appending a tick would stop it closing the existing block.
+  if (/^(?:\s*>)*\s*(?:`{3,}|~{3,})\s*$/.test(line)) return line;
   let text = line.replace(/\[([^\]\n]*)\]\([^)\n]*$/, "$1");
   const strip = text.replace(/\\./g, "").replace(/`[^`]*`/g, "");
   const ticks = (strip.match(/`/g) || []).length;
