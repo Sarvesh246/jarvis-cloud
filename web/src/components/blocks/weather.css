@@ -1,6 +1,6 @@
 .weather-bento { margin: 1rem 0; color: var(--ink); }
 .weather-fit { position: relative; margin: 1rem 0; overflow: clip; }
-.weather-fit-content { position: absolute; top: 0; width: 100%; transform-origin: top left; }
+.weather-fit-content { position: absolute; top: 0; width: 100%; transform-origin: top left; container: weather / inline-size; }
 .weather-fit .weather-bento { margin: 0; }
 .weather-bento > header { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; margin-bottom: .7rem; }
 .weather-bento > header > span { font: 500 1.45rem/1.2 var(--font-voice); }
@@ -25,7 +25,7 @@
 .weather-detailed header { align-items: flex-start; }
 .weather-now { display: flex; align-items: center; gap: 1rem; margin: 1.5rem 0; }
 .weather-now > .weather-icon { font-size: 3.7rem; }
-.weather-temperature { font: 500 clamp(2.8rem, 6vw, 4rem)/1.1 var(--font-ui); letter-spacing: -.06em; }
+.weather-temperature { white-space: nowrap; font: 500 clamp(2.8rem, 6vw, 4rem)/1.1 var(--font-ui); letter-spacing: -.06em; }
 .prose .weather-now p { margin: .3rem 0; font-size: 1rem; }
 .weather-range { display: flex; gap: 1.3rem; margin: 0 0 0 auto; }
 .weather-detailed dt { color: var(--muted); font-size: .8rem; }
@@ -62,4 +62,22 @@
   .weather-icon { align-self: flex-end; }
   .weather-period dl { gap: .75rem; }
   .weather-period dd { font-size: 1.4rem; }
+}
+/* Wide columns (desktop) use their width: today's conditions sit beside the
+   metrics instead of above them, and the week reads as one row. The container
+   is the card itself, so this follows the room it has, not the window. */
+@container weather (min-width: 40rem) {
+  .weather-detailed { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: clamp(1.5rem, 4cqw, 3rem); }
+  .weather-detailed > * { grid-column: 1 / -1; }
+  .weather-detailed > .weather-now { grid-column: 1; margin: 1rem 0; }
+  .weather-detailed > .weather-metrics { grid-column: 2; align-content: center; margin: 1rem 0; padding: 0 0 0 clamp(1.5rem, 4cqw, 3rem); border-block: 0; border-left: 1px solid var(--hairline); }
+  .weather-week-grid { grid-template-columns: repeat(auto-fit, minmax(5.6rem, 1fr)); }
+  .weather-days button { flex: 1 0 7rem; }
+}
+@container weather (min-width: 60rem) {
+  .weather-detailed { padding: 2rem 2.4rem; }
+  .weather-temperature { font-size: 4.6rem; }
+  .weather-now > .weather-icon { font-size: 4.4rem; }
+  .weather-metrics dd { font-size: 1.3rem; }
+  .weather-hours-scroll { padding-bottom: .3rem; }
 }

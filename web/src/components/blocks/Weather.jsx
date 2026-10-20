@@ -28,6 +28,8 @@ function Icon({ condition, isDay = true }) {
 // Scale the existing design as one unit. Measure the actual conversation
 // viewport, which already excludes the header and composer. Sources and
 // reply actions below the card must not force its text smaller still.
+const CAP = .85;
+
 function WeatherFit({ children }) {
   const root = useRef(null);
   const content = useRef(null);
@@ -41,16 +43,22 @@ function WeatherFit({ children }) {
     let disposed = false;
     let settle;
     const measure = (force = false) => {
+      // Narrow columns (phones) flow at natural size and scroll; shrinking the
+      // card there would only waste width and make the text unreadable.
+      const wide = box.clientWidth >= 640;
+      const layout = wide ? 1 / CAP : 1;
+      card.style.width = `${layout * 100}%`;
       const height = card.offsetHeight;
       if (!height) return;
       const viewport = conversation?.clientHeight || window.innerHeight;
       const available = Math.max(160, viewport - 64);
-      // Floor keeps text legible on short viewports; the conversation scrolls
-      // past the remainder instead of shrinking the card further.
-      const scale = Math.max(.7, Math.min(.82, available / height));
+      // The card is laid out wider than its column by the cap, so a scaled card
+      // still fills the column. Floor keeps text legible on short viewports; the
+      // conversation scrolls past the remainder instead of shrinking it further.
+      const scale = wide ? Math.max(.7, Math.min(CAP, available / height)) : 1;
       box.style.height = `${Math.ceil(height * scale)}px`;
-      card.style.transform = `scale(${scale})`;
-      card.style.left = `${(1 - scale) * 50}%`;
+      card.style.transform = scale === 1 ? '' : `scale(${scale})`;
+      card.style.left = `${(1 - scale * layout) * 50}%`;
       // Chat normally follows the very end of a reply, including its source
       // and action rows. Keep a newly fitted last card in view above the dock.
       if (conversation && message?.dataset.last === 'true') {
