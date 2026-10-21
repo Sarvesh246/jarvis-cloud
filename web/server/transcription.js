@@ -4,20 +4,23 @@ export function decodeAudio(audio) {
   if (typeof audio !== "string" || audio.length > 2_600_000 || !/^[A-Za-z0-9+/]+={0,2}$/.test(audio))
     throw new HttpError(400, "Invalid dictation recording.");
   const bytes = Buffer.from(audio, "base64");
-  if (bytes.length < 46 || bytes.length > 1_930_000 || bytes.toString("ascii", 0, 4) !== "RIFF" ||
-      bytes.toString("ascii", 8, 12) !== "WAVE" || bytes.toString("ascii", 12, 16) !== "fmt " ||
+  if (bytes.length < 46 || bytes.length > 1_930_000 || bytes.length % 2 !== 0 ||
+      bytes.toString("latin1", 0, 4) !== "RIFF" || bytes.readUInt32LE(4) !== bytes.length - 8 ||
+      bytes.toString("latin1", 8, 12) !== "WAVE" || bytes.toString("latin1", 12, 16) !== "fmt " ||
       bytes.readUInt32LE(16) !== 16 || bytes.readUInt16LE(20) !== 1 || bytes.readUInt16LE(22) !== 1 ||
-      bytes.readUInt32LE(24) !== 16000 || bytes.readUInt16LE(34) !== 16 ||
-      bytes.toString("ascii", 36, 40) !== "data" || bytes.readUInt32LE(40) !== bytes.length - 44)
+      bytes.readUInt32LE(24) !== 16000 || bytes.readUInt32LE(28) !== 32000 ||
+      bytes.readUInt16LE(32) !== 2 || bytes.readUInt16LE(34) !== 16 ||
+      bytes.toString("latin1", 36, 40) !== "data" || bytes.readUInt32LE(40) !== bytes.length - 44)
     throw new HttpError(400, "Invalid dictation recording.");
   return bytes;
 }
 
 async function boundedJson(response) {
-  if (!response.ok) throw new Error("Speech provider refused the request.");
-  const reader = response.body.getReader();
+  let reader;
   const chunks = []; let size = 0;
   try {
+    if (!response.ok) throw new Error("Speech provider refused the request.");
+    reader = response.body.getReader();
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
@@ -25,8 +28,13 @@ async function boundedJson(response) {
       if (size > 256_000) throw new Error("Speech response was too large.");
       chunks.push(value);
     }
-    return JSON.parse(Buffer.concat(chunks).toString());
-  } finally { await reader.cancel().catch(() => {}); }
+    // Damaged transport bytes must not silently change dictated words.
+    return JSON.parse(new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(Buffer.concat(chunks)));
+  } finally {
+    // Refusals also own a response body; close it before trying a fallback.
+    try { await (reader ? reader.cancel() : response.body?.cancel()); } catch {}
+    reader?.releaseLock();
+  }
 }
 
 export async function transcribe(bytes, env = process.env, request = fetch) {
