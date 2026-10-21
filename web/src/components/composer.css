@@ -417,9 +417,9 @@
   opacity: 0;
   pointer-events: none;
   transition:
-    transform var(--dur-2) var(--ease),
-    height var(--dur-2) var(--ease),
-    opacity var(--dur-1) var(--ease);
+    transform 150ms var(--ease),
+    height 150ms var(--ease),
+    opacity 120ms var(--ease);
 }
 
 .tools-glide[data-on] {

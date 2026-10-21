@@ -357,9 +357,7 @@ function WideRail({
       <p className="sr-only" role="status" aria-live="polite">{reorder.announcement}</p>
       {reorder.drag && <div className="pin-drag-ghost" aria-hidden="true" style={{left:Math.max(8, Math.min(window.innerWidth - 250, reorder.drag.x + 14)),top:Math.min(window.innerHeight - 70, reorder.drag.y + 14)}}>⠿ <span>{reorder.drag.title}</span></div>}
       <div className="rail-foot">
-        <p className="rail-note">
-          {user.guest ? "Guest chat. Nothing is saved after you close this tab." : "Private conversations and saved work."}
-        </p>
+        {user.guest && <p className="rail-note">Guest chat. Nothing is saved after you close this tab.</p>}
         <div className="rail-account">
           <span className="rail-avatar" aria-hidden="true">
             {(user.name || "?").trim().charAt(0).toUpperCase()}
