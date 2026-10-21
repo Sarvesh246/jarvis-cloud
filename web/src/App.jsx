@@ -492,6 +492,7 @@ export function App() {
   const textarea = useRef(null);
   const conversation = useRef(null);
   const pinned = useRef(true);
+  const lastTop = useRef(0);
   const fresh = useRef(new Set());
   /* Full-size images stay in memory only; conversations keep thumbnails. */
   const imageData = useRef(fullImages);
@@ -867,8 +868,16 @@ export function App() {
     if (!el) return;
     /* The welcome has nothing to follow: when it is taller than the room it
        has, it opens at the top, never scrolled down under the header. */
-    if (!messages.length) el.scrollTop = 0;
-    else if (pinned.current) el.scrollTop = el.scrollHeight;
+    if (!messages.length) {
+      el.scrollTop = 0;
+      pinned.current = true;
+      setAway(false);
+      lastTop.current = 0;
+    } else if (pinned.current) {
+      el.scrollTop = el.scrollHeight;
+      // Programmatic movement must not look like the reader scrolling up.
+      lastTop.current = el.scrollTop;
+    }
   }, [messages, activeId]);
 
   /* Blocks can grow after their words arrive (a table settling, a font
@@ -883,7 +892,10 @@ export function App() {
     const thread = el?.firstElementChild;
     if (!thread || typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver(() => {
-      if (pinned.current && Date.now() < following.current) el.scrollTop = messages.length ? el.scrollHeight : 0;
+      if (pinned.current && Date.now() < following.current) {
+        el.scrollTop = messages.length ? el.scrollHeight : 0;
+        lastTop.current = el.scrollTop;
+      }
     });
     observer.observe(thread);
     return () => observer.disconnect();
@@ -922,7 +934,6 @@ export function App() {
      scrollbar) and stops following at once. Moving back down to near the
      end picks following up again. A view pulled up because the
      conversation got shorter is still at the end, so it keeps following. */
-  const lastTop = useRef(0);
   function onScroll() {
     const el = conversation.current;
     const fromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
@@ -936,7 +947,7 @@ export function App() {
   /* Scrolling up is a decision. Honour it at once, before the next words
      arrive and the follow logic could pull the reader back down. */
   function onWheel(event) {
-    if (event.deltaY < 0) pinned.current = false;
+    if (messages.length && conversation.current?.scrollTop > 0 && event.deltaY < 0) pinned.current = false;
   }
 
   function jumpToLatest() {
@@ -1406,6 +1417,7 @@ export function App() {
     fresh.current.add(lastUser.id);
     fresh.current.add(id);
     pinned.current = true;
+    setAway(false);
     setChats((current) =>
       current.map((chat) =>
         chat.id === chatId

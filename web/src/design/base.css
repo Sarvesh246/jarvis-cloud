@@ -162,6 +162,10 @@ a:hover {
   border-radius: var(--r-sm);
 }
 
+:root[data-input="pointer"] :is(button, a, summary, [role="button"]):focus {
+  outline: none;
+}
+
 ::selection {
   background: var(--gilt-wash);
 }

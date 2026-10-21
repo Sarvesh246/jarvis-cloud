@@ -10,6 +10,17 @@ import { DESKTOP, installDesktopTransport } from "./lib/desktop.js";
 
 installDesktopTransport();
 
+// Programmatic focus after a tap can inherit the composer's focus ring on
+// Safari. Keep focus in place, but reserve control outlines for keyboards.
+document.documentElement.dataset.input = "pointer";
+addEventListener("pointerdown", () => {
+  document.documentElement.dataset.input = "pointer";
+}, { capture: true });
+addEventListener("keydown", (event) => {
+  if (["Tab", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key))
+    document.documentElement.dataset.input = "keyboard";
+}, { capture: true });
+
 createRoot(document.getElementById("root")).render(<App />);
 
 /* Home-screen installs open instantly and survive a lost connection. Only in
