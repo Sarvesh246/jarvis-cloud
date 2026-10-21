@@ -1,22 +1,33 @@
 .toast-region {
   position: fixed;
-  left: 50%;
+  /* Toast.jsx sets --toast-x to the middle of the chat area, so the toast
+     centres on the conversation whether or not the rail is open */
+  left: var(--toast-x, 50%);
   bottom: calc(var(--s-6) + env(safe-area-inset-bottom));
   z-index: 50;
   transform: translateX(-50%);
   pointer-events: none;
 }
 
+/* A raised card in the page's own surface, so it reads the same in light
+   and dark: ink on surface, a hairline edge, brass for the action. */
 .toast {
   display: flex;
   align-items: center;
-  gap: var(--s-4);
-  min-height: 3rem;
-  padding: 0 var(--s-3) 0 var(--s-5);
-  border-radius: var(--r-pill);
-  background: var(--ink);
-  color: var(--canvas);
+  justify-content: center;
+  gap: var(--s-3);
+  width: fit-content;
+  max-width: 100%;
+  margin-inline: auto;
+  min-height: 2.5rem;
+  padding: 0 var(--s-2) 0 var(--s-4);
+  border: 1px solid var(--hairline-strong);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--ink);
   font-size: var(--t-sm);
+  font-weight: 500;
+  line-height: 1.3;
   box-shadow: var(--lift-2);
   pointer-events: auto;
   position: relative;
@@ -43,9 +54,9 @@
 /* The time left, as a gilt line that shortens toward the centre */
 .toast-fuse {
   position: absolute;
-  left: var(--s-6);
-  right: var(--s-6);
-  bottom: 5px;
+  left: var(--s-4);
+  right: var(--s-4);
+  bottom: 3px;
   height: 1px;
   background: var(--gilt);
   opacity: 0.7;
@@ -76,12 +87,15 @@
 }
 
 .toast .text-button {
-  color: var(--gilt);
-  min-height: var(--hit);
+  color: var(--gilt-ink);
+  font-weight: 600;
+  min-height: 2rem;
+  padding: 0 var(--s-3);
+  border-radius: var(--r-md);
 }
 @media (hover: hover) and (pointer: fine) {
 .toast .text-button:hover {
-  background: rgb(255 255 255 / 8%);
+  background: var(--gilt-wash);
 }
 }
 

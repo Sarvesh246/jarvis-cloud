@@ -1481,7 +1481,7 @@ export function App() {
       title: active.messages.length
         ? active.title
         : chatTitle(messages[0].text || messages[0].content),
-      start: { conversationId: chatId, runId: id, messages: input, ...(place && { place }), ...(profileOf(prefsRef.current) && { profile: profileOf(prefsRef.current) }),
+      start: { conversationId: chatId, runId: id, messages: input, tz: Intl.DateTimeFormat().resolvedOptions().timeZone, ...(place && { place }), ...(profileOf(prefsRef.current) && { profile: profileOf(prefsRef.current) }),
         ...(lastUser.workContext && {work:{id:lastUser.workContext.id,revision:lastUser.workContext.revision}}) },
     });
   }

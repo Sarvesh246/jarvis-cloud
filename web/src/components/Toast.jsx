@@ -93,8 +93,28 @@ function Slip({ toast, onDismiss }) {
 }
 
 export function Toast({ toast, toasts, onDismiss }) {
+  const region = useRef(null);
+  /* Follow the middle of the chat area as the rail or workspace opens and
+     closes. The observer fires on every frame of those transitions. */
+  useEffect(() => {
+    const stage = document.querySelector(".stage");
+    const el = region.current;
+    if (!stage || !el) return;
+    const place = () => {
+      const { left, width } = stage.getBoundingClientRect();
+      el.style.setProperty("--toast-x", `${left + width / 2}px`);
+    };
+    place();
+    const watch = new ResizeObserver(place);
+    watch.observe(stage);
+    addEventListener("resize", place);
+    return () => {
+      watch.disconnect();
+      removeEventListener("resize", place);
+    };
+  }, []);
   return (
-    <div className="toast-region" role="status" aria-live="polite">
+    <div className="toast-region" role="status" aria-live="polite" ref={region}>
       {(toasts || (toast ? [toast] : [])).map(item => <Slip key={item.id} toast={item} onDismiss={() => onDismiss(item.id)} />)}
     </div>
   );
