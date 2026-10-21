@@ -1796,7 +1796,8 @@ export function App() {
                   "Content-Type": "application/json",
                   "X-CSRF-Token": session.csrf,
                 },
-                body: JSON.stringify(body),
+                // Sharing may be switched off while the backend wakes or a start retries.
+                body: JSON.stringify(body.place && !prefsRef.current.location ? { ...body, place: undefined } : body),
               });
           if (!response.ok) {
             /* A gateway hiccup while picking a reply back up is the

@@ -7,6 +7,8 @@ const FRESH_MS = 30 * 60 * 1000;
 const GEOCODER = "https://api.bigdatacloud.net/data/reverse-geocode-client";
 let cached = null;
 let pending = null;
+let generation = 0;
+const lookups = new Set();
 
 const round = (n) => Math.round(n * 100) / 100;
 
@@ -14,14 +16,22 @@ export function locationSupport() {
   return typeof navigator !== "undefined" && "geolocation" in navigator;
 }
 
-function position() {
-  return new Promise((resolve, reject) =>
-    navigator.geolocation.getCurrentPosition(resolve, reject, {
-      enableHighAccuracy: false,
-      maximumAge: 10 * 60 * 1000,
-      timeout: 10000,
-    }),
-  );
+function position(signal) {
+  return new Promise((resolve, reject) => {
+    const aborted = () => reject(signal.reason);
+    const finish = (callback) => (value) => {
+      signal.removeEventListener('abort', aborted);
+      if (!signal.aborted) callback(value);
+    };
+    signal.addEventListener('abort', aborted, { once: true });
+    try {
+      navigator.geolocation.getCurrentPosition(finish(resolve), finish(reject), {
+        enableHighAccuracy: false,
+        maximumAge: 10 * 60 * 1000,
+        timeout: 10000,
+      });
+    } catch (error) { finish(reject)(error); }
+  });
 }
 
 export function cityNames(data) {
@@ -38,16 +48,19 @@ export function cityNames(data) {
   };
 }
 
-async function cityOf(lat, lon) {
+async function cityOf(lat, lon, controller) {
+  const timer = setTimeout(() => controller.abort(), 4000);
   try {
     const response = await fetch(`${GEOCODER}?latitude=${lat}&longitude=${lon}&localityLanguage=en`, {
-      signal: AbortSignal.timeout(4000),
+      signal: controller.signal,
     });
     if (!response.ok) return {};
     const data = await response.json();
     return cityNames(data);
   } catch {
     return {};
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -56,8 +69,17 @@ async function cityOf(lat, lon) {
 export function locate({ force = false } = {}) {
   if (!locationSupport()) return Promise.reject(new Error("unsupported"));
   if (!force && cached && Date.now() - cached.at < FRESH_MS) return Promise.resolve(cached.place);
-  pending ??= position()
+  if (pending) return pending;
+  const controller = new AbortController();
+  const { signal } = controller;
+  lookups.add(controller);
+  const request = position(signal)
     .then(({ coords }) => {
+      // A browser callback can resolve just before sharing is switched off.
+      if (signal.aborted) throw signal.reason;
+      if (!coords || ![coords.latitude, coords.longitude].every(Number.isFinite) ||
+          Math.abs(coords.latitude) > 90 || Math.abs(coords.longitude) > 180)
+        throw new Error('Invalid location coordinates.');
       const lat = round(coords.latitude);
       const lon = round(coords.longitude);
       const place = {
@@ -68,14 +90,16 @@ export function locate({ force = false } = {}) {
       cached = { place, at: Date.now() };
       // Coordinates are usable immediately. A slow city lookup must never
       // discard a browser permission grant or delay a local weather request.
-      void cityOf(lat, lon).then(names => {
-        if (cached?.place === place) cached = { ...cached, place: { ...place, ...names } };
-      });
+      void cityOf(lat, lon, controller).then(names => {
+        if (!signal.aborted && cached?.place === place) cached = { ...cached, place: { ...place, ...names } };
+      }).finally(() => lookups.delete(controller));
       return place;
     })
+    .catch(error => { lookups.delete(controller); throw error; })
     .finally(() => {
-      pending = null;
+      if (pending === request) pending = null;
     });
+  pending = request;
   return pending;
 }
 
@@ -83,13 +107,15 @@ export function locate({ force = false } = {}) {
    long, and never fails a reply because location was unavailable. */
 export async function placeFor(prefs) {
   if (!prefs?.location) return null;
+  const started = generation;
   let timer;
   try {
-    return await Promise.race([locate(), new Promise((resolve) => {
+    const place = await Promise.race([locate(), new Promise((resolve) => {
       timer = setTimeout(() => resolve(cachedPlace(prefs)), 10500);
     })]);
+    return generation === started && prefs.location ? place : null;
   } catch {
-    return cachedPlace(prefs);
+    return generation === started ? cachedPlace(prefs) : null;
   } finally {
     clearTimeout(timer);
   }
@@ -101,5 +127,10 @@ export function cachedPlace(prefs) {
 }
 
 export function forgetPlace() {
+  // Browser geolocation cannot be stopped, but its callbacks lose ownership.
+  generation++;
   cached = null;
+  pending = null;
+  for (const lookup of lookups) lookup.abort();
+  lookups.clear();
 }

@@ -4,6 +4,30 @@ import assert from 'node:assert/strict';
 
 const app = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8');
 
+test('chat dispatch checks current location consent after backend wake or start retries', () => {
+  // Execute the actual request construction, after the asynchronous wake boundary.
+  const dispatch = app.match(/await fetch\("\/api\/chat", \{[\s\S]*?\n\s*\}\)/)?.[0];
+  assert.ok(dispatch);
+  const send = new Function('fetch', 'attempt', 'session', 'body', 'prefsRef', dispatch.replace(/^await /, 'return '));
+  const body = {conversationId:'chat',runId:'reply',messages:[{role:'user',content:'café $x$\n```js\nx()\n```'}],
+    place:{lat:41.88,lon:-87.63,city:'Chicago'},profile:{call:'Reader'},work:{id:'work',revision:3}};
+  const before = structuredClone(body);
+  const prefsRef = {current:{location:true}};
+  const dispatchNow = () => send((url, init) => ({url,...init,body:JSON.parse(init.body)}),
+    {signal:new AbortController().signal},{csrf:'fixture'},body,prefsRef);
+  assert.deepEqual(dispatchNow().body, body, 'normal enabled requests preserve the prepared payload');
+  prefsRef.current = {location:false};
+  const result = dispatchNow();
+  assert.equal(result.url, '/api/chat');
+  assert.equal(result.method, 'POST');
+  assert.equal(result.headers['X-CSRF-Token'], 'fixture');
+  const {place, ...withoutLocation} = body;
+  assert.deepEqual(result.body, withoutLocation);
+  assert.deepEqual(body, before, 'the prepared request remains intact');
+  delete body.place;
+  assert.deepEqual(dispatchNow().body,body,'requests without location remain unchanged');
+});
+
 test('Pause during the location wait cancels the reply before it starts', () => {
   const send = app.slice(app.indexOf('async function send('), app.indexOf('async function followReply('));
   assert.ok(send.indexOf('startingRuns.current.set(') < send.indexOf('await placeFor('));

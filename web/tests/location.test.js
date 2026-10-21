@@ -2,6 +2,157 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { locate, placeFor, cachedPlace, forgetPlace, cityNames } from '../src/lib/location.js';
 
+function browser(t) {
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+  const originalFetch = globalThis.fetch;
+  const positions = [], requests = [];
+  Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { geolocation: {
+    getCurrentPosition(resolve, reject, options) { positions.push({resolve, reject, options}); },
+  } } });
+  globalThis.fetch = (url, options) => new Promise(resolve => requests.push({url, options, resolve}));
+  forgetPlace();
+  t.after(() => {
+    forgetPlace(); globalThis.fetch = originalFetch;
+    if (descriptor) Object.defineProperty(globalThis, 'navigator', descriptor);
+    else delete globalThis.navigator;
+  });
+  return { positions, requests, grant(index = 0, latitude = 41.881, longitude = -87.629) {
+    positions[index].resolve({ coords: { latitude, longitude } });
+  } };
+}
+
+test('forgetting a pending position cancels waiters and ignores late browser callbacks', async t => {
+  const b = browser(t);
+  const waiting = locate();
+  const outcome = waiting.then(() => 'resolved', error => error.name);
+  forgetPlace();
+  b.grant();
+  assert.equal(await outcome, 'AbortError');
+  assert.equal(cachedPlace({location:true}), null);
+  assert.equal(b.requests.length, 0, 'revoked coordinates must not reach the geocoder');
+});
+
+test('a fresh position request is independent of a forgotten request and its cleanup', async t => {
+  const b = browser(t);
+  const old = locate().catch(error => error.name);
+  forgetPlace();
+  const fresh = locate();
+  assert.equal(b.positions.length, 2);
+  b.grant(0);
+  await old;
+  assert.equal(locate(), fresh, 'old completion cannot clear a newer pending request');
+  b.grant(1, 48.8566, 2.3522);
+  const place = await fresh;
+  assert.equal(place.lat, 48.86);
+  assert.equal(place.lon, 2.35);
+  assert.equal(b.requests.length, 1);
+});
+
+test('a delivered position loses ownership if forgotten before its promise resumes', async t => {
+  const b = browser(t);
+  const waiting = locate();
+  const rejected = assert.rejects(waiting, {name:'AbortError'});
+  b.grant();
+  forgetPlace();
+  await rejected;
+  assert.equal(cachedPlace({location:true}), null);
+  assert.equal(b.requests.length, 0);
+});
+
+test('forgetting aborts reverse geocoding and prevents obsolete request results', async t => {
+  const b = browser(t);
+  const first = locate(); b.grant(); await first;
+  const waiting = placeFor({location:true});
+  forgetPlace();
+  assert.equal(await waiting, null, 'even an already cached result must respect revocation during await');
+  assert.equal(b.requests[0].options.signal.aborted, true);
+  const fresh = locate(); b.grant(1, 48.8566, 2.3522); await fresh;
+  b.requests[0].resolve(Response.json({city:'Chicago'}));
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(cachedPlace({location:true}).lat, 48.86);
+  assert.equal(cachedPlace({location:true}).city, undefined);
+  b.requests[1].resolve(Response.json({city:'Paris'}));
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(cachedPlace({location:true}).city, 'Paris');
+});
+
+test('pending reply location resolves promptly to nothing when sharing is revoked', async t => {
+  const b = browser(t);
+  const waiting = placeFor({location:true});
+  let settled = false;
+  waiting.then(() => { settled = true; });
+  forgetPlace();
+  // Deliberately never deliver the browser callback: logical cancellation is immediate.
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(settled, true, 'revocation must release the reply without the 10.5-second fallback');
+  assert.equal(await waiting, null);
+  assert.equal(b.requests.length, 0);
+});
+
+test('invalid browser coordinates never enter the cache or a geocoder request', async t => {
+  const b = browser(t);
+  for (const [lat, lon] of [[NaN, 0], [0, Infinity], [91, 0], [0, -181], ['41', 0], [null, 0]]) {
+    const waiting = locate();
+    const rejected = assert.rejects(waiting, /coordinates/i);
+    b.grant(b.positions.length - 1, lat, lon);
+    await rejected;
+    assert.equal(cachedPlace({location:true}), null);
+  }
+  assert.equal(b.requests.length, 0);
+  const waiting = locate(); b.grant(b.positions.length - 1, -90, 180);
+  assert.equal((await waiting).lat, -90, 'boundary coordinates remain valid after failures');
+});
+
+test('normal acquisition deduplicates, rounds, caches, refreshes and recovers after refusal', async t => {
+  const b = browser(t);
+  assert.equal(await placeFor({location:false}), null);
+  const first = locate();
+  assert.equal(locate(), first);
+  const refused = assert.rejects(first, error => error.code === 1);
+  b.positions[0].reject({code:1}); await refused;
+  const retry = locate(); b.grant(1); const place = await retry;
+  assert.deepEqual([place.lat, place.lon], [41.88, -87.63]);
+  assert.equal(await locate(), place);
+  assert.equal(b.positions.length, 2);
+  assert.equal(b.positions[1].options.enableHighAccuracy, false);
+  assert.match(b.requests[0].url, /latitude=41.88&longitude=-87.63/);
+  const forced = locate({force:true});
+  b.grant(2, 0, 0); assert.equal((await forced).lat, 0);
+  assert.equal(await placeFor({location:false}), null);
+});
+
+test('the geocoder deadline cancels its request without discarding usable coordinates', async t => {
+  const b = browser(t);
+  t.mock.timers.enable({apis:['setTimeout']});
+  const waiting = locate(); b.grant(); const place = await waiting;
+  t.mock.timers.tick(3999);
+  assert.equal(b.requests[0].options.signal.aborted, false);
+  t.mock.timers.tick(1);
+  assert.equal(b.requests[0].options.signal.aborted, true);
+  assert.equal(await placeFor({location:true}), place);
+  // Even a provider that resolves after abort cannot add a late city.
+  b.requests[0].resolve(Response.json({city:'Late city'}));
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(cachedPlace({location:true}).city, undefined);
+});
+
+test('expired coordinates refresh while provider failure keeps the normal coordinate fallback', async t => {
+  const b = browser(t);
+  t.mock.timers.enable({apis:['Date'],now:1000});
+  const waiting = locate(); b.grant(); const original = await waiting;
+  b.requests[0].resolve(new Response('Unavailable',{status:503}));
+  await new Promise(resolve => setImmediate(resolve));
+  t.mock.timers.setTime(1000+30*60*1000-1);
+  assert.deepEqual(await locate(), original);
+  t.mock.timers.setTime(1000+30*60*1000);
+  const refresh = placeFor({location:true});
+  assert.equal(b.positions.length, 2);
+  b.positions[1].reject({code:2});
+  assert.deepEqual(await refresh, original);
+  const recovered = locate(); b.grant(2,0,0);
+  assert.equal((await recovered).lat, 0);
+});
+
 test('municipal administrative names take precedence over census subdivisions and nearby localities', () => {
   assert.deepEqual(cityNames({ city: 'South Brazos', locality: 'Bryan', principalSubdivision: 'Texas', countryName: 'United States', localityInfo: { administrative: [
     { name: 'Brazos County', description: 'county in Texas' },
