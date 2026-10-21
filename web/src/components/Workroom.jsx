@@ -97,7 +97,13 @@ export function Workroom({ open, onClose, session, onStart, initialDraft = null,
   const phone = usePhone();
   const dialog = useRef(null), file = useRef(null), account = useRef(null), fetchSequence = useRef(0);
   const scrollArea = useRef(null), taskHeading = useRef(null), resultHeading = useRef(null);
-  const sub = session?.user?.sub || null; account.current = sub;
+  const documentSession = useRef({ sub: null, active: true }), previewSequence = useRef(0), previewDraft = useRef(null);
+  const sub = session?.user?.sub || null;
+  // A -> B -> A is still a new session: old reads must never become current again.
+  if (documentSession.current.sub !== sub) documentSession.current = { sub, active: true };
+  account.current = sub;
+  const documentOwner = documentSession.current;
+  const ownsDocuments = () => documentSession.current === documentOwner && documentOwner.active;
   const [records, setRecords] = useState([]), [draft, setDraft] = useState(null), [base, setBase] = useState(null);
   const [query, setQuery] = useState(''), [view, setView] = useState('catalogue'), [busy, setBusy] = useState(''), [problem, setProblem] = useState('');
   const [status, setStatus] = useState(''), [cached, setCached] = useState(false), [conflict, setConflict] = useState(false);
@@ -105,6 +111,8 @@ export function Workroom({ open, onClose, session, onStart, initialDraft = null,
   const [confirmDelete, setConfirmDelete] = useState(false), [missing, setMissing] = useState([]);
   const [audience, setAudience] = useState('all'), [panel, setPanel] = useState('setup'), [preview, setPreview] = useState(null);
   const texts = useRef({});
+  if (previewDraft.current !== draft?.id) previewSequence.current += 1;
+  previewDraft.current = draft?.id;
   const workspace = draft ? workspaceFor(draft) : null;
   const check = draft ? checkFor(draft) : null;
   const saved = records.find(record => record.id === draft?.id);
@@ -130,6 +138,10 @@ export function Workroom({ open, onClose, session, onStart, initialDraft = null,
     (panel==='result' ? resultHeading.current : taskHeading.current)?.focus({preventScroll:true});
   }, [open, draft?.id, panel]);
   useEffect(() => { const yes=()=>setOnline(true), no=()=>setOnline(false); window.addEventListener('online',yes); window.addEventListener('offline',no); return ()=>{window.removeEventListener('online',yes);window.removeEventListener('offline',no);}; }, []);
+  useEffect(() => {
+    documentSession.current.active = true;
+    return () => { documentSession.current.active = false; };
+  }, []);
   useEffect(() => {
     setRecords(readWorkCache(sub)); texts.current = readDocumentCache(sub); setDraft(null); setBase(null); setProblem(''); setStatus(''); setCached(true); setConflict(false);
     setImports([]); setPending(null); setBusy(''); setQuery(''); setAudience('all'); setPanel('setup'); setPreview(null);
@@ -193,28 +205,43 @@ export function Workroom({ open, onClose, session, onStart, initialDraft = null,
     edit({ ...draft, documents: slotId === 'extra' ? [...draft.documents, doc] : [...draft.documents.filter(d => d.slot !== slotId), doc] });
   }
   async function loadTexts(record) {
+    if (!ownsDocuments()) return {};
     if (!record?.documents?.length || record.documents.every(d => typeof texts.current[d.sha] === 'string')) return texts.current;
     if (offline || !sub) return texts.current;
     const data = await requestWork(null, { csrf: session?.csrf, query: `?id=${encodeURIComponent(record.id)}&documents=1` });
+    if (!ownsDocuments()) return {};
     texts.current = { ...texts.current, ...Object.fromEntries(Object.entries(data.documents || {}).filter(([, t]) => typeof t === 'string')) };
     writeDocumentCache(sub, texts.current, records);
     return texts.current;
   }
   async function togglePreview(doc) {
+    if (!ownsDocuments()) return;
+    const sequence = ++previewSequence.current, target = draft?.id;
     if (preview?.id === doc.id) { setPreview(null); return; }
-    const show = text => setPreview({ id: doc.id, text: typeof text === 'string' ? text.slice(0, 6000) + (text.length > 6000 ? '\n\n…' : '') : null });
+    const show = text => {
+      if (ownsDocuments() && sequence === previewSequence.current && previewDraft.current === target)
+        setPreview({ id: doc.id, text: typeof text === 'string' ? text.slice(0, 6000) + (text.length > 6000 ? '\n\n…' : '') : null });
+    };
     if (typeof doc.text === 'string') { show(doc.text); return; }
     try { show((await loadTexts(saved || draft))[doc.sha]); } catch { show(null); }
   }
   async function exportRecords(list, name) {
+    if (!ownsDocuments()) return;
     try {
       setBusy('export');
-      for (const record of list) await loadTexts(record).catch(() => {});
+      setProblem('');
+      for (const record of list) {
+        await loadTexts(record).catch(() => {});
+        if (!ownsDocuments()) return;
+      }
       const data = exportWork(list, texts.current);
       if (!await download(data, name)) return;
+      if (!ownsDocuments()) return;
       const gaps = data.records.reduce((n, r) => n + r.documents.filter(d => d.missing).length, 0);
-      setStatus(gaps ? `Backup saved. ${plural(gaps, 'file')} couldn’t be added while you’re offline.` : 'Backup saved to your downloads.');
-    } finally { setBusy(''); }
+      setStatus(gaps ? `Backup saved. ${plural(gaps, 'file')} couldn’t be added${offline ? ' while you’re offline' : ''}.` : 'Backup saved to your downloads.');
+    } catch {
+      if (ownsDocuments()) setProblem('That backup couldn’t be saved. Please try again.');
+    } finally { if (ownsDocuments()) setBusy(''); }
   }
 
   async function mutate(action, { separate = false, prompt } = {}) {
@@ -257,8 +284,13 @@ export function Workroom({ open, onClose, session, onStart, initialDraft = null,
   }
   async function importFile(event) {
     const selected=event.target.files?.[0];event.target.value='';if(!selected)return;
-    try { if(selected.size>4_000_000)throw new Error('That file is too big. Choose one under 4 MB.'); const items=importWork(await selected.text(),lookups);setImports(items);setProblem('');setStatus(`Found ${plural(items.length,'workspace')}. Open one to look at it. Nothing is saved yet.`); }
-    catch(error){setProblem(error instanceof SyntaxError?'That isn’t a Vaelo backup file.':error.message);}
+    if (!ownsDocuments()) return;
+    try {
+      if(selected.size>4_000_000)throw new Error('That file is too big. Choose one under 4 MB.');
+      const text = await selected.text();
+      if (!ownsDocuments()) return;
+      const items=importWork(text,lookups);setImports(items);setProblem('');setStatus(`Found ${plural(items.length,'workspace')}. Open one to look at it. Nothing is saved yet.`);
+    } catch(error){if(ownsDocuments())setProblem(error instanceof SyntaxError?'That isn’t a Vaelo backup file.':error.message);}
   }
   function leaveTask() { navigate(()=>{setDraft(null);setBase(null);setProblem('');setConfirmDelete(false);setQuery('');setMissing([]);setPreview(null);}); }
 
