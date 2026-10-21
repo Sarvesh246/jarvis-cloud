@@ -1,3 +1,5 @@
+import { constrainedAnswer } from "../shared/answer-contract.js";
+
 /* Sizing a reply before it is written. Each message is read here, with no
    model call, for two things: the shape its answer should take (a table for a
    comparison, numbered steps for a how-to, plain prose for a greeting) and how
@@ -140,6 +142,7 @@ function smallTalk(text) {
 
 function explicitFormat(text) {
   for (const [pattern, label] of EXPLICIT) if (pattern.test(text)) return label;
+  if (constrainedAnswer(text)) return "explicit output and length constraints";
   return null;
 }
 

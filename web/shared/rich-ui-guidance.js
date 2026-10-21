@@ -1,4 +1,5 @@
 import { seriesTable, suppliedFigures } from "./supplied-data.js";
+import { constrainedAnswer } from "./answer-contract.js";
 
 // Worked mathematics belongs in ordinary Markdown/LaTeX, where each line
 // can stream and be typeset. A generic "how do I" must not force UI JSON.
@@ -26,6 +27,7 @@ export const RICH_UI_GUIDANCE = [
 ].join(" ");
 
 export function richPresentationFor(text = "") {
+  if (constrainedAnswer(text)) return null;
   if (mathRequest(text)) return null;
   if (/\b(?:in|as|into) (?:a |the )?table\b/i.test(text)) return null;
   if (
@@ -223,6 +225,7 @@ function shapeHint(text) {
 }
 
 export function richGuidanceFor(messages = []) {
+  if (constrainedAnswer(messages.filter(x => x.role === "user").at(-1)?.content)) return "";
   const last = messages.filter((x) => x.role === "user").at(-1)?.content;
   const text =
     typeof last === "string"

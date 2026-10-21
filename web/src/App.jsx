@@ -1,3 +1,5 @@
+import { openingChat } from "./lib/chat-opening.js";
+import { replyTrace } from "./lib/reply-trace.js";
 import React, {
   useCallback,
   useEffect,
@@ -560,18 +562,14 @@ export function App() {
     setToast(current => [...current, { id: crypto.randomUUID(), ...next }].slice(-6));
   }
 
-  /* A fresh launch opens on a new conversation, reusing an empty one rather
-     than piling them up. The chat this tab already had open (a reload, or the
+  /* A fresh launch owns a new conversation. The chat this tab already had open (a reload, or the
      phone reviving a backgrounded app) comes back instead, unless the app was
      opened from its "New conversation" shortcut. */
   function chooseOpening(saved) {
     const shortcut = new URLSearchParams(location.search).has("new");
     if (shortcut) history.replaceState(null, "", "/");
     const open = readOpenChat();
-    if (!shortcut && saved.some((chat) => chat.id === open)) return { list: saved, id: open };
-    const empty = saved.find((chat) => !chat.messages.length && !chat.pinned);
-    const chat = empty || freshChat();
-    return { list: [chat, ...saved.filter((other) => other !== chat)], id: chat.id };
+    return openingChat(saved, open, shortcut, freshChat);
   }
 
   async function loadSession() {
@@ -1528,6 +1526,7 @@ export function App() {
   async function followReply({ chatId, id, title, start = null, resumeFrom = null, run = id, mirror = false }) {
     /* One reply per conversation; a second would only talk over the first. */
     if (runs.current.has(chatId)) return;
+    let trace = replyTrace(run);
     const here = () => writing.current.chatId === chatId;
     if (here()) {
       setError("");
@@ -1572,6 +1571,7 @@ export function App() {
     /* Words are committed once per frame, not once per network fragment. */
     const flush = () => {
       frame = 0;
+      if (received.trim()) trace.mark("first_render_commit");
       received = normalizeReplySpacing(received);
       updateMessage({ content: placeImages(cleanAnswer(stripMemoryNotes(received)), generated, succeeded), ...(reasoning && { reasoning: reasoning.slice(-12000) }) });
     };
@@ -1623,6 +1623,7 @@ export function App() {
           fromServer: true,
         });
       if (name === "jarvis.complete") {
+        trace.mark("complete_event");
         completed = true;
         releaseHeld();
         updateMessage({ truncated: false });
@@ -1708,6 +1709,7 @@ export function App() {
         schedule();
       }
       if (choice?.delta?.content) {
+        trace.mark("first_answer_chunk");
         let piece = choice.delta.content;
         if (joining) {
           joinBuffer += piece;
@@ -1862,6 +1864,8 @@ export function App() {
                 const untouched = seq < 0 && !received && run === id;
                 if (!untouched) {
                   run = crypto.randomUUID();
+                  trace.finish("restarted");
+                  trace = replyTrace(run);
                   if (hasAnswer(received)) {
                     body = continueRequest(original, received, run);
                     joining = true;
@@ -2016,6 +2020,7 @@ export function App() {
         cancelAnimationFrame(frame);
         flush();
       }
+      trace.finish(succeeded ? "completed" : detached || endedElsewhere || slot.stopping ? "stopped_or_detached" : "error");
       /* A reply that carries on without this page stays marked as running.
          A mirror leaves the final word to the device that sent it. */
       const carriesOn = detached || lost || quiet || (mirror && !slot.stopping && !endedElsewhere);

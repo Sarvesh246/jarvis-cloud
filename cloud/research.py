@@ -780,6 +780,9 @@ class Research(WebSearchProvider):
 
 def register(ctx):
     ctx.register_web_search_provider(Research())
+    from .verification import SCHEMA as VERIFY_SCHEMA, verification_tool
+    ctx.register_tool(name="python_verify", toolset="web", schema=VERIFY_SCHEMA,
+                      handler=verification_tool, description="Isolated Python code and assertion tests")
     from .weather import SCHEMA, weather_tool
     ctx.register_tool(name="weather_forecast", toolset="web", schema=SCHEMA,
                       handler=weather_tool, description="Verified local weather and forecast dates")

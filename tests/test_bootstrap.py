@@ -44,6 +44,11 @@ class BootstrapTests(unittest.TestCase):
                 spec.loader.exec_module(module)
                 context = unittest.mock.Mock()
                 module.register(context)
+                verification = next(call.kwargs for call in context.register_tool.call_args_list
+                                    if call.kwargs.get('name') == 'python_verify')
+                self.assertEqual(verification['toolset'], 'web')
+                self.assertEqual(verification['handler'].__module__, 'test_installed_research.verification')
+                self.assertTrue((plugin / 'verification_worker.py').exists())
                 registered = context.register_tool.call_args.kwargs
                 self.assertEqual(registered['name'], 'weather_forecast')
                 self.assertEqual(registered['toolset'], 'web')

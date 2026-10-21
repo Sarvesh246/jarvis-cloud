@@ -1,0 +1,36 @@
+"""Align the pinned cloud gateway's normalization limit with our request budget."""
+import ast
+from pathlib import Path
+import sys
+
+try:
+    from context_policy import CONTEXT_POLICY
+except ModuleNotFoundError:
+    from cloud.context_policy import CONTEXT_POLICY
+
+
+def align_normalization(source, limit=CONTEXT_POLICY["requestChars"]):
+    tree = ast.parse(source)
+    assignments = [node for node in tree.body if isinstance(node, ast.Assign)
+                   and any(isinstance(target, ast.Name) and target.id == "MAX_NORMALIZED_TEXT_LENGTH"
+                           for target in node.targets)]
+    if len(assignments) != 1 or not isinstance(assignments[0].value, ast.Constant):
+        raise ValueError("Pinned gateway normalization contract changed")
+    value = assignments[0].value
+    if type(value.value) is not int or value.value not in (65_536, limit):
+        raise ValueError("Unexpected gateway normalization limit")
+    functions = {node.name: node for node in tree.body if isinstance(node, ast.FunctionDef)}
+    for name in ("_cap_text", "_normalize_chat_content"):
+        if name not in functions or "MAX_NORMALIZED_TEXT_LENGTH" not in ast.dump(functions[name]):
+            raise ValueError("Pinned gateway normalizer changed")
+    lines = source.splitlines(keepends=True)
+    line = lines[value.lineno - 1]
+    lines[value.lineno - 1] = line[:value.col_offset] + str(limit) + line[value.end_col_offset:]
+    result = "".join(lines)
+    ast.parse(result)
+    return result
+
+
+if __name__ == "__main__":
+    path = Path(sys.argv[1])
+    path.write_text(align_normalization(path.read_text(encoding="utf-8")), encoding="utf-8")

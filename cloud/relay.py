@@ -1107,6 +1107,15 @@ class Relay:
             return f"{at - started:.1f}s" if at is not None else "-"
         options = body.get("model_options")
         effort = options.get("reasoning_effort") if isinstance(options, dict) else None
+        self.report(json.dumps({
+            "schema": 1, "kind": "vaelo.trace", "layer": "relay", "run": run.id,
+            "route": run.route, "outcome": run.outcome,
+            "total_ms": round(max(0, self.clock() - started) * 1000),
+            "marks_ms": {name: round(max(0, value - started) * 1000)
+                         for name, value in (("first_thought", run.first_thought),
+                                             ("first_answer", run.first_answer)) if value is not None},
+            "counts": {"upstream_requests": run.upstream_requests},
+        }))
         self.report(
             f"vaelo run {run.id[:8]} route={run.route or '-'} effort={effort or 'default'} "
             f"first_thought={since(run.first_thought)} first_answer={since(run.first_answer)} "

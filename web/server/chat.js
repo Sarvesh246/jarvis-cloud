@@ -1,4 +1,6 @@
 import { richGuidanceFor } from "../shared/rich-ui-guidance.js";
+import { ANSWER_CONTRACT_GUIDANCE } from "../shared/answer-contract.js";
+import { requestTrace } from "../shared/request-trace.js";
 import { forgetHealthy, noteHealthy, waitForBackend } from "./backend-readiness.js";
 import { HttpError } from "./security.js";
 import { WORK_GUIDANCE } from "./work-context.js";
@@ -116,7 +118,7 @@ export const TYPESETTING_GUIDANCE =
 /* For questions where the person is trying to understand or solve something
    (homework, how-tos, concepts). Short facts and chat skip all of it. */
 export const TEACHING_GUIDANCE =
-  "Teaching: when the person is learning or solving something (a math or science problem, a concept, a how-to), teach it; do not just state the result. " +
+  ANSWER_CONTRACT_GUIDANCE + " Teaching: when the person is learning or solving something (a math or science problem, a concept, a how-to), teach it unless their explicit output constraints require a shorter or raw answer. All following teaching conventions are optional under those constraints. " +
   "Open with a one-line **Big idea** in plain words, then **Given** and **Goal** for a problem. Build a picture before any symbols: say what is changing and why, with a tiny concrete example or analogy when it helps. " +
   "Number each step with a bold title (1. **Set up the equation**), then say what you do and why in one plain sentence, then show the work. Define every symbol the first time it appears. Never skip algebra a beginner would trip on. " +
   "**Bold** the key terms, the key results and the final answer; give the final answer in its own **Answer:** line. " +
@@ -481,6 +483,10 @@ export async function streamChat(req, res, cfg, user, input, request = fetch, { 
   if (!cfg.backend.startsWith("https://") || !cfg.apiKey)
     throw new HttpError(503, "Cloud connection is not configured.");
   const deadline = Date.now() + followMs;
+  const trace = requestTrace(input.runId, "web-relay", { report: record => {
+    if (process.env.VERCEL) console.info(JSON.stringify(record));
+  }});
+  let tracedOutcome = "error";
   res.statusCode = 200;
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-store, no-transform");
@@ -510,7 +516,9 @@ export async function streamChat(req, res, cfg, user, input, request = fetch, { 
         },
       });
       const ready = Date.now();
+      trace.mark("backend_ready");
       await startRun(cfg, user, input, controller.signal, request);
+      trace.mark("run_started");
       if (process.env.VERCEL) console.info(
         `vaelo run ${input.runId.slice(0, 8)} tier=${input.tier || "normal"} fast=${Boolean(input.fast && !user.guest)} ` +
         `backend=${woke ? "woken" : "ready"} wait_ms=${ready - began} start_ms=${Date.now() - ready}`,
@@ -519,6 +527,7 @@ export async function streamChat(req, res, cfg, user, input, request = fetch, { 
     const outcome = await followRun(
       res, cfg, user, input.runId, input.after ?? -1, controller.signal, request, deadline,
     );
+    tracedOutcome = outcome;
     if (outcome === "ended") noteHealthy(cfg.backend, request);
     if (outcome === "missing")
       event(res, "jarvis.error", {
@@ -541,6 +550,7 @@ export async function streamChat(req, res, cfg, user, input, request = fetch, { 
             : "The connection ended before Vaelo finished. Your prompt is still here; retry when ready.",
       });
   } finally {
+    trace.finish(controller.signal.aborted ? "disconnected" : tracedOutcome);
     clearInterval(heartbeat);
     res.off("close", leave);
     req.off?.("aborted", leave);
