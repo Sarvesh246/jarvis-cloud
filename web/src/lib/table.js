@@ -70,15 +70,18 @@ export function toNumber(value) {
   // Accounting style: "(1,200)" and "$(50)" are negative.
   const bracketed = text.match(/^([$€£¥₹]?)\(([^()]+)\)$/);
   if (bracketed) {
-    if (/^[-+−]/.test(bracketed[2])) return NaN;
+    // Parentheses already supply the sign. An inner sign, including one
+    // after a currency symbol, must not be negated into a different amount.
+    if (/[-+−]/.test(bracketed[2])) return NaN;
     const n = toNumber(bracketed[1] + bracketed[2]);
     return n === 0 ? 0 : -n;
   }
-  const match = text.match(/^[-+−]?[$€£¥₹]?[-+−]?(\d+(\.\d+)?|\.\d+)([kmb%])?$/i);
-  if (!match) return NaN;
+  const match = text.match(/^([-+−]?)[$€£¥₹]?([-+−]?)(\d+(?:\.\d+)?|\.\d+)([kmb%])?$/i);
+  // A sign may precede or follow the currency, but never occupy both slots.
+  if (!match || (match[1] && match[2])) return NaN;
   const negative = /^[-−]|^[$€£¥₹][-−]/.test(text);
-  let n = parseFloat(match[1]);
-  const suffix = (match[3] || "").toLowerCase();
+  let n = parseFloat(match[3]);
+  const suffix = (match[4] || "").toLowerCase();
   if (suffix === "k") n *= 1e3;
   if (suffix === "m") n *= 1e6;
   if (suffix === "b") n *= 1e9;
