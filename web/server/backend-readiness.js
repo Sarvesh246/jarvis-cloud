@@ -1,19 +1,47 @@
 import { setTimeout as delay } from "node:timers/promises";
+import { performance } from "node:perf_hooks";
+
+// Health is a small status document, even when the edge returns a loading
+// page. Bound actual bytes and release the stream before another probe.
+const HEALTH_BYTES = 16 * 1024;
+async function healthReady(response, signal) {
+  let reader;
+  try {
+    signal.throwIfAborted();
+    if (!response.ok || !response.body) return false;
+    reader = response.body.getReader();
+    const chunks = [];
+    let size = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      signal.throwIfAborted();
+      if (done) break;
+      size += value.byteLength;
+      if (size > HEALTH_BYTES) return false;
+      chunks.push(value);
+    }
+    const text = new TextDecoder("utf-8", { fatal: true }).decode(Buffer.concat(chunks));
+    return JSON.parse(text)?.status === "ok";
+  } finally {
+    try { await (reader ? reader.cancel() : response.body?.cancel()); } catch {}
+    reader?.releaseLock();
+  }
+}
 
 /* One health check. Render's edge answers a sleeping service with a 502 or
    an HTML loading page, and a booting Hermes with setup JSON, so anything but
    {"status":"ok"} is "not ready yet", never an outage on its own. */
 export async function probeBackend(backend, { signal, request = fetch, timeoutMs = 8000 } = {}) {
   const base = backend.replace(/\/$/, "");
+  signal?.throwIfAborted();
   try {
+    const requestSignal = AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(timeoutMs)]);
     const response = await request(`${base}/health`, {
-      signal: AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(timeoutMs)]),
+      signal: requestSignal,
     });
-    if (!response.ok) {
-      await response.body?.cancel();
-      return false;
-    }
-    return (await response.json()).status === "ok";
+    const ready = await healthReady(response, requestSignal);
+    requestSignal.throwIfAborted();
+    return ready;
   } catch {
     signal?.throwIfAborted();
     return false;
@@ -22,12 +50,14 @@ export async function probeBackend(backend, { signal, request = fetch, timeoutMs
 
 /* A plain page GET is what makes Render start a sleeping free instance. */
 export async function wakeBackend(backend, { signal, request = fetch, timeoutMs = 10000 } = {}) {
+  signal?.throwIfAborted();
   try {
     const response = await request(`${backend.replace(/\/$/, "")}/`, {
       headers: { Accept: "text/html" },
       signal: AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(timeoutMs)]),
     });
     await response.body?.cancel();
+    signal?.throwIfAborted();
   } catch {
     signal?.throwIfAborted();
   }
@@ -52,7 +82,8 @@ export function forgetHealthy(backend, request = fetch) {
 
 function recentlyHealthy(backend, request) {
   const at = healthy.get(request)?.get(backend.replace(/\/$/, ""));
-  return at !== undefined && Date.now() - at < TRUST_HEALTHY_MS;
+  const age = Date.now() - at;
+  return age >= 0 && age < TRUST_HEALTHY_MS;
 }
 
 // Render's free instance can return an edge 502 while asleep or starting.
@@ -67,25 +98,28 @@ export async function waitForBackend(backend, {
   const base = backend.replace(/\/$/, "");
   signal?.throwIfAborted();
   if (recentlyHealthy(base, request)) return;
-  const deadline = Date.now() + maxWaitMs;
+  // A corrected system clock must not prolong or prematurely end warm-up.
+  const deadline = performance.now() + maxWaitMs;
   let woke = false;
-  while (Date.now() < deadline) {
+  while (performance.now() < deadline) {
     signal?.throwIfAborted();
     const probeSignal = () => AbortSignal.any([
       ...(signal ? [signal] : []),
-      AbortSignal.timeout(Math.max(1, Math.min(15000, deadline - Date.now()))),
+      AbortSignal.timeout(Math.max(1, Math.ceil(Math.min(15000, deadline - performance.now())))),
     ]);
     try {
-      const response = await request(`${base}/health`, { signal: probeSignal() });
-      if (response.ok && (await response.json()).status === "ok") {
+      const requestSignal = probeSignal();
+      const response = await request(`${base}/health`, { signal: requestSignal });
+      const ready = await healthReady(response, requestSignal);
+      requestSignal.throwIfAborted();
+      if (ready) {
         noteHealthy(base, request);
         return;
       }
-      if (!response.ok) await response.body?.cancel();
     } catch {
       signal?.throwIfAborted();
     }
-    if (!woke && Date.now() < deadline) {
+    if (!woke && performance.now() < deadline) {
       woke = true;
       onWaking();
       try {
@@ -93,11 +127,12 @@ export async function waitForBackend(backend, {
           headers: { Accept: "text/html" }, signal: probeSignal(),
         });
         await response.body?.cancel();
+        signal?.throwIfAborted();
       } catch {
         signal?.throwIfAborted();
       }
     }
-    await pause(Math.min(2500, Math.max(0, deadline - Date.now())), undefined, { signal });
+    await pause(Math.min(2500, Math.max(0, deadline - performance.now())), undefined, { signal });
   }
   throw new Error("The cloud server is still starting. Please try again in a moment.");
 }
