@@ -22,6 +22,7 @@ const check = value => {
 };
 
 const readText = value => {
+  if (typeof value !== "string") throw new HttpError(400, "Write a short note first.");
   const text = cleanNote(value);
   if (!text) throw new HttpError(400, "Write a short note first.");
   return text;

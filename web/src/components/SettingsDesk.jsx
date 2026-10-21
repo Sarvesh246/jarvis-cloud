@@ -15,6 +15,7 @@ import {
   X,
 } from "@phosphor-icons/react";
 import { RETENTION_CHOICES } from "../../shared/retention.js";
+import { useMemory } from "../lib/use-memory.js";
 import { listVoices, onVoices, speak, speechSupport, stopSpeaking } from "../lib/speech.js";
 import { InstallSteps } from "./Onboarding.jsx";
 import { DesktopUpdates } from "./DesktopUpdates.jsx";
@@ -66,8 +67,8 @@ const Row = ({ title, help, children, htmlFor }) => (
   </div>
 );
 
-const Switch = ({ id, label, checked, onChange }) => (
-  <input id={id} className="sd-switch" type="checkbox" role="switch" aria-label={label} checked={checked} onChange={(event) => onChange(event.target.checked)} />
+const Switch = ({ id, label, checked, onChange, disabled }) => (
+  <input id={id} className="sd-switch" type="checkbox" role="switch" aria-label={label} checked={checked} disabled={disabled} onChange={(event) => onChange(event.target.checked)} />
 );
 
 const Segment = ({ label, value, options, onChange }) => (
@@ -222,24 +223,17 @@ function Replies({ prefs, onChange }) {
 }
 
 function Memory({ request }) {
-  const memory = useAccount(request, "/api/chats?resource=memory");
+  const memory = useMemory(request);
   const [draft, setDraft] = useState("");
   const [editing, setEditing] = useState(null);
-  const [problem, setProblem] = useState("");
-  const [busy, setBusy] = useState(false);
-  const run = async (body) => {
-    setBusy(true); setProblem("");
-    try { memory.set(await memory.post(body)); return true; }
-    catch (error) { setProblem(error.message); return false; }
-    finally { setBusy(false); }
-  };
+  const { problem, busy, run } = memory;
   if (memory.status === "loading") return <Group title="Memory"><p className="sd-note" role="status">Loading what Vaelo has noted…</p></Group>;
   if (!memory.data) return <Group title="Memory"><p className="sd-note" data-tone="problem" role="alert">{memory.error || "Memory is unavailable right now."}</p><button type="button" className="sd-button" onClick={memory.load}>Try again</button></Group>;
   const { enabled, items } = memory.data;
   return (
     <Group title="Memory">
       <Row title="Let Vaelo note lasting facts" help="When you say “remember that…” or share something that will stay true, Vaelo saves one short note and says so in its reply. Never from replies that used the web or your files." htmlFor="sd-memory">
-        <Switch id="sd-memory" label="Let Vaelo note lasting facts" checked={enabled} onChange={(next) => run({ action: "enable", enabled: next })} />
+        <Switch id="sd-memory" label="Let Vaelo note lasting facts" checked={enabled} disabled={busy} onChange={(next) => run({ action: "enable", enabled: next })} />
       </Row>
       <p className="sd-note">Notes are kept with your account, so every device shares them, and they are sent with your messages while this is on. {items.length} of 40 used.</p>
       {!items.length && <p className="sd-note">Nothing noted yet.</p>}
@@ -249,9 +243,9 @@ function Memory({ request }) {
             {editing?.id === item.id ? (
               <form className="sd-memo-edit" onSubmit={async (event) => { event.preventDefault(); if (await run({ action: "edit", id: item.id, text: editing.text })) setEditing(null); }}>
                 <label className="sr-only" htmlFor={`sd-edit-${item.id}`}>Edit note</label>
-                <input id={`sd-edit-${item.id}`} className="sd-input" type="text" maxLength={280} value={editing.text} autoFocus onChange={(event) => setEditing({ id: item.id, text: event.target.value })} />
+                <input id={`sd-edit-${item.id}`} className="sd-input" type="text" maxLength={280} value={editing.text} disabled={busy} autoFocus onChange={(event) => setEditing({ id: item.id, text: event.target.value })} />
                 <button type="submit" className="sd-button" disabled={busy}>Save</button>
-                <button type="button" className="sd-button" onClick={() => setEditing(null)}>Cancel</button>
+                <button type="button" className="sd-button" disabled={busy} onClick={() => setEditing(null)}>Cancel</button>
               </form>
             ) : (
               <>
@@ -259,7 +253,7 @@ function Memory({ request }) {
                   <span className="sd-row-title">{item.text}</span>
                   <span className="sd-row-help">{item.source === "vaelo" ? "Noted by Vaelo" : "Added by you"} · {ago(item.updated)}</span>
                 </span>
-                <button type="button" className="sd-button" onClick={() => setEditing({ id: item.id, text: item.text })}>Edit</button>
+                <button type="button" className="sd-button" disabled={busy} onClick={() => setEditing({ id: item.id, text: item.text })}>Edit</button>
                 <button type="button" className="sd-button" data-tone="clay" disabled={busy} aria-label={`Delete note: ${item.text}`} onClick={() => run({ action: "remove", id: item.id })}>Delete</button>
               </>
             )}
@@ -268,7 +262,7 @@ function Memory({ request }) {
       </ul>
       <form className="sd-memo-add" onSubmit={async (event) => { event.preventDefault(); if (draft.trim() && await run({ action: "add", text: draft })) setDraft(""); }}>
         <label className="sr-only" htmlFor="sd-memo-new">Add a note</label>
-        <input id="sd-memo-new" className="sd-input" type="text" maxLength={280} value={draft} placeholder="Add something for Vaelo to remember" onChange={(event) => setDraft(event.target.value)} />
+        <input id="sd-memo-new" className="sd-input" type="text" maxLength={280} value={draft} disabled={busy} placeholder="Add something for Vaelo to remember" onChange={(event) => setDraft(event.target.value)} />
         <button type="submit" className="sd-button" disabled={busy || !draft.trim()}>Add</button>
       </form>
       {problem && <p className="sd-note" data-tone="problem" role="alert">{problem}</p>}
@@ -276,7 +270,7 @@ function Memory({ request }) {
   );
 }
 
-function Personal({ prefs, onChange, request, guest }) {
+function Personal({ prefs, onChange, request, guest, accountId }) {
   return (
     <div className="sd-page">
       <Head title="Personalization" line="What Vaelo knows about you, and how it speaks to you." />
@@ -291,7 +285,7 @@ function Personal({ prefs, onChange, request, guest }) {
           <span className="sd-note">{prefs.about.length} of 600. Sent with each message you write, and never shown back to you. Kept on this device.</span>
         </div>
       </Group>
-      {!guest && <Memory request={request} />}
+      {!guest && <Memory key={accountId} request={request} />}
     </div>
   );
 }
@@ -591,7 +585,7 @@ export function SettingsDesk({ open, user, prefs, onChange, onClose, onTools, on
   const panels = {
     appearance: <Appearance prefs={prefs} onChange={onChange} />,
     replies: <Replies prefs={prefs} onChange={onChange} />,
-    you: <Personal prefs={prefs} onChange={onChange} request={request} guest={!!user?.guest} />,
+    you: <Personal prefs={prefs} onChange={onChange} request={request} guest={!!user?.guest} accountId={user?.sub} />,
     voice: <Voice prefs={prefs} onChange={onChange} />,
     notify: <Notify prefs={prefs} onChange={onChange} notify={notify} />,
     devices: <DevicesHelp user={user} desktop={desktop} store={store} request={request} onTools={onTools} onWelcome={onWelcome} onSignOut={onSignOut} />,

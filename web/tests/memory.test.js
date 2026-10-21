@@ -108,3 +108,42 @@ test("an unreadable memory record never blocks a reply or lets one be written ov
   assert.deepEqual(await withMemory(input, owner, down), input);
   assert.deepEqual(await withMemory(input, owner, new MemoryStore(memoryStorage(), { enabled: () => false })), input);
 });
+
+test("non-text memory input is rejected without storing coerced objects or counters", async () => {
+  for (const text of [{ private: 'value' }, ['A note'], 123, false, null]) {
+    const memory = store();
+    const res = await call(memory, 'POST', { action: 'add', text });
+    assert.equal(res.statusCode, 400);
+    assert.deepEqual((await memory.read(owner.sub)).items, []);
+  }
+});
+
+test('invalid manual edits and mixed automatic notes leave existing memory untouched', async () => {
+  const memory = store();
+  await memory.add(owner.sub, ['Likes tea']);
+  const before = await memory.read(owner.sub), id = before.items[0].id;
+  for (const body of [
+    { action: 'edit', id, text: { unexpected: 'object' } },
+    { action: 'note', notes: ['Valid note', { unexpected: 'object' }] },
+    { action: 'add', text: ['array'] },
+  ]) {
+    assert.equal((await call(memory, 'POST', body)).statusCode, 400);
+    assert.deepEqual(await memory.read(owner.sub), before);
+  }
+  const saved = await call(memory, 'POST', { action: 'edit', id, text: '  café 漢字\nPrefers tea  ' });
+  assert.equal(saved.statusCode, 200);
+  assert.equal(saved.body.items[0].text, 'café 漢字 Prefers tea');
+});
+
+test('concurrent memory edits preserve unrelated notes through compare-and-swap retries', async () => {
+  const storage = memoryStorage();
+  const a = new MemoryStore(storage, { enabled: () => true });
+  const b = new MemoryStore(storage, { enabled: () => true });
+  await a.add(owner.sub, ['First', 'Second']);
+  const { items } = await a.read(owner.sub);
+  await Promise.all([a.edit(owner.sub, items[0].id, 'First edited'), b.edit(owner.sub, items[1].id, 'Second edited')]);
+  assert.deepEqual((await a.read(owner.sub)).items.map(item => item.text), ['First edited', 'Second edited']);
+  await Promise.all([a.remove(owner.sub, items[0].id), b.add(owner.sub, ['Third'])]);
+  assert.deepEqual((await a.read(owner.sub)).items.map(item => item.text), ['Second edited', 'Third']);
+  assert.deepEqual((await a.read('unrelated-account')).items, []);
+});
