@@ -317,7 +317,7 @@ export function PhoneRail({
       /* the arrangement still holds for this visit */
     }
   }
-  const reorder = usePinnedReorder({ aside, ids: pinned, setOrder: setPinOrder, saveOrder, chats, disabled: !!query || view !== "chats" });
+  const reorder = usePinnedReorder({ aside, ids: pinned, setOrder: setPinOrder, saveOrder, chats, owner: orderKey, disabled: !open || !!query || view !== "chats" });
 
   const results = searchChats(chats.filter((chat) => chat.messages.length), query);
 

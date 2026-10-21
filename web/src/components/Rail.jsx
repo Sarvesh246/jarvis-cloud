@@ -207,7 +207,7 @@ function WideRail({
      again, focus goes back to the button that opens it, unless choosing
      something in it already moved focus on. */
   const aside = useRef(null);
-  const reorder = usePinnedReorder({ aside, ids: pinned, setOrder: setPinOrder, saveOrder, chats, disabled: false });
+  const reorder = usePinnedReorder({ aside, ids: pinned, setOrder: setPinOrder, saveOrder, chats, owner: orderKey, disabled: !!collapsed });
   const close = useRef(null);
   const wasOpen = useRef(open);
   useEffect(() => {
