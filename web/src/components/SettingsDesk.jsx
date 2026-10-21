@@ -16,6 +16,7 @@ import {
 } from "@phosphor-icons/react";
 import { RETENTION_CHOICES } from "../../shared/retention.js";
 import { useMemory } from "../lib/use-memory.js";
+import { useRetentionSettings } from "../lib/use-retention.js";
 import { listVoices, onVoices, speak, speechSupport, stopSpeaking } from "../lib/speech.js";
 import { InstallSteps } from "./Onboarding.jsx";
 import { DesktopUpdates } from "./DesktopUpdates.jsx";
@@ -71,11 +72,11 @@ const Switch = ({ id, label, checked, onChange, disabled }) => (
   <input id={id} className="sd-switch" type="checkbox" role="switch" aria-label={label} checked={checked} disabled={disabled} onChange={(event) => onChange(event.target.checked)} />
 );
 
-const Segment = ({ label, value, options, onChange }) => (
+const Segment = ({ label, value, options, onChange, disabled }) => (
   <div className="sd-seg" role="radiogroup" aria-label={label} style={{ "--choices": options.length, "--choice": Math.max(0, options.findIndex(([id]) => id === value)) }}>
     <span className="sd-seg-indicator" aria-hidden="true" />
     {options.map(([id, text]) => (
-      <button key={id} type="button" role="radio" aria-checked={value === id} onClick={() => onChange(id)}>
+      <button key={id} type="button" role="radio" aria-checked={value === id} disabled={disabled} onClick={() => onChange(id)}>
         {text}
       </button>
     ))}
@@ -442,17 +443,11 @@ function DevicesHelp({ user, desktop, store, request, onTools, onWelcome, onSign
 }
 
 function History({ request, onRetention }) {
-  const history = useAccount(request, "/api/chats?resource=retention");
+  const history = useRetentionSettings(request, onRetention);
   const [pending, setPending] = useState(null);
-  const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState("");
+  const { busy, problem } = history;
   const save = async (days, confirm) => {
-    setBusy(true); setProblem("");
-    try {
-      const saved = await history.post({ days, ...(confirm && { confirm: true }) });
-      history.set(saved); setPending(null); onRetention?.(saved.days, saved.now);
-    } catch (error) { setProblem(error.message); }
-    finally { setBusy(false); }
+    if (await history.run({ days, ...(confirm && { confirm: true }) })) setPending(null);
   };
   if (history.status === "loading") return <Group title="Conversation history"><p className="sd-note" role="status">Loading…</p></Group>;
   if (!history.data) return <Group title="Conversation history"><p className="sd-note" data-tone="problem" role="alert">{history.error || "History settings are unavailable right now."}</p><button type="button" className="sd-button" onClick={history.load}>Try again</button></Group>;
@@ -460,7 +455,7 @@ function History({ request, onRetention }) {
   return (
     <Group title="Conversation history">
       <Row title="Keep conversations for" help={days ? `Older than ${days} days are deleted` : "Nothing is deleted automatically"}>
-        <Segment label="Keep conversations for" value={String(pending ?? days)} options={[["0", "Forever"], ...RETENTION_CHOICES.map((choice) => [String(choice), `${choice} days`])]}
+        <Segment label="Keep conversations for" disabled={busy} value={String(pending ?? days)} options={[["0", "Forever"], ...RETENTION_CHOICES.map((choice) => [String(choice), `${choice} days`])]}
           onChange={(value) => { const next = Number(value); if (next === 0) { setPending(null); if (days) save(0); } else setPending(next === days ? null : next); }} />
       </Row>
       {pending && (
@@ -468,7 +463,7 @@ function History({ request, onRetention }) {
           <p><strong>This deletes conversations for good.</strong> Anything not touched in {pending} days is removed from this device, from every other device you’re signed in on, and from the cloud copy. It can’t be undone. Pinned conversations, the one you have open and any reply being written are always kept.</p>
           <div className="sd-inline">
             <button type="button" className="sd-button" data-tone="clay" disabled={busy} onClick={() => save(pending, true)}>{busy ? "Saving…" : `Delete after ${pending} days`}</button>
-            <button type="button" className="sd-button" onClick={() => setPending(null)}>Cancel</button>
+            <button type="button" className="sd-button" disabled={busy} onClick={() => setPending(null)}>Cancel</button>
           </div>
         </div>
       )}
@@ -589,7 +584,7 @@ export function SettingsDesk({ open, user, prefs, onChange, onClose, onTools, on
     voice: <Voice prefs={prefs} onChange={onChange} />,
     notify: <Notify prefs={prefs} onChange={onChange} notify={notify} />,
     devices: <DevicesHelp user={user} desktop={desktop} store={store} request={request} onTools={onTools} onWelcome={onWelcome} onSignOut={onSignOut} />,
-    privacy: <Privacy prefs={prefs} place={place} request={request} guest={!!user?.guest} onRetention={onRetention} />,
+    privacy: <Privacy key={user?.sub || "guest"} prefs={prefs} place={place} request={request} guest={!!user?.guest} onRetention={onRetention} />,
     keys: <Keys prefs={prefs} onChange={onChange} />,
   };
 

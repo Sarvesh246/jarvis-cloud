@@ -32,6 +32,7 @@ import { refreshWorkReferences, workContextFor, proposalDraft, chatToWorkspace, 
 import { getWorkspace } from "../shared/workspaces.js";
 import { memoryNotes, stripMemoryNotes } from "../shared/memory-notes.js";
 import { expiredChatIds } from "../shared/retention.js";
+import { useRetention } from "./lib/use-retention.js";
 import { getCheck } from "../shared/checks.js";
 import { Mark } from "./components/Mark.jsx";
 import { PresentationContext } from "./components/blocks/Blocks.jsx";
@@ -706,20 +707,13 @@ export function App() {
 
   /* "Keep conversations for N days" lives on the account, so every device
      follows it. Removing a conversation here removes it everywhere (the sync
-     turns it into a deletion), so the pass is slow, bounded, waits for the
-     first sync, and never takes the open, pinned or running conversations. */
-  const [retention, setRetention] = useState({ days: 0, skew: 0 });
+     turns it into a deletion), so the pass is slow, bounded, gives initial
+     sync a grace period, and never takes open, pinned or running conversations. */
   const retentionOwner = session?.user && !session.user.guest && !session.offline ? session.user.sub : null;
-  useEffect(() => {
-    if (!retentionOwner) return undefined;
-    let gone = false;
-    request("/api/chats?resource=retention")
-      .then((result) => { if (!gone) setRetention({ days: result.days, skew: result.now - Date.now() }); })
-      .catch(() => {});
-    return () => { gone = true; };
-  }, [retentionOwner]);
+  const retention = useRetention(retentionOwner, request);
   const prune = useRef(null);
   prune.current = () => {
+    if (!retentionOwner || !retention.days || !retention.authorized()) return;
     const ids = expiredChatIds(chatsRef.current, retention.days, {
       now: Date.now() + retention.skew, activeId, busyIds: [...runs.current.keys(), ...startingRuns.current.keys()],
     });
@@ -2704,7 +2698,7 @@ export function App() {
           onWelcome={() => { setSettingsOpen(false); writeOnboarding("replay"); setOnboarding("replay"); }}
           onSignOut={() => { setSettingsOpen(false); logout(); }}
           request={request}
-          onRetention={(days, now) => setRetention({ days, skew: now - Date.now() })}
+          onRetention={retention.update}
           prefs={prefs}
           onChange={(patch) => setPrefs((current) => ({ ...current, ...patch }))}
           onClose={() => setSettingsOpen(false)}
