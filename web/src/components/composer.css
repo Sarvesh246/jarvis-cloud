@@ -360,6 +360,9 @@
   display: flex;
   flex-direction: column;
   width: 19rem;
+  box-sizing: border-box;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: var(--s-2);
   border: 1px solid var(--hairline-strong);
   border-radius: var(--r-lg);
@@ -370,10 +373,33 @@
   animation: menu-in var(--dur-2) var(--ease) both;
 }
 
+/* Opening downward, the menu has to sit above what follows the box
+   (the starter chips) */
+.dock:has(.tools-menu[data-down]) {
+  z-index: 30;
+}
+
+/* On the new-chat screen the box sits mid-page with nothing above it to
+   spare, so the menu opens downward instead */
+.tools-menu[data-down] {
+  top: calc(100% + var(--s-2));
+  bottom: auto;
+  transform-origin: 0 0;
+  scroll-margin-bottom: var(--s-3);
+  animation-name: menu-in-down;
+}
+
 @keyframes menu-in {
   from {
     opacity: 0;
     transform: translateY(4px) scale(0.97);
+  }
+}
+
+@keyframes menu-in-down {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.97);
   }
 }
 

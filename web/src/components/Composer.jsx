@@ -292,7 +292,7 @@ const ROLE_CHOICES = [
 /* On a larger screen the tools open beside the button. The roles have a
    page of their own, reached from the main list, so the main list stays
    short and the roles keep their full descriptions. */
-function ToolsMenu({ options, onOptions, onClose, anchor, guest }) {
+function ToolsMenu({ options, onOptions, onClose, anchor, guest, down }) {
   const menu = useRef(null);
   const [glide, setGlide] = useState(null);
   const [page, setPage] = useState("main");
@@ -310,6 +310,36 @@ function ToolsMenu({ options, onOptions, onClose, anchor, guest }) {
       moved: !!current,
     }));
   }
+  /* The menu never leaves the area it lives in. Docked at the bottom it
+     opens upward and is held below the header. On the new-chat screen it
+     opens downward: the page makes room by scrolling, and the menu is
+     brought into view. Only a window shorter than the menu scrolls inside
+     the menu itself. */
+  useLayoutEffect(() => {
+    const el = menu.current;
+    const button = anchor.current;
+    if (!el || !button) return;
+    const edge = 12;
+    const gap = 8;
+    let scroller = el.parentElement;
+    while (scroller && !/(auto|scroll)/.test(getComputedStyle(scroller).overflowY)) scroller = scroller.parentElement;
+    function place() {
+      const bounds = scroller?.getBoundingClientRect();
+      const top = Math.max(bounds?.top ?? 0, 0);
+      const bottom = Math.min(bounds?.bottom ?? innerHeight, innerHeight);
+      const room = down ? bottom - top : button.getBoundingClientRect().top - gap - top;
+      el.style.maxHeight = "none";
+      el.style.maxHeight = `${Math.max(Math.min(el.scrollHeight + el.offsetHeight - el.clientHeight, room - edge * 2), 160)}px`;
+    }
+    place();
+    const frame = down ? requestAnimationFrame(() => el.scrollIntoView({ block: "nearest", behavior: "smooth" })) : 0;
+    addEventListener("resize", place);
+    return () => {
+      cancelAnimationFrame(frame);
+      removeEventListener("resize", place);
+    };
+  }, [anchor, down]);
+
   const close = useRef(onClose);
   close.current = onClose;
   useEffect(() => {
@@ -362,6 +392,7 @@ function ToolsMenu({ options, onOptions, onClose, anchor, guest }) {
   return (
     <div
       className="tools-menu"
+      data-down={down || undefined}
       role="menu"
       aria-label="Tools"
       ref={menu}
@@ -571,6 +602,7 @@ export const Composer = forwardRef(function Composer(
     workContext,
     onClearWork,
     sendKey = "enter",
+    menuDown = false,
   },
   textarea,
 ) {
@@ -837,6 +869,7 @@ export const Composer = forwardRef(function Composer(
                   </button>
                   {menu && (
                     <ToolsMenu
+                      down={menuDown}
                       guest={guest}
                       options={options}
                       onOptions={onOptions}

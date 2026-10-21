@@ -2432,6 +2432,7 @@ export function App() {
               onDictating={setDictating}
               guest={guest}
               sendKey={prefs.sendKey}
+              menuDown={!messages.length}
               workContext={active?.workContext}
               onClearWork={() => setChats(current => current.map(chat => chat.id === activeId
                 ? {...chat,updated:Date.now(),workContext:undefined} : chat))}
