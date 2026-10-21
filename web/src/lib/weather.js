@@ -1,5 +1,6 @@
 import { wantsPlainReply } from './adaptive-ui.js';
 import { wantsSourceReply } from './rich-ui.js';
+import { markdownFences } from './markdown-fences.js';
 
 const DAY = /\b(?:today|tonight|tomorrow(?:\s+night)?|this evening|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)(?:\s+night)?\b/gi;
 const CONDITION = /\b(?:partly (?:sunny|cloudy)|mostly (?:sunny|clear|cloudy)|thunderstorms?|snow(?:y| showers)?|rain(?:y| showers)?|showers|sunny|clear(?: sky| skies)?|overcast|cloudy|fog(?:gy)?|windy)\b/i;
@@ -74,21 +75,35 @@ export function weatherForecast(content = '', request = '') {
 }
 
 // Only the bounded weather contract is promoted; arbitrary JSON stays literal.
+const calendarDate = value => {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value) || value.startsWith('0000')) return false;
+  const date = new Date(`${value}T00:00:00Z`);
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
+};
+const timestamp = value => {
+  if (typeof value !== 'string' || value.length > 40) return false;
+  const parts = value.match(/^(\d{4}-\d{2}-\d{2})T([01]\d|2[0-3]):([0-5]\d)(?::[0-5]\d(?:\.\d+)?)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)?$/);
+  return !!parts && calendarDate(parts[1]);
+};
+
 export function weatherData(content = '') {
   if (content.length > 60000) return null;
-  const fence = content.match(/^```weather\n([^]*?)\n```/m);
+  // Respect surrounding examples and require a real closing fence. A regex
+  // can mistake a nested weather example for the answer and delete its source.
+  const fence = markdownFences(content).find(block => block.language === 'weather' && block.closed);
   if (!fence) return null;
   try {
-    const data = JSON.parse(fence[1]);
+    const data = JSON.parse(fence.source);
     if (data.view !== undefined && !['day', 'week', 'range'].includes(data.view)) return null;
     if (data.view === 'week' && data.periods?.length !== 7) return null;
     const text = (v, max = 160) => typeof v === 'string' && v.length <= max;
     const numeric = v => v === null || (typeof v === 'number' && Number.isFinite(v));
-    const stamp = v => text(v, 40) && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(v);
+    const stamp = timestamp;
     if (data.version !== 1 || !text(data.title) || !text(data.timezone) || !['°F', '°C'].includes(data.unit) || !['mp/h', 'mph', 'km/h'].includes(data.windUnit) || !stamp(data.localTime) || !stamp(data.retrieved) || !Array.isArray(data.periods) || !data.periods.length || data.periods.length > 16) return null;
-    if (!data.periods.every(p => p && text(p.label, 10) && /^\d{4}-\d{2}-\d{2}$/.test(p.label) && text(p.condition) && ['high','low','rain','wind','uv'].every(k => numeric(p[k])) && [p.sunrise,p.sunset].every(v => v === null || stamp(v)) && Array.isArray(p.hours) && p.hours.length <= 25 && p.hours.every(h => h && stamp(h.time) && numeric(h.temperature) && numeric(h.rain) && text(h.condition) && typeof h.isDay === 'boolean'))) return null;
-    if (data.current && (!stamp(data.current.time) || !text(data.current.condition) || !['temperature','feels','humidity','wind'].every(k => numeric(data.current[k])) || typeof data.current.isDay !== 'boolean')) return null;
-    return { ...data, detailed: true, notes: '', fallback: content.replace(fence[0], '').trim() };
+    if (!data.periods.every(p => p && calendarDate(p.label) && text(p.condition) && ['high','low','rain','wind','uv'].every(k => numeric(p[k])) && [p.sunrise,p.sunset].every(v => v === null || stamp(v)) && Array.isArray(p.hours) && p.hours.length <= 25 && p.hours.every(h => h && stamp(h.time) && numeric(h.temperature) && numeric(h.rain) && text(h.condition) && typeof h.isDay === 'boolean'))) return null;
+    if (data.current != null && (!stamp(data.current.time) || !text(data.current.condition) || !['temperature','feels','humidity','wind'].every(k => numeric(data.current[k])) || typeof data.current.isDay !== 'boolean')) return null;
+    const trailingNewline = content.slice(fence.start, fence.end).match(/\r?\n$/)?.[0].length || 0;
+    return { ...data, detailed: true, notes: '', fallback: (content.slice(0, fence.start) + content.slice(fence.end - trailingNewline)).trim() };
   } catch { return null; }
 }
 
