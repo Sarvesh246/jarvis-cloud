@@ -1,6 +1,6 @@
 import { ReadingProgress } from "./UITools.jsx";
 import { CodeCompare } from "./blocks/AfterUI.jsx";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   ArrowBendUpLeft,
   CaretLeft,
@@ -59,11 +59,23 @@ function Revise({ source, range, disabled, onRevise, onAccept, onClear }) {
   const passage = source.slice(range.start, range.end);
   const tooLong = passage.length > PASSAGE_LIMIT;
 
-  useEffect(() => () => controller.current?.abort(), []);
-  useEffect(() => {
-    controller.current?.abort();
+  /* A proposal belongs to exactly one source and selection. Abort alone
+     cannot prevent already queued callbacks from an older request. */
+  useLayoutEffect(() => {
     setState({ phase: "ask" });
-  }, [range.start, range.end]);
+    return () => {
+      const previous = controller.current;
+      controller.current = null;
+      previous?.abort();
+    };
+  }, [source, range.start, range.end]);
+
+  function stop() {
+    const previous = controller.current;
+    controller.current = null;
+    previous?.abort();
+    setState({ phase: "ask" });
+  }
 
   async function run(text = instruction) {
     const asked = text.trim();
@@ -72,6 +84,7 @@ function Revise({ source, range, disabled, onRevise, onAccept, onClear }) {
     controller.current?.abort();
     const abort = new AbortController();
     controller.current = abort;
+    const current = () => controller.current === abort && !abort.signal.aborted;
     setState({ phase: "working", text: "" });
     try {
       const revised = await onRevise({
@@ -80,12 +93,15 @@ function Revise({ source, range, disabled, onRevise, onAccept, onClear }) {
         end: range.end,
         instruction: asked,
         signal: abort.signal,
-        onText: (text) => setState({ phase: "working", text }),
+        onText: (text) => { if (current()) setState({ phase: "working", text }); },
       });
-      setState({ phase: "proposal", text: revised, instruction: asked });
+      if (current()) setState({ phase: "proposal", text: revised, instruction: asked });
     } catch (error) {
+      if (!current()) return;
       const problem = revisionProblem(error);
       setState(problem ? { phase: "ask", problem } : { phase: "ask" });
+    } finally {
+      if (controller.current === abort) controller.current = null;
     }
   }
 
@@ -154,7 +170,7 @@ function Revise({ source, range, disabled, onRevise, onAccept, onClear }) {
         <div className="revise-preview" aria-busy="true">
           <p className="revise-status shimmer">Revising{state.text ? "" : "…"}</p>
           {state.text && <div className="prose revise-text">{state.text}</div>}
-          <button className="text-button" onClick={() => controller.current?.abort()}>
+          <button className="text-button" onClick={stop}>
             Stop
           </button>
         </div>
@@ -205,7 +221,7 @@ export function DocumentWork({ message, work, onWorkChange, onOpen, onReveal, ca
       clearTimeout(timer);
       timer = setTimeout(() => {
         const next = article.current && rangeFromSelection(article.current);
-        if (next) setRange(next);
+        if (next) setRange({ ...next, source: content });
       }, 220);
     };
     document.addEventListener("selectionchange", pick);
@@ -213,7 +229,7 @@ export function DocumentWork({ message, work, onWorkChange, onOpen, onReveal, ca
       clearTimeout(timer);
       document.removeEventListener("selectionchange", pick);
     };
-  }, [editing]);
+  }, [editing, content]);
 
   /* The picked blocks are marked in the page, so it's clear what will change */
   useEffect(() => {
@@ -232,6 +248,8 @@ export function DocumentWork({ message, work, onWorkChange, onOpen, onReveal, ca
     setEditing(false);
     setComparing(false);
   }, [message?.id, at]);
+
+  useEffect(() => setRange(null), [content]);
 
   useEffect(() => {
     if (!editing) return;
@@ -282,13 +300,14 @@ export function DocumentWork({ message, work, onWorkChange, onOpen, onReveal, ca
         <span className="doc-tools">
           {!editing && at > 0 && content.length <= 8000 && versions[at - 1]?.content?.length <= 8000 && <button className="block-tool" aria-pressed={comparing} onClick={() => setComparing(v => !v)}>{comparing ? "Read document" : "Compare versions"}</button>}
           {!editing && message && onReveal && (
-            <button className="block-tool" onClick={onReveal} data-tip="Show this reply in its conversation">
+            <button className="block-tool" onClick={onReveal} aria-label="Show reply in conversation" data-tip="Show this reply in its conversation">
               <ArrowBendUpLeft size={15} /> <span>In conversation</span>
             </button>
           )}
           {!editing && (
             <button
               className="block-tool"
+              aria-label="Edit document"
               onClick={() => {
                 setDraft(content);
                 setRange(null);
@@ -349,8 +368,9 @@ export function DocumentWork({ message, work, onWorkChange, onOpen, onReveal, ca
         </>
       )}
 
-      {!editing && range && (
+      {!editing && range && range.source === content && (
         <Revise
+          key={`${at}:${range.start}:${range.end}`}
           source={content}
           range={range}
           disabled={!canRevise}
