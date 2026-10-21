@@ -402,7 +402,14 @@ export function App() {
   const [chats, setChats] = useState([]);
   const [activeId, setActiveId] = useState(null);
   const [draft, setDraft] = useState("");
-  const [attachments, setAttachments] = useState([]);
+  const [attachments, renderAttachments] = useState([]);
+  // Reserve file slots immediately, including multiple additions before React renders.
+  const attachmentList = useRef(attachments);
+  const setAttachments = useCallback((value) => {
+    const updated = typeof value === "function" ? value(attachmentList.current) : value;
+    attachmentList.current = updated;
+    renderAttachments(updated);
+  }, []);
   /* What was being written in each conversation, kept while you look at
      another one, so switching never throws away a half-written message. */
   const drafts = useRef(new Map());
@@ -997,8 +1004,8 @@ export function App() {
     // Read from the latest render: a toast's action may be an older closure.
     const now = writing.current;
     if (id !== now.chatId) {
-      if (now.draft.trim() || now.attachments.length)
-        drafts.current.set(now.chatId, { draft: now.draft, attachments: now.attachments });
+      if (now.draft.trim() || attachmentList.current.length)
+        drafts.current.set(now.chatId, { draft: now.draft, attachments: attachmentList.current });
       else drafts.current.delete(now.chatId);
       const kept = drafts.current.get(id);
       drafts.current.delete(id);
@@ -1224,7 +1231,8 @@ export function App() {
       showToast({ text: "Guest mode is text only. Sign in to attach images." });
       files = files.filter((file) => !isImage(file));
     }
-    const room = 8 - attachments.length;
+    const current = attachmentList.current;
+    const room = 8 - current.length;
     const list = files.slice(0, Math.max(0, room));
     if (files.length > list.length)
       showToast({ text: `A message can carry up to 8 files. ${files.length - list.length === 1 ? "One was" : `${files.length - list.length} were`} left out.` });
@@ -1237,7 +1245,7 @@ export function App() {
       state: "reading",
     }));
     setAttachments((current) => [...current, ...pending]);
-    let images = attachments.filter((file) => file.kind === "image").length;
+    let images = current.filter((file) => file.kind === "image").length;
     await Promise.all(
       list.map(async (file, i) => {
         let read;
@@ -1249,7 +1257,9 @@ export function App() {
             note: "This file couldn’t be read.",
           }));
         if (read.kind === "image" && read.data) {
-          imageData.current.set(pending[i].id, read.data);
+          const owns = (items) => items.some((item) => item.id === pending[i].id);
+          if (owns(attachmentList.current) || [...drafts.current.values()].some((kept) => owns(kept.attachments)))
+            imageData.current.set(pending[i].id, read.data);
           delete read.data;
         }
         const settle = (list) =>
@@ -1263,7 +1273,12 @@ export function App() {
         for (const kept of drafts.current.values()) kept.attachments = settle(kept.attachments);
       }),
     );
-    textarea.current?.focus();
+    if (writing.current.chatId === activeId) textarea.current?.focus();
+  }
+
+  function removeAttachment(id) {
+    imageData.current.delete(id);
+    setAttachments((current) => current.filter((file) => file.id !== id));
   }
 
   function checkSelection() {
@@ -2412,9 +2427,7 @@ export function App() {
               onSend={() => send()}
               onStop={stopReply}
               onFiles={addFiles}
-              onRemoveFile={(id) =>
-                setAttachments((current) => current.filter((file) => file.id !== id))
-              }
+              onRemoveFile={removeAttachment}
               onOptions={(patch) => setOptions((current) => ({ ...current, ...patch }))}
               onDictating={setDictating}
               guest={guest}
