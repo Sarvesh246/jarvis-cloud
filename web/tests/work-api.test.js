@@ -27,6 +27,40 @@ async function request(token, overrides = {}) {
 }
 function response() { return { headers: {}, setHeader(key, value) { this.headers[key] = value; }, end(text) { this.body = JSON.parse(text); } }; }
 
+test("group choice duplicate rejection preserves saved answers and recovers after correction", async () => {
+  const app = setup(runCheck), token = await signSession(user, cfg);
+  const invoke = async body => {
+    const res = response(); await app.handler(await request(token, { body }), res); return res;
+  };
+  for (const [id, input] of [
+    ["preferences", { people: "Ana: Friday, Saturday, Friday\nBen: Friday, Saturday" }],
+    ["options", { people: "Ana: Friday, Saturday\nBen: Friday, Saturday", choices: "Friday, Saturday, FRIDAY" }],
+  ]) {
+    const saved = await invoke({ action: "save", base: null, record: {
+      id, workspaceId: "group-plans", title: "Weekend plans", documents: [],
+      check: { id: "group-choice", input },
+    } });
+    assert.equal(saved.statusCode, 200);
+    const rejected = await invoke({ action: "run", id, base: saved.body.record.revision });
+    assert.equal(rejected.statusCode, 400);
+    assert.match(rejected.body.error, /listed only once/);
+    const unchanged = response();
+    await app.handler(await request(token, { method: "GET", url: `/api/work?id=${id}` }), unchanged);
+    assert.deepEqual(unchanged.body.record, saved.body.record, "rejection retains answers and revision without saving a false result");
+    const corrected = await invoke({ action: "save", base: saved.body.record.revision,
+      record: { ...saved.body.record, check: { id: "group-choice", input: {
+        people: "Ana: Friday, Saturday\nBen: Friday, Saturday", choices: "Friday, Saturday",
+      } } } });
+    assert.equal(corrected.statusCode, 200);
+    const run = await invoke({ action: "run", id, base: corrected.body.record.revision });
+    assert.equal(run.statusCode, 200);
+    assert.deepEqual(run.body.record.output.result, { status: "proposed", choice: "Friday", alsoWorks: ["Saturday"] });
+    const reread = response();
+    await app.handler(await request(token, { method: "GET", url: `/api/work?id=${id}` }), reread);
+    assert.deepEqual(reread.body.record.output, run.body.record.output);
+  }
+});
+
 test("purchase duration rejection preserves saved answers and allows a corrected run", async () => {
   const app = setup(runCheck), token = await signSession(user, cfg);
   const invoke = async body => {

@@ -95,11 +95,21 @@ function groupChoice(a) {
     const [name, rest] = splitPair(line);
     const picks = splitList(rest);
     requireInput(name && picks.length, lineHelp(label, i + 1, 'say which choices work for them.', 'Ana: Saturday, Friday'));
+    // Each identity has one rank. Repeating a favorite would otherwise
+    // overwrite its first rank when the burden map is built below.
+    const seen = new Set();
+    for (const pick of picks) {
+      requireInput(!seen.has(pick.toLowerCase()),
+        lineHelp(label, i + 1, `${name}’s choice “${pick}” should be listed only once, favorite first.`, 'Ana: Saturday, Friday'));
+      seen.add(pick.toLowerCase());
+    }
     return { name, picks };
   });
   requireInput(people.length, 'Please add at least one person.');
   requireInput(new Set(people.map(p => p.name.toLowerCase())).size === people.length, 'Each person should only be listed once.');
   const choices = splitList(a.choices);
+  requireInput(new Set(choices.map(choice => choice.toLowerCase())).size === choices.length,
+    'The choices in “What are all the choices?” should each be listed only once.');
   const options = choices.length ? choices : [...new Map(people.flatMap(p => p.picks).map(c => [c.toLowerCase(), c])).values()];
   const match = pick => options.find(option => sameName(option, pick));
   const helped = splitList(a.helped);
