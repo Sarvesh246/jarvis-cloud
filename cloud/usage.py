@@ -59,7 +59,13 @@ class UsageReporter:
         while True:
             self.wake.wait(15)
             self.wake.clear()
-            self.flush()
+            try:
+                self.flush()
+            except (sqlite3.Error, OSError):
+                # Read/acknowledgement failures must not kill the only delivery
+                # worker. Keep queued rows for the normal timed retry; a replay
+                # after a failed delete retains its id for the ledger upsert.
+                print("Usage outbox unavailable; queued token counters retained for retry", flush=True)
 
 
 def configured_reporter(environ=os.environ):
@@ -68,7 +74,13 @@ def configured_reporter(environ=os.environ):
     if not url.startswith("https://") or len(key) < 32:
         return None
     home = Path(environ.get("HERMES_HOME", "/tmp"))
-    home.mkdir(parents=True, exist_ok=True)
-    reporter = UsageReporter(url, key, home / "usage-outbox.sqlite")
+    try:
+        home.mkdir(parents=True, exist_ok=True)
+        reporter = UsageReporter(url, key, home / "usage-outbox.sqlite")
+    except (sqlite3.Error, OSError):
+        # Accounting is optional: an unwritable outbox must not stop chat.
+        # Do not log the exception, which can contain private paths or URLs.
+        print("Usage outbox unavailable; persistent token tracking disabled", flush=True)
+        return None
     threading.Thread(target=reporter.worker, daemon=True, name="usage-ledger").start()
     return reporter
