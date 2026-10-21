@@ -149,7 +149,14 @@ def item(title, url, data):
 
 
 class NoRedirect(HTTPRedirectHandler):
-    def redirect_request(self, *args, **kwargs):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        # urllib closes this body only after redirect_request returns. Refusing
+        # a redirect here transfers cleanup to us instead.
+        try:
+            if fp is not None:
+                fp.close()
+        except Exception:
+            pass
         raise Unavailable("Provider redirected the request")
 
 
@@ -176,7 +183,23 @@ def fetch(url, headers=None, payload=None):
                   headers={"User-Agent": USER_AGENT, "Accept": "application/json", "Accept-Encoding": "identity", **(headers or {})})
     deadline = time.monotonic() + TIMEOUT
     opener = build_opener(ProxyHandler({}), PublicHTTPS(), NoRedirect())
-    with opener.open(req, timeout=TIMEOUT) as response:
+    try:
+        response = opener.open(req, timeout=TIMEOUT)
+    except HTTPError as exc:
+        # open() can raise before the response context owns the error body.
+        # Keep status/Retry-After available to lookup's existing backoff path.
+        try:
+            exc.close()
+        except Exception:
+            pass
+        raise
+    with response:
+        try:
+            expected = int(response.headers.get("Content-Length", ""))
+        except ValueError:
+            expected = 0
+        if response.headers.get("Transfer-Encoding", "").lower() == "chunked":
+            expected = 0  # Chunk framing takes precedence over Content-Length.
         chunks, size = [], 0
         while size <= MAX_BYTES:
             if time.monotonic() >= deadline:
@@ -188,6 +211,10 @@ def fetch(url, headers=None, payload=None):
             size += len(chunk)
         if size > MAX_BYTES:
             raise Unavailable("Provider response exceeded size limit")
+        # read1() may return EOF without raising IncompleteRead. Even a valid
+        # JSON prefix must not become evidence or enter the result cache.
+        if size < expected:
+            raise Unavailable("Provider response was incomplete")
         encoding = response.headers.get("Content-Encoding", "").lower()
     payload = b"".join(chunks)
     if encoding == "gzip" or payload.startswith(b"\x1f\x8b"):
