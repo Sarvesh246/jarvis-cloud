@@ -27,6 +27,34 @@ async function request(token, overrides = {}) {
 }
 function response() { return { headers: {}, setHeader(key, value) { this.headers[key] = value; }, end(text) { this.body = JSON.parse(text); } }; }
 
+test("purchase duration rejection preserves saved answers and allows a corrected run", async () => {
+  const app = setup(runCheck), token = await signSession(user, cfg);
+  const invoke = async body => {
+    const res = response(); await app.handler(await request(token, { body }), res); return res;
+  };
+  const saved = await invoke({ action: "save", base: null, record: {
+    id: "printer", workspaceId: "compare-buy", title: "Printer comparison", documents: [],
+    check: { id: "purchase", input: { options: "Printer 2000 $200, $20 a year\nPrinter 3000 $250, $5 a year", years: "3 weeks", budget: "$270" } },
+  } });
+  assert.equal(saved.statusCode, 200);
+  const rejected = await invoke({ action: "run", id: "printer", base: saved.body.record.revision });
+  assert.equal(rejected.statusCode, 400);
+  assert.match(rejected.body.error, /how long/);
+  const read = response();
+  await app.handler(await request(token, { method: "GET", url: "/api/work?id=printer" }), read);
+  assert.deepEqual(read.body.record, saved.body.record);
+  const corrected = await invoke({ action: "save", base: saved.body.record.revision,
+    record: { ...saved.body.record, check: { ...saved.body.record.check, input: { ...saved.body.record.check.input, years: "3 years" } } } });
+  assert.equal(corrected.statusCode, 200);
+  const run = await invoke({ action: "run", id: "printer", base: corrected.body.record.revision });
+  assert.equal(run.statusCode, 200);
+  assert.equal(run.body.record.output.result.best, "Printer 2000");
+  assert.deepEqual(run.body.record.output.result.options.map(item => item.total), [260, 265]);
+  const reread = response();
+  await app.handler(await request(token, { method: "GET", url: "/api/work?id=printer" }), reread);
+  assert.deepEqual(reread.body.record.output, run.body.record.output);
+});
+
 test("cost checks reject invalid sharing without saving a result and recover after correction", async () => {
   const app = setup(runCheck), token = await signSession(user, cfg);
   const invoke = async body => {

@@ -124,21 +124,28 @@ function purchase(a) {
   const items = linesOf(a.options, label).map((line, i) => {
     const amounts = findAmounts(line);
     requireInput(amounts.length, lineHelp(label, i + 1, 'I couldn’t find a price.', 'Laser printer $200, $20 a year'));
-    let price = null, yearly = 0;
+    const recurring = item => YEARLY.test(line.slice(item.end)) || MONTHLY.test(line.slice(item.end));
+    // Product names can contain figures ("Printer 2000 $200"). Explicit
+    // upfront money wins over those figures; plain prices still work.
+    const upfront = amounts.filter(item => !recurring(item));
+    const price = upfront.find(item => item.marked) ?? upfront[0];
+    let yearly = 0;
     for (const item of amounts) {
       const after = line.slice(item.end);
       if (YEARLY.test(after)) yearly += item.amount;
       else if (MONTHLY.test(after)) yearly += item.amount * 12;
-      else if (price === null) price = item;
     }
     requireInput(price, lineHelp(label, i + 1, 'I found a yearly cost but no price.', 'Laser printer $200, $20 a year'));
-    const name = line.slice(0, amounts[0].index).replace(/[\s,:–—-]+$/, '').trim() || `Option ${i + 1}`;
+    const firstCost = amounts.find(item => item === price || recurring(item));
+    const name = line.slice(0, firstCost.index).replace(/[\s,:–—-]+$/, '').trim() || `Option ${i + 1}`;
     return { name, price: price.amount, yearly, found: amounts };
   });
   requireInput(items.length, 'Please add at least one option.');
   // "18 months" is a year and a half, not eighteen years.
-  const kept = a.years ? /(\d+(?:\.\d+)?)\s*(months?|mos?\b)?/i.exec(a.years) : null;
-  const years = a.years ? (kept ? Number(kept[1]) / (kept[2] ? 12 : 1) : NaN) : 3;
+  // Consume the whole quantity: negative values, weeks and compound
+  // durations must not silently become a different number of years.
+  const kept = a.years ? /^(\d+(?:\.\d+)?)\s*(years?|yrs?|months?|mos?)?$/i.exec(a.years) : null;
+  const years = a.years ? (kept ? Number(kept[1]) / (/^mo/i.test(kept[2] ?? '') ? 12 : 1) : NaN) : 3;
   requireInput(Number.isFinite(years) && years >= 0 && years <= 50, 'I couldn’t read how long you’ll keep it. Try something like “3 years”.');
   const budget = a.budget ? parseMoney(a.budget) : null;
   requireInput(!a.budget || budget, 'I couldn’t find an amount in your budget. Try something like “$400”.');
