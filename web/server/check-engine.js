@@ -200,11 +200,16 @@ function costSplit(a) {
   const label = 'What did people pay for?';
   const balance = Object.fromEntries(people.map(name => [name, 0])), share = Object.fromEntries(people.map(name => [name, 0]));
   const found = [];
-  const words = line => line.toLowerCase().split(/[^\p{L}\p{N}']+/u);
+  const names = people.map(name => ({ name, pattern: new RegExp(
+    `(?<![\\p{L}\\p{N}'])${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+')}(?![\\p{L}\\p{N}'])`, 'iu') }));
+  let totalCents = 0;
   linesOf(a.spent, label).forEach((line, i) => {
     const inside = /\(([^)]*)\)/.exec(line);
     const outside = line.replace(/\([^)]*\)/, ' ');
-    const payer = people.map(name => ({ name, at: words(outside).indexOf(name.toLowerCase()) })).filter(p => p.at >= 0).sort((x, y) => x.at - y.at)[0]?.name;
+    // Match the entire name, preferring "Ana Smith" over "Ana" at the
+    // same position. The first person mentioned remains the payer.
+    const payer = names.map(person => ({ name: person.name, at: outside.search(person.pattern) }))
+      .filter(person => person.at >= 0).sort((x, y) => x.at - y.at || y.name.length - x.name.length)[0]?.name;
     requireInput(payer, lineHelp(label, i + 1, 'I couldn’t tell who paid.', `${people[0]} paid $90 for dinner`));
     const amount = parseMoney(outside);
     requireInput(amount && amount.amount > 0, lineHelp(label, i + 1, 'I couldn’t find how much they paid.', `${payer} paid $90 for dinner`));
@@ -214,8 +219,11 @@ function costSplit(a) {
       requireInput(person, lineHelp(label, i + 1, `“${name}” isn’t one of the people sharing.`, `${payer} paid $10 for a taxi (${people.slice(0, 2).join(', ')})`));
       return person;
     }) : people;
+    requireInput(sharers.length, lineHelp(label, i + 1, 'list at least one person in the brackets.', `${payer} paid $10 for a taxi (${people.slice(0, 2).join(', ')})`));
     requireInput(new Set(sharers).size === sharers.length, lineHelp(label, i + 1, 'someone is listed twice in the brackets.', `${payer} paid $10 for a taxi (${people.slice(0, 2).join(', ')})`));
     const total = cents(amount.amount);
+    totalCents += total;
+    requireInput(Number.isSafeInteger(totalCents), 'Those amounts together are too big to work with.');
     balance[payer] += total;
     const each = Math.floor(total / sharers.length);
     sharers.forEach((person, index) => { const part = each + (index < total - each * sharers.length ? 1 : 0); balance[person] -= part; share[person] += part; });
@@ -234,7 +242,7 @@ function costSplit(a) {
   }
   return { status: payments.length ? 'settle' : 'square', symbol, payments,
     people: people.map(name => ({ name, share: money(share[name]), balance: money(balance[name]) })),
-    total: money(found.reduce((sum, item) => sum + cents(item.amount), 0)) };
+    total: money(totalCents) };
 }
 
 /* The document check's rules, built from plain answers. Only the Verify

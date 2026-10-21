@@ -3,12 +3,13 @@ import assert from "node:assert/strict";
 import { SignJWT } from "jose";
 import { createWorkHandler } from "../api/work.js";
 import { WorkStore } from "../server/work-store.js";
+import { runCheck } from "../server/check-engine.js";
 import { settings, signSession, cookieNames } from "../server/security.js";
 
 const cfg = settings({ APP_ORIGIN: "https://work.example", ALLOWED_EMAIL: "owner@example.com", SESSION_SECRET: "s".repeat(64) });
 const csrf = "a".repeat(64);
 const user = { sub: "account-one", email: cfg.email, name: "Owner" };
-function setup() {
+function setup(engine = async () => ({ status: "unverified", summary: "Server result", result: {}, limitations: ["No remote source"] })) {
   const files = new Map(); let etag = 0;
   const blob = {
     async get(path) { const value = files.get(path); return value ? { stream: new Response(value.text).body, blob: { etag: value.etag } } : null; },
@@ -17,7 +18,7 @@ function setup() {
   };
   let reads = 0;
   const handler = createWorkHandler({ configuration: () => cfg, configured: () => true,
-    storeFactory: sub => { reads++; return new WorkStore(sub, blob, { engine: async () => ({ status: "unverified", summary: "Server result", result: {}, limitations: ["No remote source"] }) }); } });
+    storeFactory: sub => { reads++; return new WorkStore(sub, blob, { engine }); } });
   return { handler, get reads() { return reads; } };
 }
 async function request(token, overrides = {}) {
@@ -25,6 +26,33 @@ async function request(token, overrides = {}) {
     "x-csrf-token": csrf, "content-type": "application/json" }, body: {}, ...overrides };
 }
 function response() { return { headers: {}, setHeader(key, value) { this.headers[key] = value; }, end(text) { this.body = JSON.parse(text); } }; }
+
+test("cost checks reject invalid sharing without saving a result and recover after correction", async () => {
+  const app = setup(runCheck), token = await signSession(user, cfg);
+  const invoke = async body => {
+    const res = response(); await app.handler(await request(token, { body }), res); return res;
+  };
+  const initial = await invoke({ action: "save", base: null, record: {
+    id: "trip", workspaceId: "split-costs", title: "Trip expenses", documents: [],
+    check: { id: "cost-split", input: { people: "Ana Smith, Ben Jones", spent: "Ana Smith paid $10 ()" } },
+  } });
+  assert.equal(initial.statusCode, 200);
+  const rejected = await invoke({ action: "run", id: "trip", base: initial.body.record.revision });
+  assert.equal(rejected.statusCode, 400);
+  assert.match(rejected.body.error, /at least one person/);
+  const read = response();
+  await app.handler(await request(token, { method: "GET", url: "/api/work?id=trip" }), read);
+  assert.deepEqual(read.body.record, initial.body.record, "failed calculation leaves the saved answers and revision intact");
+  const corrected = await invoke({ action: "save", base: initial.body.record.revision,
+    record: { ...initial.body.record, check: { id: "cost-split", input: { people: "Ana Smith, Ben Jones", spent: "Ana Smith paid $10" } } } });
+  assert.equal(corrected.statusCode, 200);
+  const run = await invoke({ action: "run", id: "trip", base: corrected.body.record.revision });
+  assert.equal(run.statusCode, 200);
+  assert.deepEqual(run.body.record.output.result.payments, [{ from: "Ben Jones", to: "Ana Smith", amount: 5 }]);
+  const reread = response();
+  await app.handler(await request(token, { method: "GET", url: "/api/work?id=trip" }), reread);
+  assert.deepEqual(reread.body.record.output, run.body.record.output);
+});
 
 test("work API rejects anonymous, tampered and expired sessions before storage", async () => {
   const app = setup();
