@@ -6,6 +6,21 @@
 const SHELL = "vaelo-shell-v6";
 const PRECACHE = ["/", "/prefs.js"];
 
+// Storage is optional at runtime (private browsing, eviction and quota errors).
+// Keep writes alive after delivering the network response, but never turn a
+// successful download into a failed request just because it cannot be saved.
+function saveResponse(event, key, response) {
+  if (!response.ok) return;
+  const copy = response.clone();
+  event.waitUntil(
+    caches.open(SHELL).then((cache) => cache.put(key, copy)).catch(() => {}),
+  );
+}
+
+function savedResponse(key) {
+  return caches.open(SHELL).then((cache) => cache.match(key)).catch(() => undefined);
+}
+
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches
@@ -19,7 +34,8 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(keys.filter((key) => key !== SHELL).map((key) => caches.delete(key))))
+      .then((keys) => Promise.all(keys.filter((key) => key.startsWith("vaelo-shell-") && key !== SHELL).map((key) => caches.delete(key))))
+      .catch(() => { /* Cache cleanup is optional; online loading must still work. */ })
       .then(() => self.clients.claim()),
   );
 });
@@ -46,13 +62,15 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       fetch(request)
         .then((response) => {
-          if (response.ok) {
-            const copy = response.clone();
-            caches.open(SHELL).then((cache) => cache.put("/", copy));
+          // A direct visit to a script, another page or a redirected sign-in
+          // response must not replace the app's offline home page.
+          if (url.pathname === "/" && !response.redirected &&
+              response.headers.get("Content-Type")?.split(";")[0].trim().toLowerCase() === "text/html") {
+            saveResponse(event, "/", response);
           }
           return response;
         })
-        .catch(() => caches.match("/")),
+        .catch(() => savedResponse("/")),
     );
     return;
   }
@@ -63,13 +81,10 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       fetch(request)
         .then((response) => {
-          if (response.ok) {
-            const copy = response.clone();
-            caches.open(SHELL).then((cache) => cache.put("/prefs.js", copy));
-          }
+          saveResponse(event, "/prefs.js", response);
           return response;
         })
-        .catch(() => caches.match("/prefs.js")),
+        .catch(() => savedResponse("/prefs.js")),
     );
     return;
   }
@@ -79,14 +94,11 @@ self.addEventListener("fetch", (event) => {
   // app is added to the home screen and falls back to a letter if that fails.
   if (url.pathname.startsWith("/assets/")) {
     event.respondWith(
-      caches.match(request).then(
+      savedResponse(request).then(
         (hit) =>
           hit ||
           fetch(request).then((response) => {
-            if (response.ok) {
-              const copy = response.clone();
-              caches.open(SHELL).then((cache) => cache.put(request, copy));
-            }
+            saveResponse(event, request, response);
             return response;
           }),
       ),
