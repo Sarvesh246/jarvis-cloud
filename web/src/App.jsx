@@ -2555,15 +2555,6 @@ export function App() {
                 onOpen={selectChat}
                 plain={!prefs.greet}
                 dock={phone ? undefined : dockNode}
-                status={
-                  guest || session.offline || !online
-                    ? undefined
-                    : cloud === "Connected"
-                      ? { tone: "ok", text: "Vaelo is awake" }
-                      : cloud === "Unavailable"
-                        ? { tone: "slow", text: "Taking longer than usual to wake" }
-                        : { tone: "slow", text: "Vaelo is waking up" }
-                }
                 waiting={chats
                   .filter((chat) => chat.messages.at(-1)?.approval?.state === "pending")
                   .map((chat) => ({ id: chat.id, title: chat.title, what: chat.messages.at(-1).approval.description || "" }))}

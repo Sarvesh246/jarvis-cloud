@@ -574,6 +574,12 @@ export const Composer = forwardRef(function Composer(
   },
   textarea,
 ) {
+  // The desktop composer moves into the welcome on a new chat. Focus after
+  // that box mounts, including the first authenticated page load.
+  useLayoutEffect(() => {
+    textarea.current?.focus({ preventScroll: true });
+  }, [conversationId, textarea]);
+
   const [menu, setMenu] = useState(false);
   const phone = usePhone();
   const picker = useRef(null);

@@ -464,31 +464,6 @@
   color: var(--muted);
 }
 
-.desk-meta-rule {
-  width: 1px;
-  height: 1rem;
-  background: var(--hairline-strong);
-}
-
-.desk-status {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s-2);
-  font-style: normal;
-}
-
-.desk-status-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--sage);
-}
-
-.desk-status[data-tone="slow"] .desk-status-dot {
-  background: var(--gilt);
-  animation: rail-running 1.6s var(--ease) infinite;
-}
-
 .welcome-line {
   margin-bottom: var(--s-6);
 }

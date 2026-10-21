@@ -32,7 +32,7 @@ const today = () => new Date().toLocaleDateString(undefined, { weekday: "long", 
    under them, then ways to begin, where you left off and what is waiting on
    you. `dock` is the message box itself, so it is the real composer, not a
    picture of one. */
-export function Welcome({ name, phase, onPick, recent = [], onOpen, plain = false, dock, status, waiting = [], onWorkroom }) {
+export function Welcome({ name, phase, onPick, recent = [], onOpen, plain = false, dock, waiting = [], onWorkroom }) {
   const phone = usePhone();
   if (phone) return <PhoneWelcome name={name} phase={phase} onPick={onPick} />;
   const who = firstName(name);
@@ -40,15 +40,6 @@ export function Welcome({ name, phase, onPick, recent = [], onOpen, plain = fals
     <section className="welcome" aria-label="Start a conversation">
       <p className="desk-meta">
         <span>{today()}</span>
-        {status && (
-          <>
-            <span className="desk-meta-rule" aria-hidden="true" />
-            <span className="desk-status" data-tone={status.tone}>
-              <span className="desk-status-dot" aria-hidden="true" />
-              {status.text}
-            </span>
-          </>
-        )}
       </p>
       <Mark size={64} state={phase} />
       <h1 className="kinetic-greeting">
