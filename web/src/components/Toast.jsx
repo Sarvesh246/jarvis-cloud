@@ -2,9 +2,11 @@ import React, { useEffect, useRef, useState } from "react";
 import { PHONE } from "../lib/use-phone.js";
 import "./toast.css";
 
-const LIFE = 6500;
-/* A phone's toast says its piece and goes: 4.2 seconds */
-const PHONE_LIFE = 4200;
+/* A plain notice is read at a glance and goes; one with an action (Undo)
+   waits a little longer, and resting a pointer on it holds it. */
+const NOTICE_LIFE = 2500;
+const ACTION_LIFE = 4000;
+const PHONE_ACTION_LIFE = 3500;
 const AWAY = 40;
 
 /* A toast keeps its own time. A gilt line along its foot shortens as that
@@ -12,7 +14,7 @@ const AWAY = 40;
    on it, focusing it or holding it pauses the time; swiping it down puts
    it away early. */
 function Slip({ toast, onDismiss }) {
-  const life = toast.duration || (matchMedia(PHONE).matches ? PHONE_LIFE : LIFE);
+  const life = toast.duration || (!toast.action ? NOTICE_LIFE : matchMedia(PHONE).matches ? PHONE_ACTION_LIFE : ACTION_LIFE);
   const [held, setHeld] = useState(0);
   const [pull, setPull] = useState(0);
   const [leaving, setLeaving] = useState(false);
