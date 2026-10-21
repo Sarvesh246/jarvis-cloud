@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { containSheetFocus } from "../lib/sheet-focus.js";
 import "./sheet.css";
 
 /* The bottom sheet every phone choice rises in: tools, sources, a message's
@@ -16,7 +17,6 @@ export function Sheet({ open, onClose, label, tall = false, children }) {
   const [shown, setShown] = useState(false);
   const panel = useRef(null);
   const last = useRef(children);
-  const returnTo = useRef(null);
   const close = useRef(onClose);
   const pull = useRef(null);
   close.current = onClose;
@@ -24,10 +24,11 @@ export function Sheet({ open, onClose, label, tall = false, children }) {
 
   useEffect(() => {
     if (open) {
-      returnTo.current = document.activeElement;
       setMounted(true);
       /* One frame at rest below the screen, so the rise is a transition */
-      const frame = requestAnimationFrame(() => requestAnimationFrame(() => setShown(true)));
+      let frame = requestAnimationFrame(() => {
+        frame = requestAnimationFrame(() => setShown(true));
+      });
       return () => cancelAnimationFrame(frame);
     }
     setShown(false);
@@ -36,24 +37,9 @@ export function Sheet({ open, onClose, label, tall = false, children }) {
   }, [open]);
 
   useEffect(() => {
-    if (shown) panel.current?.focus({ preventScroll: true });
-    else if (mounted && !open) {
-      const back = returnTo.current;
-      if (back && document.contains(back) && (document.activeElement === document.body || panel.current?.contains(document.activeElement)))
-        back.focus?.({ preventScroll: true });
-    }
-  }, [shown, mounted, open]);
-
-  useEffect(() => {
-    if (!open) return;
-    function keys(event) {
-      if (event.key !== "Escape" || event.defaultPrevented) return;
-      event.stopPropagation();
-      close.current();
-    }
-    addEventListener("keydown", keys, true);
-    return () => removeEventListener("keydown", keys, true);
-  }, [open]);
+    if (!open || !mounted || !panel.current) return;
+    return containSheetFocus(panel.current, () => close.current());
+  }, [open, mounted]);
 
   const grip = {
     onPointerDown(event) {
