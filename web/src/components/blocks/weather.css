@@ -33,12 +33,13 @@
 .weather-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.2rem 1rem; margin: 0; padding: 1.2rem 0; border-block: 1px solid var(--hairline); }
 .prose .weather-hourly h3 { margin: 1.3rem 0 1rem; font-size: 1.05rem; }
 .weather-hours-scroll { overflow-x: auto; scrollbar-width: thin; padding-bottom: .5rem; }
-.weather-curve { display: block; max-width: none; height: 3.5rem; margin-bottom: .25rem; color: var(--gilt); }
+.weather-hours-track { min-width: calc(var(--hours) * 5.5rem); }
+.weather-curve { display: block; width: 100%; max-width: none; height: 3.5rem; margin-bottom: .25rem; color: var(--gilt); }
 .weather-curve polyline { stroke: currentColor; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
-.weather-hours { display: flex; gap: .5rem; width: max-content; padding: .5rem 0; }
-.weather-hour { flex: 0 0 5.5rem; display: flex; align-items: center; flex-direction: column; gap: .45rem; text-align: center; }
+.weather-hours { display: grid; grid-template-columns: repeat(var(--hours), minmax(0, 1fr)); padding: .5rem 0; }
+.weather-hour { min-width: 0; padding: 0 .15rem; display: flex; align-items: center; flex-direction: column; gap: .45rem; text-align: center; }
 .weather-hour time { font-size: .8rem; color: var(--muted); }
-.weather-hour .weather-icon { font-size: 1.6rem; }
+.weather-hour .weather-icon { align-self: center; font-size: 1.6rem; }
 .weather-hour small { font-size: .7rem; line-height: 1.25; }
 .weather-days { display: flex; overflow-x: auto; gap: .5rem; margin-top: 1rem; padding-bottom: .5rem; }
 .weather-days button { flex: 0 0 8rem; display: flex; flex-direction: column; align-items: center; gap: .5rem; padding: .8rem; border-radius: .6rem; border: 1px solid var(--hairline); background: transparent; color: var(--ink); font: inherit; font-size: .8rem; cursor: pointer; }
@@ -73,11 +74,46 @@
   .weather-detailed > .weather-metrics { grid-column: 2; align-content: center; margin: 1rem 0; padding: 0 0 0 clamp(1.5rem, 4cqw, 3rem); border-block: 0; border-left: 1px solid var(--hairline); }
   .weather-week-grid { grid-template-columns: repeat(auto-fit, minmax(5.6rem, 1fr)); }
   .weather-days button { flex: 1 0 7rem; }
+  .weather-curve { height: 4.6rem; }
+  .weather-hours { row-gap: .2rem; }
+  .weather-hour { gap: .55rem; }
+  .weather-hour time { font-size: .95rem; }
+  .weather-hour .weather-icon { font-size: 2.1rem; }
+  .weather-hour strong { font-size: 1.3rem; font-weight: 500; letter-spacing: -.03em; }
+  .weather-hour small { font-size: .8rem; }
+  .weather-metrics { gap: 1.8rem 1.4rem; }
+  .weather-metrics dt { font-size: .95rem; }
+  .weather-metrics dd { margin-top: .4rem; font-size: 1.6rem; letter-spacing: -.02em; }
+  .weather-range { gap: 1.6rem; }
+  .weather-range dt { font-size: .95rem; }
+  .weather-range dd { font-size: 1.5rem; }
+  .prose .weather-now p { font-size: 1.15rem; }
+  .weather-now small { font-size: .95rem; }
+  .prose .weather-hourly h3 { margin: 1.6rem 0 1.1rem; font-size: 1.25rem; }
 }
 @container weather (min-width: 60rem) {
-  .weather-detailed { padding: 2rem 2.4rem; }
-  .weather-temperature { font-size: 4.6rem; }
-  .weather-now > .weather-icon { font-size: 4.4rem; }
-  .weather-metrics dd { font-size: 1.3rem; }
+  .weather-detailed { padding: 2.2rem 2.8rem; }
+  .weather-temperature { font-size: 7rem; }
+  .weather-now { gap: 1.8rem; }
+  .weather-now > .weather-icon { font-size: 6.6rem; }
+  .prose .weather-detailed h2 { font-size: 2.5rem; }
+  .prose .weather-detailed header p { font-size: 1.05rem; }
+  .weather-detailed > header > small { font-size: 1.05rem; }
+  .prose .weather-now p { font-size: 1.3rem; }
+  .weather-now small { font-size: 1.05rem; }
+  .weather-metrics { gap: 2.2rem 1.6rem; }
+  .weather-metrics dt { font-size: 1.05rem; }
+  .weather-metrics dd { font-size: 2.1rem; }
+  .weather-range { gap: 1.8rem; }
+  .weather-range dt { font-size: 1.05rem; }
+  .weather-range dd { font-size: 1.9rem; }
+  .prose .weather-hourly h3 { font-size: 1.4rem; }
   .weather-hours-scroll { padding-bottom: .3rem; }
+  .weather-curve { height: 6rem; }
+  .weather-hour { gap: .7rem; }
+  .weather-hour time { font-size: 1.1rem; }
+  .weather-hour .weather-icon { font-size: 2.8rem; }
+  .weather-hour strong { font-size: 1.65rem; }
+  .weather-hour small { font-size: .95rem; }
+  .weather-detailed footer { font-size: .85rem; }
 }
