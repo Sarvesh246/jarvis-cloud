@@ -60,7 +60,9 @@ import "./math.css";
 import "./finish.css";
 import '@fontsource/jetbrains-mono/400.css';
 import '@fontsource/jetbrains-mono/500.css';
-import { DESKTOP, copyText, saveDesktopFile } from "../../lib/desktop.js";
+import { copyText } from "../../lib/desktop.js";
+import { download } from "../../lib/file-download.js";
+export { download } from "../../lib/file-download.js";
 
 /* A reply is rendered as typed blocks: prose, code, tables, sources. Each
    block carries the controls that suit it and can be promoted into the
@@ -89,21 +91,6 @@ export function useCopy() {
     }
   };
   return [done, copy];
-}
-
-export function download(name, text, type = "text/plain") {
-  // Without a byte-order mark, Excel reads CSV as the local code page and mangles "€" and "é".
-  if (type === "text/csv" && !text.startsWith("﻿")) text = `﻿${text}`;
-  if (DESKTOP) return saveDesktopFile(name, text).catch(() => {
-    alert("The file could not be saved. Please try again.");
-    return false;
-  });
-  const url = URL.createObjectURL(new Blob([text], { type: `${type};charset=utf-8` }));
-  const link = Object.assign(document.createElement("a"), { href: url, download: name });
-  document.body.append(link);
-  link.click();
-  link.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 export function textOf(node) {

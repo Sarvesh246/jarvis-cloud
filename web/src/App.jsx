@@ -2731,8 +2731,9 @@ export function App() {
                 } catch (err) {
                   if (err?.name === "AbortError") return;
                 }
-                download(`${title.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").slice(0, 60) || "conversation"}.md`, `# ${title}\n\n${text}\n`, "text/markdown");
-                showToast({ text: "Saved a copy of this conversation." });
+                if (await download(`${title.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").slice(0, 60) || "conversation"}.md`, `# ${title}\n\n${text}\n`, "text/markdown")) {
+                  showToast({ text: "Saved a copy of this conversation." });
+                }
               }}
               onRemove={() => { setSheet(null); removeChat(activeId); }}
             />

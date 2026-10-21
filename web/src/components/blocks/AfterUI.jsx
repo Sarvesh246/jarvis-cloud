@@ -34,8 +34,9 @@ import { parseRichUI, fileTree } from "../../lib/rich-ui.js";
 import { blockKey } from "../../lib/intelligent-ui.js";
 import { toNumber } from "../../lib/table.js";
 import { percentageShares } from "../../lib/output-redesign.js";
-import { copyText, DESKTOP, saveDesktopFile, saveDesktopBytes } from "../../lib/desktop.js";
+import { copyText, DESKTOP, saveDesktopBytes } from "../../lib/desktop.js";
 import { imageDownload } from '../../lib/image-download.js';
+import { download, downloadBlob } from '../../lib/file-download.js';
 
 function useCopy() {
   const [done, setDone] = useState(false);
@@ -57,19 +58,7 @@ export function SaveButton({ text, name, type = "text/plain", children }) {
     <button
       className="block-tool"
       aria-label={`Save ${name}`}
-      onClick={async () => {
-        if (DESKTOP) {
-          await saveDesktopFile(name, text);
-          return;
-        }
-        const url = URL.createObjectURL(new Blob([text], { type }));
-        const link = Object.assign(document.createElement("a"), {
-          href: url,
-          download: name,
-        });
-        link.click();
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
-      }}
+      onClick={() => download(name, text, type)}
     >
       <DownloadSimple size={17} />
       {children}
@@ -97,10 +86,7 @@ export function ImageDownload({src}) {
     try {
       const file=await imageDownload(src);
       if (DESKTOP) await saveDesktopBytes(file.name,file.bytes);
-      else {
-        const url=URL.createObjectURL(new Blob([file.bytes],{type:file.mime}));
-        const link=Object.assign(document.createElement('a'),{href:url,download:file.name});link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
-      }
+      else downloadBlob(file.name, new Blob([file.bytes], { type: file.mime }));
     } catch {setProblem('Could not save the image. Open the original to save it.');}
     finally {setSaving(false);}
   }}><DownloadSimple size={17} /></button>{problem && <span className="after-image-error" role="status">{problem}</span>}</>;
