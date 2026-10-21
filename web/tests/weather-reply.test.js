@@ -109,3 +109,14 @@ test('actual weather renderer shows bento cards, sources and streaming fallback'
     assert.equal(weatherData('```weather\n' + JSON.stringify({...weeklyForecast,periods: weeklyForecast.periods.slice(0,1)}) + '\n```'), null);
   } finally { await server.close(); }
 });
+
+test('weather icons switch to the moon after dark, like weather apps', async () => {
+  const { weatherIcon, isNightLabel } = await import('../src/lib/weather.js');
+  assert.equal(weatherIcon('Mostly Clear', false), '🌙');
+  assert.equal(weatherIcon('Partly Cloudy', false), '🌙');
+  assert.equal(weatherIcon('Clear sky', false), '🌙');
+  assert.equal(weatherIcon('Mostly Clear'), '☀️');
+  assert.equal(weatherIcon('Rain', false), '🌧️');
+  assert.equal(weatherIcon('Cloudy', false), '☁️');
+  assert.deepEqual(['Tonight', 'Friday Night', 'Overnight', 'Wednesday'].map(isNightLabel), [true, true, true, false]);
+});

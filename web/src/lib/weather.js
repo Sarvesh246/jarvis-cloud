@@ -9,7 +9,12 @@ const temperature = text => {
   const m = text.match(TEMP);
   return m ? `${m[1]}°${m[2].toUpperCase()}` : null;
 };
-export function weatherIcon(condition = '') {
+// Night periods read as "Tonight" / "Overnight" / "Friday Night" / "This Evening".
+export const isNightLabel = (label = '') => /\b(?:tonight|overnight|night|evening)\b/i.test(label);
+// Like weather apps: after dark, clear and partly clear skies swap the sun for
+// the moon. Precipitation, fog, and overcast look the same day or night.
+export function weatherIcon(condition = '', isDay = true) {
+  if (!isDay && !/thunder|snow|rain|shower|drizzle|fog|wind/i.test(condition) && /clear|sun|partly|mostly (?:sunny|clear)/i.test(condition)) return '🌙';
   if (/thunder/i.test(condition)) return '⛈️';
   if (/snow/i.test(condition)) return '🌨️';
   if (/rain|shower/i.test(condition)) return '🌧️';
