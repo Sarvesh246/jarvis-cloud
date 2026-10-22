@@ -569,6 +569,10 @@ class Relay:
         """Ask a fast model with the short prompt and a bounded public-weather tool; the
         response to stream, or None to let Hermes answer instead."""
         route = fast_route(os.environ)
+        if body.get('vision_repair') and os.environ.get('OPENROUTER_API_KEY'):
+            # A verified failed reading should try an independent native-image
+            # pool rather than repeat the same router/model selection.
+            route = fast_route({'OPENROUTER_API_KEY': os.environ['OPENROUTER_API_KEY']})
         if route is None:
             return None
         if not self.fast_health.allow(route['name']):
@@ -1324,6 +1328,18 @@ class Relay:
                                 and not seen['contract'].get('required_tools') and not seen['contract'].get('python_tests')
                                 and not body.get('freshness') and not run.trace.executed_tools
                                 and re.search(r'\b(?:use|read|inspect|analy[sz]e)\s+only\s+(?:this|the|these|attached)\s+(?:attached\s+)?images?\b', request_text(messages), re.I))
+                            if image_only:
+                                # Keep the image and its task in the final user
+                                # turn; adapters may inspect only that turn.
+                                request = [dict(message) for message in messages]
+                                for message in reversed(request):
+                                    if message.get('role') == 'user':
+                                        content = message.get('content')
+                                        if isinstance(content, list):
+                                            message['content'] = [*content, {'type':'text', 'text':repair_instruction(errors)}]
+                                        else:
+                                            message['content'] = str(content or '') + '\n' + repair_instruction(errors)
+                                        break
                             body = {**body, 'continue_fast': False, 'vision_repair': bool(image_only)}
                             continue
                         run.trace.counts['contract_failures'] = 1

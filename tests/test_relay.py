@@ -212,6 +212,7 @@ class RelayTests(unittest.TestCase):
                 source = [{'type':'text','text':'Use only this image. Return ONLY JSON with red, blue.'},
                           {'type':'image_url','image_url':{'url':'data:image/png;base64,originalPixels'}}]
                 def repair(run,messages,body):
+                    self.assertIsInstance(messages[-1]['content'],list)
                     supplied = next(m['content'] for m in messages if isinstance(m.get('content'),list))
                     self.assertEqual(supplied[1],source[1])
                     self.assertTrue(supplied[0]['text'].startswith(source[0]['text']))
