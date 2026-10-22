@@ -67,7 +67,7 @@ def contract_for(messages, tools_available=True):
 
 
 def constrained(contract):
-    return bool(contract.get('json') or contract.get('limits') or contract.get('required_tools') or contract.get('python_tests') or contract.get('result_count'))
+    return bool(contract.get('json') or contract.get('limits') or contract.get('required_tools') or contract.get('python_tests') or contract.get('result_count') or contract.get('images'))
 
 
 def contract_guidance(contract):
@@ -96,6 +96,10 @@ def contract_guidance(contract):
 def validate_answer(text, contract, executed_tools=()):
     result = text.strip()
     errors = []
+    if contract.get('images') and re.search(
+            r"\b(?:I (?:don['’]t|do not|can['’]t|cannot) (?:see|access|view|read|find)|no|missing)\s+(?:an?\s+|the\s+|any\s+)?(?:attached\s+)?images?\b|\bimage (?:is|was) not attached\b",
+            result,re.I):
+        errors.append('image_reading_unavailable')
     for tool in contract.get('required_tools',[]):
         if tool not in executed_tools: errors.append('missing_tool_'+tool)
     if len(result) > 160000:

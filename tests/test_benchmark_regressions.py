@@ -47,6 +47,13 @@ class BenchmarkRegressions(unittest.TestCase):
                        'Explain the source.\n\nAttached file: data.txt\nAnswer only JSON.'):
             self.assertFalse(constrained(self.contract(prompt)), prompt)
 
+    def test_missing_image_claim_cannot_complete_an_attached_image_turn(self):
+        contract=contract_for([{'role':'user','content':[{'type':'text','text':'Focus only on the attached image.'},
+            {'type':'image_url','image_url':{'url':'data:image/png;base64,pixels'}}]}])
+        self.assertTrue(constrained(contract))
+        self.assertIn('image_reading_unavailable',validate_answer("I don't see an image attached to your message.",contract)[1])
+        self.assertFalse(validate_answer('There are three red shapes and one blue square.',contract)[1])
+
     def test_requested_python_tests_must_be_delivered_and_parse(self):
         contract = self.contract('Write a Python function f. Include tests for empty input and unchanged input.')
         self.assertIn('missing_runnable_tests', validate_answer('```python\ndef f(x): return list(x)\n```', contract)[1])
