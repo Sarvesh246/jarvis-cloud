@@ -18,6 +18,8 @@ A measured direct-route defect was the mismatch between a valid 14,593-character
 
 Post-release checks also found a live answer with an unresolved numbered citation. Live-source answers containing these markers without usable links or an executed forecast reference now get one bounded agent recovery; a repeated unresolved citation ends with an explicit source error. This checks source availability, not whether every claim is true. Direct forecast executions now emit the same tool progress events and timing counters as agent tool calls, so evaluation can distinguish actual execution from answer text.
 
+If a direct forecast lookup succeeds but the subsequent model write-up fails, the exact dated forecast values and source remain available. Vaelo returns those values with a visible notice that the accompanying explanation or requested format did not finish, and marks the completion as degraded in diagnostics. Failed lookups never qualify for this fallback.
+
 ## Memory and source boundaries
 
 Past-chat retrieval is **off until enabled** in Settings → Personalization on desktop or Settings → Memory on a phone. “Prepare past conversations” backfills older saved conversations in bounded batches; subsequent successful saves index new revisions. Preparation reports oversized conversations it skips. Index writes are best effort after the authoritative save; preparing history again repairs missed index work without changing original chats.

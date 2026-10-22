@@ -1019,7 +1019,19 @@ class Relay:
         timer.daemon = True
         timer.start()
         seen = {"content": "", "answer": "", "approval": False, "tools": [], "held": None,
-                "finished": False, "failed": False, "dropped": False, "forecasts": []}
+                "finished": False, "failed": False, "dropped": False, "forecasts": [], "forecast_evidence": []}
+        def preserve_forecast():
+            if run.stopped or not seen["forecast_evidence"]:
+                return False
+            # The lookup succeeded even if the subsequent language-model call
+            # failed. Keep its exact dated values and source, with an explicit
+            # notice that the requested explanation/format could not finish.
+            text = "The forecast was retrieved, but Vaelo could not finish the accompanying explanation or requested format. Here are the source values:\n\n" + "\n\n".join(seen["forecast_evidence"])
+            run.emit("data: " + json.dumps({"choices": [{"delta": {"content": text}}]}))
+            run.trace.counts["forecast_evidence_fallbacks"] = 1
+            run.event("jarvis.complete", {"ok": True, "degraded": True})
+            run.finish("complete")
+            return True
         repetition_retried = False
         try:
             run.event("jarvis.status", {"message": "Vaelo is working…"})
@@ -1049,6 +1061,8 @@ class Relay:
                 with run.trace.span("upstream_open"):
                     response, failure = self.open(run, body, request, recovering=attempt > 0)
                 if failure:
+                    if preserve_forecast():
+                        return
                     run.event("jarvis.error", failure)
                     return run.finish("error")
                 if response is None:
@@ -1073,6 +1087,14 @@ class Relay:
                             progress = {**progress, "status": "completed"}
                             run.trace.tool(progress)
                             run.event("hermes.tool.progress", progress)
+                        try:
+                            verified = json.loads(result)
+                            evidence = verified.get("forecast")
+                            if (verified.get("success") is True and isinstance(evidence, str)
+                                    and 0 < len(evidence) <= 60000 and len(seen["forecast_evidence"]) < 8):
+                                seen["forecast_evidence"].append(evidence)
+                        except (ValueError, TypeError, AttributeError):
+                            pass
                         if run.stopped:
                             return run.finish("stopped")
                         token = widget_reference(arguments, result)
@@ -1171,6 +1193,8 @@ class Relay:
                     return run.finish("error")
                 return run.finish("stopped")
             if not answered(seen) and not seen["approval"]:
+                if preserve_forecast():
+                    return
                 if seen["held"]:
                     run.emit(seen["held"])
                     run.event("jarvis.error", {"message": "Vaelo stopped before finishing. Please try again."})
@@ -1181,6 +1205,8 @@ class Relay:
                 return run.finish("error")
             if not seen["approval"] and (not seen["finished"] or seen["failed"] or seen["truncated"]
                                         or not seen["attempt_answer"]):
+                if preserve_forecast():
+                    return
                 run.event("jarvis.error", {"message": "Vaelo’s server stopped before the answer finished. What arrived is kept; please retry or continue."})
                 return run.finish("error")
             # Hermes returns only a small opaque reference. Append the exact

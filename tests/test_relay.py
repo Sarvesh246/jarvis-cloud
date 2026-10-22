@@ -1480,6 +1480,33 @@ class RelayTests(unittest.TestCase):
         self.assertNotIn('tools', provider.requests[1]['body'])
         self.assertEqual(provider.requests[1]['body']['messages'][-1]['role'], 'tool')
 
+    def test_completed_forecast_survives_a_failed_model_writeup(self):
+        for success in (True, False):
+            with self.subTest(success=success):
+                _, relay, port = self.boot([])
+                call = 'data: ' + json.dumps({'choices': [{'delta': {'tool_calls': [{'index': 0,
+                    'function': {'name': 'weather_forecast', 'arguments': json.dumps({'location': 'Chicago', 'output': 'data'})}}]}, 'finish_reason': 'tool_calls'}]})
+                self.fast_provider(relay, [[call, 'data: [DONE]']])
+                original = relay.open
+                def open_once(run, body, messages, recovering=False):
+                    if run.upstream_requests:
+                        return None, {'code': 'provider_unavailable', 'message': 'Unavailable'}
+                    return original(run, body, messages, recovering=recovering)
+                result = json.dumps({'success': success, 'forecast': 'Chicago 2026-10-21: 71 F. https://open-meteo.com/'})
+                with mock.patch.dict('os.environ', {'FREELLMAPI_URL': 'https://router.example', 'FREELLMAPI_API_KEY': 'test'}), mock.patch.object(relay_module, 'weather_tool', return_value=result), mock.patch.object(relay, 'open', side_effect=open_once):
+                    self.start_fast(port)
+                    run = self.finished(relay)
+                _, frames = self.events(port)
+                if success:
+                    self.assertEqual(run.outcome, 'complete')
+                    self.assertEqual(run.trace.counts['forecast_evidence_fallbacks'], 1)
+                    self.assertIn('could not finish', json.dumps(frames))
+                    self.assertIn('Chicago 2026-10-21: 71 F', json.dumps(frames))
+                    self.assertTrue(any(json.loads(data).get('degraded') for _, name, data in frames if name == 'jarvis.complete'))
+                else:
+                    self.assertEqual(run.outcome, 'error')
+                    self.assertNotIn('Chicago 2026-10-21: 71 F', json.dumps(frames))
+
     def test_widget_forecast_is_shown_when_the_model_drops_or_mangles_the_reference(self):
         token = 'c'*24
         args = json.dumps({'days':7})
