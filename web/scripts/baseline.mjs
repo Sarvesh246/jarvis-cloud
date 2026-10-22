@@ -45,6 +45,8 @@ export async function runCase(item, { origin, headers, request = fetch, timeoutM
           throw new Error('terminal_event');
         }
         if (name === 'jarvis.retry') { row.retries++; answer = ''; }
+        if (name === 'jarvis.evidence' && data) row.evidence = Object.fromEntries(
+          ['pages_extracted','search_snippets'].filter(key=>Number.isInteger(data[key])&&data[key]>=0).map(key=>[key,data[key]]));
         if (name === 'hermes.tool.progress' && data?.status !== 'completed') {
           row.tools++;
           const tool=data.tool || data.tool_name || data.name || data.function_name;

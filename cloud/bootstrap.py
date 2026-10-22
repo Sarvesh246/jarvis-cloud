@@ -10,6 +10,7 @@ import subprocess
 import sys
 import threading
 import time
+import tempfile
 try:
     from context_policy import CONTEXT_POLICY
 except ModuleNotFoundError:
@@ -152,6 +153,23 @@ def prepare_profile(home, environ):
     shutil.copy2(HERE / "SOUL.md", home / "SOUL.md")
 
 
+def vision_cache_writable(home):
+    """Probe the exact scratch directory using the gateway's runtime identity.
+
+    No broad chmod/chown: a failed probe is diagnostic, and native image
+    routing can continue without this auxiliary cache.
+    """
+    try:
+        cache = home / 'cache' / 'vision'
+        cache.mkdir(parents=True, exist_ok=True, mode=0o700)
+        with tempfile.TemporaryFile(dir=cache) as probe:
+            probe.write(b'vaelo-vision-cache-check')
+            probe.seek(0)
+            return probe.read() == b'vaelo-vision-cache-check'
+    except OSError:
+        return False
+
+
 def setup_server(port, missing):
     """A deployment can become healthy before credentials are supplied, without exposing chat."""
     class Handler(BaseHTTPRequestHandler):
@@ -247,6 +265,8 @@ def main():
         return
     home = Path(os.environ.get("HERMES_HOME", "/opt/data"))
     prepare_profile(home, os.environ)
+    os.environ['VAELO_VISION_CACHE_WRITABLE'] = '1' if vision_cache_writable(home) else '0'
+    print('Vision runtime cache: ' + ('ready' if os.environ['VAELO_VISION_CACHE_WRITABLE'] == '1' else 'unavailable'), flush=True)
     private = internal_port(port)
     os.environ.update({
         "API_SERVER_ENABLED": "true", "API_SERVER_HOST": "127.0.0.1",

@@ -17,6 +17,13 @@ spec.loader.exec_module(bootstrap)
 
 
 class BootstrapTests(unittest.TestCase):
+    def test_runtime_vision_cache_probe_checks_read_write_and_contains_permission_failure(self):
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            self.assertTrue(bootstrap.vision_cache_writable(home))
+            self.assertEqual(list((home / 'cache/vision').iterdir()), [])
+            with unittest.mock.patch.object(bootstrap.tempfile,'TemporaryFile',side_effect=PermissionError('denied')):
+                self.assertFalse(bootstrap.vision_cache_writable(home))
     def test_multi_user_cloud_has_no_shared_memory_or_host_access_tools(self):
         for environ, extra in [({}, set()),
                                ({"FREELLMAPI_URL": "https://router.example", "FREELLMAPI_API_KEY": "test"}, {"image_gen"})]:

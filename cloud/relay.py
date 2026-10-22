@@ -1475,6 +1475,7 @@ def make_handler(relay):
                         'trace_schema':1,'fast_connect_deadline_seconds':FAST_SECONDS,
                         'fast_system_chars':FAST_SYSTEM_CHARS,
                         'tools':['weather_forecast','calculate','date_difference','evaluate_constraints','python_verify','javascript_verify'],
+                        'vision_cache_writable': os.environ.get('VAELO_VISION_CACHE_WRITABLE') == '1',
                         'answer_contracts':True,'protocol':3})
                 if method == "POST" and parts == ["vaelo", "runs"]:
                     return self.start(owner)
