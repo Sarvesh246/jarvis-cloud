@@ -1064,7 +1064,15 @@ class Relay:
                         place = body.get("place")
                         if not any(k in arguments for k in ("location", "latitude", "longitude")) and isinstance(place, dict):
                             arguments.update(latitude=place.get("lat"), longitude=place.get("lon"))
-                        result = weather_tool(arguments)
+                        progress = {"tool": "weather_forecast", "toolCallId": f"weather_lookup_{attempt}_{i}", "status": "running", "label": "Checking the forecast"}
+                        run.trace.tool(progress)
+                        run.event("hermes.tool.progress", progress)
+                        try:
+                            result = weather_tool(arguments)
+                        finally:
+                            progress = {**progress, "status": "completed"}
+                            run.trace.tool(progress)
+                            run.event("hermes.tool.progress", progress)
                         if run.stopped:
                             return run.finish("stopped")
                         token = widget_reference(arguments, result)
@@ -1113,6 +1121,28 @@ class Relay:
                         continue
                     run.event("jarvis.error", {"code": "repetitive_output", "message":
                               "The model started repeating itself, so Vaelo stopped this reply. Please retry for a fresh answer."})
+                    return run.finish("error")
+                # A numbered citation without a usable source is not grounding.
+                # Retry through the agent once; never attach an arbitrary URL to
+                # an unsupported claim just to make it look sourced.
+                if (query and not run.stopped and not seen["forecasts"]
+                        and re.search(r"【[^】]{1,80}】", seen["answer"])
+                        and not re.search(r"https?://[^\s)]+", seen["answer"])):
+                    left = RUN_LIMIT_SECONDS - (self.clock() - started)
+                    if (not run.trace.counts.get("source_recoveries")
+                            and attempt < ATTEMPTS - 1 and left >= RECOVERY_MIN_SECONDS):
+                        run.trace.counts["source_recoveries"] = 1
+                        run.event("jarvis.retry", {"message": "Checking the answer's sources…"})
+                        seen.update(content="", answer="")
+                        request = [*messages, {"role": "user", "content":
+                            "[Vaelo request: the previous answer used citation markers without source links. "
+                            "Answer the original request using actual tool results and link the supporting sources. "
+                            "For forecasts use weather_forecast. If a fact cannot be verified, say so. "
+                            "Do not invent sources or reuse unsupported claims from the discarded answer.]"}]
+                        body = {**body, "continue_fast": False}
+                        continue
+                    run.event("jarvis.error", {"code": "unverified_sources", "message":
+                              "Vaelo could not provide usable sources for this answer. Please retry."})
                     return run.finish("error")
                 cut_off = (seen["failed"] or not seen["finished"] or seen["truncated"]
                            or not seen["attempt_answer"])

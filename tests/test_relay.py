@@ -1330,6 +1330,27 @@ class RelayTests(unittest.TestCase):
         self.assertIn("jarvis.retry", names)
         self.assertEqual(names[-1], "jarvis.complete")
 
+    def test_unresolved_live_citations_recover_with_links_or_fail_explicitly(self):
+        for recovered, outcome in (('Verified [source](https://official.example/current).', 'complete'),
+                                   ('Still unsupported 【1】.', 'error')):
+            with self.subTest(outcome=outcome):
+                hermes, relay, port = self.boot([
+                    [chunk('An unsupported claim 【1】.', 'stop'), 'data: [DONE]'],
+                    [chunk(recovered, 'stop'), 'data: [DONE]'],
+                ])
+                with mock.patch.object(relay_module, 'source_context', return_value={'content': 'Retrieved evidence'}):
+                    self.call(port, 'POST', '/vaelo/runs', {'id': RUN,
+                        'messages': [{'role': 'user', 'content': 'Current facts?'}], 'freshness': 'Current facts?'})
+                    run = self.finished(relay)
+                self.assertEqual(run.outcome, outcome)
+                self.assertEqual(run.trace.counts['source_recoveries'], 1)
+                self.assertEqual(len(hermes.requests), 2)
+                self.assertIn('actual tool results', hermes.requests[1]['body']['messages'][-1]['content'])
+                _, frames = self.events(port)
+                self.assertIn('jarvis.retry', [name for _, name, _ in frames])
+                if outcome == 'error':
+                    self.assertIn('unverified_sources', json.dumps(frames))
+
     def test_fresh_sources_are_fetched_before_generation_and_reused_on_recovery(self):
         hermes, relay, port = self.boot(
             [
@@ -1450,6 +1471,11 @@ class RelayTests(unittest.TestCase):
         _, frames = self.events(port)
         self.assertIn('SEVEN VERIFIED DAYS', json.dumps(frames))
         self.assertNotIn('tool_calls', json.dumps(frames))
+        progress = [json.loads(data) for _, name, data in frames if name == 'hermes.tool.progress']
+        self.assertEqual([item['status'] for item in progress], ['running', 'completed'])
+        self.assertTrue(all(item['tool'] == 'weather_forecast' for item in progress))
+        self.assertEqual(run.trace.counts['tool_starts'], 1)
+        self.assertFalse(run.trace.active_tools)
         self.assertEqual(len(provider.requests), 2)
         self.assertNotIn('tools', provider.requests[1]['body'])
         self.assertEqual(provider.requests[1]['body']['messages'][-1]['role'], 'tool')
