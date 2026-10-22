@@ -47,6 +47,10 @@ export function localizedQuery(query, place) {
 export function freshnessQuery(content, previous = "") {
   const text = requestText(content).replace(/[’‘]/g, "'").trim();
   if (!text || TRANSFORM.test(text) || OFFLINE.test(text)) return null;
+  // A "current" private identifier is resolved from account/conversation
+  // evidence, not a public web search. Explicit external lookups still win.
+  if (!LOOKUP.test(text) && !/https?:\/\//i.test(text) &&
+      /\b(?:fictional|synthetic)\s+(?:badge(?:\s+code)?|(?:project |release )?codename)\b|\bmy\s+(?:current\s+)?(?:badge(?:\s+code)?|saved notes?|remembered preferences?)\b/i.test(text)) return null;
   const history = (Array.isArray(previous) ? previous : [previous]).map(requestText);
   const context = [];
   let followup = false;

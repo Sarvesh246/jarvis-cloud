@@ -192,6 +192,19 @@ class FakeHermes:
 
 
 class RelayTests(unittest.TestCase):
+    def test_supplied_constraints_are_computed_before_generation_without_forcing_another_model_call(self):
+        hermes, relay, port = self.boot([[chunk('OptionB meets every constraint.','stop'),'data: [DONE]']])
+        prompt = ('OptionA costs $900, battery 12 hours, weight 1.2 kg. OptionB costs $1100, battery 15 hours, weight 1.3 kg. '
+                  'My hard constraints: price at most $1200, battery at least 14 hours, weight at most 1.4 kg. Start with a recommendation.')
+        self.start(port,content=prompt)
+        run = self.finished(relay)
+        self.assertEqual(run.outcome,'complete')
+        self.assertEqual(len(hermes.requests),1)
+        supplied = hermes.requests[0]['body']['messages'][-1]['content']
+        self.assertIn('"eligible": ["OptionB"]',supplied)
+        self.assertIn('"passes": false',supplied)
+        self.assertIn('evaluate_constraints',run.trace.executed_tools)
+
     def test_failed_image_only_contract_retries_original_pixels_through_native_router(self):
         for available in (True,False):
             with self.subTest(available=available):
@@ -199,7 +212,9 @@ class RelayTests(unittest.TestCase):
                 source = [{'type':'text','text':'Use only this image. Return ONLY JSON with red, blue.'},
                           {'type':'image_url','image_url':{'url':'data:image/png;base64,originalPixels'}}]
                 def repair(run,messages,body):
-                    self.assertEqual(next(m['content'] for m in messages if isinstance(m.get('content'),list)),source)
+                    supplied = next(m['content'] for m in messages if isinstance(m.get('content'),list))
+                    self.assertEqual(supplied[1],source[1])
+                    self.assertTrue(supplied[0]['text'].startswith(source[0]['text']))
                     self.assertTrue(body['no_weather_tools'])
                     if not available: return None
                     run.connection = mock.Mock()

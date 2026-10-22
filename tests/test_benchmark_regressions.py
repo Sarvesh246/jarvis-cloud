@@ -3,8 +3,8 @@ import threading
 import time
 import unittest
 from unittest.mock import patch
-from cloud.answer_contract import contract_for, validate_answer, constrained
-from cloud.constraints import evaluate_constraints
+from cloud.answer_contract import contract_for, validate_answer, constrained, contract_guidance
+from cloud.constraints import evaluate_constraints, supplied_constraints
 from cloud.admission import Admission
 from cloud.memory_output import NoteFilter, split_notes
 from cloud.runtime_contract import fail_closed_vision
@@ -48,6 +48,22 @@ class BenchmarkRegressions(unittest.TestCase):
         answer = '```python\ndef f(x): return list(x)\nassert f([]) == []\na=[1]; before=a.copy(); b=f(a)\nassert a==before and b is not a\n```'
         self.assertFalse(validate_answer(answer, contract)[1])
         self.assertTrue(validate_answer(answer.replace('assert f', 'assert ? f'), contract)[1])
+        self.assertIn('BOTH the complete Python implementation AND complete runnable',contract_guidance(contract))
+
+    def test_supplied_option_grammar_computes_every_judgment_without_a_model_tool_roundtrip(self):
+        for price in (900, 1200, 1201):
+            prompt = (f'OptionA costs ${price}, battery 14 hours, weight 1.4 kg. '
+                      'OptionB costs $1100, battery 15 hours, weight 1400 g. '
+                      'My hard constraints: price at most $1200, battery at least 14 hours, weight at most 1.4 kg. '
+                      'Start with the recommendation and show every check.')
+            supplied = supplied_constraints(prompt)
+            self.assertIsNotNone(supplied)
+            checked = json.loads(evaluate_constraints(supplied))
+            self.assertEqual(checked['options'][0]['checks'][0]['passes'],price<=1200)
+            self.assertTrue(checked['options'][0]['checks'][1]['passes'])
+            self.assertTrue(checked['options'][1]['eligible'])
+        self.assertIsNone(supplied_constraints('Compare phones with good battery life.'))
+        self.assertIsNone(supplied_constraints('Options not supplied. My hard constraints: good battery life.'))
 
     def test_image_all_nulls_are_not_verified_success(self):
         contract = contract_for([{'role':'user','content':[

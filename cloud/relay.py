@@ -26,6 +26,10 @@ try:
 except ModuleNotFoundError:
     from cloud.admission import Admission
 try:
+    from constraints import supplied_constraints, evaluate_constraints
+except ModuleNotFoundError:
+    from cloud.constraints import supplied_constraints, evaluate_constraints
+try:
     from memory_output import NoteFilter, split_notes
 except ModuleNotFoundError:
     from cloud.memory_output import NoteFilter, split_notes
@@ -34,9 +38,9 @@ try:
 except ModuleNotFoundError:
     from cloud.calculation import direct_calculation
 try:
-    from answer_contract import contract_for, constrained, validate_answer, repair_instruction, request_text
+    from answer_contract import contract_for, constrained, validate_answer, repair_instruction, request_text, contract_guidance
 except ModuleNotFoundError:
-    from cloud.answer_contract import contract_for, constrained, validate_answer, repair_instruction, request_text
+    from cloud.answer_contract import contract_for, constrained, validate_answer, repair_instruction, request_text, contract_guidance
 from contextlib import contextmanager
 try:
     from provider_health import RouteHealth
@@ -352,7 +356,7 @@ class RunTrace:
                   payload.get('tool') or payload.get('name') or 'tool')[:160]
         if payload.get('status') == 'completed':
             name=payload.get('tool') or payload.get('tool_name') or payload.get('name')
-            if key in self.active_tools and name in ('python_verify','javascript_verify','calculate','date_difference'):
+            if key in self.active_tools and name in ('python_verify','javascript_verify','calculate','date_difference','evaluate_constraints','web_search','web_extract','weather_forecast','image_gen'):
                 self.executed_tools.add(name)
             self.active_tools.discard(key)
             if not self.active_tools and self.tool_began is not None:
@@ -1155,6 +1159,18 @@ class Relay:
                 run.trace.counts['deterministic_answers']=1
                 run.event('jarvis.complete',{'ok':True})
                 return run.finish('complete')
+            guidance = contract_guidance(seen['contract'])
+            supplied = supplied_constraints(request_text(messages))
+            if supplied:
+                checked = json.loads(evaluate_constraints(supplied))
+                if checked.get('success'):
+                    progress = {'tool':'evaluate_constraints','toolCallId':'supplied_constraints','status':'running','label':'Checking every numerical constraint'}
+                    run.trace.tool(progress); run.event('hermes.tool.progress',progress)
+                    guidance += '\n[Vaelo request: deterministic checks computed from the supplied values, not external facts. Reuse every returned pass/false/unknown value consistently in the table and verdict: ' + json.dumps(checked) + ']'
+                    progress = {**progress,'status':'completed'}
+                    run.trace.tool(progress); run.event('hermes.tool.progress',progress)
+            if guidance:
+                messages = [*messages[:-1], {**messages[-1], 'content': with_note(messages[-1]['content'], guidance)}]
             run.event("jarvis.status", {"message": "Vaelo is working…"})
             query = body.get("freshness")
             if isinstance(query, str) and query.strip() and len(query) <= 600:
@@ -1371,7 +1387,7 @@ class Relay:
                 if tail:
                     run.emit('data: ' + json.dumps({'choices': [{'delta': {'content': tail}}]}))
             _, notes = split_notes(seen['answer'])
-            if notes and body.get('memory_can_note') is True and isinstance(body.get('memory_permission'), str) and not run.trace.executed_tools:
+            if notes and body.get('memory_can_note') is True and isinstance(body.get('memory_permission'), str) and not run.trace.counts.get('tool_starts'):
                 run.event('jarvis.memory', {'notes': notes, 'permission': body['memory_permission']})
             for token in ([] if constrained(seen['contract']) else dict.fromkeys([*WEATHER_REFERENCE.findall(seen["answer"]), *seen["forecasts"]])):
                 forecast = read_forecast(token, not_before=forecast_started)

@@ -1,6 +1,7 @@
 """Evaluate supplied option constraints once for tables and recommendations."""
 from decimal import Decimal, InvalidOperation
 import json
+import re
 
 UNITS = {
     'g': ('mass', '1'), 'kg': ('mass', '1000'), 'lb': ('mass', '453.59237'),
@@ -61,3 +62,38 @@ def evaluate_constraints(arguments, **kwargs):
         return json.dumps({'success': True, 'options': rows, 'eligible': [row['name'] for row in rows if row['eligible']]})
     except (ValueError, KeyError, TypeError, AttributeError, InvalidOperation):
         return json.dumps({'success': False, 'error': 'Provide valid named options, quantities and comparison constraints.'})
+
+
+def supplied_constraints(text):
+    """Conservative adapter for explicitly labelled options and hard limits.
+
+    This recognizes a bounded supplied-data grammar, not arbitrary prose.
+    Unsupported layouts still have the structured tool; no values are inferred.
+    """
+    if not isinstance(text, str) or len(text) > 20000: return None
+    boundary = re.search(r'\b(?:hard|numeric|numerical) constraints?\s*:', text, re.I)
+    if not boundary: return None
+    constraints = []
+    operators = {'at most':'<=','no more than':'<=','at least':'>=','less than':'<','more than':'>','under':'<','over':'>'}
+    for part in text[boundary.end():].split(',')[:16]:
+        match = re.match(r'\s*([A-Za-z][A-Za-z _-]{0,30}?)\s+(at most|no more than|at least|less than|more than|under|over)\s+([$€£]?)(\d+(?:\.\d+)?)\s*([A-Za-z%]{0,12})', part, re.I)
+        if not match: return None
+        field, operator, symbol, value, unit = match.groups()
+        unit = {'$':'USD','€':'EUR','£':'GBP'}.get(symbol,unit)
+        constraints.append({'field':field.strip().lower(),'operator':operators[operator.lower()],'value':value,'unit':unit})
+    if not constraints: return None
+    source = text[:boundary.start()]
+    matches = list(re.finditer(r'\b([A-Za-z][A-Za-z0-9_-]{0,39})\s+(?:costs?|priced? at)\s+([$€£])(\d+(?:\.\d+)?)', source, re.I))
+    if not 2 <= len(matches) <= 32: return None
+    options = []
+    for index, match in enumerate(matches):
+        name, symbol, price = match.groups()
+        values = {'price': {'value': price, 'unit': {'$':'USD','€':'EUR','£':'GBP'}[symbol]}}
+        row = source[match.end():matches[index+1].start() if index+1<len(matches) else len(source)]
+        for constraint in constraints:
+            field = constraint['field']
+            if field == 'price': continue
+            found = re.search(r'\b'+re.escape(field)+r'\s*(?:[:=]|of)?\s*(\d+(?:\.\d+)?)\s*([A-Za-z%]{1,12})', row, re.I)
+            if found: values[field] = {'value':found[1],'unit':found[2]}
+        options.append({'name':name,'values':values})
+    return {'options':options,'constraints':constraints}

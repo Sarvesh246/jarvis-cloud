@@ -7,6 +7,14 @@ import { chatInput, guestInput, streamChat } from "../server/chat.js";
 const conversationId = "123e4567-e89b-12d3-a456-426614174000";
 const question = "Compare the iPhone 15 Pro and iPhone 18 Pro Max";
 
+test('current private badge codes use account evidence without a public search', () => {
+  assert.equal(freshnessQuery('Same synthetic test. What is the current fictional badge code?'),null);
+  assert.equal(freshnessQuery('What is my current badge code?'),null);
+  assert.equal(freshnessQuery('What are my saved notes currently?'),null);
+  assert.equal(freshnessQuery('Search the web for the current fictional badge code.'),'Search the web for the current fictional badge code.');
+  assert.equal(freshnessQuery('What is the current price of Apple stock?'),'What is the current price of Apple stock?');
+});
+
 test("public data requests fetch evidence while private transformations stay offline", () => {
   for (const text of ["Define serendipity", "Find books about astronomy", "Find research papers on battery recycling", "npm package react", "Food barcode 3017620422003", "Air quality in Chicago", "top Hacker News stories", "Product Hunt launches", "search One Piece on MangaDex", "pokemon pikachu", "UK postcode SW1A 1AA"]) assert.equal(freshnessQuery(text), text);
   for (const text of ["Rewrite: Define serendipity", "Don't browse. Find books about astronomy", "Only use my provided text. Define serendipity", "Translate: Product Hunt launches", "Don't search One Piece on MangaDex"]) assert.equal(freshnessQuery(text), null);

@@ -54,14 +54,13 @@ def contract_for(messages, tools_available=True):
     tools=re.findall(r'(?:^|[.!?]\s+|\n)(?:please\s+|actually\s+)?(?:use|run|execute|invoke|call)\s+(?:the\s+)?(python_verify|javascript_verify|calculate|date_difference|evaluate_constraints)\b',text,re.I)
     supplied_constraints = bool(re.search(r'\b(?:hard|numerical|numeric) constraints?\b', text, re.I)
                                 and re.search(r'\b(?:at most|at least|less than|greater than)\s+\$?\d', text, re.I))
-    if tools_available and supplied_constraints and not re.search(r'\b(?:do not|don.t|without)\s+(?:use|run|execute)\s+(?:any )?tools?\b', text, re.I):
-        tools.append('evaluate_constraints')
     code_tests = bool(re.search(r'\bpython\b', text, re.I) and
                       re.search(r'\b(?:include|provide|show|supply|return|with)\s+(?:runnable\s+|unit\s+|the\s+|assertion\s+)?tests\b', text, re.I))
     result_count = re.search(r'\b(?:give|return|provide|reply with)\s+(?:only|just)\s+(?:(?:those|these|the)\s+)?(one|two|three|four|five|six|seven|eight|nine|ten|[1-9]\d?)\s+(?:results|answers)\b', text, re.I)
     return {'json': bool(ONLY_JSON.search(text)), 'limits': list(dict.fromkeys(limits))[:8],'required_keys':required,
             'exact_keys': bool(re.search(r'\b(?:exact(?:ly)?|only)\s+(?:these\s+)?(?:fields|keys)\b|\bthese exact fields\b',text,re.I)),
             'python_tests': code_tests,
+            'supplied_constraints': supplied_constraints,
             'result_count': number(result_count[1]) if result_count else None,
             'images': any(isinstance(m.get('content'),list) and any(isinstance(p,dict) and p.get('type')=='image_url' for p in m['content']) for m in messages),
             'required_tools':list(dict.fromkeys(tool.lower() for tool in tools))}
@@ -69,6 +68,29 @@ def contract_for(messages, tools_available=True):
 
 def constrained(contract):
     return bool(contract.get('json') or contract.get('limits') or contract.get('required_tools') or contract.get('python_tests') or contract.get('result_count'))
+
+
+def contract_guidance(contract):
+    """Generate model guidance from the same requirements the validator uses."""
+    parts = []
+    if contract.get('json'):
+        parts.append('Return raw valid JSON only, without Markdown fences or surrounding commentary.')
+        if contract.get('required_keys'):
+            parts.append(('Use exactly these object keys: ' if contract.get('exact_keys') else 'Include all these object keys: ') + json.dumps(contract['required_keys']) + '.')
+    for unit, mode, count in contract.get('limits', []):
+        parts.append(f'Use {"exactly" if mode == "exact" else "at most"} {count} {unit}(s).')
+    if contract.get('python_tests'):
+        parts.append('Deliver BOTH the complete Python implementation AND complete runnable assertion or unittest code in Python code blocks. '
+                     'The final answer must contain the test source for every requested case, even if the tests already ran privately. '
+                     'A statement that tests passed is not test code. Make a deep pre-call copy to check nonmutation and check aliasing independently. '
+                     'Obey any instruction not to execute; otherwise report execution only if the matching verifier result passed.')
+    if contract.get('result_count'):
+        parts.append(f'Return only the {contract["result_count"]} requested result items. Without another specified format, use one result per line. Omit calculations and preamble.')
+    if contract.get('required_tools'):
+        parts.append('Actually invoke the required available tools: ' + ', '.join(contract['required_tools']) + '. Report unavailable or failed execution honestly.')
+    if contract.get('supplied_constraints'):
+        parts.append('Use the supplied deterministic constraint checks when present. Otherwise use evaluate_constraints to check every supplied numerical limit. Reuse identical checks in table cells, reasons and recommendation.')
+    return '[Vaelo request: ' + ' '.join(parts) + ']' if parts else ''
 
 
 def validate_answer(text, contract, executed_tools=()):
@@ -137,4 +159,5 @@ def repair_instruction(errors):
             'while obeying the requested format and length. Return no internal annotations, preamble or extra explanation. '
             'For a missing_tool check, actually invoke that exact named tool; another runtime is not a substitute. '
             'For results_only, return the requested number of result items, one per line, with no preamble or calculations. '
+            'For missing_runnable_tests or invalid_python_tests, deliver the complete implementation and runnable Python assertions or unittest code in Python fences, including every requested case. '
             'If it is unavailable, do not claim execution. Do not quote or reuse the discarded candidate.]')
