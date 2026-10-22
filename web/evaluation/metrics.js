@@ -24,7 +24,7 @@ export function checkAnswer(answer, checks = {}) {
         checks.requiredKeys.every(key=>Object.hasOwn(value,key)));
     } catch { checksRun.push(false); }
   }
-  return { passed: Boolean(text) && checksRun.every(Boolean), checks: checksRun.length,
+  return { passed: Boolean(text) && checksRun.length > 0 && checksRun.every(Boolean), checks: checksRun.length,
     semanticReview: 'unverified' };
 }
 

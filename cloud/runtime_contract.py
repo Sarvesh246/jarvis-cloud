@@ -31,6 +31,24 @@ def align_normalization(source, limit=CONTEXT_POLICY["requestChars"]):
     return result
 
 
+def fail_closed_vision(source):
+    """A failed auxiliary analysis is an error, never evidence for an answer.
+
+    Verify the pinned boundary before modifying it; fail the image build on drift.
+    Do not cache an error string as though it described the pixels.
+    """
+    before = '        note = f"[The {role_label} attached an image. Here\'s what it contains:\\n{description or \'Image analysis failed.\'}]"'
+    if source.count(before) != 1:
+        raise ValueError('Pinned vision fallback contract changed')
+    after = ("        if not description or description.startswith('Image analysis failed:'):\n"
+             "            raise ValueError('image_processing_unavailable: The attached image could not be analyzed. Please retry.')\n" + before)
+    result = source.replace(before, after)
+    ast.parse(result)
+    return result
+
+
 if __name__ == "__main__":
     path = Path(sys.argv[1])
     path.write_text(align_normalization(path.read_text(encoding="utf-8")), encoding="utf-8")
+    vision = path.parents[2] / 'agent/vision_message_prep.py'
+    vision.write_text(fail_closed_vision(vision.read_text(encoding='utf-8')), encoding='utf-8')

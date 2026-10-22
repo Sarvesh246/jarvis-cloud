@@ -1,5 +1,6 @@
 import { richGuidanceFor } from "../shared/rich-ui-guidance.js";
 import { ANSWER_CONTRACT_GUIDANCE } from "../shared/answer-contract.js";
+import { memoryPermission } from './memory-permission.js';
 import { requestTrace } from "../shared/request-trace.js";
 import { forgetHealthy, noteHealthy, waitForBackend } from "./backend-readiness.js";
 import { HttpError } from "./security.js";
@@ -417,6 +418,8 @@ ${TEACHING_GUIDANCE}${richGuidanceFor(input.messages)}${placeNote(input.place)}$
       id: input.runId,
       tier: input.tier,
       messages: [system, ...input.messages],
+      memory_can_note: Boolean(input.memory?.canNote),
+      ...(input.memory?.canNote && { memory_permission: await memoryPermission(cfg, user.sub, input.runId) }),
       ...(input.place && { place: input.place }),
       ...(effort && { model_options: { reasoning_effort: effort } }),
       ...(input.freshness && { freshness: input.freshness }),

@@ -6,6 +6,7 @@ import { cleanNote, NOTE_LIMIT, NOTES_PER_REPLY } from "../shared/memory-notes.j
 import { plainContext, rankExcerpts, terms } from '../shared/context-retrieval.js';
 import { searchConversations } from './recall-store.js';
 import { within } from './deadline.js';
+import { permitsMemory } from './memory-permission.js';
 
 /* What Vaelo has noted about the person, one short plain sentence each. Kept
    on the account, not the device, so every device and every reply sees the
@@ -141,7 +142,7 @@ export async function withMemory(input, user, store = memories, search = searchC
     if(recallEnabled && !input.fast && terms(query).length) {
       try { recall=await within(1200,signal=>search(user.sub,query,{exclude:input.conversationId,forgotten,signal})); } catch { /* no invented recall */ }
     }
-    return { ...input, memory: { notes, ...(recall.length && {recall}), canNote: !input.freshness && !input.research && !input.work } };
+    return { ...input, memory: { notes, ...(recall.length && {recall}), canNote: permitsMemory(input) } };
   } catch { return input; }
 }
 

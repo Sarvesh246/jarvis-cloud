@@ -87,7 +87,12 @@ export async function runCase(item, { origin, headers, request = fetch, timeoutM
   row.answer_chars = answer.length;
   row.quality = checkAnswer(answer, item.checks);
   row.quality.passed = row.outcome === 'complete' && !row.degraded && row.quality.passed;
-  if(item.checks?.requiresTool) row.quality.passed &&= row.tool_names.includes(item.checks.requiresTool);
+  if(item.checks?.requiresTool) {
+    const toolPresent = row.tool_names.includes(item.checks.requiresTool);
+    row.quality.passed = row.outcome === 'complete' && !row.degraded && toolPresent &&
+      (row.quality.checks === 0 ? Boolean(answer.trim()) : row.quality.passed);
+    row.quality.checks++;
+  }
   if (captureAnswers) row.answer_for_review = answer.slice(0, 12000);
   return row;
 }

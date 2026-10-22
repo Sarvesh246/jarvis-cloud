@@ -15,6 +15,7 @@ COPY cloud /opt/jarvis
 RUN python3 -c "from pathlib import Path; from pm import build_requirements_environment; build_requirements_environment(Path('/opt/jarvis/requirements-verification.txt').read_text().splitlines(), out=Path('/opt/jarvis/verification-env'), explicit=True)" \
     && /opt/jarvis/verification-env/bin/python -I -c "import quickjs; assert quickjs.Context().eval('17 * 23') == 391"
 COPY web/shared/context-policy.json /opt/jarvis/context-policy.json
+COPY web/shared/output-policy.json /opt/jarvis/output-policy.json
 RUN python3 /opt/jarvis/runtime_contract.py /opt/hermes/gateway/platforms/api_server.py
 WORKDIR /opt/data
 EXPOSE 10000

@@ -2,6 +2,7 @@ import { AccountRecord } from "./account-record.js";
 import { memories } from "./memory.js";
 import { HttpError, sameOrigin, readJson, json } from "./security.js";
 import { validRetention } from "../shared/retention.js";
+import { verifyMemoryPermission } from './memory-permission.js';
 
 /* Memory and the retention choice, behind /api/chats (?resource=memory or
    ?resource=retention) because the Hobby plan allows only twelve functions.
@@ -23,6 +24,8 @@ export async function memoryApi(req, res, cfg, user, store = memories) {
   if (body?.action === "add" || body?.action === "note") {
     const texts = body.action === "add" ? [body.text] : body.notes;
     if (!Array.isArray(texts) || !texts.length || texts.length > 10) throw new HttpError(400, "Invalid note.");
+    if (body.action === 'note' && !await verifyMemoryPermission(cfg, user.sub, body.permission))
+      throw new HttpError(403, 'This reply is not allowed to save memories.');
     const result = await store.add(user.sub, texts, body.action === "add" ? "you" : "vaelo");
     if (body.action === "add" && !result.added.length)
       throw new HttpError(409, result.full ? "Memory is full. Delete a note to make room." : "You already have that note.");

@@ -58,6 +58,9 @@ def configuration(environ):
         "threshold_tokens": CONTEXT_POLICY["compressionCapTokens"],
     })
     cfg["providers"]["cloud-openrouter"]["api"] = DEFAULT_BASE_URL
+    # These are modality-aware routers, not text model IDs in models.dev.
+    # Their request filters select a vision model when image parts are present.
+    cfg['providers']['cloud-openrouter']['models'] = {'openrouter/free': {'supports_vision': True}}
     cfg["fallback_providers"] = []
     # A reachable FreeLLMAPI router (the same pool local Jarvis uses) leads when it is
     # configured: it already fails over across its own providers, so OpenRouter's 50 daily
@@ -67,7 +70,7 @@ def configuration(environ):
     if router:
         cfg["providers"]["cloud-freellmapi"] = {
             "name": "FreeLLMAPI router", "api": router, "api_key": "${FREELLMAPI_API_KEY}",
-            "transport": "chat_completions", "default_model": "auto", "models": ["auto"],
+            "transport": "chat_completions", "default_model": "auto", "models": {'auto': {'supports_vision': True}},
             "context_length": window, "request_timeout_seconds": 180, "stale_timeout_seconds": STALE_SECONDS,
         }
         cfg["model"] = {"provider": "custom:cloud-freellmapi", "default": "auto", "context_length": window}
@@ -142,7 +145,7 @@ def prepare_profile(home, environ):
     shutil.copy2(HERE / "research.py", plugin / "__init__.py")
     shutil.copy2(HERE / "source_quality.py", plugin / "source_quality.py")
     shutil.copy2(HERE / "data_sources.py", plugin / "data_sources.py")
-    for name in ("extended_sources.py", "news_sources.py", "image_gen.py", "weather.py", "calculation.py", "verification.py", "verification_worker.py", "api_directory.py", "api_operations.json", "api_directory.json"):
+    for name in ("extended_sources.py", "news_sources.py", "image_gen.py", "weather.py", "calculation.py", "constraints.py", "verification.py", "verification_worker.py", "api_directory.py", "api_operations.json", "api_directory.json"):
         shutil.copy2(HERE / name, plugin / name)
     shutil.copy2(HERE / "research-plugin.yaml", plugin / "plugin.yaml")
     # An explicit cloud SOUL overrides the image's example personality.

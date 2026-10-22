@@ -22,6 +22,14 @@ import threading
 import time
 import uuid
 try:
+    from admission import Admission
+except ModuleNotFoundError:
+    from cloud.admission import Admission
+try:
+    from memory_output import NoteFilter, split_notes
+except ModuleNotFoundError:
+    from cloud.memory_output import NoteFilter, split_notes
+try:
     from calculation import direct_calculation
 except ModuleNotFoundError:
     from cloud.calculation import direct_calculation
@@ -388,6 +396,7 @@ class Run:
         self.usage_reports = 0
         self.prompt_tokens = self.completion_tokens = self.cached_tokens = 0
         self.images = set()  # generated-image references already handed to the reader
+        self.completed_at = None
 
     def emit(self, frame, optional=False, reserved=False):
         """Number and keep one SSE frame (without its trailing blank line). Relayed frames
@@ -411,6 +420,17 @@ class Run:
             self.stop()
 
     def event(self, name, data):
+        if name == 'jarvis.complete':
+            self.completed_at = self.completed_at or time.time()
+            data = {**data, 'timing': {
+                'completedAt': round(self.completed_at * 1000),
+                'totalMs': round(max(0, self.completed_at - self.created) * 1000),
+                **({'firstAnswerMs': round(max(0, self.first_answer - self.created) * 1000)}
+                   if self.first_answer is not None else {}),
+                **({'queueMs': self.trace.spans['queue']} if 'queue' in self.trace.spans else {}),
+            }}
+        if name == 'hermes.tool.progress':
+            data = {**data, 'eventAt': data.get('eventAt', round(time.time() * 1000))}
         self.emit(
             f"event: {name}\ndata: {json.dumps(data, ensure_ascii=False)}", reserved=True
         )
@@ -494,6 +514,11 @@ class Relay:
         self.report = lambda line: print(line, flush=True)
         self.fast_health = RouteHealth()
         self.usage_reporter = configured_reporter()
+        try:
+            capacity = min(3, max(1, int(os.environ.get('VAELO_MAX_CONCURRENT_RUNS', '1'))))
+        except ValueError:
+            capacity = 1
+        self.admission = Admission(capacity)
 
     def guest_admit(self, owner, retry=False):
         """Count a guest reply in, or say why not: too many at once, or too many this hour.
@@ -715,6 +740,9 @@ class Relay:
             if run.stopped:
                 return None, None
         run.route = "hermes"
+        if not self.admission.acquire(run):
+            return None, None if run.stopped else {'code': 'queue_full', 'status': 429,
+                'message': 'Vaelo’s reply queue is full or the wait expired. Please try again shortly.'}
         payload = {"model": "jarvis", "messages": messages, "stream": True}
         if isinstance(body.get("model_options"), dict):
             payload["model_options"] = body["model_options"]
@@ -840,6 +868,7 @@ class Relay:
                 seen["output_guard"].frames.clear()
             response.close()  # release the provider/agent slot before a fresh request
             run.connection.close()
+            self.admission.release(run)
             if seen["usage_reported"]:
                 run.usage_reports += 1
                 for key, value in usage.items():
@@ -894,6 +923,8 @@ class Relay:
                     # Some streams repeat cumulative usage in several chunks.
                     seen["usage"][key] = max(seen["usage"][key], value)
         if name == "hermes.tool.progress":
+            payload['eventAt'] = payload.get('eventAt', round(time.time() * 1000))
+            frame = 'event: hermes.tool.progress\ndata: ' + json.dumps(payload)
             run.trace.tool(payload)
         if name == "approval.request":
             seen["approval"] = True
@@ -1022,6 +1053,20 @@ class Relay:
                             return  # publish once, only after the full contract passes
                     except (ValueError, TypeError, AttributeError):
                         pass
+        if seen.get('note_filter'):
+            lines = frame.split('\n')
+            for i, line in enumerate(lines):
+                if not line.startswith('data:'): continue
+                try:
+                    payload = json.loads(line[5:])
+                    for choice in payload.get('choices', []):
+                        delta = choice.get('delta', {})
+                        if isinstance(delta.get('content'), str):
+                            delta['content'] = seen['note_filter'].feed(delta['content'])
+                    lines[i] = 'data: ' + json.dumps(payload)
+                except (ValueError, TypeError, AttributeError):
+                    continue
+            frame = '\n'.join(lines)
         run.emit(frame, **options)
 
     def share_images(self, run, answer):
@@ -1053,7 +1098,8 @@ class Relay:
         timer.start()
         seen = {"content": "", "answer": "", "approval": False, "tools": [], "held": None,
                 "finished": False, "failed": False, "dropped": False, "forecasts": [], "forecast_evidence": []}
-        seen['contract'] = contract_for(messages)
+        seen['contract'] = contract_for(messages, tools_available=not guest)
+        seen['note_filter'] = NoteFilter()
         def preserve_forecast():
             if run.stopped or not seen["forecast_evidence"]:
                 return False
@@ -1096,6 +1142,9 @@ class Relay:
                 # for the full agent.
                 with run.trace.span("freshness_lookup"):
                     evidence = source_context(query)
+                if isinstance(evidence.get('evidence'), dict):
+                    summary = evidence['evidence']
+                    run.event('jarvis.evidence', {key: summary.get(key, 0) for key in ('pages_extracted', 'search_snippets')})
                 messages = [*messages[:-1], {**messages[-1], "content": with_note(
                     messages[-1]["content"], evidence["content"])}]
             if run.stopped:
@@ -1215,7 +1264,7 @@ class Relay:
                     return run.finish("error")
                 if (constrained(seen['contract']) and answered(seen) and seen['finished']
                         and not seen['failed'] and not seen['truncated'] and not run.stopped):
-                    checked, errors = validate_answer(seen['answer'], seen['contract'],run.trace.executed_tools)
+                    checked, errors = validate_answer(split_notes(seen['answer'])[0], seen['contract'],run.trace.executed_tools)
                     if errors:
                         left = RUN_LIMIT_SECONDS - (self.clock() - started)
                         if not seen.get('contract_retried') and attempt < ATTEMPTS - 1 and left >= RECOVERY_MIN_SECONDS:
@@ -1281,6 +1330,13 @@ class Relay:
             # request never degrades to a hand-written table or a stray marker.
             if constrained(seen['contract']):
                 run.emit('data: ' + json.dumps({'choices':[{'delta':{'content':seen.get('checked_answer', seen['answer'])}}]}))
+            else:
+                tail = seen['note_filter'].feed('', final=True)
+                if tail:
+                    run.emit('data: ' + json.dumps({'choices': [{'delta': {'content': tail}}]}))
+            _, notes = split_notes(seen['answer'])
+            if notes and body.get('memory_can_note') is True and isinstance(body.get('memory_permission'), str) and not run.trace.executed_tools:
+                run.event('jarvis.memory', {'notes': notes, 'permission': body['memory_permission']})
             for token in ([] if constrained(seen['contract']) else dict.fromkeys([*WEATHER_REFERENCE.findall(seen["answer"]), *seen["forecasts"]])):
                 forecast = read_forecast(token, not_before=forecast_started)
                 if not forecast:
@@ -1294,6 +1350,7 @@ class Relay:
             run.finish("error")
         finally:
             timer.cancel()
+            self.admission.release(run)
             if guest:
                 self.guest_release()
             self.feed(run.owner).bump()

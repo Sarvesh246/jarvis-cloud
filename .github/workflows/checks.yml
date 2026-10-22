@@ -2,7 +2,7 @@ name: Checks
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'fix/benchmark-regressions-*']
   pull_request:
 
 jobs:
@@ -16,6 +16,8 @@ jobs:
       - name: Verify both runtimes and confinement inside the production image
         run: |
           docker run --rm --entrypoint /opt/jarvis/verification-env/bin/python vaelo-ci -c "import sys; sys.path.insert(0,'/opt/jarvis'); from verification import verify; assert verify({'source':'const result=17*23;', 'tests':'if(result!==391) throw Error(\"bad result\");'},language='javascript')['status']=='passed'; assert verify({'source':'value=17*23', 'tests':'assert value==391'})['status']=='passed'; assert verify({'source':'open(\"/etc/passwd\").read()', 'tests':'assert True'})['status']=='failed'; print('Production image: Python, JavaScript and confinement passed.')"
+      - name: Verify uploaded pixels and vision cache as the actual gateway user
+        run: docker run --rm vaelo-ci /opt/hermes/.venv/bin/python /opt/jarvis/check_vision_runtime.py
   bootstrap:
     runs-on: ubuntu-latest
     steps:

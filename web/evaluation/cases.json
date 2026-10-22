@@ -1,5 +1,5 @@
 [
-  {"id":"greeting","capability":"routing","messages":[{"role":"user","content":"Hello! Reply with one short sentence."}],"checks":{"maxChars":400},"review":"Natural, brief greeting; no tools needed."},
+  {"id":"greeting","capability":"routing","messages":[{"role":"user","content":"Hello! Reply with one short sentence."}],"checks":{"sentences":1,"maxChars":400},"review":"Natural, brief greeting; no tools needed."},
   {"id":"arithmetic","capability":"routing","messages":[{"role":"user","content":"What is 17 times 23? Answer with just the number."}],"checks":{"exact":"391"},"review":"Correct answer without unnecessary reasoning or tools."},
   {"id":"rewrite","capability":"routing","messages":[{"role":"user","content":"Rewrite politely: send the file asap"}],"checks":{"includes":["file"],"maxChars":600},"review":"Preserves meaning; no invented context."},
   {"id":"context-recall","capability":"context","messages":[{"role":"user","content":"For this fictional project, the release codename is MAPLE-731. Use British spelling."},{"role":"assistant","content":"Understood."},{"role":"user","content":"What is the release codename? Answer only with the codename."}],"checks":{"exact":"MAPLE-731"},"review":"Uses earlier conversation rather than inventing a new identifier."},

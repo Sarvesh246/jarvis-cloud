@@ -5,12 +5,14 @@ import { memoryApi } from "../server/account-api.js";
 import { chatInput } from "../server/chat.js";
 import { cleanNote, memoryNotes, stripMemoryNotes } from "../shared/memory-notes.js";
 import { memoryStorage, reply } from "./helpers-storage.js";
+import { memoryPermission } from '../server/memory-permission.js';
 
-const cfg = { origin: "https://vaelo.example" };
+const cfg = { origin: "https://vaelo.example", secret:'synthetic-memory-api-test-key-1234567890' };
 const csrf = "b".repeat(64);
 const owner = { sub: "owner-1", email: "owner@gmail.com", name: "Owner" };
 const store = () => new MemoryStore(memoryStorage(), { enabled: () => true });
-const call = (memory, method, body) => {
+const call = async (memory, method, body) => {
+  if (body?.action === 'note') body = { ...body, permission: await memoryPermission(cfg, owner.sub, 'synthetic-run') };
   const res = reply();
   const req = { method, headers: { origin: cfg.origin, "x-csrf-token": csrf, cookie: `jarvis-csrf=${csrf}`, "content-type": "application/json" }, body };
   return memoryApi(req, res, { ...cfg, secure: false }, owner, memory).then(() => res, error => Object.assign(res, { statusCode: error.status, body: { error: error.message } }));

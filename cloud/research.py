@@ -751,6 +751,8 @@ class Research(WebSearchProvider):
                 "title": title[:500],
                 "content": focus(content.strip(), query),
                 "provider": name,
+                "retrieval_kind": "extracted_passages",
+                "cache_status": "network" if name == 'direct' else "unknown",
             }
             if published:
                 page["published"] = published
@@ -762,6 +764,7 @@ class Research(WebSearchProvider):
             "url": url,
             "error": "Page extraction failed; use another source or the available search results",
             "content": "",
+            "retrieval_kind": "failed",
         }
 
     async def extract(self, urls, **kwargs):
@@ -780,6 +783,9 @@ class Research(WebSearchProvider):
 
 def register(ctx):
     ctx.register_web_search_provider(Research())
+    from .constraints import SCHEMA as CONSTRAINT_SCHEMA, evaluate_constraints
+    ctx.register_tool(name='evaluate_constraints', toolset='web', schema=CONSTRAINT_SCHEMA, handler=evaluate_constraints,
+                      description='Deterministic checks for supplied numerical constraints')
     from .calculation import SCHEMA as CALC_SCHEMA, DATE_SCHEMA, calculate, date_difference
     ctx.register_tool(name='calculate',toolset='web',schema=CALC_SCHEMA,handler=calculate,
                       description='Bounded deterministic decimal arithmetic')

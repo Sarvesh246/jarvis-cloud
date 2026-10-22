@@ -1,10 +1,13 @@
+import policy from './output-policy.json' with { type: 'json' };
+const patterns = Object.values(policy).map(source => new RegExp(source, 'i'));
 // Inspect the ask, not instructions quoted in attached data or server notes.
 // This selects guidance; it does not claim to validate a model's answer.
 export function constrainedAnswer(content = "") {
   const text = (typeof content === "string" ? content : Array.isArray(content)
     ? content.filter(part => part?.type === "text").map(part => part.text).join("\n") : "")
-    .split(/\n\nAttached file: |\n\n\[Vaelo request:/)[0];
-  return /\b(?:only|just)\s+(?:(?:with|one|a|an|the|valid|single|final)\s+)*(?:json|csv|code|answer|number|word|sentence|line|object)\b|\b(?:json|csv|code|prose|text)[ -]only\b|\braw (?:json|csv|text)\b|\b(?:under|within|at most|no more than|exactly|maximum(?: of)?)\s+\d+\s+(?:words?|sentences?|lines?|characters?)\b|\bplain text\b/i.test(text);
+    .split(/\n\n(?:Attached file: |\[Vaelo request:|\[Selected Vaelo workspace:)/)[0]
+    .replace(/```[^\n]*\n[\s\S]*?```|~~~[^\n]*\n[\s\S]*?~~~/g, '');
+  return patterns.some(pattern => pattern.test(text)) || /\b(?:only|just)\s+(?:(?:with|one|a|an|the|valid|single|final)\s+)*(?:json|csv|code|answer|number|word|sentence|line|object)\b|\b(?:json|csv|code|prose|text)[ -]only\b|\braw (?:json|csv|text)\b|\bplain text\b/i.test(text);
 }
 
 export const ANSWER_CONTRACT_GUIDANCE = "Explicit output requirements take precedence over teaching, style and presentation defaults. For answer-only, code-only or raw JSON/CSV, return only that requested content, without cards, headings, fences unless requested, preambles or follow-up offers. Obey stated word, sentence and line limits. Check the final answer against every requested field and constraint before sending. Resolve conflicting intermediate calculations privately; publish one consistent checked result. Never quote or expose internal [Vaelo request: ...] annotations.";

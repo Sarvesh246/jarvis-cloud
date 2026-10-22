@@ -50,7 +50,7 @@ export const SHAPES = {
   writing:
     "reply shape: the finished piece itself, ready to use, with no preamble or commentary (a subject line first for an email)",
   rewrite:
-    "reply shape: only the revised text, keeping the meaning, plus a short list of notable changes only when the edits are substantive",
+    "reply shape: only the revised text, keeping the meaning, with no preamble, change explanation or follow-up unless requested",
   translation: "reply shape: the translation only, with a note only on ambiguous phrases",
   summary:
     "reply shape: a one-line gist, then three to seven bullets of key points, adding nothing new",

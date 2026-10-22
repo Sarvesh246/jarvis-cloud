@@ -1,5 +1,7 @@
 import { openingChat } from "./lib/chat-opening.js";
 import { replyTrace } from "./lib/reply-trace.js";
+import { completedTiming } from './lib/reply-timing.js';
+import { replyRegistry } from './lib/reply-registry.js';
 import React, {
   useCallback,
   useEffect,
@@ -104,43 +106,12 @@ const SILENT_MS = 60 * 1000;
 
 /* Replies still running when the app closed, by id, so opening it again can
    pick them up. The relay keeps a finished reply for an hour. */
-const LIVE_KEY = "vaelo-live-replies";
 const LIVE_REPLY_MS = 55 * 60 * 1000;
 // A followed reply Vaelo doesn't know, with no words yet, is given up on after this.
 const ORPHAN_MS = 2 * 60 * 1000;
 /* How long a device that followed a reply waits for the sender's own copy
    before saving the finished reply itself. */
 const MIRROR_GRACE_MS = 15000;
-
-function readLiveReplies() {
-  try {
-    const value = JSON.parse(localStorage.getItem(LIVE_KEY) || "{}");
-    return value && typeof value === "object" ? value : {};
-  } catch {
-    return {};
-  }
-}
-
-function writeLiveReplies(value) {
-  try {
-    localStorage.setItem(LIVE_KEY, JSON.stringify(value));
-  } catch {
-    /* without storage a reply is only followed while the page stays open */
-  }
-}
-
-function rememberLiveReply(id, chatId, run = id) {
-  const previous = readLiveReplies()[id];
-  const at = previous?.run === run ? previous.at : Date.now();
-  writeLiveReplies({ ...readLiveReplies(), [id]: { chatId, run, at } });
-}
-
-function forgetLiveReply(id) {
-  const live = readLiveReplies();
-  if (!(id in live)) return;
-  delete live[id];
-  writeLiveReplies(live);
-}
 
 /* The live-reply list is shared by every tab of this browser, so one tab
    owns each reply: it holds a lock while it follows it. A tab opened or
@@ -218,9 +189,9 @@ function hasAnswer(text) {
   return Boolean(trimmed) && trimmed !== "(empty)";
 }
 
-function readOpenChat() {
+function readOpenChat(sub) {
   try {
-    return sessionStorage.getItem(OPEN_CHAT_KEY);
+    return sessionStorage.getItem(OPEN_CHAT_KEY + ':' + sub) || sessionStorage.getItem(OPEN_CHAT_KEY);
   } catch {
     return null;
   }
@@ -325,6 +296,9 @@ const snapshot = ({
   content,
   activity,
   thoughtMs,
+  completedAt,
+  totalMs,
+  queueMs,
   truncated,
   stopped,
   failed,
@@ -341,6 +315,9 @@ const snapshot = ({
   content,
   activity,
   thoughtMs,
+  completedAt,
+  totalMs,
+  queueMs,
   truncated,
   stopped,
   failed,
@@ -401,6 +378,8 @@ export function App() {
   const [desktopHandoff, setDesktopHandoff] = useState(() => DESKTOP ? null : readDesktopHandoff());
   const [desktopSigningIn, setDesktopSigningIn] = useState(false);
   const [session, setSession] = useState(null);
+  const registry = useMemo(() => replyRegistry(session?.user?.sub), [session?.user?.sub]);
+  const { read: readLiveReplies, remember: rememberLiveReply, forget: forgetLiveReply } = registry;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [chats, setChats] = useState([]);
@@ -566,10 +545,14 @@ export function App() {
   /* A fresh launch owns a new conversation. The chat this tab already had open (a reload, or the
      phone reviving a backgrounded app) comes back instead, unless the app was
      opened from its "New conversation" shortcut. */
-  function chooseOpening(saved) {
+  function chooseOpening(saved, sub) {
     const shortcut = new URLSearchParams(location.search).has("new");
     if (shortcut) history.replaceState(null, "", "/");
-    const open = readOpenChat();
+    const open = readOpenChat(sub);
+    try {
+      const own = JSON.parse(sessionStorage.getItem(`${OPEN_CHAT_KEY}:data:${sub}`) || 'null');
+      if (own?.id === open && Array.isArray(own.messages) && !saved.some(chat => chat.id === open)) saved = [own, ...saved];
+    } catch { /* a missing tab backup falls back to account sync */ }
     return openingChat(saved, open, shortcut, freshChat);
   }
 
@@ -631,7 +614,7 @@ export function App() {
         } catch {
           setStorageIssue(true);
         }
-        const opening = chooseOpening(saved.map(normalizeSavedReplySpacing));
+        const opening = chooseOpening(saved.map(normalizeSavedReplySpacing), result.user.sub);
         setChats(cap(opening.list));
         setActiveId(opening.id);
       }
@@ -671,11 +654,25 @@ export function App() {
   useEffect(() => {
     if (!activeId) return;
     try {
-      sessionStorage.setItem(OPEN_CHAT_KEY, activeId);
+      sessionStorage.setItem(`${OPEN_CHAT_KEY}:${session?.user?.sub}`, activeId);
     } catch {
       /* without it, a reload opens a new conversation */
     }
-  }, [activeId]);
+  }, [activeId, session?.user?.sub]);
+
+  // A shared account cache can be overwritten by another tab before its sync
+  // sees this chat. Keep this tab's selected conversation across that race.
+  useEffect(() => {
+    const sub = session?.user?.sub;
+    if (!sub || !activeId) return;
+    const save = () => {
+      const own = chatsRef.current.find(chat => chat.id === activeId);
+      if (own) try { sessionStorage.setItem(`${OPEN_CHAT_KEY}:data:${sub}`, JSON.stringify(own)); } catch { /* optional offline backup */ }
+    };
+    save();
+    addEventListener('pagehide', save);
+    return () => removeEventListener('pagehide', save);
+  }, [activeId, session?.user?.sub, active?.messages.length, active?.messages.at(-1)?.completedAt]);
 
   /* Back online after opening offline: fetch the real session quietly. */
   useEffect(() => {
@@ -1555,6 +1552,8 @@ export function App() {
     let frame = 0;
     let runId = "";
     let pendingApproval = false;
+    let memoryPermit = resumeFrom?.memoryPermission;
+    let serverNotes = [];
     let endedElsewhere = false;
     let seq = -1;
     const generated = new Map();
@@ -1580,15 +1579,15 @@ export function App() {
     const schedule = () => {
       if (!frame) frame = requestAnimationFrame(flush);
     };
-    function noteTool({ tool, callId, label, done }) {
+    function noteTool({ tool, callId, label, done, eventAt }) {
       updateMessage((message) => {
         const list = [...(message.activity || [])];
         const at = list.findLastIndex((item) =>
           callId ? item.callId === callId : item.tool === tool && !item.done,
         );
-        const now = Date.now();
+        const now = Number.isFinite(eventAt) ? eventAt : Date.now();
         if (at >= 0) {
-          if (done) list[at] = { ...list[at], done: true, endedAt: now };
+          if (done) list[at] = { ...list[at], done: true, endedAt: list[at].endedAt || now };
         } else {
           list.push({
             id: crypto.randomUUID(),
@@ -1614,6 +1613,13 @@ export function App() {
       joinBuffer = "";
     }
     function onEvent(name, data) {
+      if (name === 'jarvis.memory') {
+        if (typeof data.permission === 'string' && Array.isArray(data.notes)) {
+          memoryPermit = data.permission;
+          serverNotes = data.notes.filter(note => typeof note === 'string').slice(0, 3);
+        }
+        return;
+      }
       /* Someone stopped this reply (another device, another tab): what was
          written is kept, and there is nothing more to wait for. */
       if (name === "jarvis.stopped")
@@ -1628,7 +1634,7 @@ export function App() {
         trace.mark("complete_event");
         completed = true;
         releaseHeld();
-        updateMessage({ truncated: false });
+        updateMessage(message => ({ truncated: false, running: undefined, ...completedTiming(message, data.timing) }));
       }
       /* The answer was cut off and Vaelo is carrying it on: what follows
          joins the words already written. */
@@ -1656,7 +1662,12 @@ export function App() {
         schedule();
         return;
       }
+      if (name === 'jarvis.queued') {
+        updateMessage({ live: 'Queued — waiting for a free reply slot.' });
+        return;
+      }
       if (name === "jarvis.status") {
+        if (/working/i.test(data.message || '')) updateMessage({ live: '' });
         const waking = /wake|idle/i.test(data.message || "");
         setPhase(chatId, waking ? "waking" : "thinking");
         if (/working/i.test(data.message || "")) {
@@ -1678,7 +1689,7 @@ export function App() {
         const tool = data.tool || data.tool_name || data.name || data.function_name || "tool";
         const done = data.status === "completed";
         setPhase(chatId, pendingApproval ? "listening" : done ? "thinking" : "working");
-        noteTool({ tool, callId: data.toolCallId || data.tool_call_id, label: data.label, done });
+        noteTool({ tool, callId: data.toolCallId || data.tool_call_id, label: data.label, done, eventAt: data.eventAt });
         if (!done) announce(toolInfo(tool).now);
       }
       /* Hermes's plan for this reply, as the whole list after each change. */
@@ -1720,7 +1731,7 @@ export function App() {
           joining = false;
           joinBuffer = "";
         }
-        if (!received) updateMessage({ thoughtMs: Date.now() - startedAt, live: "" });
+        if (!received) updateMessage(message => ({ ...(!message.completedAt && message.thoughtMs == null && { thoughtMs: Date.now() - startedAt }), live: "" }));
         received += piece;
         schedule();
         setPhase(chatId, "speaking");
@@ -1943,14 +1954,14 @@ export function App() {
          The marker is never shown. The note is saved here, on the device that
          ran the reply, and the reply says truthfully what happened. Replies
          that used tools (the web, files) never save anything. */
-      const noted = !mirror && !guest ? memoryNotes(received) : [];
+      const noted = !mirror && !guest && memoryPermit ? serverNotes : [];
       received = stripMemoryNotes(received);
       if (noted.length) {
         const ranTools = Boolean(chatsRef.current.find((chat) => chat.id === chatId)?.messages.find((m) => m.id === id)?.activity?.length);
         let line = "";
         if (!ranTools) {
           try {
-            const result = await request("/api/chats?resource=memory", { action: "note", notes: noted });
+            const result = await request("/api/chats?resource=memory", { action: "note", notes: noted, permission: memoryPermit });
             line = result.saved.length
               ? `*Saved to memory: ${result.saved.map((text) => `“${text}”`).join(" · ")}. You can change this in Settings.*`
               : result.full ? "*Memory is full, so I didn’t save that. You can delete notes in Settings.*" : "";
@@ -2017,7 +2028,7 @@ export function App() {
       trace.finish(succeeded ? "completed" : detached || endedElsewhere || slot.stopping ? "stopped_or_detached" : "error");
       /* A reply that carries on without this page stays marked as running.
          A mirror leaves the final word to the device that sent it. */
-      const carriesOn = detached || lost || quiet || (mirror && !slot.stopping && !endedElsewhere);
+      const carriesOn = !completed && (detached || lost || quiet || (mirror && !slot.stopping && !endedElsewhere));
       updateMessage((message) => {
         const patch = { live: "" };
         if (!carriesOn) patch.running = undefined;
@@ -2029,7 +2040,7 @@ export function App() {
           }));
         if (message.approval?.state === "pending" || message.approval?.state === "sending")
           patch.approval = { ...message.approval, state: "expired" };
-        if (!received) patch.thoughtMs = Date.now() - startedAt;
+        if (!carriesOn) Object.assign(patch, completedTiming(message));
         if (message.versions) {
           const done = { ...message, ...patch };
           patch.versions = [
@@ -2128,11 +2139,10 @@ export function App() {
   useEffect(() => {
     if (!session?.user || session.offline || !chats.length) return;
     const pending = Object.entries(readLiveReplies()).sort((a, b) => b[1].at - a[1].at);
-    let opened = false;
     for (const [id, entry] of pending) {
       const chat = chats.find((item) => item.id === entry.chatId);
       const message = chat?.messages.find((item) => item.id === id);
-      if (!message || message.role !== "assistant" || Date.now() - entry.at > LIVE_REPLY_MS) {
+      if (!message || message.role !== "assistant" || message.completedAt || !message.running || Date.now() - entry.at > LIVE_REPLY_MS) {
         forgetLiveReply(id);
         continue;
       }
@@ -2140,11 +2150,7 @@ export function App() {
       // Already followed here while another tab owned it: that tab finishes it.
       if (watchedHere.current.has(id)) continue;
       resuming.current.add(id);
-      // Every unfinished reply is picked up; the newest one is shown.
-      if (!opened) {
-        opened = true;
-        setActiveId(chat.id);
-      }
+      // Recover in the background; selection belongs to this tab.
       replyOwnedElsewhere(id)
         .then((elsewhere) => {
           if (elsewhere) watchedHere.current.add(id);
@@ -2170,7 +2176,6 @@ export function App() {
      as running, and opening it replays that run's events from the relay and
      follows it live. Starting on a blank conversation, a reply just begun
      elsewhere is opened at once. Nothing is generated again. */
-  const autoOpened = useRef(new Set());
   useEffect(() => {
     if (!session?.user || session.offline) return;
     // Following a reply in a conversation that was left: stop following.
@@ -2179,18 +2184,6 @@ export function App() {
     if (runs.current.has(activeId)) return;
     const own = readLiveReplies();
     const active = chats.find((chat) => chat.id === activeId);
-    if (!active?.messages.length) {
-      const started = chats.find((chat) => {
-        const reply = liveReply(chat);
-        return reply && !own[reply.id] && !autoOpened.current.has(reply.id) &&
-          Date.now() - reply.startedAt < 2 * 60 * 1000;
-      });
-      if (started) {
-        autoOpened.current.add(liveReply(started).id);
-        setActiveId(started.id);
-        return;
-      }
-    }
     const reply = liveReply(active);
     if (!reply || own[reply.id] || mirrored.current.has(`${reply.id}:${reply.run}`)) return;
     mirrored.current.add(`${reply.id}:${reply.run}`);
