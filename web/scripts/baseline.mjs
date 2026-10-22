@@ -40,6 +40,7 @@ export async function runCase(item, { origin, headers, request = fetch, timeoutM
         }
         if (name === 'jarvis.error' || name === 'jarvis.stopped') {
           row.error_code = /^[a-z_]{1,64}$/.test(data?.code || '') ? data.code : 'unspecified';
+          if (Array.isArray(data?.checks)) row.error_checks = data.checks.filter(value=>typeof value==='string'&&/^[a-z_0-9]{1,100}$/.test(value));
           if (Number.isInteger(data?.status)) row.error_status = data.status;
           row.outcome = name === 'jarvis.stopped' ? 'stopped' : 'error';
           throw new Error('terminal_event');

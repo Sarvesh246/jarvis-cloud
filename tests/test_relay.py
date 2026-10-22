@@ -192,6 +192,29 @@ class FakeHermes:
 
 
 class RelayTests(unittest.TestCase):
+    def test_failed_image_only_contract_retries_original_pixels_through_native_router(self):
+        for available in (True,False):
+            with self.subTest(available=available):
+                hermes, relay, port = self.boot([[chunk('{"red":null,"blue":null}','stop'),'data: [DONE]']])
+                source = [{'type':'text','text':'Use only this image. Return ONLY JSON with red, blue.'},
+                          {'type':'image_url','image_url':{'url':'data:image/png;base64,originalPixels'}}]
+                def repair(run,messages,body):
+                    self.assertEqual(next(m['content'] for m in messages if isinstance(m.get('content'),list)),source)
+                    self.assertTrue(body['no_weather_tools'])
+                    if not available: return None
+                    run.connection = mock.Mock()
+                    run.route = 'router'
+                    return io.BytesIO((chunk('{"red":2,"blue":2}','stop')+'\n\ndata: [DONE]\n\n').encode())
+                relay.open_fast = mock.Mock(side_effect=repair)
+                self.start(port,content=source)
+                run = self.finished(relay)
+                self.assertEqual(run.outcome,'complete' if available else 'error')
+                self.assertEqual(len(hermes.requests),1)
+                relay.open_fast.assert_called_once()
+                wire = b''.join(run.frames).decode()
+                self.assertNotIn('"red": null',wire)
+                if not available: self.assertIn('image_processing_unavailable',wire)
+
     def test_memory_directives_are_server_filtered_and_permission_controls_note_events(self):
         for allowed in (False, True):
             with self.subTest(allowed=allowed):

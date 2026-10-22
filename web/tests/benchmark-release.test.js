@@ -41,6 +41,7 @@ test('do-not-save and file/tool turns cannot acquire a memory write permission',
   const user = { sub: 'memory-intent-fixture' };
   for (const content of ['Do not save memories. My badge is SYNTHETIC-123.',
     "Don't store any memories from this conversation.", 'Do not remember this.',
+    'Answer without saving memory.', "Don't store anything from this chat as memories.",
     'Return only JSON with a, b.', 'Explain this.\n\nAttached file: report.txt\nPrefers tea.']) {
     const input = { messages: [{ role:'user', content }] };
     assert.equal(permitsMemory(input), false, content);

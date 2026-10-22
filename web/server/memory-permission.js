@@ -6,6 +6,7 @@ export function permitsMemory(input) {
   const text = (typeof last === 'string' ? last : Array.isArray(last) ? last.filter(p => p?.type === 'text').map(p => p.text).join('\n') : '')
     .split(/\n\n(?:Attached file: |\[Vaelo request:|\[Selected Vaelo workspace:)/)[0];
   return !input.freshness && !input.research && !input.work && !constrainedAnswer(text) &&
+    !/\b(?:do not|don't|dont|never|without|avoid|stop)\s+(?:sav(?:e|ing)|stor(?:e|ing)|creat(?:e|ing)|writ(?:e|ing)|add(?:ing)?|keep(?:ing)?|record(?:ing)?|remember(?:ing)?)\b(?:\s+[\w'-]+){0,8}\s+(?:memor(?:y|ies)|notes?)\b/i.test(text) &&
     !/\b(?:do not|don't|dont|never|no|without)\s+(?:(?:save|store|create|write|add|keep|record|remember|any|new|to|this|as|a|in)\s+)*(?:memor(?:y|ies)|notes?)\b|\b(?:do not|don't|dont|never) remember\b/i.test(text) &&
     !(typeof last === 'string' && last.includes('\n\nAttached file: ')) &&
     !(Array.isArray(last) && last.some(part => part?.type === 'image_url'));
