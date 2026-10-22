@@ -7,7 +7,7 @@ import sys
 
 sys.path.insert(0, '/opt/hermes')
 sys.path.insert(0, '/opt/jarvis')
-from bootstrap import prepare_profile
+from bootstrap import prepare_profile, vision_cache_writable
 
 
 def check():
@@ -15,6 +15,7 @@ def check():
         home = Path(directory)
         os.environ['HERMES_HOME'] = str(home)
         prepare_profile(home, {'FREELLMAPI_URL': 'https://router.example', 'FREELLMAPI_API_KEY': 'fixture'})
+        assert vision_cache_writable(home)
         from agent.image_routing import _supports_vision_override
         import json
         cfg = json.loads((home / 'config.yaml').read_text())
@@ -23,6 +24,7 @@ def check():
         assert _supports_vision_override(cfg, 'custom:cloud-nvidia', 'nvidia/nemotron-3-ultra-550b-a55b') is None
         from tools.vision_tools import _secure_cache_dir, _write_private_bytes
         cache = _secure_cache_dir('cache/vision', 'temp_vision_images')
+        assert cache == home / 'vaelo-vision-cache'
         pixels = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=')
         image = cache / 'runtime-check.png'
         _write_private_bytes(image, pixels)

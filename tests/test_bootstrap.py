@@ -21,8 +21,9 @@ class BootstrapTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             home = Path(directory)
             self.assertTrue(bootstrap.vision_cache_writable(home))
-            self.assertEqual(list((home / 'cache/vision').iterdir()), [])
-            with unittest.mock.patch.object(bootstrap.tempfile,'TemporaryFile',side_effect=PermissionError('denied')):
+            self.assertEqual(list((home / 'vaelo-vision-cache').iterdir()), [])
+            self.assertEqual(bootstrap.os.environ['VAELO_VISION_CACHE_DIR'], str(home / 'vaelo-vision-cache'))
+            with unittest.mock.patch.object(bootstrap.tempfile,'NamedTemporaryFile',side_effect=PermissionError('denied')):
                 self.assertFalse(bootstrap.vision_cache_writable(home))
     def test_multi_user_cloud_has_no_shared_memory_or_host_access_tools(self):
         for environ, extra in [({}, set()),

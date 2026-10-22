@@ -160,13 +160,15 @@ def vision_cache_writable(home):
     routing can continue without this auxiliary cache.
     """
     try:
-        cache = home / 'cache' / 'vision'
+        cache = home / 'vaelo-vision-cache'
+        os.environ['VAELO_VISION_CACHE_DIR'] = str(cache)
         cache.mkdir(parents=True, exist_ok=True, mode=0o700)
-        with tempfile.TemporaryFile(dir=cache) as probe:
+        with tempfile.NamedTemporaryFile(dir=cache) as probe:
             probe.write(b'vaelo-vision-cache-check')
             probe.seek(0)
             return probe.read() == b'vaelo-vision-cache-check'
-    except OSError:
+    except OSError as exc:
+        print(f'Vision cache probe failed: {type(exc).__name__} errno={exc.errno}', flush=True)
         return False
 
 

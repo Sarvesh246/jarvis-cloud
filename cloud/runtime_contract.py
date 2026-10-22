@@ -47,8 +47,21 @@ def fail_closed_vision(source):
     return result
 
 
+def isolated_vision_cache(source):
+    before = '    cache_dir = get_hermes_dir(new_subpath, old_name)'
+    if source.count(before) != 1:
+        raise ValueError('Pinned vision cache contract changed')
+    after = ("    cache_override = os.environ.get('VAELO_VISION_CACHE_DIR') if new_subpath == 'cache/vision' else None\n"
+             "    cache_dir = Path(cache_override) if cache_override else get_hermes_dir(new_subpath, old_name)")
+    result = source.replace(before, after)
+    ast.parse(result)
+    return result
+
+
 if __name__ == "__main__":
     path = Path(sys.argv[1])
     path.write_text(align_normalization(path.read_text(encoding="utf-8")), encoding="utf-8")
     vision = path.parents[2] / 'agent/vision_message_prep.py'
     vision.write_text(fail_closed_vision(vision.read_text(encoding='utf-8')), encoding='utf-8')
+    cache = path.parents[2] / 'tools/vision_tools.py'
+    cache.write_text(isolated_vision_cache(cache.read_text(encoding='utf-8')), encoding='utf-8')
