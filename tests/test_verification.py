@@ -27,6 +27,11 @@ class VerificationInputTests(unittest.TestCase):
 
 @unittest.skipUnless(sys.platform == "linux", "Requires actual Linux seccomp")
 class LinuxVerificationTests(unittest.TestCase):
+    def test_operator_selected_runtime_is_used_and_missing_runtime_fails_closed(self):
+        with mock.patch.dict('os.environ',{'VAELO_VERIFIER_PYTHON':'/nonexistent/vaelo-python'}):
+            self.assertEqual(self.run_code('pass')['status'],'unavailable')
+        with mock.patch.dict('os.environ',{'VAELO_VERIFIER_PYTHON':sys.executable}):
+            self.assertEqual(self.run_code('value=17*23','assert value==391')['status'],'passed')
     def run_code(self, source, tests="assert True"):
         return verify({"source": source, "tests": tests})
 

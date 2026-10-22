@@ -6,6 +6,16 @@ on:
   pull_request:
 
 jobs:
+  container:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the actual pinned production image
+        run: docker build --progress=plain --tag vaelo-ci .
+      - name: Verify both runtimes and confinement inside the production image
+        run: |
+          docker run --rm --entrypoint /opt/jarvis/verification-env/bin/python vaelo-ci -c "import sys; sys.path.insert(0,'/opt/jarvis'); from verification import verify; assert verify({'source':'const result=17*23;', 'tests':'if(result!==391) throw Error(\"bad result\");'},language='javascript')['status']=='passed'; assert verify({'source':'value=17*23', 'tests':'assert value==391'})['status']=='passed'; assert verify({'source':'open(\"/etc/passwd\").read()', 'tests':'assert True'})['status']=='failed'; print('Production image: Python, JavaScript and confinement passed.')"
   bootstrap:
     runs-on: ubuntu-latest
     steps:

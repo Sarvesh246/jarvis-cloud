@@ -1,5 +1,6 @@
 """Bounded execution of generated Python and explicit test assertions."""
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -50,7 +51,8 @@ def _run_worker(payload,token):
     with tempfile.TemporaryDirectory(prefix="vaelo-verify-") as directory:
         with tempfile.TemporaryFile() as output:
             try:
-                result = subprocess.run([sys.executable, "-I", "-S", str(worker)],
+                executable=os.environ.get('VAELO_VERIFIER_PYTHON') or sys.executable
+                result = subprocess.run([executable, "-I", "-S", str(worker)],
                     input=payload, stdout=output, stderr=output, cwd=directory,
                     env={}, close_fds=True, timeout=5, check=False)
             except subprocess.TimeoutExpired:
