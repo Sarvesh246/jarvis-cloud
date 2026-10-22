@@ -12,6 +12,7 @@ freellmapi-keys.json
 data/
 uploads/
 logs/
+evaluation-results/
 *.log
 *.db
 *.db-shm

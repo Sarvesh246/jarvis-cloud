@@ -41,7 +41,7 @@ test("the person can add, edit and delete notes; duplicates and empty notes are 
   assert.equal((await call(memory, "POST", { action: "edit", id: "nope", text: "x" })).statusCode, 404);
   res = await call(memory, "POST", { action: "remove", id });
   assert.deepEqual(res.body.items, []);
-  assert.deepEqual((await call(memory, "GET")).body, { enabled: true, items: [] });
+  assert.deepEqual((await call(memory, "GET")).body, { enabled: true, recallEnabled: false, items: [] });
 });
 
 test("notes Vaelo saves are marked as Vaelo's, deduplicated, and reported when they do not fit", async () => {

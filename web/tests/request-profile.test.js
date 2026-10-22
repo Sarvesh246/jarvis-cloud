@@ -162,7 +162,8 @@ for (const [prompt, shape, tier] of CASES) {
     const profile = profileRequest(prompt);
     assert.equal(profile.shape, shape, `shape for: ${prompt}`);
     assert.equal(profile.tier, tier, `tier for: ${prompt}`);
-    if (shape !== "math") assert.equal(profile.fast, tier === "quick");
+    const directText = new Set(['draft a cover letter for a junior data analyst role','write a haiku about autumn','write a short story about a lighthouse keeper','summarize the plot of Hamlet','tl;dr of the French Revolution','why is the sky blue','how does a transformer neural network work','ELI5 inflation','explain quantum computing in one sentence']);
+    if (shape !== "math") assert.equal(profile.fast, tier === "quick" || directText.has(prompt));
   });
 }
 

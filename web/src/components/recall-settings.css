@@ -1,0 +1,15 @@
+.recall-settings { display: grid; gap: 12px; margin-block: 16px; min-width: 0; }
+.recall-settings .sd-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 44px; }
+.recall-settings .sd-row-text { display: grid; gap: 6px; min-width: 0; }
+.sp-memory input[type=checkbox], .recall-settings input[type=checkbox] { width: 20px; height: 20px; flex: 0 0 auto; accent-color: var(--gilt); }
+.recall-settings .sd-row-help, .recall-settings .sd-note { font-size: 14px; line-height: 1.6; color: var(--muted); overflow-wrap: anywhere; }
+.recall-settings button, .sp-memory button { font: inherit; color: var(--ink); min-height: 44px; padding: 8px 12px; border: 1px solid var(--hairline-strong); border-radius: 8px; background: transparent; }
+.sp-memory ul { list-style: none; margin: 16px 0; padding: 0; }
+.sp-memory li { border-bottom: 1px solid var(--hairline-strong); padding-block: 12px; overflow-wrap: anywhere; }
+.sp-memory li > div { display: flex; gap: 8px; margin-top: 8px; }
+.sp-memory form { display: flex; flex-wrap: wrap; gap: 8px; }
+.sp-memory form label { display: grid; gap: 6px; flex: 1 1 100%; font-size: 14px; }
+.sp-memory input:not([type=checkbox]) { box-sizing: border-box; width: 100%; min-height: 44px; background: transparent; color: var(--ink); border: 1px solid var(--hairline-strong); padding: 10px; font: inherit; border-radius: 8px; }
+.sp-memory button:disabled, .recall-settings button:disabled { opacity: .6; }
+
+.sp-memory > .sp-row { display: flex; justify-content: space-between; gap: 16px; }

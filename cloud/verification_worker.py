@@ -51,7 +51,11 @@ def main():
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
     # Read and close stdin before confinement. Only stdout/stderr are inherited.
     sys.stdin.close()
-    confine()
+    try:
+        confine()
+    except RuntimeError:
+        print('Isolation unavailable; no submitted code was executed.',flush=True)
+        raise SystemExit(78)
     namespace = {"__name__": "__main__"}
     try:
         exec(source, namespace)
@@ -60,6 +64,7 @@ def main():
         print(type(error).__name__ + ": " + str(error), flush=True)
         raise SystemExit(1)
     print("\nVerification completed.", flush=True)
+    print('\nVAELO_VERIFIED_' + payload['completion_token'],flush=True)
 
 
 if __name__ == "__main__":

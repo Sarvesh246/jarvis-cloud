@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { get, put, del, isConflict } from "./kv-storage.js";
 import { HttpError } from "./security.js";
+import { indexConversation } from './recall-store.js';
 
 export const PART_SIZE = 500_000;
 export const MAX_PARTS = 128;
@@ -14,9 +15,11 @@ export function accountPath(sub) {
 }
 
 export class ChatStore {
-  constructor(sub, storage = { get, put, del }) {
+  constructor(sub, storage, { index = storage ? null : indexConversation } = {}) {
     this.prefix = accountPath(sub);
-    this.storage = storage;
+    this.storage = storage || {get,put,del};
+    this.sub = sub;
+    this.index = index;
   }
   async read(path) {
     const result = await this.storage.get(path, { access: "private", useCache: false });
@@ -58,12 +61,12 @@ export class ChatStore {
     checkId(id); checkId(version);
     if (base !== null) checkId(base);
     if (typeof deleted !== "boolean") throw new HttpError(400, "Invalid change.");
+    let chat = null;
     if (!deleted) {
       if (!Number.isInteger(parts) || parts < 1 || parts > MAX_PARTS)
         throw new HttpError(400, "Invalid conversation size.");
       const chunks = [];
       for (let i = 0; i < parts; i++) chunks.push(await this.part(id, version, i));
-      let chat;
       try { chat = JSON.parse(chunks.join("")); } catch {
         throw new HttpError(400, "Invalid conversation data.");
       }
@@ -73,7 +76,10 @@ export class ChatStore {
     for (let attempt = 0; attempt < 5; attempt++) {
       const current = await this.manifest();
       const entry = current.data.entries[id];
-      if (entry?.version === version) return entry; // Idempotent after a lost response.
+      if (entry?.version === version) {
+        await this.index?.(this.sub,id,entry,chat).catch(() => {});
+        return entry; // Idempotent after a lost response; repair a missed index write.
+      }
       if ((entry?.version || null) !== base) {
         // The device stages a fresh version when it tries again, so these parts are dead.
         if (!deleted && this.storage.del)
@@ -95,6 +101,7 @@ export class ChatStore {
           await this.storage.del(Array.from({ length: entry.parts }, (_, part) =>
             this.partPath(id, entry.version, part))).catch(() => {});
         }
+        await this.index?.(this.sub,id,next,chat).catch(() => {});
         return next;
       } catch (error) {
         // The first create also races safely: allowOverwrite:false is atomic.

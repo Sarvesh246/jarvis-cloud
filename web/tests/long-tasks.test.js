@@ -7,6 +7,7 @@ import { readEvents } from "../src/stream.js";
 import { clipReply, fitHistory, wireMessage } from "../src/lib/attachments.js";
 import { automaticSamples } from './fixtures/automatic-samples.js';
 import { richPresentationFor } from '../shared/rich-ui-guidance.js';
+import {CONTEXT_POLICY} from '../shared/context-policy.js';
 
 const conversationId = "123e4567-e89b-12d3-a456-426614174000";
 
@@ -201,6 +202,17 @@ test("a reply is started on the relay under its own id, then followed from the s
   assert.ok(calls.some((call) => call.url.endsWith(`/vaelo/runs/${runId}/events?after=-1`)));
   assert.match(res.chunks.join(""), /id: 0\n/);
   assert.equal(events().at(-1).name, "jarvis.complete");
+});
+
+test('a real direct prompt with full saved preferences fits the shared relay budget',async()=>{
+  const {req,res}=fakeExchange();const {request,calls}=fakeRelay();
+  const profiled=chatInput({conversationId,messages:[{role:'user',content:'Hi'}]});
+  profiled.memory={notes:Array.from({length:14},()=> 'Preference '.repeat(25)),canNote:true};
+  await streamChat(req,res,cfg,user,profiled,request);
+  const payload=JSON.parse(calls.find(call=>call.method==='POST').options.body);
+  assert.ok(payload.fast.length>8000,'fixture must cover the previously rejected valid prompt');
+  assert.ok(payload.fast.length<=CONTEXT_POLICY.fastSystemChars);
+  assert.equal(payload.tier,'quick');
 });
 
 test('implicit rich presentation instructions reach normal and direct routes in a single run', async () => {

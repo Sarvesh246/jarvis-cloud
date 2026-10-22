@@ -1,5 +1,6 @@
 {
   "windowTokens": 128000,
+  "fastSystemChars": 24000,
   "openrouterWindowTokens": 200000,
   "compressionRatio": 0.85,
   "compressionCapTokens": 108800,

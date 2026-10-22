@@ -271,11 +271,15 @@ export function profileRequest(content, {
     !images && !attachments && !work && !research && role === "none" &&
     !HARD.test(text) && !RISKY.test(text) && !CURRENT.test(text) &&
     !TOOL_WORDS.test(text.replace(/\bfind\b/g, ""));
+  const directText = ['explanation','summary','writing'].includes(shape) && raw.length <= 1800 &&
+    !answering && !images && !attachments && !work && !research && role === 'none' &&
+    !HARD.test(text) && !RISKY.test(text) && !CURRENT.test(text) && !PERSONAL.test(text) && !TOOL_WORDS.test(text) &&
+    !/\b(?:this|that|these|those|above|previous|continue|parking ticket)\b/.test(text);
   return {
     shape: explicit ? "explicit" : shape,
     explicit,
     tier,
-    fast: (tier === "quick" || directMath) && style !== "thorough",
+    fast: (tier === "quick" || directMath || directText) && style !== "thorough",
   };
 }
 

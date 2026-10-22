@@ -16,6 +16,7 @@ import {
 } from "@phosphor-icons/react";
 import { RETENTION_CHOICES } from "../../shared/retention.js";
 import { useMemory } from "../lib/use-memory.js";
+import {RecallControls} from './RecallSettings.jsx';
 import { useRetentionSettings } from "../lib/use-retention.js";
 import { listVoices, onVoices, speak, speechSupport, stopSpeaking } from "../lib/speech.js";
 import { InstallSteps } from "./Onboarding.jsx";
@@ -237,6 +238,7 @@ function Memory({ request }) {
         <Switch id="sd-memory" label="Let Vaelo note lasting facts" checked={enabled} disabled={busy} onChange={(next) => run({ action: "enable", enabled: next })} />
       </Row>
       <p className="sd-note">Notes are kept with your account, so every device shares them, and they are sent with your messages while this is on. {items.length} of 40 used.</p>
+      <RecallControls memory={memory} request={request}/>
       {!items.length && <p className="sd-note">Nothing noted yet.</p>}
       <ul className="sd-notes">
         {items.map((item) => (

@@ -27,9 +27,9 @@ function database() {
   return { sql: client, ready };
 }
 
-export async function get(path) {
+export async function get(path, {signal} = {}) {
   const { sql, ready } = database(); await ready;
-  const [row] = await sql.query("SELECT body, etag FROM kv_store WHERE path = $1", [path]);
+  const [row] = await sql.query("SELECT body, etag FROM kv_store WHERE path = $1", [path], {fetchOptions:{signal}});
   if (!row) return null;
   return { statusCode: 200, stream: new Response(row.body).body, blob: { etag: row.etag } };
 }

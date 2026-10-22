@@ -4,6 +4,7 @@
    uploaded anywhere else. */
 
 import { CONTEXT_POLICY } from '../../shared/context-policy.js';
+import { historyDigest, plainContext } from '../../shared/context-retrieval.js';
 
 export const MESSAGE_LIMIT = CONTEXT_POLICY.messageChars;
 /* Matches the proxy's LIMITS.replyChars; it clips the same way. */
@@ -196,7 +197,17 @@ export function fitHistory(list, { chars = CONTEXT_POLICY.historyChars, count = 
     kept.unshift(list[i]);
   }
   while (kept.length > 1 && kept[0].role !== "user") kept.shift();
-  return { messages: kept, dropped: list.length - kept.length };
+  const dropped = list.length - kept.length;
+  if (!dropped || chars < 8000 || count < 4) return {messages:kept, dropped};
+  const reserve = Math.min(6000, Math.floor(chars * .12));
+  const query = list.slice(-3).map(message => plainContext(message.content)).join('\n');
+  const digest = historyDigest(list.slice(0, dropped), query, reserve);
+  if (!digest) return {messages:kept,dropped};
+  // Refit without recursion, keeping the actual newest question intact.
+  while (kept.length > 1 && (kept.length >= count || kept.reduce((sum,message)=>sum+wireChars(message),0) + digest.length > chars)) kept.shift();
+  while (kept.length > 1 && kept[0].role !== 'user') kept.shift();
+  if (wireChars(kept[0]) + digest.length > chars) return {messages:kept,dropped:list.length-kept.length};
+  return { messages:[{role:'user',content:digest}, ...kept], dropped:list.length-kept.length, recalled:true };
 }
 
 async function scaled(file, side, quality) {

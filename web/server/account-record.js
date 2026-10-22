@@ -15,8 +15,8 @@ export class AccountRecord {
     Object.assign(this, { kind, empty, check, storage });
   }
 
-  async read(sub) {
-    const result = await this.storage.get(recordPath(this.kind, sub), { access: "private", useCache: false });
+  async read(sub, {signal} = {}) {
+    const result = await this.storage.get(recordPath(this.kind, sub), { access: "private", useCache: false, signal });
     if (!result) return { data: this.empty(), etag: null };
     return { data: this.check(await new Response(result.stream).json()), etag: result.blob.etag };
   }

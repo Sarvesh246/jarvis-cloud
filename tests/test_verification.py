@@ -1,10 +1,19 @@
 import json
 import sys
 import unittest
+from unittest import mock
+from cloud import verification
 from cloud.verification import verify
 
 
 class VerificationInputTests(unittest.TestCase):
+    def test_parallel_verifiers_do_not_exhaust_cloud_memory(self):
+        verification._workers.acquire()
+        try:
+            with mock.patch.object(verification.sys,'platform','linux'):
+                self.assertEqual(verify({'source':'pass','tests':'assert True'})['status'],'busy')
+        finally:
+            verification._workers.release()
     def test_invalid_and_oversized_input_never_executes(self):
         for value in ({}, None, {"source": "pass", "tests": ""},
                       {"source": "x" * 24001, "tests": "pass"},
@@ -59,7 +68,7 @@ assert merge_intervals([[1,5],[2,3]]) == [[1,5]]
                 self.assertEqual(result["status"], "failed", result)
 
     def test_cpu_output_and_early_exit_limits(self):
-        for source in ("while True: pass", "while True: print('x' * 4096)", "raise SystemExit(0)"):
+        for source in ("while True: pass", "while True: print('x' * 4096)", "raise SystemExit(0)", "import os; os._exit(0)"):
             result = self.run_code(source)
             self.assertNotEqual(result["status"], "passed", result)
             self.assertLessEqual(len(result.get("output", "").encode()), 32768)

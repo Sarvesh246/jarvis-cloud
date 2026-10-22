@@ -21,6 +21,11 @@ import re
 import threading
 import time
 import uuid
+from contextlib import contextmanager
+try:
+    from provider_health import RouteHealth
+except ModuleNotFoundError:
+    from cloud.provider_health import RouteHealth
 from datetime import datetime, timezone
 try:
     from usage import configured_reporter
@@ -101,8 +106,8 @@ WEATHER_GUIDANCE = ("\n\nFor current weather or forecasts, use weather_forecast 
 # Anything that goes wrong on that route falls back
 # to Hermes, so it can only ever save time, never lose a reply.
 FAST_MAX_TOKENS = 4000
-FAST_SECONDS = 45
-FAST_SYSTEM_CHARS = 8000
+FAST_SECONDS = 18
+FAST_SYSTEM_CHARS = CONTEXT_POLICY['fastSystemChars']
 # Effort levels sent to a provider directly. "none" is rejected by models whose reasoning is
 # mandatory, and the free routes pick the model themselves, so it is sent as "minimal".
 DIRECT_EFFORTS = {"none": "minimal", "minimal": "minimal", "low": "low", "medium": "medium", "high": "high"}
@@ -304,11 +309,54 @@ class ToolOutputGuard:
         return []
 
 
+class RunTrace:
+    """Bounded, content-free observations; tool time is a union, not a sum."""
+    def __init__(self, clock=time.perf_counter):
+        self.clock, self.began = clock, clock()
+        self.ended = None
+        self.spans, self.marks, self.counts = {}, {}, {}
+        self.active_tools = set()
+        self.tool_began = None
+
+    def mark(self, name):
+        self.marks.setdefault(name, round(max(0, self.clock() - self.began) * 1000))
+
+    @contextmanager
+    def span(self, name):
+        began = self.clock()
+        try:
+            yield
+        finally:
+            self.spans[name] = self.spans.get(name, 0) + round(max(0, self.clock() - began) * 1000)
+
+    def tool(self, payload):
+        key = str(payload.get('toolCallId') or payload.get('tool_call_id') or
+                  payload.get('tool') or payload.get('name') or 'tool')[:160]
+        if payload.get('status') == 'completed':
+            self.active_tools.discard(key)
+            if not self.active_tools and self.tool_began is not None:
+                self.spans['observed_tools'] = self.spans.get('observed_tools', 0) + round(max(0, self.clock() - self.tool_began) * 1000)
+                self.tool_began = None
+        elif key not in self.active_tools and len(self.active_tools) < 64:
+            self.counts['tool_starts'] = self.counts.get('tool_starts', 0) + 1
+            if not self.active_tools:
+                self.tool_began = self.clock()
+            self.active_tools.add(key)
+
+    def record(self, run, outcome, route, requests):
+        return dict(schema=1, kind='vaelo.trace', run=run, layer='relay', outcome=outcome,
+                    route=route, total_ms=round(max(0, (self.ended if self.ended is not None else self.clock()) - self.began) * 1000),
+                    spans_ms=dict(self.spans), marks_ms=dict(self.marks),
+                    counts={**self.counts, 'upstream_requests': requests,
+                            'unfinished_tools': len(self.active_tools)})
+
+
 class Run:
     """One reply: its numbered frames, who may read them, and how it ended."""
 
     def __init__(self, run_id, owner):
         self.id, self.owner = run_id, owner
+        self.trace = RunTrace()
         self.frames, self.size = [], 0
         self.done = self.stopped = False
         self.outcome = "running"
@@ -359,6 +407,7 @@ class Run:
             self.event("jarvis.stopped", {})
         with self.cond:
             if not self.done:
+                self.trace.ended = self.trace.clock()
                 self.done, self.outcome, self.updated = True, outcome, time.time()
                 self.cond.notify_all()
 
@@ -422,12 +471,13 @@ class Relay:
         self.clock, self.sleep = clock, sleep
         self.guest_active, self.guest_log = 0, {}
         self.guest_connect = lambda: http.client.HTTPSConnection(
-            "openrouter.ai", timeout=UPSTREAM_SILENCE_SECONDS
+            "openrouter.ai", timeout=FAST_SECONDS
         )
         self.fast_connect = lambda host, port: http.client.HTTPSConnection(
             host, port, timeout=FAST_SECONDS
         )
         self.report = lambda line: print(line, flush=True)
+        self.fast_health = RouteHealth()
         self.usage_reporter = configured_reporter()
 
     def guest_admit(self, owner, retry=False):
@@ -463,13 +513,16 @@ class Relay:
         route = fast_route(os.environ)
         if route is None:
             return None
+        if not self.fast_health.allow(route['name']):
+            run.trace.counts['unhealthy_fast_skips'] = run.trace.counts.get('unhealthy_fast_skips',0)+1
+            return None
         payload = {
             "model": route["model"],
             "messages": [{"role": "system", "content": body["fast"] + WEATHER_GUIDANCE},
                          *[m for m in messages if m.get("role") != "system"]],
             "stream": True,
             "stream_options": {"include_usage": True},
-            "max_tokens": FAST_MAX_TOKENS,
+            "max_tokens": {'quick':1024,'normal':3000,'deep':FAST_MAX_TOKENS}.get(body.get('tier'),FAST_MAX_TOKENS),
         }
         if not body.get("no_weather_tools"):
             payload["tools"] = [{"type": "function", "function": WEATHER_SCHEMA}]
@@ -488,12 +541,20 @@ class Relay:
             response = connection.getresponse()
         except (OSError, http.client.HTTPException):
             connection.close()
+            if not run.stopped:
+                self.fast_health.failure(route['name'])
             return None
         if response.status == 200:
             run.route = route["name"]
+            self.fast_health.success(route['name'])
             return response
-        response.read(64 * 1024)
-        connection.close()
+        try:
+            response.read(64 * 1024)
+        except (OSError,http.client.HTTPException):
+            pass
+        finally:
+            connection.close()
+        self.fast_health.failure(route['name'])
         return None
 
     def open_guest(self, run, messages, body=None):
@@ -522,6 +583,8 @@ class Relay:
         for target in routes:
             if run.stopped:
                 return None, None
+            if not self.fast_health.allow(target['name']):
+                continue
             payload["model"] = target["model"]
             connection = (self.fast_connect(target["host"], target["port"])
                           if target["name"] == "router" else self.guest_connect())
@@ -536,12 +599,15 @@ class Relay:
                 response = connection.getresponse()
                 if response.status == 200:
                     run.route = target["name"]
+                    self.fast_health.success(target['name'])
                     return response, None
                 status = response.status
                 response.read(64 * 1024)
             except (OSError, http.client.HTTPException):
                 pass
             connection.close()
+            if not run.stopped:
+                self.fast_health.failure(target['name'])
         if run.stopped:
             return None, None
         if status == 429:
@@ -630,6 +696,7 @@ class Relay:
             response = self.open_fast(run, messages, body)
             if response is not None:
                 return response, None
+            run.trace.counts['fast_fallbacks'] = run.trace.counts.get('fast_fallbacks',0)+1
             if run.stopped:
                 return None, None
         run.route = "hermes"
@@ -811,6 +878,8 @@ class Relay:
                     seen["usage_reported"] = True
                     # Some streams repeat cumulative usage in several chunks.
                     seen["usage"][key] = max(seen["usage"][key], value)
+        if name == "hermes.tool.progress":
+            run.trace.tool(payload)
         if name == "approval.request":
             seen["approval"] = True
         if name == "hermes.tool.progress" and payload.get("status") != "completed":
@@ -897,8 +966,10 @@ class Relay:
             return
         if isinstance(content, str) and content.strip() and run.first_answer is None:
             run.first_answer = self.clock()
+            run.trace.mark('first_answer_received')
         elif (delta.get("reasoning_content") or delta.get("reasoning")) and run.first_thought is None:
             run.first_thought = self.clock()
+            run.trace.mark('first_reasoning_received')
         if isinstance(content, str):
             if content.strip():
                 seen["attempt_answer"] = True
@@ -934,6 +1005,7 @@ class Relay:
         asked again for the write-up; one cut off partway (a provider failing mid-answer, a
         dropped stream) is continued from where it stopped. The reader sees one reply."""
         started = self.clock()
+        run.trace.mark("execution_started")
         forecast_started = time.time()
         messages = body["messages"]
         guest = run.owner.startswith(GUEST_OWNER)
@@ -963,16 +1035,19 @@ class Relay:
                 # on recovery. The web asks for a direct answer only when one
                 # search result is enough; otherwise it already cleared "fast"
                 # for the full agent.
-                evidence = source_context(query)
+                with run.trace.span("freshness_lookup"):
+                    evidence = source_context(query)
                 messages = [*messages[:-1], {**messages[-1], "content": with_note(
                     messages[-1]["content"], evidence["content"])}]
             if run.stopped:
                 return run.finish("stopped")
             request = messages
             for attempt in range(ATTEMPTS):
+                run.trace.counts["attempts"] = attempt + 1
                 if guest and attempt > 0 and self.guest_admit(run.owner, retry=True):
                     break  # out of guest allowance: end with what arrived, like a last attempt
-                response, failure = self.open(run, body, request, recovering=attempt > 0)
+                with run.trace.span("upstream_open"):
+                    response, failure = self.open(run, body, request, recovering=attempt > 0)
                 if failure:
                     run.event("jarvis.error", failure)
                     return run.finish("error")
@@ -980,7 +1055,8 @@ class Relay:
                     return run.finish("stopped")
                 run.model_started = True
                 seen["request"] = body["messages"]
-                self.relay(run, response, seen)
+                with run.trace.span("upstream_stream"):
+                    self.relay(run, response, seen)
                 if seen["weather_request"] is not None and not run.stopped:
                     tool_calls, results = [], []
                     for i, original in enumerate(seen["weather_request"]):
@@ -1107,15 +1183,11 @@ class Relay:
             return f"{at - started:.1f}s" if at is not None else "-"
         options = body.get("model_options")
         effort = options.get("reasoning_effort") if isinstance(options, dict) else None
-        self.report(json.dumps({
-            "schema": 1, "kind": "vaelo.trace", "layer": "relay", "run": run.id,
-            "route": run.route, "outcome": run.outcome,
-            "total_ms": round(max(0, self.clock() - started) * 1000),
-            "marks_ms": {name: round(max(0, value - started) * 1000)
-                         for name, value in (("first_thought", run.first_thought),
-                                             ("first_answer", run.first_answer)) if value is not None},
-            "counts": {"upstream_requests": run.upstream_requests},
-        }))
+        try:
+            record = run.trace.record(run.id, run.outcome, run.route, run.upstream_requests)
+            self.report(json.dumps(record))
+        except Exception:
+            pass  # Diagnostic sinks never change a reply outcome.
         self.report(
             f"vaelo run {run.id[:8]} route={run.route or '-'} effort={effort or 'default'} "
             f"first_thought={since(run.first_thought)} first_answer={since(run.first_answer)} "
@@ -1203,6 +1275,12 @@ def make_handler(relay):
                     if method == "POST":
                         relay.feed(owner).bump()
                         return self.send_json(200, {"ok": True})
+                if method == 'GET' and parts == ['vaelo','capabilities']:
+                    revision=os.environ.get('RENDER_GIT_COMMIT','')
+                    return self.send_json(200, {'revision':revision if re.fullmatch(r'[a-f0-9]{40}',revision) else None,
+                        'trace_schema':1,'fast_connect_deadline_seconds':FAST_SECONDS,
+                        'fast_system_chars':FAST_SYSTEM_CHARS,
+                        'tools':['weather_forecast','python_verify'],'protocol':2})
                 if method == "POST" and parts == ["vaelo", "runs"]:
                     return self.start(owner)
                 if len(parts) >= 3 and parts[1] == "runs" and RUN_ID.match(parts[2]):
@@ -1214,6 +1292,8 @@ def make_handler(relay):
                         return self.send_json(404, {"error": "run not found"})
                     if method == "GET" and len(parts) == 4 and parts[3] == "events":
                         return self.follow(run)
+                    if method == 'GET' and len(parts)==4 and parts[3]=='trace':
+                        return self.send_json(200,run.trace.record(run.id,run.outcome,run.route,run.upstream_requests))
                     if method == "POST" and len(parts) == 4 and parts[3] == "stop":
                         run.stop()
                         return self.send_json(200, {"stopped": True})
@@ -1256,7 +1336,8 @@ def make_handler(relay):
                 run_id,
                 owner,
                 {"messages": messages, "model_options": body.get("model_options"), "fast": fast,
-                 "freshness": body.get("freshness"), "place": body.get("place")},
+                 "freshness": body.get("freshness"), "place": body.get("place"),
+                 'tier':body.get('tier') if body.get('tier') in ('quick','normal','deep') else 'normal'},
             )
             if run is None:
                 return self.send_json(409, {"error": "run belongs to another session"})

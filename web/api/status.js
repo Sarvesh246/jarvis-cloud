@@ -17,7 +17,8 @@ export default async function handler(req, res) {
     await authorizeAny(req, cfg);
     if (!cfg.backend.startsWith("https://") || !cfg.apiKey)
       throw new HttpError(503, "Cloud connection is not configured.");
-    if (await probeBackend(cfg.backend)) return json(res, 200, { ready: true, status: "ok" });
+    const revision=/^[a-f0-9]{40}$/.test(process.env.VERCEL_GIT_COMMIT_SHA || '') ? process.env.VERCEL_GIT_COMMIT_SHA : null;
+    if (await probeBackend(cfg.backend)) return json(res, 200, { ready: true, status: "ok", revision });
     await wakeBackend(cfg.backend);
     json(res, 200, { ready: false, status: "starting" });
   } catch (error) {

@@ -4,6 +4,10 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import secrets
+import threading
+
+_workers=threading.BoundedSemaphore(1)
 
 SCHEMA = {"name": "python_verify", "description":
     "Execute self-contained Python code and explicit tests in a disposable interpreter. "
@@ -23,11 +27,21 @@ def verify(arguments):
     for key, limit in (("source", 24_000), ("tests", 12_000)):
         if not isinstance(arguments[key], str) or not arguments[key].strip() or len(arguments[key]) > limit:
             return {"status": "invalid", "error": "Source or tests are missing or too long."}
-    payload = json.dumps(arguments, ensure_ascii=False).encode("utf-8")
+    token=secrets.token_hex(16)
+    payload = json.dumps({**arguments,'completion_token':token}, ensure_ascii=False).encode("utf-8")
     if len(payload) > 50_000:
         return {"status": "invalid", "error": "Verification input exceeds its byte limit."}
     if sys.platform != "linux":
         return {"status": "unavailable", "error": "Isolated Linux verification is unavailable; no code was run."}
+    if not _workers.acquire(blocking=False):
+        return {'status':'busy','error':'One verification is already running. No additional code was run.'}
+    try:
+        return _run_worker(payload,token)
+    finally:
+        _workers.release()
+
+
+def _run_worker(payload,token):
     worker = Path(__file__).with_name("verification_worker.py")
     # Output goes to a regular file so the child's file-size limit also bounds
     # an infinite print loop. No model-controlled paths or shell are involved.
@@ -43,7 +57,11 @@ def verify(arguments):
                 return {"status": "unavailable", "error": "Could not start the isolated verifier."}
             output.seek(0)
             text = output.read(32_768).decode("utf-8", errors="replace")
-            return {"status": "passed" if result.returncode == 0 else "failed",
+            completed='\nVAELO_VERIFIED_' + token in text
+            status='unavailable' if result.returncode==78 else 'passed' if result.returncode==0 and completed else 'failed'
+            text=text.replace('\nVAELO_VERIFIED_'+token,'')
+            return {"status": status,
+                    'tests_completed':completed,
                     "exit_code": result.returncode, "output": text,
                     "scope": "Only the supplied implementation and tests were executed."}
 

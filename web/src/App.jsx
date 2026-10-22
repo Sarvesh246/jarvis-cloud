@@ -1735,26 +1735,15 @@ export function App() {
         );
     }
     try {
-      /* Waiting for a sleeping cloud happens here, in the page, so the
-         reply gets the request's whole time limit once it starts. */
-      if (start && Date.now() - lastReady.current > STALE_READY_MS) {
-        setPhase(chatId, "waking");
-        updateMessage({ live: "Waking Vaelo up. This can take a minute" });
-        await new Promise((resolve, reject) => {
-          const stop = () => reject(Object.assign(new Error("Stopped"), { name: "AbortError" }));
-          controller.signal.addEventListener("abort", stop, { once: true });
-          warmCloud().then(resolve, resolve).finally(() =>
-            controller.signal.removeEventListener("abort", stop),
-          );
-        });
-        updateMessage({ live: "" });
-        setPhase(chatId, "thinking");
-      }
+      // The API owns readiness and emits wake status while waiting. Starting
+      // immediately avoids serializing two independent wake loops.
+      trace.mark("request_ready");
       /* Ask, read, and when the connection drops, ask again from the last
          event that arrived. Only the reply's own end, or Stop, ends this. */
       let started = !start;
       let body = start;
       let busyTries = 0;
+      let busySince = 0;
       let recoveries = 0;
       let drops = 0;
       let stalledSince = 0;
@@ -1900,10 +1889,13 @@ export function App() {
               body &&
               !received &&
               !pendingApproval &&
-              (busyTries < 12 || queuedBehind) &&
+              busyTries < (queuedBehind ? 12 : 3) &&
+              (!busySince || Date.now() - busySince < (queuedBehind ? 180000 : 20000)) &&
               classifyError({ name: err.name, message: err.message, status: err.status }).kind === "busy";
             if (!busyNow) throw err;
+            busySince ||= Date.now();
             busyTries += 1;
+            trace.count("busy_retries");
             started = false;
             /* The relay starts the retry afresh under the same id, numbered
                from the beginning again; nothing of the refused run is kept. */
@@ -1913,7 +1905,7 @@ export function App() {
                 ? "Waiting for your other conversation to finish first"
                 : "Vaelo is finishing something else first",
             });
-            await pause(queuedBehind ? 3000 : busyTries > 2 ? 15000 : 5000, controller.signal);
+            await pause(queuedBehind ? 3000 : Math.min(2000 * 2 ** (busyTries - 1), 8000), controller.signal);
             continue;
           }
           /* Anything else is the connection, not the reply. */

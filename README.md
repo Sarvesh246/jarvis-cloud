@@ -15,6 +15,11 @@ The [cloud model router](deploy/freellmapi/README.md) runs in its own Vercel Hob
 
 ## Run locally
 
+Cloud context, memory, verification, routing and evaluation behavior is described in the
+[capability implementation and validation notes](docs/capabilities-release.md). Past-chat
+recall is opt-in in Settings; saved notes and selected Workroom documents remain separately
+controllable. The notes also explain how to reproduce the latency and privacy checks.
+
 The web app includes the Workroom, opened from the conversation rail. Think of it as
 a shelf of ready-made workspaces: applying for a job, reviewing a lease, chasing a
 refund, debugging, splitting trip costs and thirty-odd more. Each one already

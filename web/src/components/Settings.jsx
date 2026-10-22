@@ -10,6 +10,7 @@ import { DesktopUpdates } from "./DesktopUpdates.jsx";
 import { InstallSteps } from "./Onboarding.jsx";
 import { Sheet } from "./Sheet.jsx";
 import { SettingsDesk } from "./SettingsDesk.jsx";
+import {PhoneMemory} from './RecallSettings.jsx';
 import "./settings.css";
 import "./settings-page.css";
 
@@ -97,7 +98,7 @@ function useLocate(prefs, onChange) {
 const LOCATION_NOTE =
   "Shares roughly where you are (about a kilometre) and your nearest city with your messages, so questions like the weather just work. Off by default.";
 
-function PhoneSettings({ open, user, prefs, onChange, onClose, onTools, onWelcome, onSignOut }) {
+function PhoneSettings({ open, user, prefs, onChange, onClose, onTools, onWelcome, onSignOut, request }) {
   const page = useRef(null);
   const edge = useRef(false);
   const [install, setInstall] = useState(false);
@@ -205,6 +206,7 @@ function PhoneSettings({ open, user, prefs, onChange, onClose, onTools, onWelcom
           );
         })}
 
+        {!guest && <PhoneMemory request={request}/>}
         <div className="sp-rows">
           {notify.support === "available" ? (
             <button

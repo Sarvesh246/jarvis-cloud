@@ -15,7 +15,7 @@ const check = value => {
 export const retentionRecord = new AccountRecord("retention", { empty: blank, check });
 
 export async function memoryApi(req, res, cfg, user, store = memories) {
-  const view = data => ({ enabled: data.enabled, items: [...data.items].sort((a, b) => b.updated - a.updated) });
+  const view = data => ({ enabled: data.enabled, recallEnabled:Boolean(data.recallEnabled), items: [...data.items].sort((a, b) => b.updated - a.updated) });
   if (req.method === "GET") return json(res, 200, view(await store.read(user.sub)));
   if (req.method !== "POST") throw new HttpError(405, "Method not allowed.");
   sameOrigin(req, cfg);
@@ -32,6 +32,8 @@ export async function memoryApi(req, res, cfg, user, store = memories) {
   if (body?.action === "remove") return json(res, 200, view(await store.remove(user.sub, String(body.id))));
   if (body?.action === "enable" && typeof body.enabled === "boolean")
     return json(res, 200, view(await store.setEnabled(user.sub, body.enabled)));
+  if (body?.action === 'recall' && typeof body.enabled === 'boolean')
+    return json(res,200,view(await store.setRecall(user.sub,body.enabled)));
   throw new HttpError(400, "Invalid memory request.");
 }
 

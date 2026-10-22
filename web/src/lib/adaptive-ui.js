@@ -81,7 +81,7 @@ export function inferListPresentation(lines, { context = '', rich = false } = {}
 
 // What the person asked decides the shape: a comparison stays a table, a trend
 // or a share-of-whole becomes a chart, and an explicit "in a table" always wins.
-const ASKS_TABLE = /\b(?:(?:in|as|into) (?:a |the )?table|table (?:form|format|view))\b/i;
+const ASKS_TABLE = /\b(?:(?:in|as|into|show|make|use)\s+(?:(?:a|the|one)\s+)?(?:markdown\s+|simple\s+|comparison\s+)?table|table (?:form|format|view))\b/i;
 const ASKS_CHART = /\b(?:chart|graph|plot|visuali[sz]e|visuali[sz]ation|trend(?:s|line)?|over time|growth|history of|how (?:has|have|did).{0,40}(?:changed?|grown?|moved?|develop(?:ed)?|evolved?|performed?)|break(?:ing)? down|breakdown|what drove|which \w+ drove|distribution|share of|market share|proportion|split (?:by|between)|per (?:month|year|week|quarter)|month by month|year[- ]over[- ]year|by (?:month|year|quarter|week))\b/i;
 const ASKS_COMPARE = /\b(?:compare|comparison|versus|vs|which (?:one|is|should)|better|differences? between|pros and cons|choose between|shortlist|alternatives?|side by side)\b/i;
 export function requestIntent(request = '') {
