@@ -101,15 +101,18 @@ class BenchmarkRegressions(unittest.TestCase):
 
     def test_completed_metadata_and_tool_timestamps_replay_unchanged(self):
         run = Run('id','owner')
-        run.first_answer = run.created + 2
+        run.first_answer = run.created + 1
+        with patch('cloud.relay.time.time', return_value=run.created+2):
+            run.emit('data: {"choices":[{"delta":{"content":"Accepted answer"}}]}')
         with patch('cloud.relay.time.time', return_value=run.created+5):
             run.event('jarvis.complete', {'ok':True})
-        first = json.loads(run.frames[0].decode().split('data: ')[1])
+        first = json.loads(run.frames[1].decode().split('data: ')[1])
         with patch('cloud.relay.time.time', return_value=run.created+1000):
             run.event('jarvis.complete', {'ok':True})
-        second = json.loads(run.frames[1].decode().split('data: ')[1])
+        second = json.loads(run.frames[2].decode().split('data: ')[1])
         self.assertEqual(first['timing'],second['timing'])
         self.assertEqual(first['timing']['firstAnswerMs'],2000)
+        self.assertEqual(first['timing']['firstUpstreamAnswerMs'],1000)
         run.event('hermes.tool.progress', {'tool':'calculate','status':'completed','eventAt':1234})
         self.assertIn(b'"eventAt": 1234', run.frames[-1])
 

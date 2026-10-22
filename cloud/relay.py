@@ -391,6 +391,7 @@ class Run:
         # so a slow reply can be told apart: waiting on a provider, thinking, or writing.
         self.route = None
         self.first_thought = self.first_answer = None
+        self.first_published_answer = None
         self.model_started = False
         self.upstream_requests = 0
         self.usage_reports = 0
@@ -406,6 +407,17 @@ class Run:
         with self.cond:
             if self.done or (self.overflowed and not reserved):
                 return
+            if self.first_published_answer is None:
+                for line in frame.split('\n'):
+                    if not line.startswith('data:'): continue
+                    try:
+                        value = json.loads(line[5:])
+                        if any(isinstance(choice, dict) and isinstance(choice.get('delta'), dict) and
+                               isinstance(choice['delta'].get('content'), str) and choice['delta']['content'].strip()
+                               for choice in value.get('choices', [])):
+                            self.first_published_answer = time.time()
+                    except (ValueError, TypeError, AttributeError):
+                        pass
             if optional and self.size > RUN_BYTES:
                 return  # past the budget, thinking text is dropped before the answer is
             data = f"id: {len(self.frames)}\n{frame}\n\n".encode()
@@ -425,7 +437,9 @@ class Run:
             data = {**data, 'timing': {
                 'completedAt': round(self.completed_at * 1000),
                 'totalMs': round(max(0, self.completed_at - self.created) * 1000),
-                **({'firstAnswerMs': round(max(0, self.first_answer - self.created) * 1000)}
+                **({'firstAnswerMs': round(max(0, self.first_published_answer - self.created) * 1000)}
+                   if self.first_published_answer is not None else {}),
+                **({'firstUpstreamAnswerMs': round(max(0, self.first_answer - self.created) * 1000)}
                    if self.first_answer is not None else {}),
                 **({'queueMs': self.trace.spans['queue']} if 'queue' in self.trace.spans else {}),
             }}

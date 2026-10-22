@@ -56,7 +56,7 @@ export async function runCase(item, { origin, headers, request = fetch, timeoutM
         if (answer.length > 2_000_000) throw new Error('answer_limit');
         if (name === 'jarvis.complete') {
           completed = true;
-          if (data?.timing) row.relay_timing = Object.fromEntries(['totalMs','firstAnswerMs','queueMs'].filter(key=>Number.isFinite(data.timing[key])).map(key=>[key,data.timing[key]]));
+          if (data?.timing) row.relay_timing = Object.fromEntries(['totalMs','firstAnswerMs','firstUpstreamAnswerMs','queueMs'].filter(key=>Number.isFinite(data.timing[key])).map(key=>[key,data.timing[key]]));
           if(data?.degraded === true) row.degraded = true;
         }
       });
