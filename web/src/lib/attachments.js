@@ -5,6 +5,7 @@
 
 import { CONTEXT_POLICY } from '../../shared/context-policy.js';
 import { historyDigest, plainContext } from '../../shared/context-retrieval.js';
+import { DOCUMENT_EXT, readDocument } from './document-reader.js';
 
 export const MESSAGE_LIMIT = CONTEXT_POLICY.messageChars;
 /* Matches the proxy's LIMITS.replyChars; it clips the same way. */
@@ -44,6 +45,7 @@ export function isImage(file) {
 export function isReadable(file) {
   return (
     TEXT_EXT.test(file.name || "") ||
+    DOCUMENT_EXT.test(file.name || "") ||
     /^text\//.test(file.type || "") ||
     /json|xml|javascript|yaml|csv/.test(file.type || "")
   );
@@ -168,12 +170,22 @@ export function wireMessage(message, { latest = false, images = new Map() } = {}
       ],
       ...mode,
     };
-  const notes = attached.map((file) => `[Image shared earlier: ${file.name}]`).join("\n");
+  const notes = attached.map((file) => `[Image shared earlier: ${file.name}${latest && !images.get(file.id)?'; original pixels unavailable in this session. Ask for reattachment before making visual claims.':''}]`).join("\n");
   return {
     role: "user",
     content: [text, notes].filter((part) => part.trim()).join("\n\n"),
     ...mode,
   };
+}
+
+// A visual follow-up needs the actual preceding image, not just its filename.
+// Reuse only the latest relevant image turn and the existing four-image limit.
+export function visualContextTurn(messages) {
+  const last=messages.at(-1);
+  if(last?.attachments?.some(file=>file.kind==='image')) return messages.length-1;
+  if(!/\b(?:image|photo|picture|screenshot|chart|diagram|shapes?|visual|same one|that one)\b/i.test(plainContext(last?.content)))
+    return messages.length-1;
+  return messages.findLastIndex(message=>message.role==='user'&&message.attachments?.some(file=>file.kind==='image'));
 }
 
 function wireChars(message) {
@@ -201,11 +213,14 @@ export function fitHistory(list, { chars = CONTEXT_POLICY.historyChars, count = 
   if (!dropped || chars < 8000 || count < 4) return {messages:kept, dropped};
   const reserve = Math.min(6000, Math.floor(chars * .12));
   const query = list.slice(-3).map(message => plainContext(message.content)).join('\n');
-  const digest = historyDigest(list.slice(0, dropped), query, reserve);
+  let digest = historyDigest(list.slice(0, dropped), query, reserve);
   if (!digest) return {messages:kept,dropped};
   // Refit without recursion, keeping the actual newest question intact.
-  while (kept.length > 1 && (kept.length >= count || kept.reduce((sum,message)=>sum+wireChars(message),0) + digest.length > chars)) kept.shift();
+  while (kept.length > 1 && (kept.length >= count || kept.reduce((sum,message)=>sum+wireChars(message),0) + reserve > chars)) kept.shift();
   while (kept.length > 1 && kept[0].role !== 'user') kept.shift();
+  // Include turns removed to make room for the digest as well. Otherwise a
+  // correction in that boundary turn could vanish from both representations.
+  digest=historyDigest(list.slice(0,list.length-kept.length),query,reserve);
   if (wireChars(kept[0]) + digest.length > chars) return {messages:kept,dropped:list.length-kept.length};
   return { messages:[{role:'user',content:digest}, ...kept], dropped:list.length-kept.length, recalled:true };
 }
@@ -252,11 +267,18 @@ export async function readAttachment(file) {
   };
   if (!file.size) return { ...base, state: "empty", note: "This file is empty." };
   if (isImage(file)) return readImage(file);
+  if (DOCUMENT_EXT.test(file.name || '')) {
+    try {
+      const result=await readDocument(file);
+      if(result.body.length>MESSAGE_LIMIT-2000) throw Error('Too much extracted text for one message. Split the document into smaller files.');
+      return {...base,state:'ready',body:result.body,chars:result.body.length,note:result.note};
+    } catch(error) { return {...base,state:'unsupported',note:error.message||'This document could not be read.'}; }
+  }
   if (!isReadable(file))
     return {
       ...base,
       state: "unsupported",
-      note: "Vaelo takes images and text files: notes, code, CSV, JSON, Markdown.",
+      note: "Vaelo takes images, PDF text, DOCX, XLSX, PPTX and text files.",
     };
   if (file.size > READ_LIMIT)
     return { ...base, state: "too-large", note: `Too large to read here (${formatSize(file.size)}).` };

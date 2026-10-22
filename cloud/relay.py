@@ -21,6 +21,14 @@ import re
 import threading
 import time
 import uuid
+try:
+    from calculation import direct_calculation
+except ModuleNotFoundError:
+    from cloud.calculation import direct_calculation
+try:
+    from answer_contract import contract_for, constrained, validate_answer, repair_instruction
+except ModuleNotFoundError:
+    from cloud.answer_contract import contract_for, constrained, validate_answer, repair_instruction
 from contextlib import contextmanager
 try:
     from provider_health import RouteHealth
@@ -316,6 +324,7 @@ class RunTrace:
         self.ended = None
         self.spans, self.marks, self.counts = {}, {}, {}
         self.active_tools = set()
+        self.models=set()
         self.tool_began = None
 
     def mark(self, name):
@@ -345,7 +354,8 @@ class RunTrace:
 
     def record(self, run, outcome, route, requests):
         return dict(schema=1, kind='vaelo.trace', run=run, layer='relay', outcome=outcome,
-                    route=route, total_ms=round(max(0, (self.ended if self.ended is not None else self.clock()) - self.began) * 1000),
+                    route=route, model_ids=sorted(self.models),model_identity='upstream_reported' if self.models else 'unavailable',
+                    total_ms=round(max(0, (self.ended if self.ended is not None else self.clock()) - self.began) * 1000),
                     spans_ms=dict(self.spans), marks_ms=dict(self.marks),
                     counts={**self.counts, 'upstream_requests': requests,
                             'unfinished_tools': len(self.active_tools)})
@@ -821,7 +831,7 @@ class Relay:
             # Preserve buffered legitimate text even when reading raises mid-stream.
             if not seen["invalid_output"] and not seen["repetitive"]:
                 for pending in seen["output_guard"].frames:
-                    run.emit(pending)
+                    self.publish(run, pending, seen)
                 seen["output_guard"].frames.clear()
             response.close()  # release the provider/agent slot before a fresh request
             run.connection.close()
@@ -853,7 +863,7 @@ class Relay:
             seen["protocol_done"] = True
             seen["finished"] = True
             for pending in seen["output_guard"].feed(frame, final=True):
-                run.emit(pending)
+                self.publish(run, pending, seen)
             return
         try:
             payload = json.loads(text)
@@ -888,6 +898,11 @@ class Relay:
             ).strip()[:160]
             if label and label not in seen["tools"] and len(seen["tools"]) < 12:
                 seen["tools"].append(label)
+        model=payload.get('model')
+        if (isinstance(model,str) and re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,159}',model)
+                and model.lower() not in ('auto','jarvis','openrouter/free')
+                and not re.match(r'(?:sk-|gsk_|AIza|Bearer)',model) and len(run.trace.models)<8):
+            run.trace.models.add(model)
         choices = payload.get("choices")
         if choices is not None and (not isinstance(choices, list)
                                     or (choices and not isinstance(choices[0], dict))):
@@ -962,7 +977,7 @@ class Relay:
             if finish == "error" or payload.get("error"):
                 seen["held"] = frame
             for pending in pending_frames[:-1]:
-                run.emit(pending)
+                self.publish(run, pending, seen)
             return
         if isinstance(content, str) and content.strip() and run.first_answer is None:
             run.first_answer = self.clock()
@@ -987,9 +1002,22 @@ class Relay:
             and name == "message"
         )
         for pending in pending_frames:
-            run.emit(pending, optional=bool(thinking_only))
+            self.publish(run, pending, seen, optional=bool(thinking_only))
         if isinstance(content, str) and "vaelo-image:" in seen["answer"]:
             self.share_images(run, seen["answer"])
+
+    def publish(self, run, frame, seen, **options):
+        if constrained(seen.get('contract', {})):
+            for line in frame.split('\n'):
+                if line.startswith('data:'):
+                    try:
+                        data = json.loads(line[5:])
+                        if any(isinstance(c, dict) and isinstance(c.get('delta'), dict)
+                               and c['delta'].get('content') is not None for c in data.get('choices', [])):
+                            return  # publish once, only after the full contract passes
+                    except (ValueError, TypeError, AttributeError):
+                        pass
+        run.emit(frame, **options)
 
     def share_images(self, run, answer):
         """A generated picture is written into the reply as a short reference; the reader
@@ -1020,6 +1048,7 @@ class Relay:
         timer.start()
         seen = {"content": "", "answer": "", "approval": False, "tools": [], "held": None,
                 "finished": False, "failed": False, "dropped": False, "forecasts": [], "forecast_evidence": []}
+        seen['contract'] = contract_for(messages)
         def preserve_forecast():
             if run.stopped or not seen["forecast_evidence"]:
                 return False
@@ -1034,6 +1063,19 @@ class Relay:
             return True
         repetition_retried = False
         try:
+            exact=direct_calculation(messages,body.get('tier','normal'))
+            if exact is not None and not validate_answer(exact,seen['contract'])[1]:
+                run.route='calculator'
+                progress={'tool':'calculate','toolCallId':'exact_arithmetic','status':'running','label':'Checking the calculation'}
+                run.trace.tool(progress)
+                run.event('hermes.tool.progress',progress)
+                run.emit('data: '+json.dumps({'choices':[{'delta':{'content':exact}}]}))
+                progress={**progress,'status':'completed'}
+                run.trace.tool(progress)
+                run.event('hermes.tool.progress',progress)
+                run.trace.counts['deterministic_answers']=1
+                run.event('jarvis.complete',{'ok':True})
+                return run.finish('complete')
             run.event("jarvis.status", {"message": "Vaelo is working…"})
             query = body.get("freshness")
             if isinstance(query, str) and query.strip() and len(query) <= 600:
@@ -1166,6 +1208,24 @@ class Relay:
                     run.event("jarvis.error", {"code": "unverified_sources", "message":
                               "Vaelo could not provide usable sources for this answer. Please retry."})
                     return run.finish("error")
+                if (constrained(seen['contract']) and answered(seen) and seen['finished']
+                        and not seen['failed'] and not seen['truncated'] and not run.stopped):
+                    checked, errors = validate_answer(seen['answer'], seen['contract'])
+                    if errors:
+                        left = RUN_LIMIT_SECONDS - (self.clock() - started)
+                        if not seen.get('contract_retried') and attempt < ATTEMPTS - 1 and left >= RECOVERY_MIN_SECONDS:
+                            seen['contract_retried'] = True
+                            run.trace.counts['contract_recoveries'] = 1
+                            run.event('jarvis.retry', {'message': 'Checking the requested answer format…'})
+                            request = [*messages, {'role':'user', 'content':repair_instruction(errors)}]
+                            seen.update(content='', answer='')
+                            body = {**body, 'continue_fast': False}
+                            continue
+                        run.trace.counts['contract_failures'] = 1
+                        run.event('jarvis.error', {'code':'answer_contract', 'message':
+                                  'Vaelo could not satisfy the requested format or length. Please retry or adjust the requirement.'})
+                        return run.finish('error')
+                    seen['checked_answer'] = checked
                 cut_off = (seen["failed"] or not seen["finished"] or seen["truncated"]
                            or not seen["attempt_answer"])
                 left = RUN_LIMIT_SECONDS - (self.clock() - started)
@@ -1214,7 +1274,9 @@ class Relay:
             # The model is asked to repeat the reference but may mangle or omit it.
             # Forecasts this run fetched itself are shown regardless, so a widget
             # request never degrades to a hand-written table or a stray marker.
-            for token in dict.fromkeys([*WEATHER_REFERENCE.findall(seen["answer"]), *seen["forecasts"]]):
+            if constrained(seen['contract']):
+                run.emit('data: ' + json.dumps({'choices':[{'delta':{'content':seen.get('checked_answer', seen['answer'])}}]}))
+            for token in ([] if constrained(seen['contract']) else dict.fromkeys([*WEATHER_REFERENCE.findall(seen["answer"]), *seen["forecasts"]])):
                 forecast = read_forecast(token, not_before=forecast_started)
                 if not forecast:
                     run.event("jarvis.error", {"message": "The forecast could not be loaded. Please try again."})
@@ -1336,7 +1398,8 @@ def make_handler(relay):
                     return self.send_json(200, {'revision':revision if re.fullmatch(r'[a-f0-9]{40}',revision) else None,
                         'trace_schema':1,'fast_connect_deadline_seconds':FAST_SECONDS,
                         'fast_system_chars':FAST_SYSTEM_CHARS,
-                        'tools':['weather_forecast','python_verify'],'protocol':2})
+                        'tools':['weather_forecast','calculate','date_difference','python_verify','javascript_verify'],
+                        'answer_contracts':True,'protocol':3})
                 if method == "POST" and parts == ["vaelo", "runs"]:
                     return self.start(owner)
                 if len(parts) >= 3 and parts[1] == "runs" and RUN_ID.match(parts[2]):

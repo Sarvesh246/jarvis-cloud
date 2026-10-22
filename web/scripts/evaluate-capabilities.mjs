@@ -17,7 +17,7 @@ async function check(name,work) {
 try {
   await mkdir('evaluation-results',{recursive:true});
   if(!process.argv.includes('--database')) {
-    const run=spawnSync(process.execPath,['--test','--test-concurrency=2','tests/capabilities.test.js','tests/baseline.test.js'],{encoding:'utf8'});
+    const run=spawnSync(process.execPath,['--test','--test-concurrency=2','tests/capabilities.test.js','tests/baseline.test.js','tests/quality-completion.test.js'],{encoding:'utf8'});
     assert.equal(run.status,0,'Local capability regressions failed.');
     report.checks.push({name:'local capability and baseline regression suite',passed:true});
   } else {

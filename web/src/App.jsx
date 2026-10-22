@@ -64,6 +64,7 @@ import {
   MESSAGE_LIMIT,
   composeContent,
   fitHistory,
+  visualContextTurn,
   isImage,
   placeImages,
   readAttachment,
@@ -1491,9 +1492,10 @@ export function App() {
     const sendable = messages.filter(
       (message) => (message.content || message.attachments?.length) && !message.failed,
     );
+    const visualTurn = visualContextTurn(sendable);
     const wired = sendable
       .map((message, i) =>
-        wireMessage(message, { latest: i === sendable.length - 1, images: imageData.current }),
+        wireMessage(message, { latest: i === visualTurn, images: imageData.current }),
       )
       .filter((message) =>
         typeof message.content === "string" ? message.content.trim() : message.content.length,

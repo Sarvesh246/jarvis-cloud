@@ -4,6 +4,8 @@ import { pathToFileURL } from 'node:url';
 import { randomUUID, createHash } from 'node:crypto';
 import { readEvents } from '../src/stream.js';
 import { checkAnswer, summarize } from '../evaluation/metrics.js';
+import { comprehensiveCases } from '../evaluation/comprehensive.js';
+import { visualCases } from '../evaluation/visual-cases.js';
 
 export async function runCase(item, { origin, headers, request = fetch, timeoutMs = 90000, captureAnswers = false }) {
   const runId = randomUUID();
@@ -46,7 +48,7 @@ export async function runCase(item, { origin, headers, request = fetch, timeoutM
         if (name === 'hermes.tool.progress' && data?.status !== 'completed') {
           row.tools++;
           const tool=data.tool || data.tool_name || data.name || data.function_name;
-          if(['python_verify','weather_forecast','web_search','web_extract','image_gen'].includes(tool) && !row.tool_names.includes(tool)) row.tool_names.push(tool);
+          if(['python_verify','javascript_verify','calculate','date_difference','weather_forecast','web_search','web_extract','image_gen'].includes(tool) && !row.tool_names.includes(tool)) row.tool_names.push(tool);
         }
         const content = data?.choices?.[0]?.delta?.content;
         if (typeof content === 'string' && content.trim()) row.first_answer_ms ??= Math.round(performance.now() - began);
@@ -84,7 +86,7 @@ export async function runCase(item, { origin, headers, request = fetch, timeoutM
   row.answer_sha256 = createHash('sha256').update(answer).digest('hex');
   row.answer_chars = answer.length;
   row.quality = checkAnswer(answer, item.checks);
-  row.quality.passed = row.outcome === 'complete' && row.quality.passed;
+  row.quality.passed = row.outcome === 'complete' && !row.degraded && row.quality.passed;
   if(item.checks?.requiresTool) row.quality.passed &&= row.tool_names.includes(item.checks.requiresTool);
   if (captureAnswers) row.answer_for_review = answer.slice(0, 12000);
   return row;
@@ -100,12 +102,19 @@ export async function main() {
   const repeat = Number(option('--repeat', '1'));
   const timeoutMs = Number(option('--timeout-ms', '90000'));
   if (!Number.isInteger(repeat) || repeat < 1 || repeat > 20 || !Number.isFinite(timeoutMs) || timeoutMs < 100 || timeoutMs > 900000) throw new Error('Invalid repeat or timeout.');
-  const cases = JSON.parse(await readFile(new URL('../evaluation/cases.json', import.meta.url), 'utf8'));
-  const ids = option('--cases', 'greeting,arithmetic,rewrite,context-recall').split(',');
+  const suite=option('--suite','smoke');
+  if(!['smoke','comprehensive','visual'].includes(suite)) throw Error('Unknown evaluation suite.');
+  const seed=Number(option('--seed','731'));
+  if(!Number.isInteger(seed)||seed<0||seed>4294967295) throw Error('Seed must be an unsigned 32-bit integer.');
+  const cases = suite==='visual'?await visualCases():suite==='comprehensive'?comprehensiveCases(seed):
+    JSON.parse(await readFile(new URL('../evaluation/cases.json', import.meta.url), 'utf8'));
+  const chosen=option('--cases',suite!=='smoke'?cases.slice(0,4).map(item=>item.id).join(','):'greeting,arithmetic,rewrite,context-recall');
+  const ids = chosen==='all'?cases.map(item=>item.id):chosen.split(',');
   for (const id of ids) if (!cases.some(item => item.id === id)) throw new Error(`Unknown case: ${id}`);
   const selected = cases.filter(item => ids.includes(item.id));
   if (mode === 'guest' && selected.filter(item => !item.manual).length * repeat > 18) throw new Error('Keep guest batches below 19 requests; retries also consume quota.');
   const report = { schema: 1, environment: origin, mode, source_revision: option('--revision', 'unspecified'), deployed_revision: 'unverified',
+    case_set_sha256:createHash('sha256').update(JSON.stringify(selected)).digest('hex'),suite,seed,
     recorded_at: new Date().toISOString(), rows: [], skipped: [], summary: {} };
   const out = resolve(option('--out', 'evaluation-results/baseline.json'));
   await mkdir(dirname(out), { recursive: true });
@@ -140,6 +149,15 @@ export async function main() {
     if (!login.ok) throw new Error('Guest session unavailable.');
     cookies(login); await login.body?.cancel();
   }
+  async function revision() {
+    try {
+      const status=await fetch(`${origin}/api/status`,{headers:headers(),signal:AbortSignal.timeout(20000)});
+      const data=await status.json();
+      return status.ok && /^[a-f0-9]{40}$/.test(data.revision||'')?data.revision:null;
+    } catch {return null;}
+  }
+  const initialRevision=await revision();
+  report.deployed_revision=initialRevision||'unverified';
   for (const item of selected) {
     if (item.manual || (item.signedIn && mode === 'guest')) {
       report.skipped.push({ case: item.id, reason: item.manual ? 'manual_review_required' : 'signed_in_required', review: item.review });
@@ -162,6 +180,9 @@ export async function main() {
       if (row.cleanup === 'stop_failed') throw new Error('Stop was not confirmed; halt the batch to avoid overlapping generations.');
     }
   }
+  const finalRevision=await revision();
+  report.deployment_stable=Boolean(initialRevision && finalRevision===initialRevision);
+  if(!report.deployment_stable) report.deployed_revision='unverified';
   await save();
   console.info(JSON.stringify(report.summary));
   if (report.summary.failures || report.summary.automated_passes !== report.summary.completed) process.exitCode = 1;

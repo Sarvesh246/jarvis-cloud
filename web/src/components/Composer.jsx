@@ -665,7 +665,7 @@ export const Composer = forwardRef(function Composer(
     if (!over && !reading && !offline) onSend();
   }
 
-  const accept = `${guest ? "" : "image/png,image/jpeg,image/webp,image/gif,"}text/*,.md,.markdown,.csv,.tsv,.json,.jsonl,.xml,.yml,.yaml,.toml,.ini,.log,.html,.css,.js,.jsx,.ts,.tsx,.py,.rb,.go,.rs,.java,.kt,.swift,.c,.h,.cpp,.cs,.php,.sh,.ps1,.sql,.svg`;
+  const accept = `${guest ? "" : "image/png,image/jpeg,image/webp,image/gif,"}text/*,.pdf,.docx,.xlsx,.pptx,.md,.markdown,.csv,.tsv,.json,.jsonl,.xml,.yml,.yaml,.toml,.ini,.log,.html,.css,.js,.jsx,.ts,.tsx,.py,.rb,.go,.rs,.java,.kt,.swift,.c,.h,.cpp,.cs,.php,.sh,.ps1,.sql,.svg`;
   const taken = (event) => {
     onFiles([...event.target.files]);
     event.target.value = "";

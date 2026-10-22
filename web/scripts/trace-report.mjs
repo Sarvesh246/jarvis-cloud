@@ -1,20 +1,20 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { percentile } from '../evaluation/metrics.js';
+import { percentile, median } from '../evaluation/metrics.js';
 
 export function summarizeTraces(records) {
   const layers = {};
   const valid = records.filter(row => row?.kind === 'vaelo.trace' && row.schema === 1 && ['api','web-relay','relay','browser'].includes(row.layer));
   const stats = values => { const clean = values.filter(value => Number.isFinite(value) && value >= 0);
-    return { n: clean.length, median_ms: percentile(clean,.5), p95_ms: percentile(clean,.95) }; };
+    return { n: clean.length, median_ms: median(clean), p95_ms: percentile(clean,.95),p99_ms:percentile(clean,.99) }; };
   for (const layer of ['api','web-relay','relay','browser']) {
     const rows = valid.filter(row => row.layer === layer);
     const result = layers[layer] = { samples: rows.length, total: stats(rows.map(row => row.total_ms)), outcomes: {}, routes: {}, counts: {}, spans: {}, marks: {} };
     for (const row of rows) {
       const outcome = ['ended','cut','left','missing','error','complete','completed','restarted','stopped','stopped_or_detached','detached','stopped_before_request','running'].includes(row.outcome) ? row.outcome : 'unknown';
       result.outcomes[outcome] = (result.outcomes[outcome] || 0) + 1;
-      if (['hermes','weather','router','openrouter','guest'].includes(row.route)) result.routes[row.route] = (result.routes[row.route] || 0) + 1;
+      if (['hermes','weather','router','openrouter','guest','calculator'].includes(row.route)) result.routes[row.route] = (result.routes[row.route] || 0) + 1;
       for (const [name, count] of Object.entries(row.counts || {})) {
         if (/^[a-z_]{1,64}$/.test(name) && Number.isSafeInteger(count) && count >= 0) result.counts[name] = (result.counts[name] || 0) + count;
       }

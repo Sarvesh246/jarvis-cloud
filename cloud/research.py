@@ -780,7 +780,14 @@ class Research(WebSearchProvider):
 
 def register(ctx):
     ctx.register_web_search_provider(Research())
-    from .verification import SCHEMA as VERIFY_SCHEMA, verification_tool
+    from .calculation import SCHEMA as CALC_SCHEMA, DATE_SCHEMA, calculate, date_difference
+    ctx.register_tool(name='calculate',toolset='web',schema=CALC_SCHEMA,handler=calculate,
+                      description='Bounded deterministic decimal arithmetic')
+    ctx.register_tool(name='date_difference',toolset='web',schema=DATE_SCHEMA,handler=date_difference,
+                      description='Timezone-aware calendar and elapsed-time differences')
+    from .verification import SCHEMA as VERIFY_SCHEMA, JS_SCHEMA, verification_tool, javascript_tool
+    ctx.register_tool(name='javascript_verify',toolset='web',schema=JS_SCHEMA,handler=javascript_tool,
+                      description='Isolated JavaScript implementation and assertion tests')
     ctx.register_tool(name="python_verify", toolset="web", schema=VERIFY_SCHEMA,
                       handler=verification_tool, description="Isolated Python code and assertion tests")
     from .weather import SCHEMA, weather_tool

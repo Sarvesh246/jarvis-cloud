@@ -21,14 +21,16 @@ SCHEMA = {"name": "python_verify", "description":
         "required": ["source", "tests"], "additionalProperties": False}}
 
 
-def verify(arguments):
+def verify(arguments, *, language='python'):
     if not isinstance(arguments, dict) or set(arguments) != {"source", "tests"}:
         return {"status": "invalid", "error": "Provide source and tests."}
     for key, limit in (("source", 24_000), ("tests", 12_000)):
         if not isinstance(arguments[key], str) or not arguments[key].strip() or len(arguments[key]) > limit:
             return {"status": "invalid", "error": "Source or tests are missing or too long."}
     token=secrets.token_hex(16)
-    payload = json.dumps({**arguments,'completion_token':token}, ensure_ascii=False).encode("utf-8")
+    if language not in ('python','javascript'):
+        return {'status':'invalid','error':'Unsupported verification language.'}
+    payload = json.dumps({**arguments,'language':language,'completion_token':token}, ensure_ascii=False).encode("utf-8")
     if len(payload) > 50_000:
         return {"status": "invalid", "error": "Verification input exceeds its byte limit."}
     if sys.platform != "linux":
@@ -68,3 +70,18 @@ def _run_worker(payload,token):
 
 def verification_tool(arguments, **kwargs):
     return json.dumps(verify(arguments), ensure_ascii=False)
+
+
+JS_SCHEMA={**SCHEMA,'name':'javascript_verify','description':
+    'Execute self-contained JavaScript implementation and assertion tests in an isolated QuickJS interpreter. '
+    'No Node, DOM, files, network, timers, modules or third-party packages. 64 MB JS heap; 2 CPU seconds; '
+    '5 seconds wall time. Throw an Error when a test fails; use independent expected results and edge cases. '
+    'This verifies only the supplied code and tests, not general correctness.',
+    'parameters':{'type':'object','properties':{
+        'source':{'type':'string','description':'Complete self-contained JavaScript implementation, up to 24000 characters.'},
+        'tests':{'type':'string','description':'Synchronous JavaScript tests; throw Error on failure. Independently check expected values. Up to 12000 characters.'}},
+        'required':['source','tests'],'additionalProperties':False}}
+
+
+def javascript_tool(arguments, **kwargs):
+    return json.dumps(verify(arguments,language='javascript'),ensure_ascii=False)

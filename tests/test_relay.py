@@ -681,6 +681,55 @@ class RelayTests(unittest.TestCase):
             time.sleep(0.02)
         self.fail("the run never finished")
 
+    def test_model_trace_accepts_bounded_identifiers_without_echoing_secret_like_metadata(self):
+        frames=['data: '+json.dumps({'model':model,'choices':[]}) for model in
+                ['vendor/model-1','auto','sk-private-token','private data with spaces']]
+        _,relay,port=self.boot([frames+[chunk('Done.','stop'),'data: [DONE]']])
+        self.start(port)
+        run=self.finished(relay)
+        record=run.trace.record(run.id,run.outcome,run.route,run.upstream_requests)
+        self.assertEqual(record['model_ids'],['vendor/model-1'])
+        self.assertEqual(record['model_identity'],'upstream_reported')
+        self.assertNotIn('private',str(record))
+
+    def test_exact_arithmetic_needs_no_provider_call(self):
+        hermes,relay,port=self.boot([])
+        self.start(port,content='What is 17 times 23? Answer with just the number.')
+        run=self.finished(relay)
+        self.assertEqual(run.outcome,'complete')
+        self.assertEqual(run.route,'calculator')
+        self.assertEqual(len(hermes.requests),0)
+        self.assertIn('391',b''.join(run.frames).decode())
+
+    def test_explicit_json_withholds_bad_candidate_and_repairs_once(self):
+        hermes, relay, port=self.boot([[chunk('Here is the answer: {"value":7}', 'stop'),'data: [DONE]'],
+                                      [chunk('```json\n{"value":7}\n```','stop'),'data: [DONE]']])
+        self.start(port,content='Return only one valid JSON object with value 7.')
+        run=self.finished(relay)
+        self.assertEqual(run.outcome,'complete')
+        wire=b''.join(run.frames).decode()
+        self.assertNotIn('Here is the answer',wire)
+        emitted=[]
+        for frame in run.frames:
+            for line in frame.decode().splitlines():
+                if line.startswith('data: {"choices"'):
+                    emitted.append(json.loads(line[6:])['choices'][0]['delta'].get('content',''))
+        self.assertEqual(''.join(emitted),'{"value":7}')
+        self.assertEqual(len(hermes.requests),2)
+        self.assertNotIn('Here is the answer',json.dumps(hermes.requests[1]))
+        self.assertEqual(run.trace.counts['contract_recoveries'],1)
+
+    def test_repeated_length_contract_failure_is_an_error_without_partial_leak(self):
+        hermes,relay,port=self.boot([[chunk('One two three four five.','stop'),'data: [DONE]']]*3)
+        self.start(port,content='Answer in at most 2 words.')
+        run=self.finished(relay)
+        self.assertEqual(run.outcome,'error')
+        wire=b''.join(run.frames).decode()
+        self.assertIn('answer_contract',wire)
+        self.assertNotIn('One two three',wire)
+        self.assertNotIn('jarvis.complete',wire)
+        self.assertEqual(len(hermes.requests),2)
+
     def test_a_negative_content_length_is_refused_instead_of_hanging(self):
         _, _, port = self.boot([])
         connection = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
