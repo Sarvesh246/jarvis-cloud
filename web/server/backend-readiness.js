@@ -4,11 +4,11 @@ import { performance } from "node:perf_hooks";
 // Health is a small status document, even when the edge returns a loading
 // page. Bound actual bytes and release the stream before another probe.
 const HEALTH_BYTES = 16 * 1024;
-async function healthReady(response, signal) {
+async function statusDocument(response, signal) {
   let reader;
   try {
     signal.throwIfAborted();
-    if (!response.ok || !response.body) return false;
+    if (!response.ok || !response.body) return null;
     reader = response.body.getReader();
     const chunks = [];
     let size = 0;
@@ -17,15 +17,32 @@ async function healthReady(response, signal) {
       signal.throwIfAborted();
       if (done) break;
       size += value.byteLength;
-      if (size > HEALTH_BYTES) return false;
+      if (size > HEALTH_BYTES) return null;
       chunks.push(value);
     }
     const text = new TextDecoder("utf-8", { fatal: true }).decode(Buffer.concat(chunks));
-    return JSON.parse(text)?.status === "ok";
+    return JSON.parse(text);
   } finally {
     try { await (reader ? reader.cancel() : response.body?.cancel()); } catch {}
     reader?.releaseLock();
   }
+}
+
+async function healthReady(response,signal) {
+  return (await statusDocument(response,signal))?.status==='ok';
+}
+
+// Explicit diagnostic reads only; never adds a probe to chat generation.
+export async function probeCapabilities(backend,key,{request=fetch,timeoutMs=2500}={}) {
+  try {
+    const signal=AbortSignal.timeout(timeoutMs);
+    const response=await request(`${backend.replace(/\/$/,'')}/vaelo/capabilities`,{
+      headers:{Authorization:`Bearer ${key}`,'X-Hermes-Session-Key':'web:release-diagnostics'},signal});
+    const value=await statusDocument(response,signal);
+    if(!value || !/^[a-f0-9]{40}$/.test(value.revision||'')) return null;
+    return {backend_revision:value.revision,
+      backend_protocol:Number.isInteger(value.protocol)&&value.protocol>=1&&value.protocol<=100?value.protocol:null};
+  } catch {return null;}
 }
 
 /* One health check. Render's edge answers a sleeping service with a 502 or

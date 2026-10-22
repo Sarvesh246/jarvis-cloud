@@ -151,13 +151,17 @@ export async function main() {
   }
   async function revision() {
     try {
-      const status=await fetch(`${origin}/api/status`,{headers:headers(),signal:AbortSignal.timeout(20000)});
+      const status=await fetch(`${origin}/api/status?capabilities=1`,{headers:headers(),signal:AbortSignal.timeout(20000)});
       const data=await status.json();
-      return status.ok && /^[a-f0-9]{40}$/.test(data.revision||'')?data.revision:null;
+      return status.ok && /^[a-f0-9]{40}$/.test(data.revision||'')?
+        {web:data.revision,backend:/^[a-f0-9]{40}$/.test(data.backend_revision||'')?data.backend_revision:null,
+         backend_protocol:data.backend_protocol??null}:null;
     } catch {return null;}
   }
   const initialRevision=await revision();
-  report.deployed_revision=initialRevision||'unverified';
+  report.deployed_revision=initialRevision?.web||'unverified';
+  report.backend_revision=initialRevision?.backend||'unverified';
+  report.backend_protocol=initialRevision?.backend_protocol??null;
   for (const item of selected) {
     if (item.manual || (item.signedIn && mode === 'guest')) {
       report.skipped.push({ case: item.id, reason: item.manual ? 'manual_review_required' : 'signed_in_required', review: item.review });
@@ -181,8 +185,10 @@ export async function main() {
     }
   }
   const finalRevision=await revision();
-  report.deployment_stable=Boolean(initialRevision && finalRevision===initialRevision);
+  report.deployment_stable=Boolean(initialRevision && finalRevision?.web===initialRevision.web);
+  report.backend_deployment_stable=Boolean(initialRevision?.backend && finalRevision?.backend===initialRevision.backend);
   if(!report.deployment_stable) report.deployed_revision='unverified';
+  if(!report.backend_deployment_stable) report.backend_revision='unverified';
   await save();
   console.info(JSON.stringify(report.summary));
   if (report.summary.failures || report.summary.automated_passes !== report.summary.completed) process.exitCode = 1;

@@ -34,16 +34,20 @@ def contract_for(messages):
                 names=re.split(r'\s*,\s*|\s+and\s+',candidate)
                 if 1<=len(names)<=24 and all(re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]{0,63}',name) for name in names):
                     required=names
-    return {'json': bool(ONLY_JSON.search(text)), 'limits': limits[:8],'required_keys':required}
+    tools=re.findall(r'(?:^|[.!?]\s+|\n)(?:please\s+|actually\s+)?(?:use|run|execute|invoke|call)\s+(?:the\s+)?(python_verify|javascript_verify|calculate|date_difference)\b',text,re.I)
+    return {'json': bool(ONLY_JSON.search(text)), 'limits': limits[:8],'required_keys':required,
+            'required_tools':list(dict.fromkeys(tool.lower() for tool in tools))}
 
 
 def constrained(contract):
-    return bool(contract.get('json') or contract.get('limits'))
+    return bool(contract.get('json') or contract.get('limits') or contract.get('required_tools'))
 
 
-def validate_answer(text, contract):
+def validate_answer(text, contract, executed_tools=()):
     result = text.strip()
     errors = []
+    for tool in contract.get('required_tools',[]):
+        if tool not in executed_tools: errors.append('missing_tool_'+tool)
     if len(result) > 160000:
         return result, ['answer_size']
     if contract.get('json'):
@@ -80,4 +84,5 @@ def repair_instruction(errors):
     return ('[Vaelo request: the previous candidate failed explicit output checks: ' + ', '.join(errors) +
             '. Answer the original request afresh using its source input. Preserve factual completeness and correctness '
             'while obeying the requested format and length. Return no internal annotations, preamble or extra explanation. '
-            'Do not quote or reuse the discarded candidate.]')
+            'For a missing_tool check, actually invoke that exact named tool; another runtime is not a substitute. '
+            'If it is unavailable, do not claim execution. Do not quote or reuse the discarded candidate.]')

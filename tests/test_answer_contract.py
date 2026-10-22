@@ -3,6 +3,12 @@ from cloud.answer_contract import contract_for, validate_answer, constrained
 
 
 class AnswerContractTests(unittest.TestCase):
+    def test_explicit_named_verification_requires_that_exact_executed_tool(self):
+        contract=self.contract('Actually use javascript_verify to check this. Return ONLY JSON.')
+        self.assertEqual(contract['required_tools'],['javascript_verify'])
+        self.assertIn('missing_tool_javascript_verify',validate_answer('{}',contract,['python_verify'])[1])
+        self.assertFalse(validate_answer('{}',contract,['javascript_verify'])[1])
+        self.assertFalse(constrained(self.contract('Do not use python_verify. Explain the function.')))
     def contract(self, text):
         return contract_for([{'role':'user','content':text}])
 

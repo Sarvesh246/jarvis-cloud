@@ -325,6 +325,7 @@ class RunTrace:
         self.spans, self.marks, self.counts = {}, {}, {}
         self.active_tools = set()
         self.models=set()
+        self.executed_tools=set()
         self.tool_began = None
 
     def mark(self, name):
@@ -342,6 +343,9 @@ class RunTrace:
         key = str(payload.get('toolCallId') or payload.get('tool_call_id') or
                   payload.get('tool') or payload.get('name') or 'tool')[:160]
         if payload.get('status') == 'completed':
+            name=payload.get('tool') or payload.get('tool_name') or payload.get('name')
+            if key in self.active_tools and name in ('python_verify','javascript_verify','calculate','date_difference'):
+                self.executed_tools.add(name)
             self.active_tools.discard(key)
             if not self.active_tools and self.tool_began is not None:
                 self.spans['observed_tools'] = self.spans.get('observed_tools', 0) + round(max(0, self.clock() - self.tool_began) * 1000)
@@ -355,6 +359,7 @@ class RunTrace:
     def record(self, run, outcome, route, requests):
         return dict(schema=1, kind='vaelo.trace', run=run, layer='relay', outcome=outcome,
                     route=route, model_ids=sorted(self.models),model_identity='upstream_reported' if self.models else 'unavailable',
+                    executed_tools=sorted(self.executed_tools),
                     total_ms=round(max(0, (self.ended if self.ended is not None else self.clock()) - self.began) * 1000),
                     spans_ms=dict(self.spans), marks_ms=dict(self.marks),
                     counts={**self.counts, 'upstream_requests': requests,
@@ -1210,7 +1215,7 @@ class Relay:
                     return run.finish("error")
                 if (constrained(seen['contract']) and answered(seen) and seen['finished']
                         and not seen['failed'] and not seen['truncated'] and not run.stopped):
-                    checked, errors = validate_answer(seen['answer'], seen['contract'])
+                    checked, errors = validate_answer(seen['answer'], seen['contract'],run.trace.executed_tools)
                     if errors:
                         left = RUN_LIMIT_SECONDS - (self.clock() - started)
                         if not seen.get('contract_retried') and attempt < ATTEMPTS - 1 and left >= RECOVERY_MIN_SECONDS:
@@ -1223,7 +1228,7 @@ class Relay:
                             continue
                         run.trace.counts['contract_failures'] = 1
                         run.event('jarvis.error', {'code':'answer_contract', 'message':
-                                  'Vaelo could not satisfy the requested format or length. Please retry or adjust the requirement.'})
+                                  'Vaelo could not satisfy the requested format, length or verification tool. Please retry or adjust the requirement.'})
                         return run.finish('error')
                     seen['checked_answer'] = checked
                 cut_off = (seen["failed"] or not seen["finished"] or seen["truncated"]

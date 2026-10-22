@@ -11,6 +11,7 @@ export function compareReports(before,after,{minimumSamples=30}={}) {
   if(!before.case_set_sha256 || before.case_set_sha256!==after.case_set_sha256) reasons.push('case_set_mismatch');
   if(before.mode!==after.mode || before.environment!==after.environment) reasons.push('environment_or_mode_mismatch');
   if(!/^[a-f0-9]{40}$/.test(before.deployed_revision||'') || !/^[a-f0-9]{40}$/.test(after.deployed_revision||'')) reasons.push('deployment_revision_unverified');
+  if(!/^[a-f0-9]{40}$/.test(before.backend_revision||'') || !/^[a-f0-9]{40}$/.test(after.backend_revision||'')) reasons.push('backend_revision_unverified');
   const keys=new Set([...(before.rows||[]),...(after.rows||[])].map(row=>row.capability||'unspecified'));
   const cohorts=[];
   for(const capability of keys) {

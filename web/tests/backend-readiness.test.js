@@ -3,7 +3,18 @@ import assert from "node:assert/strict";
 import { createServer } from 'node:http';
 import { once } from 'node:events';
 import { setTimeout as delay } from 'node:timers/promises';
-import { forgetHealthy, noteHealthy, probeBackend, waitForBackend, wakeBackend } from "../server/backend-readiness.js";
+import { forgetHealthy, noteHealthy, probeBackend, waitForBackend, wakeBackend, probeCapabilities } from "../server/backend-readiness.js";
+
+test('explicit release diagnostics expose only validated backend revision and protocol',async()=> {
+  const result=await probeCapabilities('https://backend.example/','private-key',{request:async(url,options)=> {
+    assert.equal(url,'https://backend.example/vaelo/capabilities');
+    assert.equal(options.headers.Authorization,'Bearer private-key');
+    return Response.json({revision:'a'.repeat(40),protocol:3,secret:'private-key',tools:['private arbitrary data']});
+  }});
+  assert.deepEqual(result,{backend_revision:'a'.repeat(40),backend_protocol:3});
+  for(const body of [JSON.stringify({revision:'private data'}),'[]','x'.repeat(17000),'{'])
+    assert.equal(await probeCapabilities('https://backend.example','key',{request:async()=>new Response(body)}),null);
+});
 
 test("cold-start edge failures wake the service once and only use GET requests", async () => {
   const calls = [];

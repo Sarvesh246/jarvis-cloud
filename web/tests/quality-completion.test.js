@@ -99,7 +99,7 @@ test('speed experiments require matched cases, revisions and independent semanti
   const rows=Array.from({length:30},(_,i)=>({case:`arithmetic-${i}`,capability:'routing',outcome:'complete',
     total_ms:100,answer_sha256:hash,quality:{passed:true},
     review:{method:'human',answer_sha256:hash,correct:true,complete:true,grounded:true,constraints:true}}));
-  const before={environment:'https://example.com',mode:'signed-in',case_set_sha256:'same',deployed_revision:'a'.repeat(40),rows};
+  const before={environment:'https://example.com',mode:'signed-in',case_set_sha256:'same',deployed_revision:'a'.repeat(40),backend_revision:'a'.repeat(40),rows};
   const after={...before,deployed_revision:'b'.repeat(40),rows:rows.map(row=>({...row,total_ms:50}))};
   assert.equal(compareReports(before,after).eligible,true);
   assert.equal(compareReports(before,after).cohorts[0].speed_change_percent,50);

@@ -692,6 +692,24 @@ class RelayTests(unittest.TestCase):
         self.assertEqual(record['model_identity'],'upstream_reported')
         self.assertNotIn('private',str(record))
 
+    def test_wrong_execution_runtime_cannot_satisfy_an_explicit_named_tool(self):
+        def progress(name,status):
+            return 'event: hermes.tool.progress\ndata: '+json.dumps({'tool':name,'toolCallId':name,'status':status})
+        wrong=[progress('python_verify','running'),progress('python_verify','completed'),
+               chunk('{"runtime":"python"}','stop'),'data: [DONE]']
+        correct=[progress('javascript_verify','running'),progress('javascript_verify','completed'),
+                 chunk('{"runtime":"javascript"}','stop'),'data: [DONE]']
+        hermes,relay,port=self.boot([wrong,correct])
+        self.start(port,content='Actually use javascript_verify to execute the tests. Return ONLY JSON.')
+        run=self.finished(relay)
+        self.assertEqual(run.outcome,'complete')
+        self.assertEqual(len(hermes.requests),2)
+        self.assertEqual(run.trace.counts['contract_recoveries'],1)
+        self.assertEqual(run.trace.executed_tools,{'python_verify','javascript_verify'})
+        wire=b''.join(run.frames).decode()
+        self.assertNotIn(json.dumps('{"runtime":"python"}'),wire)
+        self.assertNotIn(json.dumps('{"runtime":"python"}'),json.dumps(hermes.requests[1]))
+
     def test_exact_arithmetic_needs_no_provider_call(self):
         hermes,relay,port=self.boot([])
         self.start(port,content='What is 17 times 23? Answer with just the number.')
