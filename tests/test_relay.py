@@ -192,6 +192,34 @@ class FakeHermes:
 
 
 class RelayTests(unittest.TestCase):
+    def test_memory_directives_are_server_filtered_and_permission_controls_note_events(self):
+        for allowed in (False, True):
+            with self.subTest(allowed=allowed):
+                _, relay, port = self.boot([[chunk('Noted.\n[[rem'), chunk('ember: Prefers tea]]', 'stop'), 'data: [DONE]']])
+                self.call(port, 'POST', '/vaelo/runs', {'id':RUN,
+                    'messages':[{'role':'user','content':'Remember that I prefer tea.'}],
+                    'memory_can_note':allowed,'memory_permission':'synthetic-permission'})
+                self.assertEqual(self.finished(relay).outcome,'complete')
+                _, frames = self.events(port)
+                content = ''.join(json.loads(data)['choices'][0]['delta'].get('content','')
+                    for _,name,data in frames if name=='message' and data!='[DONE]')
+                self.assertEqual(content.strip(),'Noted.')
+                notes = [json.loads(data) for _,name,data in frames if name=='jarvis.memory']
+                self.assertEqual(notes,[{'notes':['Prefers tea'],'permission':'synthetic-permission'}] if allowed else [])
+
+    def test_natural_json_and_sentence_contracts_repair_without_leaking_bad_candidates(self):
+        for prompt, bad, good in [('Answer ONLY a JSON object with keys a, b.', 'Here is JSON: {"a":1,"b":2}', '{"a":1,"b":2}'),
+                                  ('Hello! Reply with one short sentence.', 'Hello. How are you?', 'Hello there!')]:
+            with self.subTest(prompt=prompt):
+                hermes, relay, port = self.boot([[chunk(bad,'stop'),'data: [DONE]'],[chunk(good,'stop'),'data: [DONE]']])
+                self.start(port,content=prompt)
+                self.assertEqual(self.finished(relay).outcome,'complete')
+                _, frames = self.events(port)
+                content = ''.join(json.loads(data)['choices'][0]['delta'].get('content','')
+                    for _,name,data in frames if name=='message' and data!='[DONE]')
+                self.assertEqual(content,good)
+                self.assertEqual(len(hermes.requests),2)
+
     def test_keepalive_only_streams_recover_but_approval_waits_remain_open(self):
         for approval in (False, True):
             with self.subTest(approval=approval):

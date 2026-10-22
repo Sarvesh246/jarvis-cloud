@@ -48,7 +48,7 @@ export async function runCase(item, { origin, headers, request = fetch, timeoutM
         if (name === 'hermes.tool.progress' && data?.status !== 'completed') {
           row.tools++;
           const tool=data.tool || data.tool_name || data.name || data.function_name;
-          if(['python_verify','javascript_verify','calculate','date_difference','weather_forecast','web_search','web_extract','image_gen'].includes(tool) && !row.tool_names.includes(tool)) row.tool_names.push(tool);
+          if(['python_verify','javascript_verify','calculate','date_difference','evaluate_constraints','weather_forecast','web_search','web_extract','image_gen'].includes(tool) && !row.tool_names.includes(tool)) row.tool_names.push(tool);
         }
         const content = data?.choices?.[0]?.delta?.content;
         if (typeof content === 'string' && content.trim()) row.first_answer_ms ??= Math.round(performance.now() - began);
@@ -56,6 +56,7 @@ export async function runCase(item, { origin, headers, request = fetch, timeoutM
         if (answer.length > 2_000_000) throw new Error('answer_limit');
         if (name === 'jarvis.complete') {
           completed = true;
+          if (data?.timing) row.relay_timing = Object.fromEntries(['totalMs','firstAnswerMs','queueMs'].filter(key=>Number.isFinite(data.timing[key])).map(key=>[key,data.timing[key]]));
           if(data?.degraded === true) row.degraded = true;
         }
       });

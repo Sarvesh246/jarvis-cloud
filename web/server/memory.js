@@ -63,6 +63,7 @@ export class MemoryStore {
       result.added = []; result.duplicate = 0; result.full = 0;
       if (source === "vaelo" && !record.enabled) throw new HttpError(409, "Memory is turned off.");
       for (const text of wanted) {
+        if (source === 'vaelo' && record.forgotten?.includes(terms(text).join(' '))) { result.duplicate++; continue; }
         if (record.items.some(item => same(item.text, text)) || result.added.some(done => same(done, text))) result.duplicate++;
         else if (record.items.length >= MAX_NOTES) result.full++;
         else {

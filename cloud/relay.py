@@ -1517,6 +1517,8 @@ def make_handler(relay):
                 run_id,
                 owner,
                 {"messages": messages, "model_options": body.get("model_options"), "fast": fast,
+                 'memory_can_note': body.get('memory_can_note') is True and not owner.startswith(GUEST_OWNER),
+                 'memory_permission': body.get('memory_permission') if isinstance(body.get('memory_permission'), str) and len(body['memory_permission']) <= 2048 else None,
                  "freshness": body.get("freshness"), "place": body.get("place"),
                  'tier':body.get('tier') if body.get('tier') in ('quick','normal','deep') else 'normal'},
             )

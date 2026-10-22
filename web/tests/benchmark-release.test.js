@@ -75,3 +75,15 @@ test('empty automated criteria cannot certify a model answer', () => {
   assert.equal(checkAnswer('Any fluent but unverified answer',{}).passed,false);
   assert.equal(checkAnswer('391',{exact:'391'}).passed,true);
 });
+
+test('replayed automatic notes cannot undo a memory deletion or edit', async () => {
+  const memory = new MemoryStore(memoryStorage(), { enabled: () => true });
+  await memory.add('owner',['Prefers tea'],'vaelo');
+  const first = (await memory.read('owner')).items[0];
+  await memory.edit('owner',first.id,'Prefers coffee');
+  assert.deepEqual((await memory.add('owner',['Prefers tea'],'vaelo')).added,[]);
+  await memory.remove('owner',first.id);
+  assert.deepEqual((await memory.add('owner',['Prefers coffee'],'vaelo')).added,[]);
+  assert.deepEqual((await memory.read('owner')).items,[]);
+  assert.deepEqual((await memory.add('owner',['Prefers coffee'],'you')).added,['Prefers coffee']);
+});

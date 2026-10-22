@@ -1559,7 +1559,9 @@ export function App() {
     const generated = new Map();
     let fromScratch = Boolean(resumeFrom);
     const startedAt = resumeFrom?.startedAt || Date.now();
-    const updateMessage = (patch) => updateChatMessage(chatId, id, patch);
+    const updateMessage = (patch) => {
+      if (runs.current.get(chatId) === slot) updateChatMessage(chatId, id, patch);
+    };
     if (resumeFrom)
       updateMessage({
         interrupted: false,
@@ -1634,7 +1636,7 @@ export function App() {
         trace.mark("complete_event");
         completed = true;
         releaseHeld();
-        updateMessage(message => ({ truncated: false, running: undefined, ...completedTiming(message, data.timing) }));
+        updateMessage(message => ({ truncated: false, ...completedTiming(message, data.timing) }));
       }
       /* The answer was cut off and Vaelo is carrying it on: what follows
          joins the words already written. */
@@ -1757,7 +1759,7 @@ export function App() {
       let body = start;
       let busyTries = 0;
       let busySince = 0;
-      let recoveries = 0;
+      let recoveries = resumeFrom?.recoveryAttempts || 0;
       let drops = 0;
       let stalledSince = 0;
       while (true) {
@@ -1859,10 +1861,11 @@ export function App() {
                with it. Nothing is lost on the page: the work carries on in a
                new run, which continues the answer from where it stopped, or
                picks the research back up if no answer was written yet. */
-            if (err.code === "run_missing" && recoveries < 3 && !mirror) {
+            if (err.code === "run_missing" && recoveries < 3 && Date.now() - startedAt < 15 * 60 * 1000 && !mirror) {
               const original = body || requestFor(chatId, id);
               if (original) {
                 recoveries += 1;
+                updateMessage({ recoveryAttempts: recoveries });
                 const untouched = seq < 0 && !received && run === id;
                 if (!untouched) {
                   run = crypto.randomUUID();
@@ -2134,18 +2137,19 @@ export function App() {
   }
 
   /* A reply that was still running when the app closed, reloaded or lost
-     its connection for good carries on at Vaelo; opening the app picks the
-     newest one back up and shows it from the start. */
+     its connection for good carries on at Vaelo; recover it in the
+     background while preserving this tab's selection. */
   useEffect(() => {
     if (!session?.user || session.offline || !chats.length) return;
     const pending = Object.entries(readLiveReplies()).sort((a, b) => b[1].at - a[1].at);
     for (const [id, entry] of pending) {
       const chat = chats.find((item) => item.id === entry.chatId);
       const message = chat?.messages.find((item) => item.id === id);
-      if (!message || message.role !== "assistant" || message.completedAt || !message.running || Date.now() - entry.at > LIVE_REPLY_MS) {
+      if (Date.now() - entry.at > LIVE_REPLY_MS || message && (message.role !== 'assistant' || message.completedAt || !message.running)) {
         forgetLiveReply(id);
         continue;
       }
+      if (!message) continue; // account sync may not have downloaded this chat yet
       if (resuming.current.has(id) || runs.current.has(chat.id)) continue;
       // Already followed here while another tab owned it: that tab finishes it.
       if (watchedHere.current.has(id)) continue;
@@ -2164,18 +2168,18 @@ export function App() {
               content: message.content || "",
               reasoning: message.reasoning || "",
               startedAt: message.startedAt,
+              recoveryAttempts: message.recoveryAttempts,
             },
           });
         })
         .finally(() => resuming.current.delete(id));
     }
-  }, [session?.user?.sub, session?.offline, chats.length > 0]);
+  }, [session?.user?.sub, session?.offline, chats]);
 
   /* A reply another device is writing shows here as it happens, the way
      ChatGPT and Claude do it: the conversation arrives through sync marked
      as running, and opening it replays that run's events from the relay and
-     follows it live. Starting on a blank conversation, a reply just begun
-     elsewhere is opened at once. Nothing is generated again. */
+     follows it live when selected. Nothing is generated again. */
   useEffect(() => {
     if (!session?.user || session.offline) return;
     // Following a reply in a conversation that was left: stop following.
@@ -2197,6 +2201,7 @@ export function App() {
         content: reply.content || "",
         reasoning: reply.reasoning || "",
         startedAt: reply.startedAt,
+        recoveryAttempts: reply.recoveryAttempts,
       },
     });
   }, [session?.user?.sub, session?.offline, live, activeId, chats]);

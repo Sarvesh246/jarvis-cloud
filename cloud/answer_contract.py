@@ -58,15 +58,17 @@ def contract_for(messages, tools_available=True):
         tools.append('evaluate_constraints')
     code_tests = bool(re.search(r'\bpython\b', text, re.I) and
                       re.search(r'\b(?:include|provide|show|supply|return|with)\s+(?:runnable\s+|unit\s+|the\s+|assertion\s+)?tests\b', text, re.I))
+    result_count = re.search(r'\b(?:give|return|provide|reply with)\s+(?:only|just)\s+(?:(?:those|these|the)\s+)?(one|two|three|four|five|six|seven|eight|nine|ten|[1-9]\d?)\s+(?:results|answers)\b', text, re.I)
     return {'json': bool(ONLY_JSON.search(text)), 'limits': list(dict.fromkeys(limits))[:8],'required_keys':required,
             'exact_keys': bool(re.search(r'\b(?:exact(?:ly)?|only)\s+(?:these\s+)?(?:fields|keys)\b|\bthese exact fields\b',text,re.I)),
             'python_tests': code_tests,
+            'result_count': number(result_count[1]) if result_count else None,
             'images': any(isinstance(m.get('content'),list) and any(isinstance(p,dict) and p.get('type')=='image_url' for p in m['content']) for m in messages),
             'required_tools':list(dict.fromkeys(tool.lower() for tool in tools))}
 
 
 def constrained(contract):
-    return bool(contract.get('json') or contract.get('limits') or contract.get('required_tools') or contract.get('python_tests'))
+    return bool(contract.get('json') or contract.get('limits') or contract.get('required_tools') or contract.get('python_tests') or contract.get('result_count'))
 
 
 def validate_answer(text, contract, executed_tools=()):
@@ -116,6 +118,16 @@ def validate_answer(text, contract, executed_tools=()):
             if not definitions or not assertions: errors.append('missing_runnable_tests')
         except (ValueError, SyntaxError, RecursionError):
             errors.append('invalid_python_tests')
+    if contract.get('result_count'):
+        lines = [line.strip() for line in result.splitlines() if line.strip()]
+        count = len(lines)
+        try:
+            value = json.loads(result)
+            if isinstance(value, (dict, list)): count = len(value)
+        except (ValueError, RecursionError):
+            pass
+        if count != contract['result_count'] or any(re.match(r'^(?:#{1,6}\s|```|\[\[remember:)', line) for line in lines):
+            errors.append('results_only_' + str(contract['result_count']))
     return result, errors
 
 
@@ -124,4 +136,5 @@ def repair_instruction(errors):
             '. Answer the original request afresh using its source input. Preserve factual completeness and correctness '
             'while obeying the requested format and length. Return no internal annotations, preamble or extra explanation. '
             'For a missing_tool check, actually invoke that exact named tool; another runtime is not a substitute. '
+            'For results_only, return the requested number of result items, one per line, with no preamble or calculations. '
             'If it is unavailable, do not claim execution. Do not quote or reuse the discarded candidate.]')

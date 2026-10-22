@@ -6,6 +6,22 @@ from cloud.freshness import source_context
 
 
 class FreshnessTests(unittest.TestCase):
+    def test_requested_url_requires_real_extraction_and_discloses_failed_retrieval(self):
+        url = 'https://docs.example.com/reference'
+        search = mock.Mock(return_value={'success':True,'data':{'web':[{'url':url,'description':'A search snippet'}]}})
+        extract = mock.Mock(return_value={'content':'The page says sort mutates its input.','title':'Reference','cache_status':'network'})
+        result = source_context('Read '+url+' and explain sort.',search,extract)
+        extract.assert_called_once_with(url)
+        search.assert_not_called()
+        self.assertEqual(result['evidence']['pages_extracted'],1)
+        self.assertIn('extracted_passages',result['content'])
+        extract.return_value = {'content':'','error':'blocked'}
+        result = source_context('Read '+url+' and explain sort.',search,extract)
+        self.assertEqual(result['evidence']['pages_extracted'],0)
+        self.assertEqual(result['evidence']['search_snippets'],1)
+        self.assertIn('"status": "failed"',result['content'])
+        self.assertIn('disclose that failure',result['content'])
+
     def test_search_evidence_never_outranks_the_forecast_tool(self):
         # Evidence is fetched for any request that looks time-sensitive, so the
         # model itself must be told a forecast comes from the tool, not snippets.
