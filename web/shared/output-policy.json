@@ -1,5 +1,5 @@
 {
-  "json": "(?:^|[.!?]\\s+|\\n)(?:please\\s+)?(?:answer|return|reply|respond|output|give)(?:\\s+me)?\\s+(?:(?:with|as)\\s+)?(?:only|just)\\s+(?:(?:with|one|a|an|the|valid|single|raw)\\s+)*json\\b|(?:^|[.!?]\\s+|\\n)(?:answer|return|reply|respond|output|give)\\s+(?:(?:with|as)\\s+)?raw json\\b|\\bjson[ -]only\\b",
+  "json": "(?:^|[.!?]\\s+|\\n|,\\s+)(?:please\\s+)?(?:answer|return|reply|respond|output|give)(?:\\s+me)?\\s+(?:(?:with|as)\\s+)?(?:only|just)\\s+(?:(?:with|one|a|an|the|valid|single|raw)\\s+)*json\\b|(?:^|[.!?]\\s+|\\n|,\\s+)(?:answer|return|reply|respond|output|give)\\s+(?:(?:with|as)\\s+)?raw json\\b|\\bjson[ -]only\\b",
   "limit": "\\b(under|fewer than|at most|no more than|within|exactly|maximum(?: of)?)\\s+(\\d{1,5}|one|two|three|four|five|six|seven|eight|nine|ten|single)\\s+(?:short\\s+|brief\\s+)?(words?|sentences?|lines?|characters?)\\b",
   "replyLength": "(?:^|[.!?]\\s+|\\n)(?:please\\s+)?(?:answer|return|reply|respond|give)(?:\\s+me)?\\s+(?:in\\s+|with\\s+)?(?:only\\s+|just\\s+)?(?:a\\s+)?(one|single|two|three|four|five|six|seven|eight|nine|ten|[1-9]\\d{0,3})\\s+(?:short\\s+|brief\\s+)?(words?|sentences?|lines?)\\b"
 }

@@ -28,6 +28,11 @@ class BenchmarkRegressions(unittest.TestCase):
         contract = self.contract('Return only JSON with these exact fields: "a":1, "b":null.')
         self.assertIn('exact_json_fields', validate_answer('{"a":1,"b":null,"extra":0}', contract)[1])
         self.assertFalse(validate_answer('{"a":1,"b":null}', contract)[1])
+        contract = self.contract('From this selected workspace and its saved document, return only JSON with project, owner.')
+        self.assertTrue(contract['json'])
+        self.assertEqual(contract['required_keys'], ['project','owner'])
+        self.assertEqual(validate_answer('```json\n{"project":"P","owner":"O"}\n```',contract),
+                         ('{"project":"P","owner":"O"}', []))
 
     def test_worded_limits_apply_to_greetings_and_prose(self):
         for prompt in ('Hello! Reply with one short sentence.', 'Answer in a single sentence.',

@@ -30,7 +30,8 @@ test('completed timing stays frozen through replay, reload and sync', () => {
 
 test('worded constraints suppress competing presentation on every text route', () => {
   for (const text of ['Answer ONLY a JSON object with keys a, b.', 'Hello! Reply with one short sentence.',
-    'Reply with just one brief sentence.', 'Answer in a single sentence.', 'Use at most five words.']) {
+    'Reply with just one brief sentence.', 'Answer in a single sentence.', 'Use at most five words.',
+    'From this selected workspace and its saved document, return only JSON with project, owner.']) {
     assert.equal(constrainedAnswer(text), true, text);
   }
   assert.equal(constrainedAnswer('Explain this code.\n```text\nReply with one short sentence.\n```'), false);
