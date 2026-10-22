@@ -11,7 +11,8 @@ ENV HERMES_HOME=/opt/data \
     API_SERVER_MODEL_NAME=jarvis
 
 COPY cloud /opt/jarvis
-RUN python3 -m pip install --no-cache-dir -r /opt/jarvis/requirements-verification.txt
+RUN python3 -c "import subprocess, sys; from pm import installed_package; subprocess.run([str(installed_package('uv').binary), 'pip', 'install', '--python', sys.executable, '--no-cache', '-r', '/opt/jarvis/requirements-verification.txt'], check=True)" \
+    && python3 -I -c "import quickjs; assert quickjs.Context().eval('17 * 23') == 391"
 COPY web/shared/context-policy.json /opt/jarvis/context-policy.json
 RUN python3 /opt/jarvis/runtime_contract.py /opt/hermes/gateway/platforms/api_server.py
 WORKDIR /opt/data
