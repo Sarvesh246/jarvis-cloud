@@ -1460,7 +1460,7 @@ def make_handler(relay):
                     return self.send_json(200, {'revision':revision if re.fullmatch(r'[a-f0-9]{40}',revision) else None,
                         'trace_schema':1,'fast_connect_deadline_seconds':FAST_SECONDS,
                         'fast_system_chars':FAST_SYSTEM_CHARS,
-                        'tools':['weather_forecast','calculate','date_difference','python_verify','javascript_verify'],
+                        'tools':['weather_forecast','calculate','date_difference','evaluate_constraints','python_verify','javascript_verify'],
                         'answer_contracts':True,'protocol':3})
                 if method == "POST" and parts == ["vaelo", "runs"]:
                     return self.start(owner)

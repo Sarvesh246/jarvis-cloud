@@ -1,5 +1,6 @@
 """Bounded execution of generated Python and explicit test assertions."""
 import json
+import hashlib
 import os
 from pathlib import Path
 import subprocess
@@ -39,7 +40,12 @@ def verify(arguments, *, language='python'):
     if not _workers.acquire(blocking=False):
         return {'status':'busy','error':'One verification is already running. No additional code was run.'}
     try:
-        return _run_worker(payload,token)
+        result = _run_worker(payload,token)
+        if result.get('tests_completed'):
+            result['receipt'] = {'runtime': language,
+                'source_sha256': hashlib.sha256(arguments['source'].encode('utf-8')).hexdigest(),
+                'tests_sha256': hashlib.sha256(arguments['tests'].encode('utf-8')).hexdigest()}
+        return result
     finally:
         _workers.release()
 
