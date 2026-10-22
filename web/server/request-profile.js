@@ -136,7 +136,10 @@ function wordsOf(text) {
 }
 
 function smallTalk(text) {
-  const words = wordsOf(text);
+  // A length-only suffix does not turn a greeting into an agent task. Keep
+  // substantive follow-ups intact: "about today's weather" cannot match.
+  const greeting=text.replace(/(?:[.!?]\s*|\s+)(?:please\s+)?(?:reply|respond|answer)(?:\s+(?:in|with))?\s+(?:just\s+|only\s+)?(?:one|1|single|a(?:\s+single)?)\s+(?:short\s+|brief\s+)?sentence[.!?]*$/,'');
+  const words = wordsOf(greeting);
   return words.length > 0 && words.length <= 9 && words.every((word) => GREETING_WORDS.has(word));
 }
 

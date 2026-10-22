@@ -109,3 +109,10 @@ test('direct text routing avoids tools while retaining research, risk and contex
   assert.equal(profileRequest('Explain photosynthesis',{research:true}).fast,false);
   assert.equal(profileRequest('Explain photosynthesis',{work:true}).fast,false);
 });
+
+test('a length-only greeting constraint stays fast without hiding a real follow-up task',()=>{
+  for(const prompt of ['Hello! Reply with one short sentence.','Hi, please respond in a single sentence.','Thanks! Answer in one sentence.']) {
+    const profile=profileRequest(prompt);assert.equal(profile.fast,true,prompt);assert.equal(profile.tier,'quick');
+  }
+  for(const prompt of ['Hello! Reply with one short sentence about today\'s weather.','Hi, respond in one sentence about my contract.']) assert.equal(profileRequest(prompt).fast,false,prompt);
+});
