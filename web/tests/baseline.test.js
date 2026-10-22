@@ -58,6 +58,15 @@ test('quality checks do not turn numerical answers into proof of execution or re
 const frame = (id, name, data) => `id: ${id}\nevent: ${name}\ndata: ${JSON.stringify(data)}\n\n`;
 const item = { id:'arithmetic', capability:'routing', messages:[{role:'user',content:'17 * 23'}],checks:{exact:'391'} };
 
+test('degraded completions stay visible separately from failed requests and answer checks', async()=>{
+  const request=async()=>new Response(frame(0,'message',{choices:[{delta:{content:'391'}}]})+frame(1,'jarvis.complete',{ok:true,degraded:true}));
+  const row=await runCase(item,{origin:'https://example.test',headers:{},request});
+  assert.equal(row.outcome,'complete');
+  assert.equal(row.degraded,true);
+  assert.equal(summarize([row]).degraded,1);
+  assert.equal(summarize([row]).failures,0);
+});
+
 test('benchmark resumes one run, deduplicates replay, and waits for explicit completion', async () => {
   const calls = [];
   const request = async (url, options) => {

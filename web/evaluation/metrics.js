@@ -21,6 +21,7 @@ export function summarize(rows) {
     median_ms: percentile(complete.map(row => row[key]), .5), p95_ms: percentile(complete.map(row => row[key]), .95) });
   return { samples: rows.length, completed: complete.length,
     failures: rows.length - complete.length,
+    degraded: complete.filter(row => row.degraded).length,
     automated_passes: complete.filter(row => row.quality?.passed).length,
     first_answer: stats('first_answer_ms'), total: stats('total_ms'),
     failure_latency: { n: rows.length - complete.length, p95_ms: percentile(rows.filter(row => row.outcome !== 'complete').map(row => row.total_ms), .95) },

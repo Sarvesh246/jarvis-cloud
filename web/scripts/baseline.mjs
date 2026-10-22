@@ -52,7 +52,10 @@ export async function runCase(item, { origin, headers, request = fetch, timeoutM
         if (typeof content === 'string' && content.trim()) row.first_answer_ms ??= Math.round(performance.now() - began);
         if (typeof content === 'string') answer += content;
         if (answer.length > 2_000_000) throw new Error('answer_limit');
-        if (name === 'jarvis.complete') completed = true;
+        if (name === 'jarvis.complete') {
+          completed = true;
+          if(data?.degraded === true) row.degraded = true;
+        }
       });
       if (!completed) {
         row.retries++;
