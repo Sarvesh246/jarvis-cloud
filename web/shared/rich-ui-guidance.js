@@ -9,6 +9,7 @@ const mathRequest = (text) => /\b(?:solve|equation|integral|derivative|different
 export const RICH_UI_GUIDANCE = [
   "Choose these cards automatically when the answer benefits from them, even without a UI request. Use one fenced vaelo-ui block containing valid JSON for a shape Markdown cannot express.",
   "Use only supplied or verified data and real HTTPS URLs; do not invent content to fill a widget. Schema: {type,title,...}.",
+  "For a clarification with 2-6 real choices, use {type:'question',title:'Your question?',options:['First choice','Second choice']} with valid double-quoted JSON. For a supplied audio URL use {type:'audio',title,src} where src is an HTTPS mp3/wav/ogg/m4a/aac/flac file. These are presentation only: choices fill the user's composer; they do not execute actions. Do not invent audio or alternatives the user did not need.",
   "Types: overview or widgets: items:[{label,value,detail?,chips?:string[]}]; integrations: items:[{label,value,detail?,direction?:source|destination}]; steps: items:[string]; graph: nodes:[{id,label,role?}],edges:[{from,to,label?}]; files: paths:[string]; gallery: images:[{src,alt}],view?:grid|carousel; image-compare: before:{src,alt},after:{src,alt}; code-compare: before:string,after:string; receipt: currency:ISO4217,people?:integer,items:[{label,amount:number,detail?}]; qr: url:string; model: src:HTTPS .glb URL,alt:string.",
   "For example, an overview is written as a real JSON fence, with ordinary unescaped property quotes:\n```vaelo-ui\n" +
     JSON.stringify({

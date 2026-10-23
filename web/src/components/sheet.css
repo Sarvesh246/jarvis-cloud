@@ -37,8 +37,12 @@
   box-shadow: var(--lift-2);
   outline: none;
   transform: translateY(105%);
-  transition: transform var(--dur-2) var(--ease);
+  transition: transform var(--dur-2) var(--ease), height var(--dur-2) var(--ease);
 }
+
+.sheet-content { display: flow-root; min-width: 0; }
+@media(prefers-reduced-motion: reduce) { .sheet { transition: none; } }
+:root[data-motion=reduce] .sheet { transition: none; }
 
 .sheet[data-tall] {
   max-height: 90dvh;

@@ -1,4 +1,5 @@
 import React from "react";
+import { CapabilityBento } from './EverydayUI.jsx';
 import { ArrowRight } from "@phosphor-icons/react";
 import { Mark } from "./Mark.jsx";
 import { firstName, greeting, previewOf, timeLabel } from "../lib/format.js";
@@ -54,6 +55,10 @@ export function Welcome({ name, phase, onPick, recent = [], onOpen, plain = fals
       </h1>
       <p className="welcome-line">What would you like to take care of?</p>
       {dock}
+      <details className="welcome-capabilities" open={!recent.length && !waiting.length || undefined}>
+        <summary>Explore what you can do</summary>
+        <CapabilityBento onPick={onPick} />
+      </details>
       <div className="starter-chips" role="group" aria-label="Start with">
         <span className="starter-chips-label">Start with</span>
         {starters.map((starter) => (

@@ -23,6 +23,7 @@ import { InstallSteps } from "./Onboarding.jsx";
 import { DesktopUpdates } from "./DesktopUpdates.jsx";
 import { Mark } from "./Mark.jsx";
 import "./settings-desk.css";
+import { Segmented, SkeletonCards, EmptyState, UsageMeter } from "./EverydayUI.jsx";
 
 /* Settings for a wide screen: a full page. Sections down the
    left, the chosen one on the right. Appearance shows a live preview, so a
@@ -73,16 +74,7 @@ const Switch = ({ id, label, checked, onChange, disabled }) => (
   <input id={id} className="sd-switch" type="checkbox" role="switch" aria-label={label} checked={checked} disabled={disabled} onChange={(event) => onChange(event.target.checked)} />
 );
 
-const Segment = ({ label, value, options, onChange, disabled }) => (
-  <div className="sd-seg" role="radiogroup" aria-label={label} style={{ "--choices": options.length, "--choice": Math.max(0, options.findIndex(([id]) => id === value)) }}>
-    <span className="sd-seg-indicator" aria-hidden="true" />
-    {options.map(([id, text]) => (
-      <button key={id} type="button" role="radio" aria-checked={value === id} disabled={disabled} onClick={() => onChange(id)}>
-        {text}
-      </button>
-    ))}
-  </div>
-);
+const Segment = props => <Segmented {...props} />;
 
 const Head = ({ title, line }) => (
   <header className="sd-head">
@@ -229,8 +221,8 @@ function Memory({ request }) {
   const [draft, setDraft] = useState("");
   const [editing, setEditing] = useState(null);
   const { problem, busy, run } = memory;
-  if (memory.status === "loading") return <Group title="Memory"><p className="sd-note" role="status">Loading what Vaelo has noted…</p></Group>;
-  if (!memory.data) return <Group title="Memory"><p className="sd-note" data-tone="problem" role="alert">{memory.error || "Memory is unavailable right now."}</p><button type="button" className="sd-button" onClick={memory.load}>Try again</button></Group>;
+  if (memory.status === "loading") return <Group title="Memory"><SkeletonCards label="Loading memory" /></Group>;
+  if (!memory.data) return <Group title="Memory"><EmptyState error title="Memory is unavailable" action="Try again" onAction={memory.load}>{memory.error}</EmptyState></Group>;
   const { enabled, items } = memory.data;
   return (
     <Group title="Memory">
@@ -377,7 +369,7 @@ function DeviceList({ request }) {
     catch (error) { setProblem(error.message); }
     finally { setBusy(""); }
   };
-  if (devices.status === "loading") return <p className="sd-note" role="status">Looking for signed-in devices…</p>;
+  if (devices.status === "loading") return <SkeletonCards label="Loading signed-in devices" />;
   if (!devices.data) return <><p className="sd-note" data-tone="problem" role="alert">{devices.error || "Devices are unavailable right now."}</p><button type="button" className="sd-button" onClick={devices.load}>Try again</button></>;
   if (!devices.data.available) return <p className="sd-note">This Vaelo doesn’t keep a list of devices.</p>;
   const { current, devices: list } = devices.data;
@@ -451,7 +443,7 @@ function History({ request, onRetention }) {
   const save = async (days, confirm) => {
     if (await history.run({ days, ...(confirm && { confirm: true }) })) setPending(null);
   };
-  if (history.status === "loading") return <Group title="Conversation history"><p className="sd-note" role="status">Loading…</p></Group>;
+  if (history.status === "loading") return <Group title="Conversation history"><SkeletonCards label="Loading conversation history" /></Group>;
   if (!history.data) return <Group title="Conversation history"><p className="sd-note" data-tone="problem" role="alert">{history.error || "History settings are unavailable right now."}</p><button type="button" className="sd-button" onClick={history.load}>Try again</button></Group>;
   const days = history.data.days;
   return (

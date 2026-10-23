@@ -36,6 +36,7 @@ import { toNumber } from "../../lib/table.js";
 import { percentageShares } from "../../lib/output-redesign.js";
 import { copyText, DESKTOP, saveDesktopBytes } from "../../lib/desktop.js";
 import { imageDownload } from '../../lib/image-download.js';
+import { AudioCard, QuestionCard, SkeletonCards } from '../EverydayUI.jsx';
 import { download, downloadBlob } from '../../lib/file-download.js';
 
 function useCopy() {
@@ -1477,14 +1478,17 @@ const TITLES = {
   qr: "Open on another device",
   model: "3D preview",
   integrations: "Connections",
+  audio: 'Audio',
+  question: 'Choose a direction',
 };
-export function RichUI({ source, enabled, stateKey, pending = false }) {
+export function RichUI({ source, enabled, stateKey, pending = false, onAnswer }) {
   const data = useMemo(() => parseRichUI(source), [source]),
     [original, setOriginal] = useState(false);
   if (pending)
     return (
       <div className="rich-pending" role="status" aria-busy="true">
         Preparing this view…
+        <SkeletonCards label="Preparing this view" />
       </div>
     );
   if (!data || !enabled) return <pre className="block-plain">{source}</pre>;
@@ -1540,6 +1544,8 @@ export function RichUI({ source, enabled, stateKey, pending = false }) {
           {data.type === "qr" && <QRLink url={data.url} />}
           {data.type === "model" && <Model data={data} />}
           {data.type === "integrations" && <Integrations data={data} />}
+          {data.type === 'audio' && <AudioCard src={data.src} title={data.title} />}
+          {data.type === 'question' && <QuestionCard data={data} onAnswer={onAnswer} framed />}
         </div>
       )}
     </section>

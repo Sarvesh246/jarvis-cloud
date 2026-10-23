@@ -3,6 +3,7 @@ import { ArrowRight, MagnifyingGlass, Trash, X } from "@phosphor-icons/react";
 import { collectWork, currentContent, searchWork, withoutCode } from "../lib/library.js";
 import { timeLabel } from "../lib/format.js";
 import "./saved-work.css";
+import { FileBadge, EmptyState, Segmented } from "./EverydayUI.jsx";
 
 /* Everything Vaelo has made that is worth keeping, from every conversation,
    each with a way back to the reply it came from. A list on the left, what
@@ -18,6 +19,7 @@ const KIND_NAME = { document: "Document", table: "Table", code: "Code" };
 
 const first = (text, max) => {
   const clean = withoutCode(String(text))
+    .replace(/^\s*\|?[\s:|-]+\|?\s*$/gm, ' ')
     .replace(/[#>*_`|[\]]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
@@ -116,13 +118,7 @@ export function SavedWork({ chats, onOpen, onReply, onDelete, onClose }) {
       </header>
 
       <div className="saved-bar">
-        <div role="tablist" aria-label="Kind" className="saved-tabs">
-          {KINDS.map(([id, label]) => (
-            <button key={id} role="tab" aria-selected={kind === id} onClick={() => setKind(id)} disabled={id !== "all" && !counts[id] && kind !== id}>
-              {label} <span>{counts[id]}</span>
-            </button>
-          ))}
-        </div>
+        <Segmented label="Kind of saved work" value={kind} options={KINDS.map(([id, label]) => [id, `${label} (${counts[id]})`])} onChange={setKind} />
         {projects.length > 0 && (
           <div className="saved-projects" role="group" aria-label="Project">
             {projects.map((title) => (
@@ -141,7 +137,7 @@ export function SavedWork({ chats, onOpen, onReply, onDelete, onClose }) {
             {shown.map((entry) => (
               <li key={entry.id}>
                 <button className="saved-row" aria-current={entry.id === current?.id || undefined} onClick={() => setPicked(entry.id)}>
-                  <span className="saved-kind">{KIND_NAME[entry.kind]}</span>
+                  <FileBadge name={entry.kind === "code" ? `snippet.${entry.item.language || "txt"}` : entry.kind === "table" ? "table.csv" : "document.md"} kind={entry.kind} />
                   <span className="saved-row-text">
                     <span className="saved-row-title">{entry.title}</span>
                     <span className="saved-row-from">
@@ -157,11 +153,9 @@ export function SavedWork({ chats, onOpen, onReply, onDelete, onClose }) {
           {current && <Preview entry={current} chats={chats} onOpen={onOpen} onReply={onReply} onDelete={onDelete} />}
         </div>
       ) : (
-        <p className="saved-empty">
-          {all.length
-            ? "Nothing matches that. Try a shorter word."
-            : "Documents, longer code and tables Vaelo makes will gather here, so the final version is never lost in a conversation."}
-        </p>
+        <EmptyState title={all.length ? 'No matching work' : 'Your work has a home here'} action={all.length ? 'Clear filters' : 'Back to conversation'} onAction={all.length ? () => { setQuery(''); setKind('all'); setProject(''); } : onClose}>
+          {all.length ? 'Try a shorter search or another kind of output.' : 'Documents, code and tables gather here automatically. Open any item to read, export or return to its conversation.'}
+        </EmptyState>
       )}
     </section>
   );

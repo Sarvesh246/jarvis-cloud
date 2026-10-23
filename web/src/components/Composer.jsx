@@ -32,6 +32,8 @@ import "./composer.css";
 import { ActivityIsland } from "./UITools.jsx";
 import { DESKTOP } from "../lib/desktop.js";
 import { DesktopRecognition } from "../lib/dictation.js";
+import { PasteCard, VoiceOrb } from './EverydayUI.jsx';
+import { LONG_PASTE, pasteName } from '../lib/everyday-ui.js';
 
 export const STYLES = [
   { id: "balanced", label: "Balanced", note: "Vaelo’s usual voice." },
@@ -262,6 +264,7 @@ function useVoice(listening, weights = BAR_WEIGHTS) {
           let sum = 0;
           for (let i = 2; i < 48; i++) sum += data[i];
           const level = Math.min(1, sum / (46 * 150));
+          bars.current?.closest('.composer')?.style.setProperty('--voice-level', level.toFixed(3));
           bars.current?.childNodes.forEach((bar, i) => {
             bar.style.setProperty("--level", (0.18 + level * (weights[i] ?? 0.6) * 0.82).toFixed(3));
           });
@@ -595,6 +598,7 @@ export const Composer = forwardRef(function Composer(
     onStop,
     onFiles,
     onRemoveFile,
+    onUpdateFile,
     onOptions,
     onDictating,
     conversationId,
@@ -625,6 +629,10 @@ export const Composer = forwardRef(function Composer(
   const ready = draft.trim() || attachments.some((file) => file.state === "ready");
   const style = STYLES.find((s) => s.id === options.style);
   const role = ROLES.find((r) => r.id === options.role);
+  const pastes = onUpdateFile ? attachments.filter(file => file.state === 'ready' && file.name?.startsWith('Pasted — ') && typeof file.body === 'string') : [];
+  const visibleAttachments = attachments.filter(file => !pastes.includes(file));
+  const suggestions = !draft.trim() && !busy && !dictation.listening && attachments.some(file => file.state === 'ready')
+    ? [['Summarize', 'Summarize the attached files and highlight the main points.'], ['Find next steps', 'Read the attached files and identify the next actions, with references to the relevant sections.'], ...(attachments.filter(file => file.state === 'ready').length > 1 ? [['Compare files', 'Compare the attached files. Show the important similarities and differences.']] : [])] : [];
   /* On a phone, dictation takes the place of the box: what is being said
      shows large above one row of controls. What was already written stays
      out of it, and cancelling gives that back. */
@@ -689,6 +697,7 @@ export const Composer = forwardRef(function Composer(
 
       {panel && (
         <div className="dictation" role="group" aria-label="Dictation">
+          <VoiceOrb active={dictation.listening} heard={voice.heard} time={voice.time} />
           <p className="dictation-text" aria-live="polite">
             {spoken || "Listening…"}
           </p>
@@ -732,6 +741,7 @@ export const Composer = forwardRef(function Composer(
       )}
 
       <div className="composer-main" hidden={panel || undefined}>
+        {pastes.map(file => <PasteCard key={file.id} file={file} onUpdate={onUpdateFile} onRemove={onRemoveFile} limit={MESSAGE_LIMIT - 2000} />)}
         {phone ? (
           (options.research || role || workContext || attachments.length > 0) && (
             <div className="composer-chips">
@@ -762,12 +772,13 @@ export const Composer = forwardRef(function Composer(
                   </button>
                 </span>
               )}
-              <AttachmentList items={attachments} onRemove={onRemoveFile} />
+              <AttachmentList items={visibleAttachments} onRemove={onRemoveFile} />
             </div>
           )
         ) : (
-          <AttachmentList items={attachments} onRemove={onRemoveFile} />
+          <AttachmentList items={visibleAttachments} onRemove={onRemoveFile} />
         )}
+        {suggestions.length > 0 && <div className="composer-suggestions" role="group" aria-label="Suggestions for your attachments">{suggestions.map(([label, text]) => <button key={label} type="button" onClick={() => { onChange(text); textarea.current?.focus(); }}>{label}</button>)}</div>}
         <textarea
           dir="auto"
           ref={textarea}
@@ -775,6 +786,12 @@ export const Composer = forwardRef(function Composer(
           onChange={(event) => onChange(event.target.value)}
           onPaste={(event) => {
             const files = [...(event.clipboardData?.files || [])];
+            const text = event.clipboardData?.getData('text/plain') || '';
+            if (!files.length && text.length >= LONG_PASTE && text.length <= MESSAGE_LIMIT - 2000 && attachments.length < 8) {
+              event.preventDefault();
+              onFiles([new File([text], `Pasted — ${pasteName(text)}.txt`, { type: 'text/plain' })]);
+              return;
+            }
             if (files.length && !event.clipboardData.getData("text")) {
               event.preventDefault();
               onFiles(files);
@@ -918,6 +935,7 @@ export const Composer = forwardRef(function Composer(
           </div>
           {!phone && dictation.listening && (
             <span className="composer-live" role="status">
+              <VoiceOrb active heard={voice.heard} time={voice.time} />
               <span
                 className="voice-bars"
                 ref={voice.bars}

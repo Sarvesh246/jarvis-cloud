@@ -16,7 +16,8 @@ export function Chart({ columns, rows, plan, stackedDefault = false }) {
   const data = useMemo(() => chartData(columns, rows, column, plan.label), [columns, rows, column, plan.label]);
   const canLine = temporalColumn(columns[plan.label], data.points);
   const [chosenKind, setKind] = useState(null);
-  const kind = canLine ? chosenKind || 'line' : 'bar';
+  const canTiles = data.finite.length >= 2 && data.finite.length <= 100 && data.finite.every(point => point.value >= 0) && data.finite.some(point => point.value > 0) && Number.isFinite(data.finite.reduce((sum, point) => sum + point.value, 0));
+  const kind = chosenKind && (chosenKind !== 'line' || canLine) && (!['tiles', 'heatmap'].includes(chosenKind) || canTiles) ? chosenKind : canLine ? 'line' : 'bar';
   const [expanded, setExpanded] = useState(false);
   const [reading, setReading] = useState(null);
   const stacked = useMemo(() => {
@@ -33,13 +34,14 @@ export function Chart({ columns, rows, plan, stackedDefault = false }) {
       {plan.values.length > 1 && <label className="chart-column">Measure <select aria-label="Column to chart" value={column} onChange={e => setColumn(Number(e.target.value))}>
         {plan.values.map(i => <option key={i} value={i}>{columns[i]}</option>)}
       </select></label>}
-      {canLine && <div className="chart-pick" role="group" aria-label="Chart type">
-        {['line', 'bar'].map(type => <button key={type} className="block-tool" aria-pressed={kind === type} onClick={() => setKind(type)}>{type === 'line' ? 'Line' : 'Bars'}</button>)}
+      {(canLine || canTiles) && <div className="chart-pick" role="group" aria-label="Chart type">
+        {[...(canLine ? ['line'] : []), 'bar', ...(canTiles ? ['tiles', 'heatmap'] : [])].map(type => <button key={type} className="block-tool" aria-pressed={kind === type} onClick={() => { setKind(type); setStackedView(false); }}>{({line:'Line',bar:'Bars',tiles:'Tiles',heatmap:'Heatmap'})[type]}</button>)}
       </div>}
       {stacked && <button className="block-tool" aria-pressed={stackedView} onClick={() => setStackedView(v => !v)}>{stackedView ? "Single series" : "Stacked breakdown"}</button>}
     </div>
     <p className="chart-summary">{data.summary}</p>
-    {stackedView && stacked ? <SeriesChart data={stacked} /> : data.finite.length > 0 && (kind === 'line' ? <LineChart key={column} points={data.points} label={columns[column]} /> : <>
+    {canLine && <Sparkline points={data.points} />}
+    {stackedView && stacked ? <SeriesChart data={stacked} /> : ['tiles', 'heatmap'].includes(kind) ? <DataMosaic points={data.finite} kind={kind} /> : data.finite.length > 0 && (kind === 'line' ? <LineChart key={column} points={data.points} label={columns[column]} /> : <>
       <div className="chart-viewport" role="region" aria-label={`${columns[column]} bar chart. ${data.signed ? 'Negative values extend left of zero.' : 'Bars start at zero.'}`} tabIndex={0}>
         <div className="chart-axis"><span>{data.signed ? `−${compactNumber(scale)}${unit}` : '0'}</span>{data.signed && <span>0</span>}<span>{data.signed ? '+' : ''}{compactNumber(scale)}{unit}</span></div>
         <ol className="chart-bars" onPointerLeave={() => setReading(null)}>
@@ -56,6 +58,24 @@ export function Chart({ columns, rows, plan, stackedDefault = false }) {
       {data.points.length > COLLAPSED_ROWS && <div className="chart-footer"><span className="local-note">Showing {shown.length} of {data.points.length} · scale uses every row</span><button className="block-tool" aria-expanded={expanded} onClick={() => setExpanded(value => !value)}>{expanded ? `Show first ${COLLAPSED_ROWS}` : `Show all ${data.points.length}`}</button></div>}
     </>)}
   </div>;
+}
+
+function Sparkline({ points }) {
+  const geometry = lineGeometry(points, {left:2,right:298,top:2,bottom:38});
+  // Separate polylines preserve gaps rather than connecting missing values.
+  const segments = []; let current = [];
+  for (const point of geometry.points) {
+    if (!Number.isFinite(point.y)) { if (current.length) segments.push(current); current = []; }
+    else current.push(`${point.x},${point.y}`);
+  }
+  if (current.length) segments.push(current);
+  return <svg className="chart-sparkline" viewBox="0 0 300 40" preserveAspectRatio="none" aria-hidden="true">{segments.map((segment, i) => <polyline key={i} points={segment.join(' ')} fill="none" stroke="currentColor" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />)}</svg>;
+}
+function DataMosaic({ points, kind }) {
+  const [chosen, setChosen] = useState(null);
+  const max = Math.max(...points.map(point => point.value), 1);
+  const total = points.reduce((sum, point) => sum + point.value, 0);
+  return <><div className="data-mosaic" data-kind={kind} role="group" aria-label={kind === 'heatmap' ? 'Value heatmap' : 'Proportional value tiles'}>{points.map((point, index) => <button type="button" key={point.index ?? index} aria-pressed={chosen === index} onClick={() => setChosen(index)} style={{'--share':kind === 'heatmap' ? 1 : Math.max(.01, point.value / total * 100), '--intensity': .08 + point.value / max * .48}}><span>{point.label}</span><strong>{point.text}</strong></button>)}</div><p className="chart-reading" aria-live="polite">{chosen === null ? (kind === 'heatmap' ? 'Darker cells have higher values. Select a cell to inspect it.' : 'Tile width follows each supplied value. Zero values keep a readable minimum size.') : `${points[chosen]?.label}: ${points[chosen]?.text}`}</p></>;
 }
 
 const WIDE = { view: { width: 640, height: 182 }, box: { left: 46, right: 628, top: 14, bottom: 150 }, labels: 6 };

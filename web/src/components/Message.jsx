@@ -40,6 +40,8 @@ import { buzz } from "../lib/haptics.js";
 import { Sheet } from "./Sheet.jsx";
 import "./message.css";
 import { HoldButton } from "./HoldButton.jsx";
+import { FileBadge, ContextMeter, UsageMeter, VersionTree } from './EverydayUI.jsx';
+import { measuredUsage } from '../lib/everyday-ui.js';
 
 /* Seconds since `from`, ticking once a second while `live`. */
 function useNow(live) {
@@ -99,10 +101,11 @@ function Steps({ items, now }) {
           <li key={item.id} data-state={item.done ? "done" : "running"} title={item.label || tool}>
             <span className="steps-mark" aria-hidden="true" />
             <Icon size={15} aria-hidden="true" className="steps-icon" />
-            <span className="steps-text">
-              {item.done ? info.past : info.now}
-              {detail && <span className="steps-detail"> · {detail}</span>}
-            </span>
+            <details className="steps-text tool-call-card">
+              <summary>{item.done ? info.past : info.now}{detail && <span className="steps-detail"> · {detail.length > 90 ? `${detail.slice(0, 90)}…` : detail}</span>}</summary>
+              <p>{detail || item.label || info.past}</p>
+              <small>{item.done ? 'Finished' : 'In progress'}{item.done && item.endedAt && item.startedAt ? ` · ${seconds(item.endedAt - item.startedAt)}` : ''}</small>
+            </details>
             <span className="sr-only">{item.done ? ", done" : ", in progress"}</span>
             {item.done && item.endedAt && item.startedAt && (
               <span className="steps-time">{seconds(item.endedAt - item.startedAt)}</span>
@@ -141,6 +144,8 @@ function Context({ context, usage }) {
     usage && (usage.total_tokens || (usage.prompt_tokens || 0) + (usage.completion_tokens || 0));
   return (
     <>
+      <ContextMeter context={context} />
+      <UsageMeter usage={usage} />
       <p className="context-line">
         <span className="label">Drew on</span> {parts.join(" · ")}
         {mode && <span className="context-mode"> — {mode}</span>}
@@ -152,7 +157,7 @@ function Context({ context, usage }) {
           read at once
         </p>
       )}
-      {tokens > 0 && (
+      {tokens > 0 && !measuredUsage(usage) && (
         <p className="context-line">
           <span className="label">Used</span> {tokens.toLocaleString()} tokens
           {usage.completion_tokens ? ` (${usage.completion_tokens.toLocaleString()} written)` : ""}
@@ -470,7 +475,7 @@ export function AttachmentList({ items, onRemove }) {
           ) : file.kind === "image" ? (
             <ImageSquare size={16} aria-hidden="true" />
           ) : (
-            <File size={16} aria-hidden="true" />
+            <FileBadge name={file.name} kind={file.kind} />
           )}
           <span className="attachment-name">{file.name}</span>
           <span className="attachment-meta">
@@ -756,7 +761,7 @@ function MessageView({ message, requestText = "", requestImages, fresh, busy, li
                 {mine ? (
                   shown
                 ) : (
-                  <Rendered requestText={requestText} attached={requestImages} stateKey={message.id} content={message.content} sources={sources} onOpen={open} live={live} />
+                  <Rendered requestText={requestText} attached={requestImages} stateKey={message.id} content={message.content} sources={sources} onOpen={open} onAnswer={canAct ? text => act('answer', text) : undefined} live={live} />
                 )}
                 {streaming && <span className="caret" aria-hidden="true" />}
               </div>
@@ -866,6 +871,7 @@ function MessageView({ message, requestText = "", requestImages, fresh, busy, li
           </div>
         )}
 
+        {!mine && !editing && !live && versions && <VersionTree versions={versions} current={message.version} onSelect={index => act('version', index)} disabled={busy} />}
         {!phone && !editing && !live && (shown || versions) && (
           <div className="message-actions">
             {versions && (

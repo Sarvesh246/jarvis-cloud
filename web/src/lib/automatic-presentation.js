@@ -10,6 +10,7 @@ import { wantsPlainReply, inferListPresentation, requestIntent } from "./adaptiv
 import { explicitRelationshipGraph } from "./output-redesign.js";
 import { headedTimeline, headedComparison, rankedFigures, periodFigures } from "./shape-recovery.js";
 import { seriesTable, suppliedFigures, suppliedDates } from "../../shared/supplied-data.js";
+import { answerChoices } from './everyday-ui.js';
 
 // Presentation recovery runs on settled answers from every provider. It only
 // restructures existing data; it never calls a model or executes reply code.
@@ -408,8 +409,13 @@ export function automaticPresentation(content = "", request = "", attached = [])
   if (series) return series;
   // Already valid rich output has its own renderer; never add a duplicate card.
   if (whole || blocks.length) return null;
-  const intent = richPresentationFor(request);
   const forceTable = /\b(?:in|as|into) (?:a |the )?table\b/i.test(request);
+  const question = !forceTable && !fences.length && answerChoices(content);
+  if (question) {
+    const { markdown, ...block } = question;
+    return { block, markdown };
+  }
+  const intent = richPresentationFor(request);
   if(forceTable) {
     const rows=pairs(content);
     return rows && !fences.length && !/^\s*\|/m.test(content) ? {markdown:'| Item | Value |\n|---|---|\n'+rows.map(x=>'| '+x.label+' | '+x.value.replace(/\|/g,'\\|')+' |').join('\n')+'\n\n'+retainedLinks(content)} : null;
@@ -491,6 +497,7 @@ export function automaticPresentation(content = "", request = "", attached = [])
   if (
     images.length &&
     (intent === "gallery" ||
+      (images.length >= 2 && content.includes('![')) ||
       /\b(?:photos|images|pictures|inspiration)\b/i.test(request))
   ) {
     const lens = /\b(?:inspect|closer|detail|zoom)\b/i.test(request);
@@ -701,6 +708,14 @@ export function automaticPresentation(content = "", request = "", attached = [])
         ...native(inferred.kind, inferred.source),
         markdown: retainedLinks(content),
       };
+  }
+  // Ordinary labelled summaries can earn cards without a magic prompt.
+  // Leave citations, code, and positional prose alone: moving them into a
+  // different place would lose their context or the link they support.
+  if (!/https?:\/\/|`|^#{1,6}\s/m.test(content)) {
+    const summary = boldLed(content);
+    if (summary && summary.items.length >= 3 && summary.items.length <= 6 && new Set(summary.items.map(item => item.label.toLowerCase())).size === summary.items.length && summary.items.every(item => item.value.length <= 160 && !/[\d$€£₹%]/.test(item.value) && !/^(?:mon|tues|wednes|thurs|fri|satur|sun)day/i.test(item.label)) && !/\b(?:above|below|following|preceding)\b/i.test(content))
+      return { block: checked({ type: 'widgets', title: 'Key details', items: summary.items }), markdown: summary.rest };
   }
   return null;
 }

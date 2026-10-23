@@ -19,6 +19,7 @@ import { currentContent, docTitle, isLongReply, parseTables } from "../lib/libra
 import { DocumentWork } from "./DocumentWork.jsx";
 import { requestForReply } from "../lib/adaptive-ui.js";
 import "./workspace.css";
+import { SourceRail } from "./SourceRail.jsx";
 import { usePhone } from "../lib/use-phone.js";
 
 /* The workspace opens beside the conversation only when something deserves
@@ -92,16 +93,9 @@ function CodeView({ item }) {
 function SourcesView({ message, focus }) {
   const sources = useSources(message?.content);
   const [filter, setFilter] = useState("all");
-  const list = useRef(null);
   const kinds = SOURCE_KINDS.filter((kind) => sources.some((s) => s.kind === kind.kind));
   const shown = filter === "all" ? sources : sources.filter((s) => s.kind === filter);
-
-  useEffect(() => {
-    if (!focus) return;
-    const el = list.current?.querySelector(`[data-id="${CSS.escape(focus)}"]`);
-    el?.scrollIntoView({ block: "center" });
-    el?.querySelector("a")?.focus({ preventScroll: true });
-  }, [focus]);
+  useEffect(() => setFilter('all'), [focus, message?.id]);
 
   if (!sources.length) return <p className="ws-empty">This reply didn’t link any sources.</p>;
   return (
@@ -127,24 +121,7 @@ function SourcesView({ message, focus }) {
           ))}
         </div>
       )}
-      <ol className="ws-sources" ref={list}>
-        {shown.map((source) => (
-          <li key={source.id} data-id={source.id} data-focus={source.id === focus || undefined}>
-            <span className="ws-source-index">{source.index}</span>
-            <div>
-              <a href={source.url} target="_blank" rel="noopener noreferrer">
-                {source.title || source.domain}
-                <ArrowSquareOut size={13} aria-hidden="true" />
-              </a>
-              <span className="ws-source-meta">
-                <SourceIcon kind={source.kind} size={13} />
-                {source.domain} · {kindLabel(source.kind)}
-              </span>
-              {source.context && <p className="ws-source-context">“{source.context}”</p>}
-            </div>
-          </li>
-        ))}
-      </ol>
+      <SourceRail sources={shown} focus={focus} />
       <p className="ws-note">
         Sources can be incomplete, out of date or wrong. Open the ones that matter and check
         them.

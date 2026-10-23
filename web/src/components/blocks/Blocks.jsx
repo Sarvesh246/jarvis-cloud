@@ -62,6 +62,8 @@ import '@fontsource/jetbrains-mono/400.css';
 import '@fontsource/jetbrains-mono/500.css';
 import { copyText } from "../../lib/desktop.js";
 import { download } from "../../lib/file-download.js";
+import { AudioCard } from '../EverydayUI.jsx';
+import { audioLinks } from '../../lib/everyday-ui.js';
 export { download } from "../../lib/file-download.js";
 
 /* A reply is rendered as typed blocks: prose, code, tables, sources. Each
@@ -133,7 +135,7 @@ function languageOf(children) {
    In a mapped document each block carries where it sits in the Markdown
    (data-src), so a selection can be traced back to the words behind it. */
 function CodeBlock({ children, node, "data-src": src }) {
-  const { content, open, live, presentation, stateKey, requestText } = useContext(BlockContext);
+  const { content, open, live, presentation, stateKey, requestText, onAnswer } = useContext(BlockContext);
   const language = languageOf(children);
   const source = textOf(children);
   const grid = !wantsSourceReply(requestText) && !live ? gridOverview(source, language) || treePaths(source, language) : null;
@@ -142,7 +144,7 @@ function CodeBlock({ children, node, "data-src": src }) {
   const settled = fenceClosed(content, node?.position?.start?.offset, node?.position?.end?.offset);
   const pending = live && !settled && pendingRichPayload(source, language, requestText);
   if (payload || pending || (language === "vaelo-ui" && !wantsSourceReply(requestText))) {
-    return <div data-src={src}><RichUI key={blockKey(stateKey || "temporary", node?.position?.start?.offset, textOf(children))} source={textOf(children)} enabled={settled && presentation !== "minimal"} pending={live && !settled && presentation !== 'minimal'} stateKey={stateKey} /></div>;
+    return <div data-src={src}><RichUI key={blockKey(stateKey || "temporary", node?.position?.start?.offset, textOf(children))} source={textOf(children)} enabled={settled && presentation !== "minimal"} pending={live && !settled && presentation !== 'minimal'} stateKey={stateKey} onAnswer={onAnswer} /></div>;
   }
   if (language === "vaelo-work") {
     const proposal = readWorkProposal(textOf(children));
@@ -987,11 +989,12 @@ export function useSources(content) {
   return useMemo(() => collectSources(content || ""), [content]);
 }
 
-export function Rendered({ content, sources, onOpen, mapped = false, live = false, stateKey, requestText = "", attached }) {
+export function Rendered({ content, sources = [], onOpen, onAnswer, mapped = false, live = false, stateKey, requestText = "", attached }) {
   content = cleanAnswer(content);
   const preference = useContext(PresentationContext);
   const presentation = wantsPlainReply(requestText) ? "minimal" : preference;
   const mathy = useMemo(() => hasMath(content), [content]);
+  const audio = useMemo(() => !mapped && !live && presentation !== 'minimal' ? audioLinks(content) : [], [mapped, live, presentation, content]);
   const weather = useMemo(() => !mapped && !live && presentation !== 'minimal' ? weatherForecast(content, requestText) : null, [mapped, live, presentation, content, requestText]);
   const automaticView = useMemo(() => !weather && !mapped && !live && !mathy && presentation !== 'minimal' ? automaticPresentation(content, requestText, attached) : null, [weather, mapped, live, mathy, presentation, requestText, content, attached]);
   const shaped = automaticView?.markdown ?? weatherMarkdown(content);
@@ -1004,6 +1007,7 @@ export function Rendered({ content, sources, onOpen, mapped = false, live = fals
       sources,
       byKey: new Map(sources.map((source) => [source.id, source])),
       open: onOpen,
+      onAnswer,
       presentation,
       content: displayContent,
       live,
@@ -1012,7 +1016,7 @@ export function Rendered({ content, sources, onOpen, mapped = false, live = fals
       interactive: !mapped && !wantsPlainReply(requestText),
       automatic: !mapped && presentation !== "minimal" && !live,
     }),
-    [sources, onOpen, presentation, displayContent, live, stateKey, mapped, requestText],
+    [sources, onOpen, onAnswer, presentation, displayContent, live, stateKey, mapped, requestText],
   );
   const markdown = <Markdown remarkPlugins={mapped ? mappedRemarkPlugins : remarkPlugins} rehypePlugins={mapped ? mappedPlugins : rehypeMath} components={components} urlTransform={urlTransform}>{displayContent}</Markdown>;
   return (
@@ -1020,11 +1024,12 @@ export function Rendered({ content, sources, onOpen, mapped = false, live = fals
       <BlockBoundary content={content}>
         {weather && <Weather forecast={weather} />}
         {weather?.notes && <Markdown remarkPlugins={remarkPlugins} components={components} urlTransform={urlTransform}>{weather.notes}</Markdown>}
-        {automaticView?.block && <RichUI source={JSON.stringify(automaticView.block)} enabled stateKey={stateKey} />}
+        {automaticView?.block && <RichUI source={JSON.stringify(automaticView.block)} enabled stateKey={stateKey} onAnswer={onAnswer} />}
         {automaticView?.language === 'metrics' && <Metrics source={automaticView.source} settled />}
         {automaticView?.language === 'timeline' && <Timeline source={automaticView.source} settled />}
         {automaticView?.explorer && <NumberExplorer columns={automaticView.explorer.columns} rows={automaticView.explorer.rows} initialFactor={automaticView.explorer.factor} />}
         {weather ? <details className="weather-details"><summary>Forecast details and sources</summary>{markdown}</details> : markdown}
+        {audio.map(item => <AudioCard key={item.src} {...item} />)}
         {pending && <p className="math-pending" role="status">{pending === "math" ? "Typesetting…" : "Building the table…"}</p>}
       </BlockBoundary>
     </BlockContext.Provider>

@@ -2221,6 +2221,7 @@ export function App() {
       return send({ edit: { id, text } });
     },
     version: (id, index) => selectVersion(id, index),
+    answer: (id, text) => { setDraft(current => current.trim() ? `${current.trimEnd()}\n\n${String(text)}` : String(text)); textarea.current?.focus(); },
     branch: (id) => branchFrom(id),
     carry: () => carryOver(),
     signin: () => location.reload(),
@@ -2419,6 +2420,7 @@ export function App() {
               options={options}
               length={length}
               onChange={setDraft}
+              onUpdateFile={(id, body) => setAttachments(current => current.map(file => file.id === id && file.state === 'ready' ? { ...file, body, chars: body.length, size: new TextEncoder().encode(body).length } : file))}
               onSend={() => send()}
               onStop={stopReply}
               onFiles={addFiles}

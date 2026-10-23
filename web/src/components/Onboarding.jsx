@@ -5,6 +5,7 @@ import { greeting } from "../lib/format.js";
 import { notifySupport } from "../lib/preferences.js";
 import { buzz } from "../lib/haptics.js";
 import "./onboarding.css";
+import { EngravedCard } from './EverydayUI.jsx';
 
 /* The first minute on a phone: sign in, keep Vaelo on the home screen, and
    say when a reply is ready. Sign-in is its own screen (SignIn.jsx, the same
@@ -100,7 +101,7 @@ export function OnboardingFrame({ index, total, children, actions }) {
 export function WelcomeStep({ children }) {
   return (
     <>
-      <Mark size={84} state="idle" />
+      <EngravedCard />
       <h1 className="onb-greeting">
         {greeting()}.
         <br />

@@ -16,6 +16,7 @@ export function Sheet({ open, onClose, label, tall = false, children }) {
   const [mounted, setMounted] = useState(open);
   const [shown, setShown] = useState(false);
   const panel = useRef(null);
+  const content = useRef(null);
   const last = useRef(children);
   const close = useRef(onClose);
   const pull = useRef(null);
@@ -39,6 +40,21 @@ export function Sheet({ open, onClose, label, tall = false, children }) {
   useEffect(() => {
     if (!open || !mounted || !panel.current) return;
     return containSheetFocus(panel.current, () => close.current());
+  }, [open, mounted]);
+
+  useEffect(() => {
+    if (!open || !mounted || !content.current || typeof ResizeObserver === 'undefined') return;
+    const measure = () => {
+      if (!panel.current || !content.current) return;
+      const body = content.current.parentElement;
+      const style = getComputedStyle(body);
+      const padding = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
+      panel.current.style.height = `${Math.ceil(content.current.getBoundingClientRect().height + padding + 28)}px`;
+    };
+    const observer = new ResizeObserver(measure);
+    observer.observe(content.current); measure();
+    addEventListener('resize', measure);
+    return () => { observer.disconnect(); removeEventListener('resize', measure); };
   }, [open, mounted]);
 
   const grip = {
@@ -89,7 +105,7 @@ export function Sheet({ open, onClose, label, tall = false, children }) {
         <div className="sheet-handle" {...grip}>
           <span aria-hidden="true" />
         </div>
-        <div className="sheet-body">{last.current}</div>
+        <div className="sheet-body"><div ref={content} className="sheet-content">{last.current}</div></div>
       </div>
     </div>,
     document.body,

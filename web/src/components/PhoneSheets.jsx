@@ -16,6 +16,7 @@ import {
 } from "@phosphor-icons/react";
 import { Sheet } from "./Sheet.jsx";
 import { useSources } from "./blocks/Blocks.jsx";
+import { SourceRail } from "./SourceRail.jsx";
 import { kindLabel } from "../lib/sources.js";
 
 /* The conversation as plain text, for sharing or saving a copy */
@@ -82,29 +83,7 @@ function SourcesBody({ message, focus }) {
           <p className="sh-note">
             Sources can be incomplete, out of date or wrong. Open the ones that matter and check them.
           </p>
-          {sources.map((source) => {
-            const Icon = TYPE_ICONS[source.kind] || Globe;
-            return (
-              <a
-                key={source.id}
-                className="sh-source"
-                data-focus={source.id === focus || undefined}
-                href={source.url}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <span className="sh-source-n">{source.index}</span>
-                <span className="sh-source-text">
-                  <span className="sh-source-title">{source.title || source.domain}</span>
-                  <span className="sh-source-meta">
-                    <Icon size={15} aria-hidden="true" />
-                    {kindLabel(source.kind)} · {source.domain}
-                  </span>
-                </span>
-                <ArrowUpRight size={18} className="sh-source-out" aria-hidden="true" />
-              </a>
-            );
-          })}
+          <SourceRail sources={sources} focus={focus} />
         </>
       ) : (
         <p className="sh-empty">This reply didn’t link any sources.</p>

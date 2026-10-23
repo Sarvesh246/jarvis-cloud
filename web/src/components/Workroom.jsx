@@ -14,6 +14,7 @@ import './workroom-sheet.css';
 import './workroom-desk.css';
 import { workspaceIcon } from './workspace-icons.js';
 import { DESKTOP, saveDesktopFile } from '../lib/desktop.js';
+import { FileBadge, SkeletonCards, EmptyState } from './EverydayUI.jsx';
 import { usePhone } from '../lib/use-phone.js';
 
 const SCOPES = [['personal', 'Personal'], ['work', 'Work'], ['client', 'A client']];
@@ -69,7 +70,7 @@ function DocumentSlot({ slot, docs, disabled, onFiles, onPaste, onRemove, onPrev
     </div>
     {slot.hint && <p className="work-help">{slot.hint}</p>}
     {docs.map(doc => <div className="work-doc" key={doc.id}>
-      <FileText size={20} weight="light" aria-hidden="true" />
+      <FileBadge name={doc.name} />
       <span className="work-doc-name"><strong>{doc.name}</strong><span>{documentSize(doc.chars ?? doc.text?.length ?? 0)}{typeof doc.text === 'string' ? ' · not saved yet' : ''}</span></span>
       <button type="button" className="work-text-button" aria-expanded={preview?.id === doc.id} onClick={() => onPreview(doc)}>{preview?.id === doc.id ? 'Hide preview' : 'Preview'}</button>
       <button type="button" className="icon-button" disabled={disabled} aria-label={`Remove ${doc.name}`} onClick={() => onRemove(doc.id)}><Trash size={18} weight="light" /></button>
@@ -333,7 +334,7 @@ export function Workroom({ open, onClose, session, onStart, initialDraft = null,
     </div>
     {draft&&missing.length>0&&<div className="work-error" role="alert"><p>Please answer these first:</p>
       <ul className="work-missing">{missing.map((item,i)=><li key={i}>{item}</li>)}</ul></div>}
-    {problem&&<div className="work-error" role="alert"><p>{problem}</p>{conflict&&<div className="work-inline-actions">
+    {problem&&<div className="work-error" role="alert"><p>{problem}</p>{!conflict && <button type="button" className="block-tool" disabled={mutationBusy || offline} onClick={refresh}>Reload saved work</button>}{conflict&&<div className="work-inline-actions">
       <button disabled={mutationBusy||offline} onClick={refresh}>Show me the newest</button>
       <button disabled={mutationBusy||offline} onClick={()=>mutate('save',{separate:true})}>Keep mine as a copy</button>
       {saved&&saved.revision!==base&&<button disabled={mutationBusy} onClick={()=>choose(saved)}>Use the newest</button>}
@@ -343,6 +344,7 @@ export function Workroom({ open, onClose, session, onStart, initialDraft = null,
     </div></div>}
     <input ref={file} type="file" accept="application/json,.json" hidden onChange={importFile} />
     <div ref={scrollArea} className="workroom-scroll" key={draft ? `task-${draft.id}` : 'browse'}>
+      {busy === 'loading' && !records.length && <SkeletonCards label="Getting your work" />}
       {!draft ? <>
         <div className="work-home-nav">
           <div className="work-tabs" role="group" aria-label="Choose what to see">

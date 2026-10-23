@@ -74,6 +74,7 @@ export function CommandPalette({
     }
   }, [open]);
   useEffect(() => setSelected(0), [query]);
+  useEffect(() => setSelected(index => Math.min(index, Math.max(0, results.length - 1))), [results.length]);
   useEffect(() => {
     dialog.current
       ?.querySelector(`[data-command-index="${selected}"]`)

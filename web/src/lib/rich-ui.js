@@ -14,6 +14,8 @@ export const RICH_TYPES = new Set([
   "qr",
   "model",
   "integrations",
+  "audio",
+  "question",
 ]);
 const RICH_ALIASES = { bento: 'overview', 'bento-grid': 'overview', summary: 'overview', 'widget-stack': 'widgets', 'file-tree': 'files', 'image-gallery': 'gallery', 'image-comparison': 'image-compare', 'code-comparison': 'code-compare', diff: 'code-compare', network: 'graph', 'qr-code': 'qr', 'model-viewer': 'model' };
 export function safeMedia(value, kind = "image") {
@@ -53,6 +55,12 @@ export function parseRichUI(source, expectedType) {
       data[key].length <= max;
     if (data.title !== undefined && !text(data.title)) return null;
     switch (data.type) {
+      case 'audio':
+        if (!safeMedia(data.src) || !/\.(?:mp3|wav|ogg|m4a|aac|flac)$/i.test(new URL(data.src).pathname)) return null;
+        break;
+      case 'question':
+        if (!items('options', 6) || data.options.length < 2 || !data.options.every(x => text(x) && x.trim() && x.length <= 180) || new Set(data.options).size !== data.options.length) return null;
+        break;
       case "overview":
       case "widgets":
       case "integrations":

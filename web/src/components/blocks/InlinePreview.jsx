@@ -18,6 +18,7 @@ export function InlinePreview({ source, language, src }) {
       data-src={src}
       data-phone={phone || undefined}
     >
+      <figcaption className="inline-preview-title"><strong>{language === 'html' ? 'Web artifact' : 'Graphic artifact'}</strong><small>Preview · source · export</small></figcaption>
       <div className="after-tabs" role="group" aria-label="Preview view">
         {["preview", "code", "split"].map((x) => (
           <button key={x} aria-pressed={view === x} onClick={() => setView(x)}>

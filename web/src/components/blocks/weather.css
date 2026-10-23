@@ -80,3 +80,14 @@
   .weather-detailed footer span:last-child { margin-left: 0; }
 }
 @media (max-width: 420px) { .weather-detailed { padding: .85rem; } .weather-bento > header { flex-wrap: wrap; gap: .35rem; } }
+
+/* Small condition cues animate only during deliberate inspection. The sky
+   stays calm while reading a transcript, and reduced motion remains static. */
+@keyframes weather-rain-cue { from { transform: translateY(-.6px); opacity: .6; } to { transform: translateY(.6px); opacity: 1; } }
+@keyframes weather-cloud-cue { from { transform: translateX(-.4px); } to { transform: translateX(.4px); } }
+@media (prefers-reduced-motion: no-preference) {
+  .weather-detailed:hover .weather-glyph .fill-weather-ink-rain,
+  .weather-detailed:focus-within .weather-glyph .fill-weather-ink-rain { animation: weather-rain-cue 2s ease-in-out infinite alternate; }
+  .weather-detailed:hover .weather-glyph .fill-weather-ink-cloud { animation: weather-cloud-cue 4s ease-in-out infinite alternate; }
+}
+:root[data-motion=reduce] .weather-glyph path { animation: none !important; }
