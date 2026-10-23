@@ -79,8 +79,27 @@
 .composer:not([data-phone]) .attachment-meta { grid-row: 2; align-self: start; min-width: 0; overflow: hidden; text-overflow: ellipsis; font: 14px/1.4 var(--font-ui); }
 .composer .attachment-remove { grid-column: 3; grid-row: 1 / 3; min-width: 36px; min-height: 36px; }
 .saved-row { border: 1px solid var(--hairline); border-radius: var(--r-md); margin-bottom: 10px; background: var(--surface); gap: 14px; padding: 16px; }
-.saved-preview { position: relative; border-radius: var(--r-lg); background: var(--surface); padding: var(--card-pad); }
-.saved-preview::before { content: ''; position: absolute; width: 36px; height: 7px; top: 0; left: 24px; background: var(--canvas); border: 1px solid var(--hairline); border-top: 0; border-radius: 0 0 5px 5px; }
+.saved-preview {
+  position: relative;
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  padding: var(--card-pad);
+  /* Cut through the whole surface, including its border, so the page shows
+     through the notch even over a textured or differently coloured canvas. */
+  -webkit-mask-image: radial-gradient(ellipse 40px 24px at 76px 0, transparent calc(100% - 1px), #000 100%);
+  mask-image: radial-gradient(ellipse 40px 24px at 76px 0, transparent calc(100% - 1px), #000 100%);
+}
+.saved-preview::before {
+  content: '';
+  position: absolute;
+  width: 80px;
+  height: 48px;
+  top: -25px;
+  left: 35px;
+  border: 1px solid var(--hairline-strong);
+  border-radius: 50%;
+  pointer-events: none;
+}
 .work-entry { border-radius: var(--r-md); }
 .work-entries { gap: var(--card-gap); }
 .work-doc > .file-badge { margin-right: 8px; }
