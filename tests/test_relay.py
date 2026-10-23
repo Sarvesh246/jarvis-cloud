@@ -248,6 +248,24 @@ class RelayTests(unittest.TestCase):
                     self.assertNotIn('I did not execute',wire)
                     self.assertIn('python_tests_failed',wire)
 
+    def test_standalone_python_uses_coding_route_and_independent_repair_with_verified_publication(self):
+        bad='```python\ndef f(items):\n    items.sort()\n    return items\nassert f([2,1])==[1,2]\n```'
+        good='```python\ndef f(items): return sorted(items)\nassert f([2,1])==[1,2]\n```'
+        hermes,relay,port=self.boot([])
+        provider,targets=self.fast_provider(relay,[[chunk(bad,'stop'),'data: [DONE]'],[chunk(good,'stop'),'data: [DONE]']])
+        with mock.patch.dict('os.environ',{'FREELLMAPI_URL':'https://router.example/v1','FREELLMAPI_API_KEY':'test','OPENROUTER_API_KEY':'or-test'},clear=True), mock.patch.object(relay_module,'verify_python',side_effect=[{'status':'failed'},{'status':'passed','receipt':{'runtime':'python'}}]) as checked:
+            self.call(port,'POST','/vaelo/runs',{'id':RUN,'messages':[
+                {'role':'system','content':'Never access a network. Later corrections override earlier ones.'},
+                {'role':'user','content':'Write a Python function f(items). Do not mutate the input. Include tests.'}]})
+            run=self.finished(relay)
+        self.assertEqual(run.outcome,'complete')
+        self.assertEqual(hermes.requests,[])
+        self.assertEqual(checked.call_count,2)
+        self.assertEqual(targets,[('router.example',None),('openrouter.ai',None)])
+        self.assertEqual(provider.requests[0]['headers']['X-FreeLLM-Task-Type'],'code')
+        self.assertNotIn('tools',provider.requests[0]['body'])
+        self.assertIn('jarvis.verification',b''.join(run.frames).decode())
+
     def test_memory_directives_are_server_filtered_and_permission_controls_note_events(self):
         for allowed in (False, True):
             with self.subTest(allowed=allowed):

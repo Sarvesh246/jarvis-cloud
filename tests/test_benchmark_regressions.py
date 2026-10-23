@@ -9,7 +9,7 @@ from cloud.admission import Admission
 from cloud.memory_output import NoteFilter, split_notes
 from cloud.runtime_contract import fail_closed_vision
 from cloud.relay import Run
-from cloud.code_answer import returned_python
+from cloud.code_answer import returned_python, standalone_python
 
 
 class BenchmarkRegressions(unittest.TestCase):
@@ -80,6 +80,16 @@ class BenchmarkRegressions(unittest.TestCase):
         scope={};exec(copied['source'],scope);exec(copied['tests'],scope)
         uncalled=returned_python('```python\ndef f(x): return x\ndef test_case(fixture):\n    assert f(fixture)==fixture\n```')
         self.assertIn('No runnable assertion tests',uncalled['tests'])
+
+    def test_only_self_contained_verified_python_deliverables_use_direct_generation(self):
+        text='Write a Python function f(items). Include tests. Do not save memories.'
+        messages=[{'role':'user','content':text}];contract=self.contract(text)
+        self.assertTrue(standalone_python(text,messages,{},contract))
+        for suffix in (' Use the previous answer.',' Use the attached file.',' Use the numpy library.',' Read https://example.com/code.'):
+            self.assertFalse(standalone_python(text+suffix,[{'role':'user','content':text+suffix}],{},contract))
+        self.assertFalse(standalone_python(text,[{'role':'assistant','content':'Earlier code'},*messages],{},contract))
+        self.assertFalse(standalone_python(text,messages,{'freshness':'query'},contract))
+        self.assertFalse(standalone_python(text,messages,{},dict(contract,required_tools=['python_verify'])))
 
     def test_supplied_option_grammar_computes_every_judgment_without_a_model_tool_roundtrip(self):
         for price in (900, 1200, 1201):

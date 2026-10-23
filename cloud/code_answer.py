@@ -3,6 +3,20 @@ import ast
 import re
 
 
+def standalone_python(text,messages,body,contract):
+    """A small, self-contained code deliverable that can be verified locally."""
+    users=[message for message in messages if message.get('role')=='user']
+    return bool(contract.get('verify_returned_python') and not contract.get('required_tools')
+        and not contract.get('images') and not body.get('freshness') and not body.get('research')
+        and len(users)==1 and isinstance(users[0].get('content'),str)
+        and not any(message.get('role')=='assistant' for message in messages)
+        and len(text)<=1800 and re.search(r'\b(?:write|implement|create|generate)\b',text,re.I)
+        and re.search(r'\b(?:function|code|algorithm|class)\b',text,re.I)
+        and not re.search(r'https?://|\b(?:workspace|saved|previous|earlier|attached|uploaded|filesystem|network|package|library|dependencies|install)\b',text,re.I)
+        and not re.search(r'Attached file:|Selected Vaelo workspace:',
+            '\n'.join(str(message.get('content','')) for message in messages),re.I))
+
+
 def returned_python(answer, preserve_input=False):
     blocks=re.findall(r'```(?:python|py)?\s*\n([\s\S]*?)\n```',answer,re.I)
     code='\n\n'.join(blocks) if blocks else answer
