@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { PHONE } from "../lib/use-phone.js";
+import { buzz } from "../lib/haptics.js";
 import "./toast.css";
 
 /* A plain notice is read at a glance and goes; one with an action (Undo)
@@ -11,79 +12,135 @@ const AWAY = 40;
 
 /* A toast keeps its own time. A gilt line along its foot shortens as that
    time runs out, so an Undo says how long it will wait. Resting a pointer
-   on it, focusing it or holding it pauses the time; swiping it down puts
-   it away early. */
+   on it, focusing it or holding it pauses the time.
+
+   It can be dragged down and away. The drag writes straight to the element
+   (no re-render per move) so it tracks the finger frame for frame: down
+   follows 1:1, up pulls against a rubber band. On release the finger's
+   speed is projected forward, so a flick goes however short it was, a slow
+   drag goes only past a third of the toast, and anything less springs back.
+   Whichever way it leaves, it slides the rest of the way off the screen at
+   the speed the finger left it. */
+const FLICK = 0.35; /* px per ms */
+const PROJECT = 160; /* ms of travel the release speed is worth */
+const SEND = 0.4; /* share of its own height a slow drag must pass */
+const RUBBER = 22; /* px the toast can be pulled upward, at most */
+
+const SPRING = "cubic-bezier(0.32, 1.35, 0.5, 1)";
+const SWEEP = "cubic-bezier(0.3, 0.5, 0.6, 1)";
+const SINK = "cubic-bezier(0.55, 0, 0.85, 0.45)";
+
 function Slip({ toast, onDismiss, gone = false }) {
   const life = toast.duration || (!toast.action ? NOTICE_LIFE : matchMedia(PHONE).matches ? PHONE_ACTION_LIFE : ACTION_LIFE);
   const [held, setHeld] = useState(0);
-  const [pull, setPull] = useState(0);
-  const [going, setLeaving] = useState(false);
-  const leaving = going || gone;
+  const [leaving, setLeaving] = useState(false);
+  const el = useRef(null);
   const left = useRef(life);
   const since = useRef(0);
   const drag = useRef(null);
+  const exit = useRef(0);
   const done = useRef(onDismiss);
   done.current = onDismiss;
   const paused = held > 0;
-  const exit = useRef(0);
+  const hold = (on) => setHeld((n) => Math.max(0, n + (on ? 1 : -1)));
+
   useEffect(() => () => clearTimeout(exit.current), []);
 
-  /* Every way out, the timer, Undo and a swipe, takes the same slide-down
-     and fade before the toast is removed */
-  function away() {
-    if (exit.current) return;
+  const shift = (y, ms = 0, curve = SPRING) => {
+    const node = el.current;
+    if (!node) return;
+    node.style.transition = ms ? `transform ${ms}ms ${curve}` : "none";
+    node.style.transform = `translate3d(0, ${y}px, 0)`;
+  };
+
+  /* Slide the rest of the way off the bottom of the screen. `v` is the speed
+     the finger left it at (px/ms); 0 means no finger, just time. */
+  function away(from = 0, v = 0) {
+    const node = el.current;
+    if (!node || exit.current) return;
     setLeaving(true);
-    exit.current = setTimeout(() => done.current(), 300);
+    const base = node.getBoundingClientRect().top - from;
+    const target = window.innerHeight - base + 24;
+    const ms = v ? Math.min(340, Math.max(160, (target - from) / v)) : 340;
+    node.style.animation = "none";
+    shift(from);
+    void node.offsetHeight;
+    shift(target, ms, v ? SWEEP : SINK);
+    exit.current = setTimeout(() => done.current(), ms + 20);
   }
+
+  useEffect(() => {
+    if (gone) away();
+  }, [gone]);
 
   useEffect(() => {
     if (paused || leaving) return;
     since.current = performance.now();
-    const timer = setTimeout(away, left.current);
+    const timer = setTimeout(() => away(), left.current);
     return () => {
       clearTimeout(timer);
       left.current -= performance.now() - since.current;
     };
   }, [paused, leaving]);
 
-
-  const hold = (on) => setHeld((n) => Math.max(0, n + (on ? 1 : -1)));
+  const release = (event, cancelled) => {
+    const g = drag.current;
+    if (!g) return;
+    drag.current = null;
+    hold(false);
+    el.current.removeAttribute("data-dragging");
+    const y = g.y;
+    const v = g.v;
+    const height = el.current.offsetHeight;
+    const sends = !cancelled && (y > 0 ? y + v * PROJECT > height * SEND || v > FLICK : false);
+    if (sends) {
+      buzz();
+      away(y, Math.max(v, 0.9));
+    } else {
+      shift(0, 420, SPRING);
+    }
+  };
 
   return (
     <div
+      ref={el}
       className="toast"
       data-paused={paused || undefined}
-      data-dragging={drag.current ? true : undefined}
       data-leaving={leaving || undefined}
-      data-gone={gone || undefined}
-      style={{ "--life": `${life}ms`, "--pull": `${pull}px`, "--fade": 1 - Math.min(pull, 100) / 140 }}
+      style={{ "--life": `${life}ms` }}
       onPointerEnter={(event) => event.pointerType === "mouse" && hold(true)}
       onPointerLeave={(event) => event.pointerType === "mouse" && hold(false)}
       onFocus={() => hold(true)}
       onBlur={() => hold(false)}
       onPointerDown={(event) => {
-        if (leaving || event.target.closest("button")) return;
-        drag.current = { y: event.clientY, at: performance.now() };
-        event.currentTarget.setPointerCapture(event.pointerId);
+        if (leaving || drag.current || event.button > 0 || event.target.closest("button")) return;
+        /* Catching it mid-spring: pick up from where it visibly is */
+        const node = event.currentTarget;
+        const now = new DOMMatrixReadOnly(getComputedStyle(node).transform).m42 || 0;
+        node.style.animation = "none";
+        node.setAttribute("data-dragging", "");
+        drag.current = { y0: event.clientY - now, y: now, v: 0, lastY: event.clientY, lastT: performance.now() };
+        shift(now);
+        node.setPointerCapture(event.pointerId);
         hold(true);
       }}
       onPointerMove={(event) => {
-        if (drag.current) setPull(Math.max(0, event.clientY - drag.current.y));
+        const g = drag.current;
+        if (!g) return;
+        const raw = event.clientY - g.y0;
+        g.y = raw >= 0 ? raw : -Math.min(RUBBER, Math.sqrt(-raw) * 2.5);
+        shift(g.y);
+        /* speed, smoothed over recent moves so one jittery sample can't decide it */
+        const t = performance.now();
+        const dt = t - g.lastT;
+        if (dt > 0) {
+          g.v = g.v * 0.6 + ((event.clientY - g.lastY) / dt) * 0.4;
+          g.lastY = event.clientY;
+          g.lastT = t;
+        }
       }}
-      onPointerUp={(event) => {
-        if (!drag.current) return;
-        const distance = Math.max(0, event.clientY - drag.current.y);
-        const speed = distance / Math.max(1, performance.now() - drag.current.at);
-        drag.current = null;
-        hold(false);
-        if (distance > AWAY || speed > 0.5) away();
-        else setPull(0);
-      }}
-      onPointerCancel={() => {
-        drag.current = null;
-        hold(false);
-        setPull(0);
-      }}
+      onPointerUp={(event) => release(event, false)}
+      onPointerCancel={(event) => release(event, true)}
     >
       <span>{toast.text}</span>
       {toast.action && (
@@ -123,22 +180,25 @@ export function Toast({ toast, toasts, onDismiss }) {
       removeEventListener("resize", place);
     };
   }, []);
-  /* A toast replaced by a newer one slides away rather than blinking out */
-  const list = toasts || (toast ? [toast] : []);
+  /* A toast replaced by a newer one slides away rather than blinking out.
+     Worked out during render so there is no frame without it. */
+  const list = toast ? [toast] : toasts || [];
+  const key = list.map((item) => item.id).join();
   const [ghosts, setGhosts] = useState([]);
-  const shown = useRef(list);
+  const [last, setLast] = useState({ key, list });
+  if (last.key !== key) {
+    const lost = last.list.filter((item) => !list.some((now) => now.id === item.id));
+    setLast({ key, list });
+    if (lost.length && list.length) setGhosts((current) => [...current, ...lost]);
+  }
   useEffect(() => {
-    const now = new Set(list.map((item) => item.id));
-    const lost = shown.current.filter((item) => !now.has(item.id));
-    shown.current = list;
-    if (!lost.length || !list.length) return;
-    setGhosts((current) => [...current, ...lost]);
-    const timer = setTimeout(() => setGhosts((current) => current.filter((item) => !lost.includes(item))), 320);
+    if (!ghosts.length) return;
+    const timer = setTimeout(() => setGhosts([]), 420);
     return () => clearTimeout(timer);
-  }, [list.map((item) => item.id).join()]);
+  }, [ghosts]);
   return (
     <div className="toast-region" role="status" aria-live="polite" ref={region}>
-      {ghosts.map(item => <Slip key={item.id} toast={item} gone onDismiss={() => {}} />)}
+      {ghosts.map(item => <Slip key={`gone-${item.id}`} toast={item} gone onDismiss={() => {}} />)}
       {list.map(item => <Slip key={item.id} toast={item} onDismiss={() => onDismiss(item.id)} />)}
     </div>
   );

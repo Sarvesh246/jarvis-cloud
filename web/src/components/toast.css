@@ -33,26 +33,24 @@
   position: relative;
   overflow: hidden;
   touch-action: none;
-  transform: translateY(var(--pull, 0));
-  opacity: var(--fade, 1);
+  will-change: transform;
   /* backwards only, so the drag and the leave can move it afterwards */
-  animation: arrive var(--dur-2) var(--ease) backwards;
-  transition:
-    transform var(--dur-2) var(--ease),
-    opacity var(--dur-2) var(--ease);
+  animation: toast-in 460ms cubic-bezier(0.32, 0.72, 0, 1) backwards;
+}
+
+/* In from below the screen's edge, on the curve iOS sheets use */
+@keyframes toast-in {
+  from {
+    transform: translate3d(0, calc(100% + 3rem), 0);
+  }
 }
 
 .toast[data-dragging] {
-  transition: none;
+  cursor: grabbing;
 }
 
 .toast[data-leaving] {
-  transform: translateY(calc(var(--pull, 0px) + 1.5rem)) scale(0.96);
-  opacity: 0;
   pointer-events: none;
-  transition:
-    transform 280ms var(--ease),
-    opacity 240ms var(--ease);
 }
 
 /* The toast it made way for takes its place at once */
@@ -129,5 +127,5 @@
   background: var(--gilt-wash);
 }
 
-.toast-region { display: grid; gap: .5rem; width: min(32rem, calc(100vw - 2rem)); max-height: 55dvh; overflow-y: auto; }
+.toast-region { display: grid; gap: .5rem; width: min(32rem, calc(100vw - 2rem)); }
 .toast { flex-shrink: 0; }
