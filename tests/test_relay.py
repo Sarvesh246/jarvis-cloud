@@ -192,6 +192,24 @@ class FakeHermes:
 
 
 class RelayTests(unittest.TestCase):
+    def test_native_pool_failure_retains_pixels_through_checked_gateway_vision(self):
+        for readable in (True,False):
+            with self.subTest(readable=readable):
+                answer='{"red":2,"blue":1}' if readable else '{"red":null,"blue":null}'
+                hermes,relay,port=self.boot([[chunk(answer,'stop'),'data: [DONE]']]*2)
+                source=[{'type':'text','text':'Use only this image. Return ONLY JSON with red, blue.'},
+                        {'type':'image_url','image_url':{'url':'data:image/png;base64,pixels'}}]
+                env={'FREELLMAPI_URL':'https://router.example/v1','FREELLMAPI_API_KEY':'fixture',
+                     'OPENROUTER_API_KEY':'fixture','VAELO_VISION_CACHE_WRITABLE':'1'}
+                with mock.patch.dict('os.environ',env,clear=True),mock.patch.object(relay,'open_fast',return_value=None) as native:
+                    self.start(port,content=source)
+                    run=self.finished(relay)
+                self.assertEqual(native.call_count,2)
+                self.assertEqual(run.outcome,'complete' if readable else 'error')
+                for request in hermes.requests:
+                    parts=next(m['content'] for m in request['body']['messages'] if isinstance(m.get('content'),list))
+                    self.assertEqual(parts[1],source[1])
+                self.assertEqual(run.trace.counts['vision_gateway_fallbacks'],1)
     def test_native_image_object_contract_reaches_provider_without_forcing_arrays(self):
         for prompt, object_only in [('Return ONLY JSON with red, blue.',True),('Return ONLY JSON as an array.',False)]:
             with self.subTest(prompt=prompt):

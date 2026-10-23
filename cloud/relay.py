@@ -794,7 +794,8 @@ class Relay:
         if run.owner.startswith(GUEST_OWNER):
             run.route = "guest"
             return self.open_guest(run, messages, body)
-        if body.get('source_vision') or body.get('vision_repair'):
+        image_route = body.get('source_vision') or body.get('vision_repair')
+        if image_route and not run.trace.counts.get('vision_gateway_fallbacks'):
             if not self.admission.acquire(run):
                 return None,None if run.stopped else {'code':'queue_full','status':429,'message':'Vaelo’s reply queue is full or the wait expired. Please try again shortly.'}
             # Send original pixels directly to a modality-aware router; never reuse
@@ -811,9 +812,20 @@ class Relay:
                 response=self.open_fast(run,messages,{**body,'vision_repair':True,
                     'fast':'Inspect the actual attached pixels and answer the original image-only request. Preserve the requested output format and every requested field. Do not infer absent data or simulate tools.',
                     'no_weather_tools':True})
-            return (response, None) if response is not None else (None, {
-                'code':'image_processing_unavailable',
-                'message':'The attached image could not be analyzed. Please retry or attach a clearer image.'})
+            if response is not None:
+                return response,None
+            if run.stopped:
+                return None,None
+            if os.environ.get('VAELO_VISION_CACHE_WRITABLE') != '1':
+                return None, {'code':'image_processing_unavailable',
+                    'message':'The attached image could not be analyzed. Please retry or attach a clearer image.'}
+            # The gateway's configured multimodal provider chain can remain
+            # healthy when the direct pools time out or exhaust their quota.
+            # Runtime preparation is checked and auxiliary vision fails closed;
+            # forward the original image parts, never a text-only substitute.
+            run.trace.counts['vision_gateway_fallbacks']=1
+        if image_route and run.trace.counts.get('vision_gateway_fallbacks'):
+            body={**body,'fast':None}
         # Continuing text from a successful direct route needs no agent/tool bootstrap.
         # Empty replies still escalate to Hermes, as do direct-route failures.
         if body.get("fast") and (not recovering or body.get("continue_fast")):
