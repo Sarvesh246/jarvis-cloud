@@ -70,6 +70,11 @@ def _run_worker(payload,token):
             completed='\nVAELO_VERIFIED_' + token in text
             status='unavailable' if result.returncode==78 else 'passed' if result.returncode==0 and completed else 'failed'
             text=text.replace('\nVAELO_VERIFIED_'+token,'')
+            if result.returncode == -31:
+                text = ('The sandbox blocked a forbidden operating-system operation. '
+                        'Use only in-memory assertions and preloaded standard-library modules; '
+                        'no third-party imports, file/source inspection, test discovery on disk, '
+                        'terminal queries, processes or network access. No successful verification was recorded.\n') + text
             return {"status": status,
                     'tests_completed':completed,
                     "exit_code": result.returncode, "output": text,

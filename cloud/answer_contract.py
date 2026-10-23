@@ -127,6 +127,10 @@ def contract_guidance(contract):
         parts.append('Ensure every test actually runs: call assertion test functions or use unittest.main(exit=False). '
                      'Test unchanged INPUT against a deep pre-call copy, not by comparing a merged OUTPUT with an unmerged input. '
                      'Use independent expected outputs for nested and touching intervals. For immutable inputs, use sorted copies and copy mutable result elements.')
+        if contract.get('verify_returned_python'):
+            parts.append('The execution environment permits only in-memory standard-library Python. Prefer plain executable assert statements. '
+                         'Do not import pytest or other third-party test frameworks, inspect source files, discover tests on disk, '
+                         'query a terminal, open files, create processes or use the network. Standard unittest and copy are available.')
     if contract.get('result_count'):
         parts.append(f'Return only the {contract["result_count"]} requested result items. Without another specified format, use one result per line. Omit calculations and preamble.')
     if contract.get('required_tools'):
