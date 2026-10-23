@@ -1,9 +1,15 @@
 import unittest
 from fractions import Fraction
-from cloud.bounded_math import polynomial, solve_item, worked_math, display, sequence_sum
+from cloud.bounded_math import polynomial, solve_item, worked_math, display, sequence_sum, outstanding_balance
 
 
 class WorkedMathTests(unittest.TestCase):
+    def test_pending_payments_do_not_reduce_outstanding_supplied_balances(self):
+        for owed,settled,pending,expected in [('312.50','103.25','40.00','209.25'),('500','500','80','0'),('842','321','200','521')]:
+            text=f'Invoice: {owed} dollars owed; {settled} dollars settled; {pending} dollars pending. Pending is not settled. Reply only with the outstanding amount in dollars as a number.'
+            self.assertEqual(outstanding_balance([{'role':'user','content':text}]),expected)
+            self.assertIsNone(outstanding_balance([{'role':'user','content':text.replace('dollars settled','euros settled')}]))
+            self.assertIsNone(outstanding_balance([{'role':'user','content':text+' Include tax and fees.'}]))
     def test_sequence_formulas_match_independently_enumerated_terms(self):
         for n in (0,1,2,7,31,58,99):
             for kind,start in [('odd',1),('even',2)]:

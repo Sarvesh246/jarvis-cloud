@@ -26,6 +26,22 @@ def sequence_sum(messages):
     return str(count*count if kind=='odd' else count*(count+1) if kind=='even' else count*(count+1)//2)
 
 
+def outstanding_balance(messages):
+    turns=[m for m in messages if m.get('role')!='system']
+    if len(turns)!=1 or not isinstance(turns[0].get('content'),str):
+        return None
+    text=turns[0]['content'].split('\n\n[Vaelo request:')[0].strip()
+    amount=r'(\d{1,12}(?:\.\d{1,8})?)'
+    match=re.fullmatch(rf'(?:Fictional )?(?:refund|invoice|payment|balance): {amount} (?P<currency>dollars?|USD|euros?) owed; {amount} (?P=currency) settled; {amount} (?P=currency) pending\. Pending is not settled\. Reply only with the outstanding amount in (?P=currency) as a number\.',text,re.I)
+    if not match:
+        return None
+    owed,_,settled,pending=match.groups()
+    owed,settled,pending=map(Fraction,(owed,settled,pending))
+    if settled>owed:
+        return None
+    return display(owed-settled)
+
+
 def display(value):
     value = Fraction(value)
     if value.denominator == 1:

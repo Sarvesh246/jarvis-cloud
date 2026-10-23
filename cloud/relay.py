@@ -41,10 +41,10 @@ except ModuleNotFoundError:
     from cloud.memory_output import NoteFilter, split_notes
 try:
     from calculation import direct_calculation
-    from bounded_math import worked_math, sequence_sum
+    from bounded_math import worked_math, sequence_sum, outstanding_balance
 except ModuleNotFoundError:
     from cloud.calculation import direct_calculation
-    from cloud.bounded_math import worked_math, sequence_sum
+    from cloud.bounded_math import worked_math, sequence_sum, outstanding_balance
 try:
     from answer_contract import contract_for, constrained, validate_answer, repair_instruction, request_text, contract_guidance, supplied_literal
 except ModuleNotFoundError:
@@ -1235,7 +1235,7 @@ class Relay:
                 return run.finish('complete')
             exact=direct_calculation(messages,body.get('tier','normal'))
             if exact is None:
-                exact=worked_math(messages) or sequence_sum(messages)
+                exact=worked_math(messages) or sequence_sum(messages) or outstanding_balance(messages)
             if exact is not None and not validate_answer(exact,seen['contract'])[1]:
                 run.route='calculator'
                 progress={'tool':'calculate','toolCallId':'exact_arithmetic','status':'running','label':'Checking the calculation'}
