@@ -3,6 +3,19 @@ from cloud.answer_contract import contract_for, validate_answer, constrained, re
 
 
 class AnswerContractTests(unittest.TestCase):
+    def test_field_descriptions_do_not_erase_the_required_object_fields(self):
+        contract=self.contract('Return ONLY JSON with units and revenue, using numeric values.')
+        self.assertEqual(contract['required_keys'],['units','revenue'])
+        self.assertIn('required_json_fields',validate_answer('[{"units":4,"revenue":8}]',contract)[1])
+        self.assertFalse(validate_answer('{"units":4,"revenue":8}',contract)[1])
+
+    def test_conditional_unknown_keeps_known_answers_and_rejects_verbose_refusal(self):
+        contract=self.contract('What is the absent fact? Reply only UNKNOWN if it cannot be determined.')
+        self.assertTrue(constrained(contract))
+        self.assertIn('unknown_only',validate_answer("I don't have this information. Please provide it.",contract)[1])
+        self.assertEqual(validate_answer('unknown',contract),('UNKNOWN',[]))
+        self.assertFalse(validate_answer('The supplied total is 12.',contract)[1])
+        self.assertFalse(self.contract('Explain this code.\n```python\n# Reply only UNKNOWN if data is absent\n```')['unknown_only'])
     def test_repairs_keep_the_original_task_without_unrelated_tool_or_code_requirements(self):
         image=repair_instruction(['raw_json','required_json_fields'])
         self.assertIn('No Markdown fence',image)

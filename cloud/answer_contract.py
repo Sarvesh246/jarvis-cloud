@@ -47,6 +47,7 @@ def contract_for(messages, tools_available=True):
             if not required:
                 candidate=re.split(r'[.!?]',candidate,1)[0]
                 candidate=re.sub(r'\s*\([^)]*\)', '', candidate)
+                candidate=re.sub(r',\s*(?:using|use|with|where|each|all|as)\s+.*$', '', candidate, flags=re.I)
                 candidate=re.sub(r'^(?:these\s+)?(?:exact\s+)?(?:fields\s*)?[: ]*','',candidate,flags=re.I)
                 names=re.split(r'\s*,\s*|\s+and\s+',candidate)
                 if 1<=len(names)<=24 and all(re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]{0,63}',name) for name in names):
@@ -58,6 +59,7 @@ def contract_for(messages, tools_available=True):
                       re.search(r'\b(?:include|provide|show|supply|return|with)\s+(?:runnable\s+|unit\s+|the\s+|assertion\s+)?tests\b', text, re.I))
     result_count = re.search(r'\b(?:give|return|provide|reply with)\s+(?:only|just)\s+(?:(?:those|these|the)\s+)?(one|two|three|four|five|six|seven|eight|nine|ten|[1-9]\d?)\s+(?:results|answers)\b', text, re.I)
     return {'json': bool(ONLY_JSON.search(text)), 'limits': list(dict.fromkeys(limits))[:8],'required_keys':required,
+            'unknown_only':bool(re.search(r'''\b(?:reply|return|respond|answer)\s+(?:with\s+)?(?:only|just)\s+["'`]?UNKNOWN["'`]?\s+if\b''',text,re.I)),
             'exact_keys': bool(re.search(r'\b(?:exact(?:ly)?|only)\s+(?:these\s+)?(?:fields|keys)\b|\bthese exact fields\b',text,re.I)),
             'python_tests': code_tests,
             'preserve_input': code_tests and bool(re.search(r'\bdo not mutate (?:the )?input\b|\bnonmutation\b',text,re.I)),
@@ -71,12 +73,14 @@ def contract_for(messages, tools_available=True):
 
 
 def constrained(contract):
-    return bool(contract.get('json') or contract.get('limits') or contract.get('required_tools') or contract.get('python_tests') or contract.get('result_count') or contract.get('images'))
+    return bool(contract.get('json') or contract.get('limits') or contract.get('required_tools') or contract.get('python_tests') or contract.get('result_count') or contract.get('images') or contract.get('unknown_only'))
 
 
 def contract_guidance(contract):
     """Generate model guidance from the same requirements the validator uses."""
     parts = []
+    if contract.get('unknown_only'):
+        parts.append('If the requested fact cannot be determined from the supplied evidence, return exactly UNKNOWN, with no explanation or follow-up. If it can be determined, answer normally from that evidence.')
     if contract.get('json'):
         parts.append('Return raw valid JSON only, without Markdown fences or surrounding commentary.')
         if contract.get('required_keys'):
@@ -103,6 +107,11 @@ def contract_guidance(contract):
 def validate_answer(text, contract, executed_tools=()):
     result = text.strip()
     errors = []
+    if contract.get('unknown_only'):
+        if result.upper() == 'UNKNOWN':
+            result='UNKNOWN'
+        elif re.match(r'''(?:I\s+(?:don['’]t|do not|can['’]t|cannot|have no|am unable)\b|(?:unknown|undetermined|not (?:known|provided|available|enough information))\b|(?:it|this|that)\s+(?:cannot|can['’]t)\s+be\s+determined\b)''',result,re.I):
+            errors.append('unknown_only')
     if contract.get('images') and re.search(
             r"\b(?:I (?:don['’]t|do not|can['’]t|cannot) (?:see|access|view|read|find)|no|missing)\s+(?:an?\s+|the\s+|any\s+)?(?:attached\s+)?images?\b|\bimage (?:is|was) not attached\b",
             result,re.I):
@@ -173,6 +182,8 @@ def validate_answer(text, contract, executed_tools=()):
 
 def repair_instruction(errors):
     guidance=[]
+    if 'unknown_only' in errors:
+        guidance.append('If the requested fact is unavailable, return exactly UNKNOWN without an explanation or follow-up. Do not invent a value.')
     if any(error in ('raw_json','required_json_fields','exact_json_fields') for error in errors):
         guidance.append('Return one complete valid JSON value in the original requested shape, including every requested field. No Markdown fence, prose or commentary.')
     if any(error.startswith('image_reading_') for error in errors):
