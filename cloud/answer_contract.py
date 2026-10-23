@@ -84,7 +84,7 @@ def contract_for(messages, tools_available=True):
             'exact_keys': bool(re.search(r'\b(?:exact(?:ly)?|only)\s+(?:these\s+)?(?:fields|keys)\b|\bthese exact fields\b',text,re.I)),
             'python_tests': code_tests,
             'preserve_input': code_tests and bool(re.search(r'\bdo not mutate (?:the )?input\b|\bnonmutation\b',text,re.I)),
-            'verify_returned_python': code_tests and tools_available and not re.search(r"\b(?:do not|don't|never) (?:run|execute)\b",text,re.I),
+            'verify_returned_python': code_tests and tools_available and not re.search(r"\b(?:do not|don't|never)\s+(?:actually\s+)?(?:run|execute)\b",text,re.I),
             'execution_disclosure': code_tests and bool(re.search(r'\bwhether\b.{0,60}\b(?:ran|run|executed)\b',text,re.I)),
             'code_only':bool(re.search(r'\bcode[ -]only\b|\b(?:return|give|output)\s+(?:only|just)\s+(?:the\s+)?code\b',text,re.I)),
             'supplied_constraints': supplied_constraints,

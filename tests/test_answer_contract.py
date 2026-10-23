@@ -13,6 +13,7 @@ class AnswerContractTests(unittest.TestCase):
         self.assertIn('missing_tool_javascript_verify',validate_answer('All passed.',js)[1])
         self.assertFalse(self.contract('Implement JavaScript sumValues(items). Do not execute assertions.')['required_tools'])
         self.assertFalse(self.contract('Translate "execute JavaScript assertions" into Spanish.')['required_tools'])
+        self.assertFalse(self.contract('Write a Python function with tests. Do not actually run them.')['verify_returned_python'])
     def test_supplied_identifiers_are_copied_without_guessing_or_suppressing_other_requests(self):
         for kind,value in [('booking','aB_28'),('release','ALDER-918'),('reference','ref-v2')]:
             ask=f'Correction: the {kind} code is {value}. Reply only with the current code.'
