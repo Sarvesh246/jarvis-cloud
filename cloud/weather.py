@@ -173,7 +173,7 @@ def number(value):
     return value if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) else None
 
 
-def weather_reply(ask, place=None, now=None):
+def meteo_reply(ask, place=None, now=None):
     """Execute validated model tool arguments, never parse the user's wording."""
     try:
         validate(ask)
@@ -234,3 +234,83 @@ def weather_reply(ask, place=None, now=None):
         return "```weather\n" + json.dumps(payload, ensure_ascii=False) + "\n```\n\n" + fallback + "\n\n[Open-Meteo](https://open-meteo.com/) · Model forecast; times are local to " + data["timezone"] + "."
     except Exception:
         return None  # A failed lookup is evidence of unavailability, never a forecast.
+
+
+def nws_condition(text):
+    text = (text or "").lower()
+    if "thunder" in text: return "Thunderstorms"
+    if re.search(r"snow|sleet|ice|flurr|freezing", text): return "Snow"
+    if "drizzle" in text: return "Drizzle"
+    if re.search(r"rain|shower", text): return "Rain"
+    if re.search(r"fog|haze|smoke", text): return "Fog"
+    if re.search(r"mostly cloudy|cloudy|overcast", text): return "Overcast"
+    if re.search(r"partly|mostly sunny|mostly clear", text): return "Partly cloudy"
+    if re.search(r"sunny|clear", text): return "Clear sky"
+    return ""
+
+
+def nws_reply(ask, place, now=None):
+    """The same forecast payload from the National Weather Service, for US coordinates, when
+    Open-Meteo cannot be reached. NWS supplies no UV or sunrise, which the widget shows as absent."""
+    try:
+        lat, lon = number(place.get("lat")), number(place.get("lon"))
+        if lat is None or lon is None or not (18 <= lat <= 72 and -180 <= lon <= -65):
+            return None
+        point = get(f"https://api.weather.gov/points/{lat:.4f},{lon:.4f}")["properties"]
+        hourly = get(point["forecastHourly"])["properties"]["periods"]
+        daily = get(point["forecast"])["properties"]["periods"]
+        if not hourly: return None
+        def wind(text):
+            found = [int(n) for n in re.findall(r"\d+", text or "")]
+            return max(found) if found else None
+        def rain(period):
+            return number((period.get("probabilityOfPrecipitation") or {}).get("value"))
+        today = date.fromisoformat(hourly[0]["startTime"][:10])
+        start = date.fromisoformat(ask["start_date"]) if ask.get("start_date") else today + timedelta(days=ask.get("day_offset", 0))
+        end = start + timedelta(days=ask.get("days", 1) - 1)
+        if start < today or end > today + timedelta(days=6):
+            return None
+        label = shared_location_label(place)
+        periods = []
+        for offset in range((end - start).days + 1):
+            day = (start + timedelta(days=offset)).isoformat()
+            hours = [{"time": h["startTime"][:16], "temperature": number(h.get("temperature")), "rain": rain(h),
+                      "condition": nws_condition(h.get("shortForecast")), "isDay": bool(h.get("isDaytime"))}
+                     for h in hourly if h["startTime"].startswith(day)]
+            by_day = [d for d in daily if d["startTime"].startswith(day)]
+            daytime = next((d for d in by_day if d.get("isDaytime")), None)
+            night = next((d for d in by_day if not d.get("isDaytime")), None)
+            temps = [h["temperature"] for h in hours if h["temperature"] is not None]
+            high = number(daytime["temperature"]) if daytime else (max(temps) if temps else None)
+            low = number(night["temperature"]) if night else (min(temps) if temps else None)
+            if high is None and low is None: return None
+            chances = [c for c in [rain(d) for d in by_day] + [h["rain"] for h in hours] if c is not None]
+            speeds = [wind(d.get("windSpeed")) for d in by_day] + [wind(h.get("windSpeed")) for h in hourly if h["startTime"].startswith(day)]
+            periods.append({"label": day, "high": high, "low": low,
+                            "condition": day_condition(hours, None, max(chances) if chances else None) if hours
+                                         else nws_condition((daytime or night or {}).get("shortForecast")),
+                            "rain": max(chances) if chances else None,
+                            "wind": max([x for x in speeds if x is not None], default=None),
+                            "uv": None, "sunrise": None, "sunset": None, "hours": hours})
+        first = hourly[0]
+        humidity = number((first.get("relativeHumidity") or {}).get("value"))
+        snapshot = {"time": first["startTime"][:16], "temperature": number(first.get("temperature")), "feels": None,
+                    "humidity": humidity, "wind": wind(first.get("windSpeed")), "condition": nws_condition(first.get("shortForecast")),
+                    "isDay": bool(first.get("isDaytime"))} if start == today else None
+        instant = now or datetime.now(timezone.utc)
+        payload = {"version": 1, "view": "day" if start == end else "week" if len(periods) == 7 else "range", "title": label,
+                   "timezone": point.get("timeZone", ""), "unit": "°F", "windUnit": "mph", "localTime": first["startTime"][:16],
+                   "retrieved": instant.isoformat(), "current": snapshot, "periods": periods}
+        fallback = f"Weather for {label}\n\n| Day | Conditions | High (°F) | Low (°F) |\n|---|---|---|---|\n"
+        fallback += "\n".join(f"| {p['label']} | {p['condition']} | {p['high'] if p['high'] is not None else '—'} | {p['low'] if p['low'] is not None else '—'} |" for p in periods)
+        return "```weather\n" + json.dumps(payload, ensure_ascii=False) + "\n```\n\n" + fallback + "\n\n[National Weather Service](https://www.weather.gov/) · Forecast times are local to " + (point.get("timeZone") or "the location") + "."
+    except Exception:
+        return None
+
+
+def weather_reply(ask, place=None, now=None):
+    """Open-Meteo first; for US coordinates, the National Weather Service when that is unreachable."""
+    reply = meteo_reply(ask, place, now)
+    if reply is None and not ask.get("location") and isinstance(place, dict):
+        reply = nws_reply(ask, place, now)
+    return reply

@@ -105,3 +105,41 @@ class DayConditionTests(unittest.TestCase):
         from cloud.weather import day_condition
         hours = [{"condition": "Rain", "isDay": True, "rain": 80} for _ in range(6)]
         self.assertEqual(day_condition(hours, 63, 85), "Rain")
+
+
+class NationalWeatherServiceFallbackTests(unittest.TestCase):
+    def feed(self):
+        from datetime import timedelta
+        hourly, daily = [], []
+        for d in range(7):
+            day = date(2026, 10, 23) + timedelta(days=d)
+            for hour in range(24):
+                hourly.append({"startTime": f"{day.isoformat()}T{hour:02d}:00:00-05:00", "temperature": 60 + (hour if hour < 15 else 29 - hour),
+                               "probabilityOfPrecipitation": {"value": 3}, "windSpeed": "5 to 10 mph", "shortForecast": "Sunny" if 7 <= hour < 19 else "Clear",
+                               "isDaytime": 7 <= hour < 19, "relativeHumidity": {"value": 40}})
+            daily.append({"startTime": f"{day.isoformat()}T06:00:00-05:00", "isDaytime": True, "temperature": 85, "shortForecast": "Sunny", "windSpeed": "5 mph", "probabilityOfPrecipitation": {"value": 3}})
+            daily.append({"startTime": f"{day.isoformat()}T18:00:00-05:00", "isDaytime": False, "temperature": 57, "shortForecast": "Clear", "windSpeed": "5 mph", "probabilityOfPrecipitation": {"value": 3}})
+        def get(url, *a, **k):
+            if "/points/" in url: return {"properties": {"forecastHourly": "https://nws/hourly", "forecast": "https://nws/daily", "timeZone": "America/Chicago", "relativeLocation": {"properties": {"city": "College Station", "state": "TX"}}}}
+            return {"properties": {"periods": hourly if url.endswith("hourly") else daily}}
+        return get
+
+    def test_the_widget_still_builds_when_open_meteo_is_unreachable(self):
+        us_city.cache_clear()
+        def get(url, *a, **k):
+            if "open-meteo" in url: raise TimeoutError
+            return self.feed()(url)
+        now = datetime(2026, 10, 23, 15, tzinfo=timezone.utc)
+        with patch('cloud.weather.get', side_effect=get), patch('cloud.weather.meteo_config', return_value=''):
+            day = json.loads(weather_reply({}, {"lat": 30.6, "lon": -96.3}, now).split('\n')[1])
+            week = json.loads(weather_reply({"days": 7}, {"lat": 30.6, "lon": -96.3}, now).split('\n')[1])
+        self.assertEqual(day["view"], "day")
+        self.assertEqual((day["periods"][0]["high"], day["periods"][0]["low"], day["periods"][0]["condition"]), (85, 57, "Clear sky"))
+        self.assertEqual(day["title"], "College Station, TX")
+        self.assertEqual(week["view"], "week")
+        self.assertEqual(len(week["periods"]), 7)
+        us_city.cache_clear()
+
+    def test_no_fallback_outside_the_us(self):
+        with patch('cloud.weather.get', side_effect=TimeoutError), patch('cloud.weather.meteo_config', return_value=''):
+            self.assertIsNone(weather_reply({}, {"lat": 48.85, "lon": 2.35}))

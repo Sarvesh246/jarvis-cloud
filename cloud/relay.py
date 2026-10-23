@@ -1669,8 +1669,10 @@ class Relay:
                         if found:
                             seen["forecasts"].append(found)
                             run.trace.counts["weather_widget_recoveries"] = 1
+                        else:
+                            run.trace.counts["weather_widget_unavailable"] = 1
                     except Exception:
-                        pass
+                        run.trace.counts["weather_widget_unavailable"] = 1
             for token in ([] if constrained(seen['contract']) else dict.fromkeys([*WEATHER_REFERENCE.findall(seen["answer"]), *seen["forecasts"]])):
                 forecast = read_forecast(token, not_before=forecast_started)
                 if forecast and '"view": "day"' in forecast and week_requested(asked) and not wants_weather_format(asked):
