@@ -61,7 +61,9 @@ def router(environ=os.environ):
 
 
 def folder(environ=os.environ):
-    return Path(environ.get("HERMES_HOME") or "/opt/data") / "cache" / "vaelo-images"
+    # The pinned image can ship an unwritable inherited cache directory. Keep
+    # generated pictures in our own runtime-owned sibling, like the vision cache.
+    return Path(environ.get("HERMES_HOME") or "/opt/data") / "vaelo-image-cache"
 
 
 def tidy(where, now=None):
@@ -110,7 +112,7 @@ def mime(data):
 def keep(data, environ=os.environ):
     """Store the picture and return its reference."""
     where = folder(environ)
-    where.mkdir(parents=True, exist_ok=True)
+    where.mkdir(parents=True, exist_ok=True, mode=0o700)
     tidy(where)
     token = secrets.token_hex(12)
     path = where / f"{token}.jpg"  # the suffix only marks Vaelo's files; mime() reads the bytes

@@ -64,6 +64,16 @@ class ImageProviderTests(unittest.TestCase):
         uri = image_gen.data_uri(result["image"].split(":")[1], self.environ)
         self.assertRegex(uri, r"^data:image/(png|jpeg);base64,")
 
+    def test_generated_images_do_not_depend_on_the_inherited_cache_directory(self):
+        # A file at cache blocks all descendants, even when the test runs as root.
+        inherited = Path(self.home.name) / "cache"
+        inherited.write_text("container-owned cache boundary")
+        result = self.provider({"data": [{"b64_json": base64.b64encode(PIXEL).decode()}]}).generate("a car")
+        self.assertTrue(result["success"])
+        self.assertEqual(image_gen.folder(self.environ), Path(self.home.name) / "vaelo-image-cache")
+        self.assertTrue(image_gen.data_uri(result["image"].split(":")[1], self.environ))
+        self.assertEqual(inherited.read_text(), "container-owned cache boundary")
+
     def test_router_down_says_so_plainly(self):
         for error in (URLError("refused"), HTTPError("u", 503, "down", {}, None), TimeoutError()):
             result = self.provider(error).generate("a car")
