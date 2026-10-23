@@ -831,6 +831,17 @@ class RelayTests(unittest.TestCase):
         self.assertEqual(len(hermes.requests),0)
         self.assertIn('391',b''.join(run.frames).decode())
 
+    def test_worked_equations_never_publish_conflicting_model_headings(self):
+        hermes,relay,port=self.boot([])
+        self.start(port,content='Answer each numbered item briefly with its result and essential working. 1) Solve 4(x-3)=3x+8. 2) Solve x^2-7x+12=0.')
+        run=self.finished(relay)
+        self.assertEqual(run.outcome,'complete')
+        self.assertEqual(run.route,'calculator')
+        self.assertEqual(hermes.requests,[])
+        wire=b''.join(run.frames).decode()
+        self.assertIn('x=20',wire)
+        self.assertIn('x=3, 4',wire)
+
     def test_explicit_json_withholds_bad_candidate_and_repairs_once(self):
         hermes, relay, port=self.boot([[chunk('Here is the answer: {"value":7}', 'stop'),'data: [DONE]'],
                                       [chunk('```json\n{"value":7}\n```','stop'),'data: [DONE]']])
