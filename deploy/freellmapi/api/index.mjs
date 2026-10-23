@@ -3,7 +3,6 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { cloudSeed, selectCloudModels } from '../bootstrap.mjs';
 
-let instance;
 async function initialize() {
   const config = cloudSeed(process.env);
   process.env.NODE_ENV = 'production';
@@ -33,26 +32,31 @@ function authorized(req) {
   return Boolean(process.env.FREELLMAPI_API_KEY) && actual.length === expected.length && timingSafeEqual(actual, expected);
 }
 
-export default async function handler(req, res) {
-  res.setHeader('Cache-Control', 'no-store');
-  const route = new URL(req.url, 'https://router.invalid').pathname;
-  // No dashboard, key export or administrative API is exposed by this function.
-  if (!['/health', '/v1/models', '/v1/chat/completions'].includes(route)) {
-    res.statusCode = 404; res.end(); return;
-  }
-  if (!authorized(req)) {
-    res.statusCode = 401; res.end(JSON.stringify({error:'Authentication required.'})); return;
-  }
-  try {
-    if (!instance) instance = initialize().catch(error => {instance = undefined; throw error;});
-    const { app, models } = await instance;
-    if (route === '/health') {
-      res.setHeader('Content-Type','application/json');
-      res.end(JSON.stringify({status:'ok', models, context_floor:128000, host:'vercel'})); return;
+export function createHandler(initializeRouter = initialize) {
+  let instance;
+  return async function handler(req, res) {
+    res.setHeader('Cache-Control', 'no-store');
+    const route = new URL(req.url, 'https://router.invalid').pathname;
+    // No dashboard, key export or administrative API is exposed by this function.
+    if (!['/health', '/v1/models', '/v1/chat/completions', '/v1/images/generations'].includes(route)) {
+      res.statusCode = 404; res.end(); return;
     }
-    return app(req, res);
-  } catch {
-    res.statusCode = 503;
-    res.end(JSON.stringify({error:'The model router is temporarily unavailable.'}));
-  }
+    if (!authorized(req)) {
+      res.statusCode = 401; res.end(JSON.stringify({error:'Authentication required.'})); return;
+    }
+    try {
+      if (!instance) instance = initializeRouter().catch(error => {instance = undefined; throw error;});
+      const { app, models } = await instance;
+      if (route === '/health') {
+        res.setHeader('Content-Type','application/json');
+        res.end(JSON.stringify({status:'ok', models, context_floor:128000, host:'vercel'})); return;
+      }
+      return app(req, res);
+    } catch {
+      res.statusCode = 503;
+      res.end(JSON.stringify({error:'The model router is temporarily unavailable.'}));
+    }
+  };
 }
+
+export default createHandler();

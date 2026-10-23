@@ -5,6 +5,6 @@
   "engines": { "node": "24.x" },
   "scripts": {
     "build": "node build.mjs",
-    "test": "node --test bootstrap.test.mjs"
+    "test": "node --test bootstrap.test.mjs handler.test.mjs"
   }
 }

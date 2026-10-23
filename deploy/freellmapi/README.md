@@ -2,7 +2,8 @@
 
 FreeLLMAPI v0.14.2 hosted as an API-only Vercel function in a separate project.
 It uses no Render instance hours and shares no process memory with Hermes.
-Only authenticated health, model-list and chat-completion endpoints are exposed.
+Only authenticated health, model-list, chat-completion and image-generation endpoints are exposed.
+Image requests use the pinned server's configured media providers and failover.
 The dashboard and administrative APIs are unavailable.
 
 Builds download the pinned upstream source and compile its server. Provider keys,
