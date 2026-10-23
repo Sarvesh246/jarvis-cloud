@@ -47,8 +47,19 @@
 }
 
 .toast[data-leaving] {
-  transform: translateY(calc(var(--pull, 0px) + 2.5rem));
+  transform: translateY(calc(var(--pull, 0px) + 1.5rem)) scale(0.96);
   opacity: 0;
+  pointer-events: none;
+  transition:
+    transform 280ms var(--ease),
+    opacity 240ms var(--ease);
+}
+
+/* The toast it made way for takes its place at once */
+.toast[data-gone] {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
 }
 
 /* The time left, as a gilt line that shortens toward the centre */

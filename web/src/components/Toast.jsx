@@ -13,32 +13,39 @@ const AWAY = 40;
    time runs out, so an Undo says how long it will wait. Resting a pointer
    on it, focusing it or holding it pauses the time; swiping it down puts
    it away early. */
-function Slip({ toast, onDismiss }) {
+function Slip({ toast, onDismiss, gone = false }) {
   const life = toast.duration || (!toast.action ? NOTICE_LIFE : matchMedia(PHONE).matches ? PHONE_ACTION_LIFE : ACTION_LIFE);
   const [held, setHeld] = useState(0);
   const [pull, setPull] = useState(0);
-  const [leaving, setLeaving] = useState(false);
+  const [going, setLeaving] = useState(false);
+  const leaving = going || gone;
   const left = useRef(life);
   const since = useRef(0);
   const drag = useRef(null);
   const done = useRef(onDismiss);
   done.current = onDismiss;
   const paused = held > 0;
+  const exit = useRef(0);
+  useEffect(() => () => clearTimeout(exit.current), []);
+
+  /* Every way out, the timer, Undo and a swipe, takes the same slide-down
+     and fade before the toast is removed */
+  function away() {
+    if (exit.current) return;
+    setLeaving(true);
+    exit.current = setTimeout(() => done.current(), 300);
+  }
 
   useEffect(() => {
     if (paused || leaving) return;
     since.current = performance.now();
-    const timer = setTimeout(() => done.current(), left.current);
+    const timer = setTimeout(away, left.current);
     return () => {
       clearTimeout(timer);
       left.current -= performance.now() - since.current;
     };
   }, [paused, leaving]);
 
-  function away() {
-    setLeaving(true);
-    setTimeout(() => done.current(), 340);
-  }
 
   const hold = (on) => setHeld((n) => Math.max(0, n + (on ? 1 : -1)));
 
@@ -48,13 +55,14 @@ function Slip({ toast, onDismiss }) {
       data-paused={paused || undefined}
       data-dragging={drag.current ? true : undefined}
       data-leaving={leaving || undefined}
+      data-gone={gone || undefined}
       style={{ "--life": `${life}ms`, "--pull": `${pull}px`, "--fade": 1 - Math.min(pull, 100) / 140 }}
       onPointerEnter={(event) => event.pointerType === "mouse" && hold(true)}
       onPointerLeave={(event) => event.pointerType === "mouse" && hold(false)}
       onFocus={() => hold(true)}
       onBlur={() => hold(false)}
       onPointerDown={(event) => {
-        if (event.target.closest("button")) return;
+        if (leaving || event.target.closest("button")) return;
         drag.current = { y: event.clientY, at: performance.now() };
         event.currentTarget.setPointerCapture(event.pointerId);
         hold(true);
@@ -83,7 +91,7 @@ function Slip({ toast, onDismiss }) {
           className="text-button"
           onClick={() => {
             toast.onAction?.();
-            onDismiss();
+            away();
           }}
         >
           {toast.action}
@@ -115,9 +123,23 @@ export function Toast({ toast, toasts, onDismiss }) {
       removeEventListener("resize", place);
     };
   }, []);
+  /* A toast replaced by a newer one slides away rather than blinking out */
+  const list = toasts || (toast ? [toast] : []);
+  const [ghosts, setGhosts] = useState([]);
+  const shown = useRef(list);
+  useEffect(() => {
+    const now = new Set(list.map((item) => item.id));
+    const lost = shown.current.filter((item) => !now.has(item.id));
+    shown.current = list;
+    if (!lost.length || !list.length) return;
+    setGhosts((current) => [...current, ...lost]);
+    const timer = setTimeout(() => setGhosts((current) => current.filter((item) => !lost.includes(item))), 320);
+    return () => clearTimeout(timer);
+  }, [list.map((item) => item.id).join()]);
   return (
     <div className="toast-region" role="status" aria-live="polite" ref={region}>
-      {(toasts || (toast ? [toast] : [])).map(item => <Slip key={item.id} toast={item} onDismiss={() => onDismiss(item.id)} />)}
+      {ghosts.map(item => <Slip key={item.id} toast={item} gone onDismiss={() => {}} />)}
+      {list.map(item => <Slip key={item.id} toast={item} onDismiss={() => onDismiss(item.id)} />)}
     </div>
   );
 }
