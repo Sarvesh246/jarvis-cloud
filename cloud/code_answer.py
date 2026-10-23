@@ -68,3 +68,17 @@ def returned_python(answer, preserve_input=False):
     if not runnable_tests and not top_level_assertions:
         calls.append("raise AssertionError('No runnable assertion tests were found')")
     return {'source':source,'tests':tests+'\nimport copy\nimport unittest\n'+'\n'.join(calls)+'\nassert True'}
+
+
+JAVASCRIPT_BLOCK=r'```(?:javascript|js|mjs)\s*\n([\s\S]*?)\n```'
+
+
+def returned_javascript(answer):
+    """Split returned JavaScript into implementation and synchronous tests.
+
+    The first block is the implementation and later blocks are tests. A single
+    block carries both, so it runs whole with an inert test suffix."""
+    blocks=re.findall(JAVASCRIPT_BLOCK,answer,re.I)
+    if not blocks:
+        raise ValueError('No JavaScript code block was returned')
+    return {'source':blocks[0],'tests':'\n\n'.join(blocks[1:]) if len(blocks)>1 else 'true;'}

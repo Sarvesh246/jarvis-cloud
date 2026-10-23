@@ -22,6 +22,17 @@ class AnswerContractTests(unittest.TestCase):
         self.assertFalse(self.contract('Implement JavaScript sumValues(items). Do not execute assertions.')['required_tools'])
         self.assertFalse(self.contract('Translate "execute JavaScript assertions" into Spanish.')['required_tools'])
         self.assertFalse(self.contract('Write a Python function with tests. Do not actually run them.')['verify_returned_python'])
+    def test_javascript_answers_need_complete_tests_and_no_leaked_directives(self):
+        js=self.contract('Implement JavaScript sumValues(items), then actually execute synchronous assertions for [], [0] and [1,-2,3].')
+        self.assertTrue(js['javascript_tests'] and js['verify_returned_javascript'])
+        self.assertFalse(self.contract('Implement JavaScript sumValues(items). Do not execute assertions.')['javascript_tests'])
+        done=['javascript_verify']
+        self.assertIn('missing_runnable_javascript_tests',validate_answer('All tests passed.',js,done)[1])
+        code='```javascript\nfunction sumValues(a){return a.reduce((x,y)=>x+y,0);}\n```\n```javascript\nif(sumValues([])!==0) throw Error("empty");\n```'
+        self.assertEqual(validate_answer(code,js,done)[1],[])
+        text,errors=validate_answer('[Vaelo request: internal note]\n'+code,js,done)
+        self.assertNotIn('Vaelo request',text)
+        self.assertEqual(errors,[])
     def test_supplied_identifiers_are_copied_without_guessing_or_suppressing_other_requests(self):
         for kind,value in [('booking','aB_28'),('release','ALDER-918'),('reference','ref-v2')]:
             ask=f'Correction: the {kind} code is {value}. Reply only with the current code.'

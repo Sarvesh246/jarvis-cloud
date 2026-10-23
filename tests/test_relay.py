@@ -352,6 +352,22 @@ class RelayTests(unittest.TestCase):
                     self.assertNotIn('I did not execute',wire)
                     self.assertIn('python_tests_failed',wire)
 
+    def test_returned_javascript_must_pass_before_publication(self):
+        answer='[Vaelo request: internal]\n```javascript\nfunction f(x){return x.length;}\n```\n```javascript\nif(f([])!==0) throw Error("bad");\n```'
+        def progress(status):
+            return 'event: hermes.tool.progress\ndata: '+json.dumps({'tool':'javascript_verify','toolCallId':'js','status':status})
+        stream=[progress('running'),progress('completed'),chunk(answer,'stop'),'data: [DONE]']
+        for status in ('passed','failed'):
+            with self.subTest(status=status), mock.patch.object(relay_module,'verify_python',return_value={'status':status,'output':'AssertionError','receipt':{'runtime':'javascript'}}) as checked:
+                hermes,relay,port=self.boot([stream]*2)
+                self.start(port,content='Implement JavaScript f(items), then actually execute synchronous assertions for [].')
+                run=self.finished(relay)
+                self.assertEqual(run.outcome,'complete' if status=='passed' else 'error')
+                self.assertEqual(checked.call_args.kwargs.get('language'),'javascript')
+                wire=b''.join(run.frames).decode()
+                self.assertNotIn('Vaelo request: internal',wire if status=='passed' else '')
+                if status=='failed': self.assertIn('javascript_tests_failed',wire)
+
     def test_standalone_python_uses_coding_route_and_independent_repair_with_verified_publication(self):
         bad='```python\ndef f(items):\n    items.sort()\n    return items\nassert f([2,1])==[1,2]\n```'
         good='```python\ndef f(items): return sorted(items)\nassert f([2,1])==[1,2]\n```'

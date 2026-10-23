@@ -22,10 +22,10 @@ import threading
 import time
 import uuid
 try:
-    from code_answer import returned_python, standalone_python
+    from code_answer import returned_python, returned_javascript, standalone_python
     from verification import verify as verify_python
 except ModuleNotFoundError:
-    from cloud.code_answer import returned_python, standalone_python
+    from cloud.code_answer import returned_python, returned_javascript, standalone_python
     from cloud.verification import verify as verify_python
 try:
     from admission import Admission
@@ -1450,6 +1450,29 @@ class Relay:
                             if (seen['contract'].get('execution_disclosure') and not seen['contract'].get('limits')
                                     and not seen['contract'].get('json') and not seen['contract'].get('code_only')):
                                 checked += '\n\nFinal verification: the returned Python code and tests passed in the isolated Python runtime.'
+                    if not errors and seen['contract'].get('verify_returned_javascript'):
+                        arguments={'source':'','tests':''}
+                        try:
+                            arguments=returned_javascript(checked)
+                            progress={'tool':'javascript_verify','toolCallId':'returned_javascript_'+str(attempt),'status':'running','label':'Checking the returned code and tests'}
+                            run.trace.tool(progress);run.event('hermes.tool.progress',progress)
+                            result=verify_python(arguments,language='javascript')
+                            progress={**progress,'status':'completed','label':'Returned code and tests passed' if result.get('status')=='passed' else 'Returned code or tests failed'}
+                            run.trace.tool(progress);run.event('hermes.tool.progress',progress)
+                        except ValueError:
+                            result={'status':'invalid','output':'No JavaScript code block was returned.'}
+                        if result.get('status')!='passed':
+                            diagnostic=str(result.get('output') or result.get('error') or 'Verification did not pass.')[:2000]
+                            verification_feedback={'status':result.get('status'),'diagnostic':diagnostic,
+                                'source':arguments['source'],'tests':arguments['tests']}
+                            run.event('jarvis.verification',{'status':'failed','runtime':'javascript',
+                                'diagnostic':diagnostic,'exit_code':result.get('exit_code')})
+                            status_key='verification_status_'+str(result.get('status','unknown'))
+                            run.trace.counts[status_key]=run.trace.counts.get(status_key,0)+1
+                            errors.append('javascript_tests_failed')
+                        else:
+                            run.trace.counts['returned_javascript_verified']=1
+                            run.event('jarvis.verification',{'status':'passed',**result.get('receipt',{})})
                     if errors:
                         for error in errors:
                             key = 'contract_' + error
@@ -1460,7 +1483,7 @@ class Relay:
                             run.trace.counts['contract_recoveries'] = 1
                             run.event('jarvis.retry', {'message': 'Checking the requested answer format…'})
                             repair=repair_instruction(errors)
-                            if 'python_tests_failed' in errors and verification_feedback:
+                            if ('python_tests_failed' in errors or 'javascript_tests_failed' in errors) and verification_feedback:
                                 # Unlike invalid protocol frames, syntactically
                                 # valid submitted code is useful debugging data.
                                 # Supply the real confined-runtime failure, not

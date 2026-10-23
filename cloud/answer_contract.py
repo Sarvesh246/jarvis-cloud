@@ -77,6 +77,7 @@ def contract_for(messages, tools_available=True):
                            and not re.match(r'\s*(?:translate|paraphrase|proofread)\b',text,re.I))
     if execution_tests and re.search(r'\bJavaScript\b',text,re.I) and not re.search(r'\bNode(?:\.js)?\b',text,re.I):
         tools.append('javascript_verify')
+    javascript_tests = bool(execution_tests and re.search(r'\bJavaScript\b',text,re.I) and not re.search(r'\bNode(?:\.js)?\b',text,re.I))
     code_tests = bool(re.search(r'\bpython\b', text, re.I) and
                       (re.search(r'\b(?:include|provide|show|supply|return|with)\s+(?:runnable\s+|unit\s+|the\s+|assertion\s+)?tests\b', text, re.I)
                        or execution_tests and re.search(r'\b(?:implement|write|create|generate)\b',text,re.I)))
@@ -90,6 +91,8 @@ def contract_for(messages, tools_available=True):
             'python_tests': code_tests,
             'preserve_input': code_tests and bool(re.search(r'\bdo not mutate (?:the )?input\b|\bnonmutation\b',text,re.I)),
             'verify_returned_python': code_tests and tools_available and not re.search(r"\b(?:do not|don't|never)\s+(?:actually\s+)?(?:run|execute)\b",text,re.I),
+            'javascript_tests': javascript_tests,
+            'verify_returned_javascript': javascript_tests and tools_available,
             'execution_disclosure': code_tests and bool(re.search(r'\bwhether\b.{0,60}\b(?:ran|run|executed)\b',text,re.I)),
             'code_only':bool(re.search(r'\bcode[ -]only\b|\b(?:return|give|output)\s+(?:only|just)\s+(?:the\s+)?code\b',text,re.I)),
             'supplied_constraints': supplied_constraints,
@@ -99,7 +102,7 @@ def contract_for(messages, tools_available=True):
 
 
 def constrained(contract):
-    return bool(contract.get('json') or contract.get('limits') or contract.get('required_tools') or contract.get('python_tests') or contract.get('result_count') or contract.get('images') or contract.get('unknown_only') or contract.get('translation_only'))
+    return bool(contract.get('json') or contract.get('limits') or contract.get('required_tools') or contract.get('python_tests') or contract.get('javascript_tests') or contract.get('result_count') or contract.get('images') or contract.get('unknown_only') or contract.get('translation_only'))
 
 
 def contract_guidance(contract):
@@ -131,6 +134,11 @@ def contract_guidance(contract):
             parts.append('The execution environment permits only in-memory standard-library Python. Prefer plain executable assert statements. '
                          'Do not import pytest or other third-party test frameworks, inspect source files, discover tests on disk, '
                          'query a terminal, open files, create processes or use the network. Standard unittest and copy are available.')
+    if contract.get('javascript_tests'):
+        parts.append('Deliver BOTH the complete JavaScript implementation AND complete synchronous test code in ```javascript code blocks, '
+                     'with the implementation first and every requested case in the tests. A statement that tests passed is not test code. '
+                     'Tests must throw an Error on failure. Use only in-memory standard JavaScript: no Node, require, import, DOM, timers, files or network. '
+                     'Report execution only if the matching verifier result passed.')
     if contract.get('result_count'):
         parts.append(f'Return only the {contract["result_count"]} requested result items. Without another specified format, use one result per line. Omit calculations and preamble.')
     if contract.get('required_tools'):
@@ -142,6 +150,8 @@ def contract_guidance(contract):
 
 def validate_answer(text, contract, executed_tools=()):
     result = text.strip()
+    # Internal request annotations are instructions to the model, never content.
+    result = re.sub(r'(?m)^[ \t]*\[Vaelo (?:request|verification)[^\n]*(?:\n|$)','',result).strip()
     errors = []
     if contract.get('translation_single_line') and len(result.splitlines())!=1:
         errors.append('translation_single_line')
@@ -207,6 +217,12 @@ def validate_answer(text, contract, executed_tools=()):
         prose=result if contract.get('code_only') else re.sub(r'```[\s\S]*?```','',result)
         if contract.get('execution_disclosure') and not re.search(r'\b(?:ran|run|execute(?:d)?|execution)\b',prose,re.I):
             errors.append('missing_execution_disclosure')
+    if contract.get('javascript_tests'):
+        blocks = re.findall(r'```(?:javascript|js|mjs)\s*\n([\s\S]*?)\n```', result, re.I)
+        code = '\n'.join(blocks)
+        defines = re.search(r'\bfunction\s+\w+\s*\(|\b(?:const|let|var)\s+\w+\s*=\s*(?:async\s*)?(?:\([^)]*\)|\w+)\s*=>|\bclass\s+\w+', code)
+        checks = re.search(r'\bthrow\b|\bassert\w*\s*\(', code)
+        if not blocks or not defines or not checks: errors.append('missing_runnable_javascript_tests')
     if contract.get('result_count'):
         lines = [line.strip() for line in result.splitlines() if line.strip()]
         count = len(lines)
@@ -236,6 +252,8 @@ def repair_instruction(errors):
         guidance.append('Return the requested number of results, one per line, without a preamble or calculations.')
     if any(error in ('missing_runnable_tests','invalid_python_tests','python_tests_failed') for error in errors):
         guidance.append('Return the complete implementation and runnable Python tests, including every requested case. Correct both the implementation and independently derived expected values; actually call the test assertions.')
+    if any(error in ('missing_runnable_javascript_tests','javascript_tests_failed') for error in errors):
+        guidance.append('Return the complete JavaScript implementation and complete synchronous tests, in ```javascript blocks, covering every requested case. Tests must throw on failure and use independently derived expected values; use no Node or browser APIs.')
     if 'input_mutation' in errors:
         guidance.append('Do not modify the supplied input. Sort copies and copy returned mutable elements.')
     if 'missing_execution_disclosure' in errors:
