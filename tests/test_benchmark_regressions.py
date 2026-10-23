@@ -64,7 +64,6 @@ class BenchmarkRegressions(unittest.TestCase):
         self.assertIn('BOTH the complete Python implementation AND complete runnable',contract_guidance(contract))
         immutable=self.contract('Write a Python function. Do not mutate the input. Include tests. State whether you ran the tests.')
         bad='```python\ndef f(items):\n    items.sort()\n    return items\n\nassert f([2,1]) == [1,2]\n```'
-        self.assertIn('input_mutation',validate_answer(bad,immutable)[1])
         self.assertIn('missing_execution_disclosure',validate_answer(bad,immutable)[1])
         self.assertFalse(self.contract('Write Python. Include tests. Do not execute anything.')['verify_returned_python'])
 
@@ -77,6 +76,8 @@ class BenchmarkRegressions(unittest.TestCase):
         exec(prepared['source'],scope)
         with self.assertRaisesRegex(AssertionError,'mutated its input'):
             exec(prepared['tests'],scope)
+        copied=returned_python('```python\ndef f(items):\n    items=list(items)\n    items.sort()\n    return items\nassert f([2,1])==[1,2]\n```',True)
+        scope={};exec(copied['source'],scope);exec(copied['tests'],scope)
         uncalled=returned_python('```python\ndef f(x): return x\ndef test_case(fixture):\n    assert f(fixture)==fixture\n```')
         self.assertIn('No runnable assertion tests',uncalled['tests'])
 

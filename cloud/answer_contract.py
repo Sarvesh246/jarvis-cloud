@@ -149,13 +149,6 @@ def validate_answer(text, contract, executed_tools=()):
             definitions = any(isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and not n.name.startswith('test') for n in ast.walk(tree))
             assertions = any(isinstance(n, ast.Assert) or isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.func.attr.startswith('assert') for n in ast.walk(tree))
             if not definitions or not assertions: errors.append('missing_runnable_tests')
-            if contract.get('preserve_input'):
-                arguments={arg.arg for node in tree.body if isinstance(node,ast.FunctionDef) for arg in node.args.args}
-                if any(isinstance(node,ast.Call) and isinstance(node.func,ast.Attribute) and
-                       isinstance(node.func.value,ast.Name) and node.func.value.id in arguments and
-                       node.func.attr in ('sort','reverse','append','extend','insert','pop','remove','clear','update')
-                       for node in ast.walk(tree)):
-                    errors.append('input_mutation')
         except (ValueError, SyntaxError, RecursionError):
             errors.append('invalid_python_tests')
         prose=result if contract.get('code_only') else re.sub(r'```[\s\S]*?```','',result)
