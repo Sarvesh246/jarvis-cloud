@@ -46,3 +46,20 @@ export function selectCloudModels(db, contextTokens = 128000) {
   });
   return apply();
 }
+
+// Serverless startup skips the desktop catalog scheduler. Install the supported
+// free image routes explicitly so a fresh temporary database can draw immediately.
+// Keep these separate from the chat profile and preserve an operator-disabled row.
+export function seedCloudImages(db) {
+  const routes = [
+    ['cloudflare', '@cf/black-forest-labs/flux-1-schnell', 'FLUX.1 Schnell', 0],
+  ];
+  const insert = db.prepare(`INSERT OR IGNORE INTO media_models
+    (platform, model_id, display_name, modality, priority, enabled, quota_label)
+    SELECT ?, ?, ?, 'image', ?, 1, 'Provider free allowance'
+    WHERE EXISTS (SELECT 1 FROM api_keys WHERE platform = ? AND enabled = 1)`);
+  db.transaction(() => {
+    for (const [platform, model, display, priority] of routes)
+      insert.run(platform, model, display, priority, platform);
+  })();
+}

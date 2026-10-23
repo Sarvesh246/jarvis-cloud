@@ -1,7 +1,7 @@
 import { timingSafeEqual } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { cloudSeed, selectCloudModels } from '../bootstrap.mjs';
+import { cloudSeed, selectCloudModels, seedCloudImages } from '../bootstrap.mjs';
 
 async function initialize() {
   const config = cloudSeed(process.env);
@@ -22,6 +22,7 @@ async function initialize() {
   applyDeclarativeConfigFromEnv();
   db.prepare("UPDATE settings SET value = ? WHERE key = 'unified_api_key'").run(process.env.FREELLMAPI_API_KEY);
   const models = selectCloudModels(db);
+  seedCloudImages(db);
   const app = createApp({...loadConfig(), serveStaticAssets:false});
   return { app, models };
 }

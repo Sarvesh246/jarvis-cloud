@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { gzipSync } from 'node:zlib';
-import { cloudSeed, selectCloudModels } from './bootstrap.mjs';
+import { cloudSeed, selectCloudModels, seedCloudImages } from './bootstrap.mjs';
 
 test('startup requires separate credentials and a protected dashboard', () => {
   const config = {admin:{email:'owner@example.com',password:'a'.repeat(32)},keys:[{platform:'nvidia',key:'example'}]};
@@ -38,5 +38,25 @@ test('the cloud chain selects supported models and stays stable across restarts'
   db.exec('UPDATE models SET enabled=0');
   assert.throws(()=>selectCloudModels(wrapped),/No configured/);
   assert.equal(db.prepare('SELECT COUNT(*) AS count FROM profile_models').get().count,1,'a failed update retains the working chain');
+  db.close();
+});
+
+test('fresh cloud databases seed images separately and preserve disabled providers on restart', () => {
+  const db = new DatabaseSync(':memory:');
+  db.exec(`CREATE TABLE api_keys (platform TEXT, enabled INTEGER);
+    CREATE TABLE media_models (platform TEXT, model_id TEXT, display_name TEXT, modality TEXT,
+      priority INTEGER, enabled INTEGER, quota_label TEXT, UNIQUE(platform, model_id));
+    INSERT INTO api_keys VALUES ('cloudflare', 1), ('nvidia', 0);`);
+  const wrapped = { prepare: sql => db.prepare(sql), transaction: fn => () => fn() };
+  seedCloudImages(wrapped);
+  assert.deepEqual(db.prepare('SELECT platform, modality, priority FROM media_models').all().map(r => ({...r})),
+    [{ platform: 'cloudflare', modality: 'image', priority: 0 }]);
+  db.exec("UPDATE api_keys SET enabled = 1 WHERE platform = 'nvidia'");
+  seedCloudImages(wrapped);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM media_models').get().n, 1);
+  db.exec("UPDATE media_models SET enabled = 0 WHERE platform = 'cloudflare'");
+  seedCloudImages(wrapped);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM media_models').get().n, 1);
+  assert.equal(db.prepare("SELECT enabled FROM media_models WHERE platform = 'cloudflare'").get().enabled, 0);
   db.close();
 });
