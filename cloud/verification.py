@@ -75,6 +75,7 @@ def _run_worker(payload,token):
                         'Use only in-memory assertions and preloaded standard-library modules; '
                         'no third-party imports, file/source inspection, test discovery on disk, '
                         'terminal queries, processes or network access. No successful verification was recorded.\n') + text
+                text = text.encode('utf-8')[:32_768].decode('utf-8',errors='ignore')
             return {"status": status,
                     'tests_completed':completed,
                     "exit_code": result.returncode, "output": text,
