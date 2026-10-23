@@ -16,7 +16,7 @@ import { cleanAnswer } from "../shared/answer-cleanup.js";
 import { normalizeReplySpacing, normalizeSavedReplySpacing } from "./lib/reply-spacing.js";
 import { requestForReply, imagesForReply } from "./lib/adaptive-ui.js";
 import { fullImages } from "./lib/image-store.js";
-import { cachedPlace, placeFor } from "./lib/location.js";
+import { cachedPlace, needsPlace, placeFor } from "./lib/location.js";
 import { chatTitle, displayChatTitle } from './lib/titles.js';
 import { liveReply, readSyncCache } from "./lib/chat-sync.js";
 import { useChatSync } from "./lib/use-chat-sync.js";
@@ -1472,7 +1472,7 @@ export function App() {
     /* Stop can land during that wait, before the run has a controller. */
     const starting = { id, stopped: false };
     startingRuns.current.set(chatId, starting);
-    const place = await placeFor(prefsRef.current);
+    const place = await placeFor(prefsRef.current, { needed: needsPlace(messages.at(-1)?.text ?? messages.at(-1)?.content) });
     if (startingRuns.current.get(chatId) === starting) startingRuns.current.delete(chatId);
     if (starting.stopped) return;
     await followReply({

@@ -2,7 +2,7 @@ import { richGuidanceFor } from "../shared/rich-ui-guidance.js";
 import { ANSWER_CONTRACT_GUIDANCE } from "../shared/answer-contract.js";
 import { memoryPermission } from './memory-permission.js';
 import { requestTrace } from "../shared/request-trace.js";
-import { forgetHealthy, noteHealthy, waitForBackend } from "./backend-readiness.js";
+import { forgetHealthy, noteHealthy, recentlyHealthy, waitForBackend } from "./backend-readiness.js";
 import { HttpError } from "./security.js";
 import { WORK_GUIDANCE } from "./work-context.js";
 import { CONTEXT_POLICY } from "../shared/context-policy.js";
@@ -506,7 +506,7 @@ async function followRun(res, cfg, user, runId, after, signal, request, deadline
   return !pending && /: end\n\n$/.test(tail) ? "ended" : "cut";
 }
 
-export async function streamChat(req, res, cfg, user, input, request = fetch, { followMs = FOLLOW_MS } = {}) {
+export async function streamChat(req, res, cfg, user, input, request = fetch, { followMs = FOLLOW_MS, warm } = {}) {
   if (!cfg.backend.startsWith("https://") || !cfg.apiKey)
     throw new HttpError(503, "Cloud connection is not configured.");
   const deadline = Date.now() + followMs;
@@ -534,17 +534,32 @@ export async function streamChat(req, res, cfg, user, input, request = fetch, { 
          time to answer; the relay logs the rest per run. */
       const began = Date.now();
       let woke = false;
-      await waitForBackend(cfg.backend, {
-        signal: controller.signal,
-        request,
-        onWaking: () => {
-          woke = true;
-          event(res, "jarvis.status", { message: "Waking Vaelo up. This can take a minute." });
-        },
-      });
+      const waking = () => {
+        woke = true;
+        event(res, "jarvis.status", { message: "Waking Vaelo up. This can take a minute." });
+      };
+      const trusted = recentlyHealthy(cfg.backend, request);
+      if (warm) {
+        // The check began when the request arrived; join it.
+        if (warm.state.woke) waking();
+        warm.state.onWaking = waking;
+        await warm.promise;
+      } else {
+        await waitForBackend(cfg.backend, { signal: controller.signal, request, onWaking: waking });
+      }
       const ready = Date.now();
       trace.mark("backend_ready");
-      await startRun(cfg, user, input, controller.signal, request);
+      try {
+        await startRun(cfg, user, input, controller.signal, request);
+      } catch (error) {
+        /* A health check trusted from moments ago can be stale if the backend
+           restarted since. Check properly and start once more; starting the
+           same run id twice is safe. */
+        if (!trusted || controller.signal.aborted || error?.status === 401 || /API key/.test(error?.message || "")) throw error;
+        forgetHealthy(cfg.backend, request);
+        await waitForBackend(cfg.backend, { signal: controller.signal, request, onWaking: waking });
+        await startRun(cfg, user, input, controller.signal, request);
+      }
       trace.mark("run_started");
       if (process.env.VERCEL) console.info(
         `vaelo run ${input.runId.slice(0, 8)} tier=${input.tier || "normal"} fast=${Boolean(input.fast && !user.guest)} ` +

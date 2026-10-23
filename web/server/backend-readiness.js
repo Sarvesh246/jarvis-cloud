@@ -85,7 +85,7 @@ export async function wakeBackend(backend, { signal, request = fetch, timeoutMs 
    round trip first. A free instance can't fall asleep within this window
    (Render waits 15 idle minutes). Kept per transport, so a test's fake
    fetch never borrows the real one's answer. */
-const TRUST_HEALTHY_MS = 45000;
+const TRUST_HEALTHY_MS = 150000;
 const healthy = new WeakMap();
 
 export function noteHealthy(backend, request = fetch) {
@@ -97,7 +97,7 @@ export function forgetHealthy(backend, request = fetch) {
   healthy.get(request)?.delete(backend.replace(/\/$/, ""));
 }
 
-function recentlyHealthy(backend, request) {
+export function recentlyHealthy(backend, request = fetch) {
   const at = healthy.get(request)?.get(backend.replace(/\/$/, ""));
   const age = Date.now() - at;
   return age >= 0 && age < TRUST_HEALTHY_MS;
@@ -152,4 +152,33 @@ export async function waitForBackend(backend, {
     await pause(Math.min(2500, Math.max(0, deadline - performance.now())), undefined, { signal });
   }
   throw new Error("The cloud server is still starting. Please try again in a moment.");
+}
+
+/* Start the readiness check as soon as the request arrives, so a sleeping
+   backend begins waking while the page's own context (memory, saved work) is
+   still being gathered instead of after it. The chat takes over the promise;
+   `onWaking` is wired up then, and fires at once if waking already began. */
+export function warmBackend(backend, { signal, request = fetch, ...options } = {}) {
+  const state = { woke: false, onWaking: null };
+  const controller = new AbortController();
+  const stop = () => controller.abort();
+  signal?.addEventListener("abort", stop, { once: true });
+  const promise = waitForBackend(backend, {
+    ...options,
+    request,
+    signal: controller.signal,
+    onWaking: () => {
+      state.woke = true;
+      state.onWaking?.();
+    },
+  });
+  promise.catch(() => {});
+  return {
+    promise,
+    state,
+    abort: () => {
+      signal?.removeEventListener("abort", stop);
+      stop();
+    },
+  };
 }

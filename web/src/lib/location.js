@@ -103,15 +103,37 @@ export function locate({ force = false } = {}) {
   return pending;
 }
 
+/* Questions whose answer depends on where the person is. Only these are
+   worth holding a reply for while the phone works out its position. */
+const LOCAL = /\b(?:weather|forecast|temperature|rain(?:ing)?|snow(?:ing)?|humid(?:ity)?|sunrise|sunset|near(?:by| me)|local|around here|my (?:area|location|city|town)|closest|nearest|open now|directions? to)\b/i;
+export function needsPlace(text) {
+  return LOCAL.test(String(text || ''));
+}
+
 /* What a request carries right now: nothing unless switched on, never waits
-   long, and never fails a reply because location was unavailable. */
-export async function placeFor(prefs) {
+   long, and never fails a reply because location was unavailable.
+
+   With `{ needed }` the reply does not wait on the phone's position unless the
+   question depends on it: a known place, even an old one, goes along at once
+   and is refreshed in the background, and with no place yet a short wait is
+   all an everyday question gets. Waiting on GPS used to hold every message for
+   seconds before anything was sent. */
+export async function placeFor(prefs, quick) {
   if (!prefs?.location) return null;
   const started = generation;
+  const limit = quick ? (quick.needed ? 6000 : 800) : 10500;
+  if (quick && cached) {
+    const stale = Date.now() - cached.at >= FRESH_MS;
+    if (!stale) return cached.place;
+    if (!quick.needed) {
+      locate().catch(() => {});
+      return cached.place;
+    }
+  }
   let timer;
   try {
     const place = await Promise.race([locate(), new Promise((resolve) => {
-      timer = setTimeout(() => resolve(cachedPlace(prefs)), 10500);
+      timer = setTimeout(() => resolve(cachedPlace(prefs)), limit);
     })]);
     return generation === started && prefs.location ? place : null;
   } catch {

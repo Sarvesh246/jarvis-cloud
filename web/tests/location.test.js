@@ -192,3 +192,25 @@ test('a slow geocoder cannot lose granted coordinates and disabled sharing sends
     else delete globalThis.navigator;
   }
 });
+
+test('a quick send never waits on the phone for an everyday question', async t => {
+  const b = browser(t);
+  assert.equal(await placeFor({ location: true }, { needed: false }), null, "no place yet: only a short wait");
+  b.grant(0);
+  await new Promise(resolve => setTimeout(resolve, 0));
+  const old = Date.now;
+  t.after(() => { Date.now = old; });
+  Date.now = () => old() + 31 * 60 * 1000;
+  const started = performance.now();
+  const stale = await placeFor({ location: true }, { needed: false });
+  assert.equal(stale.lat, 41.88, 'an old place goes along at once');
+  assert.ok(performance.now() - started < 200);
+  assert.equal(b.positions.length, 2, 'and is refreshed in the background');
+});
+
+import { needsPlace } from '../src/lib/location.js';
+test('only place-dependent questions are worth waiting for', () => {
+  assert.equal(needsPlace('what is the weather today'), true);
+  assert.equal(needsPlace('good coffee near me'), true);
+  assert.equal(needsPlace('explain recursion'), false);
+});

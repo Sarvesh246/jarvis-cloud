@@ -185,7 +185,7 @@ test('healthy cache is scoped to backend and transport and expires after clock r
     now--;
     await waitForBackend('https://cache.example', { request });
     assert.equal(calls, 1, 'a future cache timestamp cannot establish recent health');
-    now += 45000;
+    now += 150000;
     await waitForBackend('https://cache.example', { request });
     assert.equal(calls, 2);
     forgetHealthy('https://cache.example/', request);
@@ -295,4 +295,17 @@ test('a clock rollback during warm-up cannot extend its overall deadline', async
     assert.equal(wakes, 1);
     assert.equal(pauses, 1);
   } finally { Date.now = originalNow; }
+});
+
+test('a warm-up started early reports waking to a listener that joins late', async () => {
+  const { warmBackend } = await import('../server/backend-readiness.js');
+  let probes = 0;
+  const request = async url => {
+    if (String(url).endsWith('/health') && ++probes > 1) return Response.json({ status: 'ok' });
+    return new Response('loading', { status: 502 });
+  };
+  const warm = warmBackend('https://warm-late.example', { request, pause: async () => {} });
+  await warm.promise;
+  assert.equal(warm.state.woke, true);
+  warm.abort();
 });

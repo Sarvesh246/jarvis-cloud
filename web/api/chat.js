@@ -10,6 +10,7 @@ import { LIMITS, chatInput, guestInput, resumeInput, streamChat } from "../serve
 import { withSelectedWork } from "../server/work-context.js";
 import { withMemory } from "../server/memory.js";
 import { requestTrace } from "../shared/request-trace.js";
+import { warmBackend } from "../server/backend-readiness.js";
 
 /* POST starts a reply and follows it; GET picks a reply back up after the
    last event the page saw. Either way the reply itself runs on the relay. */
@@ -18,6 +19,7 @@ export default async function handler(req, res) {
     if (process.env.VERCEL) console.info(JSON.stringify(record));
   }});
   let outcome = "error";
+  let warm;
   try {
     if (req.method !== "POST" && req.method !== "GET") throw new HttpError(405, "Method not allowed.");
     const cfg = settings();
@@ -29,6 +31,12 @@ export default async function handler(req, res) {
       trace.identify(input.runId);
     } else {
       sameOrigin(req, cfg);
+      // Begin waking the backend now; the context below is gathered meanwhile.
+      if (cfg.backend?.startsWith("https://") && cfg.apiKey) {
+        const left = new AbortController();
+        res.once("close", () => left.abort());
+        warm = warmBackend(cfg.backend, { signal: left.signal });
+      }
       input = await trace.span('context',async()=>chatInput(await readJson(req,LIMITS.body),{guest:Boolean(user.guest)}));
       trace.identify(input.runId);
       if (user.guest) input = guestInput(input);
@@ -43,11 +51,12 @@ export default async function handler(req, res) {
     trace.count(req.method==='GET'?'resume_requests':'start_requests');
     if(['quick','normal','deep'].includes(input.tier)) trace.count('tier_'+input.tier);
     if(input.fast) trace.count('fast_requested');
-    outcome = await streamChat(req, res, cfg, user, input);
+    outcome = await streamChat(req, res, cfg, user, input, undefined, { warm });
   } catch (error) {
     if (!res.headersSent) fail(res, error);
     else res.end();
   } finally {
+    warm?.abort();
     trace.finish(outcome);
   }
 }
