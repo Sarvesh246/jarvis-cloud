@@ -1871,15 +1871,25 @@ class RelayTests(unittest.TestCase):
         def progress(status):
             return 'event: hermes.tool.progress\ndata: ' + json.dumps({'tool':'weather_forecast','toolCallId':'w','status':status})
         stream = [progress('running'), progress('completed'), chunk('Clear, around 60 F.', 'stop'), 'data: [DONE]']
-        for question, expected in (("What's the weather today", True), ('Weather in Paris tomorrow', False)):
+        for question, expected in (("What's the weather today", True), ('Weather in Paris tomorrow', True)):
             hermes, relay, port = self.boot([stream])
             result = json.dumps({'success':True,'reference':'[[vaelo-weather:' + 'f'*24 + ']]'})
             with mock.patch.object(relay_module,'weather_tool',return_value=result) as tool, mock.patch.object(relay_module,'read_forecast',return_value='WIDGET'):
                 self.call(port, 'POST', '/vaelo/runs', {'id': RUN, 'messages':[{'role':'user','content':question}], 'place':{'lat':30.6,'lon':-96.3}})
                 self.assertEqual(self.finished(relay).outcome, 'complete')
             self.assertEqual(tool.called, expected, question)
+            if question.startswith('Weather in Paris'): self.assertEqual(tool.call_args.args[0], {'location':'Paris','day_offset':1})
             _, frames = self.events(port)
             self.assertEqual('WIDGET' in json.dumps(frames), expected, question)
+
+    def test_a_weather_question_answered_without_the_tool_still_gets_the_widget(self):
+        for question, expected in (("What's the weather like", True), ('Explain how weather forecasts work', False)):
+            _, relay, port = self.boot([[chunk('It is mild.', 'stop'), 'data: [DONE]']])
+            result = json.dumps({'success':True,'reference':'[[vaelo-weather:' + 'a1'*12 + ']]'})
+            with mock.patch.object(relay_module,'weather_tool',return_value=result) as tool, mock.patch.object(relay_module,'read_forecast',return_value='WIDGET'):
+                self.call(port, 'POST', '/vaelo/runs', {'id': RUN, 'messages':[{'role':'user','content':question}], 'place':{'lat':30.6,'lon':-96.3}})
+                self.assertEqual(self.finished(relay).outcome, 'complete')
+            self.assertEqual(tool.called, expected, question)
 
     def test_stop_during_weather_tool_never_emits_forecast(self):
         _, relay, port = self.boot([])
@@ -2159,4 +2169,6 @@ class AttachedSourceGuardTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
 

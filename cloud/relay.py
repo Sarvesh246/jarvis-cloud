@@ -272,6 +272,21 @@ def wants_weather_format(text):
     return bool(re.search(r"\b(?:table|plain text|text only|json|csv|markdown|bullet(?:s| points)?|list|in words|no widget|just (?:tell|say))\b", text or "", re.I))
 
 
+def weather_intent(text):
+    """A plain question about the weather, not an explanation, a translation or a piece of writing."""
+    text = text or ""
+    return bool(re.search(r"\b(?:weather|forecast|temperature|raining|snowing|will it (?:rain|snow)|how (?:hot|cold|warm)|umbrella)\b", text, re.I)
+                and not re.search(r"\b(?:explain|translate|poem|essay|write|code|function|api|why|how does|what causes|meaning of|history of)\b", text, re.I))
+
+
+_PLACE = re.compile(r"\b(?:in|for|at|near|around)\s+([A-Z][\w.'-]*(?:[ ,]+[A-Z][\w.'-]*){0,3})")
+
+
+def named_place(text):
+    found = _PLACE.search(text or "")
+    return found[1].strip(" ,.")[:120] if found else None
+
+
 def names_other_place(text):
     """A destination named in the question, so shared coordinates must not stand in for it."""
     return bool(re.search(r"\b(?:in|for|at|near|around|to)\s+(?!the\b|my\b|me\b|today\b|tomorrow\b|tonight\b|this\b|next\b|here\b|a\b|an\b|\d)[A-Za-z]", text or "", re.I))
@@ -1591,20 +1606,28 @@ class Relay:
             _, notes = split_notes(seen['answer'])
             if notes and body.get('memory_can_note') is True and isinstance(body.get('memory_permission'), str) and not run.trace.counts.get('tool_starts'):
                 run.event('jarvis.memory', {'notes': notes, 'permission': body['memory_permission']})
-            if (run.route == "hermes" and not constrained(seen['contract']) and not seen["forecasts"]
-                    and "weather_forecast" in run.trace.executed_tools
-                    and not WEATHER_REFERENCE.search(seen["answer"]) and isinstance(body.get("place"), dict)
-                    and not names_other_place(request_text(messages)) and not wants_weather_format(request_text(messages))):
-                # The agent fetched a forecast but did not repeat its reference. For a plain
-                # question about where the person is, fetch the same widget ourselves.
-                try:
-                    place = body["place"]
-                    found = widget_reference({}, weather_tool({"latitude": place.get("lat"), "longitude": place.get("lon")}))
-                    if found:
-                        seen["forecasts"].append(found)
-                        run.trace.counts["weather_widget_recoveries"] = 1
-                except Exception:
-                    pass
+            asked = request_text(messages)
+            if (not constrained(seen['contract']) and not seen["forecasts"] and not run.stopped
+                    and not WEATHER_REFERENCE.search(seen["answer"]) and not wants_weather_format(asked)
+                    and ("weather_forecast" in run.trace.executed_tools or weather_intent(asked))):
+                # A weather question gets the weather widget whatever the model did: it may have
+                # answered from context, asked for plain text, or forgotten the reference.
+                ask = None
+                if names_other_place(asked):
+                    destination = named_place(asked)
+                    ask = {"location": destination} if destination else None
+                elif isinstance(body.get("place"), dict):
+                    ask = {"latitude": body["place"].get("lat"), "longitude": body["place"].get("lon")}
+                if ask:
+                    if re.search(r"\btomorrow\b", asked, re.I): ask["day_offset"] = 1
+                    if re.search(r"\b(?:this|next|coming)\s+week\b|\bweek\b|\b7[- ]day\b", asked, re.I): ask["days"] = 7
+                    try:
+                        found = widget_reference({}, weather_tool(ask))
+                        if found:
+                            seen["forecasts"].append(found)
+                            run.trace.counts["weather_widget_recoveries"] = 1
+                    except Exception:
+                        pass
             for token in ([] if constrained(seen['contract']) else dict.fromkeys([*WEATHER_REFERENCE.findall(seen["answer"]), *seen["forecasts"]])):
                 forecast = read_forecast(token, not_before=forecast_started)
                 if not forecast:
