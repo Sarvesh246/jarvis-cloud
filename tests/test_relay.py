@@ -330,7 +330,7 @@ class RelayTests(unittest.TestCase):
         def capture_connection(host,port):
             connection=connect(host,port);connections.append(connection);return connection
         relay.fast_connect=capture_connection
-        with mock.patch.dict('os.environ',{'FREELLMAPI_URL':'https://router.example/v1','FREELLMAPI_API_KEY':'test','OPENROUTER_API_KEY':'or-test'},clear=True), mock.patch.object(relay_module,'verify_python',side_effect=[{'status':'failed'},{'status':'passed','receipt':{'runtime':'python'}}]) as checked:
+        with mock.patch.dict('os.environ',{'FREELLMAPI_URL':'https://router.example/v1','FREELLMAPI_API_KEY':'test','OPENROUTER_API_KEY':'or-test'},clear=True), mock.patch.object(relay_module,'verify_python',side_effect=[{'status':'failed','output':'AssertionError: input changed'},{'status':'passed','receipt':{'runtime':'python'}}]) as checked:
             self.call(port,'POST','/vaelo/runs',{'id':RUN,'messages':[
                 {'role':'system','content':'Never access a network. Later corrections override earlier ones.'},
                 {'role':'user','content':'Write a Python function f(items). Do not mutate the input. Include tests.'}]})
@@ -344,6 +344,9 @@ class RelayTests(unittest.TestCase):
         self.assertEqual(sum(message['role']=='user' for message in repair_messages),1)
         self.assertIn('Write a Python function f(items)',repair_messages[-1]['content'])
         self.assertIn('python_tests_failed',repair_messages[-1]['content'])
+        self.assertIn('AssertionError: input changed',repair_messages[-1]['content'])
+        self.assertNotIn('input changed',provider.requests[0]['body']['messages'][-1]['content'])
+        self.assertFalse(any(message['role']=='assistant' for message in repair_messages))
         self.assertNotIn('tools',provider.requests[0]['body'])
         self.assertEqual([connection.timeout for connection in connections],[relay_module.CODE_IMAGE_SECONDS]*2)
         self.assertIn('jarvis.verification',b''.join(run.frames).decode())
