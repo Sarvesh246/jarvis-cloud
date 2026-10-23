@@ -1891,6 +1891,30 @@ class RelayTests(unittest.TestCase):
                 self.assertEqual(self.finished(relay).outcome, 'complete')
             self.assertEqual(tool.called, expected, question)
 
+    def test_weekly_questions_get_the_week_widget_not_a_single_day(self):
+        _, relay, port = self.boot([])
+        call = 'data: ' + json.dumps({'choices':[{'delta':{'tool_calls':[{'index':0,'function':{'name':'weather_forecast','arguments':'{}'}}]},'finish_reason':'tool_calls'}]})
+        self.fast_provider(relay, [[call, 'data: [DONE]'], [chunk('A mild week.', 'stop'), 'data: [DONE]']])
+        result = json.dumps({'success':True,'reference':'[[vaelo-weather:' + 'b2'*12 + ']]'})
+        with mock.patch.dict('os.environ', {'FREELLMAPI_URL':'https://router.example','FREELLMAPI_API_KEY':'test'}), mock.patch.object(relay_module,'weather_tool',return_value=result) as tool, mock.patch.object(relay_module,'read_forecast',return_value='WEEK'):
+            self.call(port, 'POST', '/vaelo/runs', {'id': RUN, 'messages':[{'role':'user','content':"What's the weekly weather"}], 'fast':'You are Vaelo.', 'place':{'lat':30.6,'lon':-96.3}})
+            self.assertEqual(self.finished(relay).outcome, 'complete')
+        self.assertEqual(tool.call_args.args[0]['days'], 7)
+        self.assertEqual(tool.call_args.args[0]['day_offset'], 0)
+
+    def test_agent_day_widget_is_swapped_for_the_week_when_a_week_was_asked(self):
+        marker = '[[vaelo-weather:' + 'c3'*12 + ']]'
+        _, relay, port = self.boot([[chunk(marker, 'stop'), 'data: [DONE]']])
+        week = json.dumps({'success':True,'reference':'[[vaelo-weather:' + 'd4'*12 + ']]'})
+        def read(token, **kw):
+            return '```weather\n{"view": "day"}\n```' if token == 'c3'*12 else 'WEEK VIEW'
+        with mock.patch.object(relay_module,'weather_tool',return_value=week) as tool, mock.patch.object(relay_module,'read_forecast',side_effect=read):
+            self.call(port, 'POST', '/vaelo/runs', {'id': RUN, 'messages':[{'role':'user','content':'weather this week'}], 'place':{'lat':30.6,'lon':-96.3}})
+            self.assertEqual(self.finished(relay).outcome, 'complete')
+        _, frames = self.events(port)
+        self.assertIn('WEEK VIEW', json.dumps(frames))
+        self.assertNotIn('"view": "day"', json.dumps(frames))
+
     def test_stop_during_weather_tool_never_emits_forecast(self):
         _, relay, port = self.boot([])
         call = 'data: ' + json.dumps({'choices':[{'delta':{'tool_calls':[{'index':0,'function':{'name':'weather_forecast','arguments':'{}'}}]},'finish_reason':'tool_calls'}]})

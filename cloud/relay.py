@@ -287,6 +287,26 @@ def named_place(text):
     return found[1].strip(" ,.")[:120] if found else None
 
 
+def week_requested(text):
+    """A request for the coming week or seven days, not a weekend or a single day."""
+    return bool(re.search(r"\bweek(?:ly|s)?\b|\b(?:7|seven)[- ]days?\b", text or "", re.I))
+
+
+def weather_ask(asked, body):
+    """Arguments for the widget this question deserves, or None when no place is known."""
+    if names_other_place(asked):
+        destination = named_place(asked)
+        ask = {"location": destination} if destination else None
+    elif isinstance(body.get("place"), dict):
+        ask = {"latitude": body["place"].get("lat"), "longitude": body["place"].get("lon")}
+    else:
+        ask = None
+    if ask:
+        if re.search(r"\btomorrow\b", asked or "", re.I): ask["day_offset"] = 1
+        if week_requested(asked): ask.update(days=7, day_offset=7 if re.search(r"\bnext week\b", asked, re.I) else 0)
+    return ask
+
+
 def names_other_place(text):
     """A destination named in the question, so shared coordinates must not stand in for it."""
     return bool(re.search(r"\b(?:in|for|at|near|around|to)\s+(?!the\b|my\b|me\b|today\b|tomorrow\b|tonight\b|this\b|next\b|here\b|a\b|an\b|\d)[A-Za-z]", text or "", re.I))
@@ -1363,6 +1383,8 @@ class Relay:
                         arguments = dict(original)
                         if arguments.get("output") in ("text", "data") and not wants_weather_format(request_text(messages)):
                             arguments["output"] = "widget"
+                        if week_requested(request_text(messages)) and not wants_weather_format(request_text(messages)) and not arguments.get("start_date"):
+                            arguments.update(days=7, day_offset=7 if re.search(r"\bnext week\b", request_text(messages), re.I) else 0)
                         place = body.get("place")
                         if not any(k in arguments for k in ("location", "latitude", "longitude")) and isinstance(place, dict):
                             arguments.update(latitude=place.get("lat"), longitude=place.get("lon"))
@@ -1612,15 +1634,8 @@ class Relay:
                     and ("weather_forecast" in run.trace.executed_tools or weather_intent(asked))):
                 # A weather question gets the weather widget whatever the model did: it may have
                 # answered from context, asked for plain text, or forgotten the reference.
-                ask = None
-                if names_other_place(asked):
-                    destination = named_place(asked)
-                    ask = {"location": destination} if destination else None
-                elif isinstance(body.get("place"), dict):
-                    ask = {"latitude": body["place"].get("lat"), "longitude": body["place"].get("lon")}
+                ask = weather_ask(asked, body)
                 if ask:
-                    if re.search(r"\btomorrow\b", asked, re.I): ask["day_offset"] = 1
-                    if re.search(r"\b(?:this|next|coming)\s+week\b|\bweek\b|\b7[- ]day\b", asked, re.I): ask["days"] = 7
                     try:
                         found = widget_reference({}, weather_tool(ask))
                         if found:
@@ -1630,6 +1645,11 @@ class Relay:
                         pass
             for token in ([] if constrained(seen['contract']) else dict.fromkeys([*WEATHER_REFERENCE.findall(seen["answer"]), *seen["forecasts"]])):
                 forecast = read_forecast(token, not_before=forecast_started)
+                if forecast and '"view": "day"' in forecast and week_requested(asked) and not wants_weather_format(asked):
+                    # The model fetched a single day for a weekly question; show the week.
+                    ask = weather_ask(asked, body)
+                    swapped = widget_reference({}, weather_tool(ask)) if ask else None
+                    forecast = (read_forecast(swapped, not_before=forecast_started) if swapped else "") or forecast
                 if not forecast:
                     run.event("jarvis.error", {"message": "The forecast could not be loaded. Please try again."})
                     return run.finish("error")
