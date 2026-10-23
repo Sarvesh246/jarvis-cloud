@@ -8,6 +8,17 @@ import { memoryApi } from '../server/account-api.js';
 import { memoryStorage, reply } from './helpers-storage.js';
 import { checkAnswer } from '../evaluation/metrics.js';
 import { replyRegistry } from '../src/lib/reply-registry.js';
+import { openingChat } from '../src/lib/chat-opening.js';
+
+test('reload restores this tab submitted messages over another tab empty draft snapshot',()=>{
+  const stale={id:'tab-two',messages:[]};
+  const own={id:'tab-two',messages:[{id:'question',role:'user',text:'Own source'},
+    {id:'answer',role:'assistant',running:true,run:'own-run'}]};
+  const opened=openingChat([stale,{id:'other-tab',messages:[]}],'tab-two',false,()=>({id:'fresh'}),own);
+  assert.equal(opened.id,'tab-two');
+  assert.deepEqual(opened.list.find(chat=>chat.id==='tab-two'),own);
+  assert.equal(openingChat([stale],'tab-two',true,()=>({id:'fresh'}),own).id,'fresh');
+});
 
 test('recovery registries isolate accounts and keep run identity and original start time', () => {
   const rows = new Map(), storage = { getItem: key => rows.get(key), setItem: (key,value) => rows.set(key,value) };

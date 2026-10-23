@@ -44,9 +44,9 @@ function setup() {
     return (await store.manifest()).data;
   };
   let id = 0;
-  const device = (chats = [], storage = memoryStorage(), base = {}) => {
+  const device = (chats = [], storage = memoryStorage(), base = {}, deleted = []) => {
     const state = { chats, conflicts: 0, issue: "", storage };
-    state.sync = new ChatSync({ sub: "owner", chats, base, storage, request,
+    state.sync = new ChatSync({ sub: "owner", chats, base, deleted, storage, request,
       uuid: () => `version-${++id}`, onChange: (next) => state.chats = next,
       onConflict: () => state.conflicts++, onStatus: (issue) => state.issue = issue });
     return state;
@@ -88,10 +88,20 @@ test("offline deletion survives a restart and does not resurrect the deleted cha
   const a = device([chat()]); await a.sync.tick();
   a.sync.observe([]);
   const cache = readSyncCache("owner", a.storage);
-  const restarted = device(cache.chats, a.storage, cache.base);
+  const restarted = device(cache.chats, a.storage, cache.base, cache.deleted);
   await restarted.sync.tick();
   const phone = device(); await phone.sync.tick();
   assert.deepEqual(phone.chats, []);
+});
+
+test('a shared baseline without its chat snapshot downloads it instead of deleting it', async () => {
+  const {device,store}=setup();
+  const a=device([chat('one'),chat('two')]);await a.sync.tick();
+  const cache=readSyncCache('owner',a.storage);
+  const b=device([chat('one')],memoryStorage(),cache.base);
+  await b.sync.tick();
+  assert.equal(b.chats.some(chat=>chat.id==='two'),true);
+  assert.equal((await store.manifest()).data.entries.two.deleted,false);
 });
 
 test("an edit made while an upload is in flight stays pending and syncs next time", async () => {

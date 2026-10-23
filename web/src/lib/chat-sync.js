@@ -69,11 +69,14 @@ export function mergeChats(local, remote) {
 // The server uses conditional writes; a conflicting local edit is merged, or
 // kept as a copy when the two histories diverged.
 export class ChatSync {
-  constructor({ sub, chats, base = {}, request, onChange, onStatus, onConflict,
+  constructor({ sub, chats, base = {}, deleted = [], request, onChange, onStatus, onConflict,
     storage = localStorage, uuid = () => crypto.randomUUID(), busy = () => null }) {
     Object.assign(this, { sub, request, onChange, onStatus, onConflict, storage, uuid, busy });
     this.current = new Map(chats.map((chat) => [chat.id, chat]));
-    this.base = { ...base };
+    this.deleted = new Set(deleted);
+    // A shared cache may know a revision this tab has not downloaded. Only
+    // explicit local deletion intent may turn an absent snapshot into a delete.
+    this.base = Object.fromEntries(Object.entries(base).filter(([id])=>this.current.has(id)||this.deleted.has(id)));
     this.stopped = false;
     this.running = false;
     this.again = false;
@@ -87,6 +90,9 @@ export class ChatSync {
     globalThis.document?.addEventListener?.("visibilitychange", this.flush);
   }
   observe(chats) {
+    const ids = new Set(chats.map(chat=>chat.id));
+    for (const id of this.current.keys()) if (!ids.has(id)) this.deleted.add(id);
+    for (const id of ids) this.deleted.delete(id);
     this.current = new Map(chats.map((chat) => [chat.id, chat]));
     /* A streaming reply changes the chats every frame; writing the whole
        list to localStorage each time stalls the page, so while one streams
@@ -107,7 +113,7 @@ export class ChatSync {
     clearTimeout(this.saveTimer);
     this.saveTimer = null;
     try {
-      this.storage.setItem(syncKey(this.sub), JSON.stringify({ chats: [...this.current.values()], base: this.base }));
+      this.storage.setItem(syncKey(this.sub), JSON.stringify({ chats: [...this.current.values()], base: this.base, deleted: [...this.deleted] }));
       this.storage.removeItem(`jarvis-chats:${this.sub}`);
     } catch { this.onStatus("Local backup is full. Keep this tab open until sync completes."); }
   }
@@ -170,6 +176,7 @@ export class ChatSync {
         if (next) this.current.set(id, next);
         else this.current.delete(id);
         this.base[id] = { version: entry.version, fingerprint: fingerprint(chat) };
+        this.deleted.delete(id);
         this.emit();
       }
       const ids = new Set([...this.current.keys(), ...Object.keys(this.base)]);
@@ -198,6 +205,7 @@ export class ChatSync {
         if (this.stopped) return;
         // Changes made during the upload remain dirty for the next pass.
         this.base[id] = { version, fingerprint: mark };
+        if (!this.current.has(id)) this.deleted.delete(id);
         this.persist();
         } catch (error) {
           // A failed upload must still publish the run for other devices to

@@ -549,11 +549,11 @@ export function App() {
     const shortcut = new URLSearchParams(location.search).has("new");
     if (shortcut) history.replaceState(null, "", "/");
     const open = readOpenChat(sub);
+    let own;
     try {
-      const own = JSON.parse(sessionStorage.getItem(`${OPEN_CHAT_KEY}:data:${sub}`) || 'null');
-      if (own?.id === open && Array.isArray(own.messages) && !saved.some(chat => chat.id === open)) saved = [own, ...saved];
+      own = JSON.parse(sessionStorage.getItem(`${OPEN_CHAT_KEY}:data:${sub}`) || 'null');
     } catch { /* a missing tab backup falls back to account sync */ }
-    return openingChat(saved, open, shortcut, freshChat);
+    return openingChat(saved, open, shortcut, freshChat, own);
   }
 
   async function loadSession() {

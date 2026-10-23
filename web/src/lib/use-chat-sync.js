@@ -21,6 +21,7 @@ export function useChatSync({ session, chats, setChats, busyId, onConflict }) {
       try {
         localStorage.setItem(syncKey(session.user.sub), JSON.stringify({
           chats, base: readSyncCache(session.user.sub)?.base || {},
+          deleted: readSyncCache(session.user.sub)?.deleted || [],
         }));
         localStorage.removeItem(`jarvis-chats:${session.user.sub}`);
       } catch { setIssue("Local backup is full. Keep this tab open until sync completes."); }
@@ -32,6 +33,7 @@ export function useChatSync({ session, chats, setChats, busyId, onConflict }) {
     const sync = new ChatSync({
       sub: session.user.sub, chats: latest.current.chats,
       base: readSyncCache(session.user.sub)?.base || {},
+      deleted: readSyncCache(session.user.sub)?.deleted || [],
       busy: () => Boolean(latest.current.busyId),
       onChange: setChats, onStatus: setIssue,
       onConflict: () => latest.current.onConflict(),
