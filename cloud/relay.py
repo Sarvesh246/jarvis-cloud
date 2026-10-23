@@ -292,6 +292,11 @@ class ToolOutputGuard:
     def __init__(self, messages):
         user = next((m.get("content", "") for m in reversed(messages)
                      if m.get("role") == "user"), "")
+        # Attached files and workspaces are supplied sources, not the request: a
+        # resume that mentions Python or functions must not switch the guard off.
+        if isinstance(user, str):
+            user = re.sub(r'(?m)^Attached file:[^\n]*\n(`{3,}|~{3,})[^\n]*\n[\s\S]*?\n\1[ \t]*$', '', user)
+            user = re.split(r'\n*Selected Vaelo workspace:', user, 1)[0]
         # Only explicit technical requests exempt examples, never supplied sources.
         self.examples = isinstance(user, str) and bool(re.search(
             r'\b(?:schema|tool[ -]?call|function[ -]?call|function calling|tool calling|chatml|protocol tokens|reasoning tags)\b|'

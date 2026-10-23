@@ -2120,5 +2120,17 @@ class RelayTests(unittest.TestCase):
         self.assertEqual(relay.guest_active, 0)
 
 
+class AttachedSourceGuardTests(unittest.TestCase):
+    def test_attached_file_text_cannot_disable_the_tool_output_guard(self):
+        fence='`'*3
+        resume=f'Attached file: resume.pdf\n{fence}\nImplemented a serverless function; debug JSON API issues; Python parser\n{fence}'
+        guard=relay_module.ToolOutputGuard([{'role':'user','content':"Check my resume and tell me if it's fine\n\n"+resume}])
+        self.assertFalse(guard.examples)
+        self.assertFalse(guard.code_requested)
+        explicit=relay_module.ToolOutputGuard([{'role':'user','content':'Show an example function call as JSON.\n\n'+resume}])
+        self.assertTrue(explicit.examples)
+
+
 if __name__ == "__main__":
     unittest.main()
+
