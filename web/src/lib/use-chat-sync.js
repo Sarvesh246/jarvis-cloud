@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ChatSync, readSyncCache, syncKey } from "./chat-sync.js";
 import { readEvents } from "../stream.js";
+import { persistentChats } from './slash-history.js';
 
 /* Storage is checked this often while the live feed is down, and only this
    rarely while it is up: then the feed says the moment anything changes. */
@@ -16,11 +17,11 @@ export function useChatSync({ session, chats, setChats, busyId, onConflict }) {
   const latest = useRef({ chats, busyId, onConflict });
   latest.current = { chats, busyId, onConflict };
   useLayoutEffect(() => {
-    if (engine.current && engine.current.sub === session?.user?.sub) engine.current.observe(chats);
+    if (engine.current && engine.current.sub === session?.user?.sub) engine.current.observe(persistentChats(chats));
     else if (session?.user) {
       try {
         localStorage.setItem(syncKey(session.user.sub), JSON.stringify({
-          chats, base: readSyncCache(session.user.sub)?.base || {},
+          chats: persistentChats(chats), base: readSyncCache(session.user.sub)?.base || {},
           deleted: readSyncCache(session.user.sub)?.deleted || [],
         }));
         localStorage.removeItem(`jarvis-chats:${session.user.sub}`);
@@ -31,11 +32,11 @@ export function useChatSync({ session, chats, setChats, busyId, onConflict }) {
     if (!session?.user || session.offline) return;
     const controller = new AbortController();
     const sync = new ChatSync({
-      sub: session.user.sub, chats: latest.current.chats,
+      sub: session.user.sub, chats: persistentChats(latest.current.chats),
       base: readSyncCache(session.user.sub)?.base || {},
       deleted: readSyncCache(session.user.sub)?.deleted || [],
       busy: () => Boolean(latest.current.busyId),
-      onChange: setChats, onStatus: setIssue,
+      onChange: saved => setChats(current => [...saved, ...current.filter(chat => chat.temporary)]), onStatus: setIssue,
       onConflict: () => latest.current.onConflict(),
       request: async (path, body) => {
         const response = await fetch(path, {
@@ -120,6 +121,8 @@ export function useChatSync({ session, chats, setChats, busyId, onConflict }) {
       engine.current = null;
     };
   }, [session?.user?.sub, session?.offline, session?.csrf, setChats]);
-  const push = useCallback((id) => engine.current?.push(id), []);
+  const push = useCallback((id) => {
+    if (!latest.current.chats.find(chat => chat.id === id)?.temporary) engine.current?.push(id);
+  }, []);
   return { issue, push };
 }

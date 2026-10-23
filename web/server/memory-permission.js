@@ -2,6 +2,7 @@ import { SignJWT, jwtVerify } from 'jose';
 import { constrainedAnswer } from '../shared/answer-contract.js';
 
 export function permitsMemory(input) {
+  if (input.temporary) return false;
   const last = input.messages?.findLast(message => message.role === 'user')?.content;
   const text = (typeof last === 'string' ? last : Array.isArray(last) ? last.filter(p => p?.type === 'text').map(p => p.text).join('\n') : '')
     .split(/\n\n(?:Attached file: |\[Vaelo request:|\[Selected Vaelo workspace:)/)[0];

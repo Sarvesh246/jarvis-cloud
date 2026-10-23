@@ -28,6 +28,9 @@ import { Header } from "./components/Header.jsx";
 import { Welcome } from "./components/Welcome.jsx";
 import { Message, liveLine } from "./components/Message.jsx";
 import { Composer } from "./components/Composer.jsx";
+import { SlashPanel } from './components/SlashPanel.jsx';
+import { useSlashCommands } from './lib/use-slash-commands.js';
+import { compactedHistory } from './lib/slash-history.js';
 import { Workspace } from "./components/Workspace.jsx";
 import { Settings } from "./components/Settings.jsx";
 import { useSettingsPage } from "./lib/use-settings-page.js";
@@ -349,9 +352,10 @@ const quoted = (text) =>
 
 /* Work that finishes while you're elsewhere says so where you'll see it:
    the tab title always, the app badge and a notification if you asked. */
-async function tellReady(title, content) {
+async function tellReady(title, content, { reminder = false } = {}) {
+  const notificationTitle = reminder ? 'Vaelo reminder' : `Vaelo replied · ${title}`;
   if (DESKTOP) {
-    await desktopNotification(`Vaelo replied · ${title}`, content.replace(/\s+/g, " ").slice(0, 140)).catch(() => {});
+    await desktopNotification(notificationTitle, content.replace(/\s+/g, " ").slice(0, 140)).catch(() => {});
     return;
   }
   try {
@@ -364,8 +368,8 @@ async function tellReady(title, content) {
   const options = { body, tag: "vaelo-reply", icon: "/icons/icon-192.png", badge: "/icons/icon-192.png" };
   try {
     const registration = await navigator.serviceWorker?.getRegistration();
-    if (registration) await registration.showNotification(`Vaelo replied · ${title}`, options);
-    else new Notification(`Vaelo replied · ${title}`, options);
+    if (registration) await registration.showNotification(notificationTitle, options);
+    else new Notification(notificationTitle, options);
   } catch {
     /* the title change still says it */
   }
@@ -380,7 +384,11 @@ export function App() {
   const [desktopSigningIn, setDesktopSigningIn] = useState(false);
   const [session, setSession] = useState(null);
   const registry = useMemo(() => replyRegistry(session?.user?.sub), [session?.user?.sub]);
-  const { read: readLiveReplies, remember: rememberLiveReply, forget: forgetLiveReply } = registry;
+  const { read: readSavedReplies, remember: rememberSavedReply, forget: forgetSavedReply } = registry;
+  const temporaryReplies = useRef({});
+  useEffect(() => { temporaryReplies.current = {}; }, [session?.user?.sub]);
+  function readLiveReplies() { return { ...readSavedReplies(), ...temporaryReplies.current }; }
+  function forgetLiveReply(id) { delete temporaryReplies.current[id]; forgetSavedReply(id); }
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [chats, setChats] = useState([]);
@@ -490,6 +498,11 @@ export function App() {
   const settleTimer = useRef(0);
   const chatsRef = useRef(chats);
   chatsRef.current = chats;
+  function rememberLiveReply(id, chatId, run) {
+    if (chatsRef.current.find(item => item.id === chatId)?.temporary)
+      temporaryReplies.current[id] = { chatId, run: run || id, at: temporaryReplies.current[id]?.at || Date.now() };
+    else rememberSavedReply(id, chatId, run);
+  }
   const active = chats.find((chat) => chat.id === activeId);
   const messages = active?.messages || [];
   /* "Busy" is about the conversation in front of you; the others carry on
@@ -670,7 +683,10 @@ export function App() {
     if (!sub || !activeId) return;
     const save = () => {
       const own = chatsRef.current.find(chat => chat.id === activeId);
-      if (own) try { sessionStorage.setItem(`${OPEN_CHAT_KEY}:data:${sub}`, JSON.stringify(own)); } catch { /* optional offline backup */ }
+      if (own) try {
+        if (own.temporary) sessionStorage.removeItem(`${OPEN_CHAT_KEY}:data:${sub}`);
+        else sessionStorage.setItem(`${OPEN_CHAT_KEY}:data:${sub}`, JSON.stringify(own));
+      } catch { /* optional offline backup */ }
     };
     save();
     addEventListener('pagehide', save);
@@ -688,7 +704,7 @@ export function App() {
   useEffect(() => {
     if (!guest) return;
     try {
-      sessionStorage.setItem(GUEST_CHATS_KEY, JSON.stringify(chats));
+      sessionStorage.setItem(GUEST_CHATS_KEY, JSON.stringify(chats.filter(chat => !chat.temporary)));
     } catch {
       /* a full tab store just means a reload starts fresh */
     }
@@ -960,8 +976,8 @@ export function App() {
   /* Leaving a conversation never touches its reply: it keeps running and
      writing into its own conversation, and the live state, Stop and Esc
      belong to whichever conversation is open. */
-  function newChat() {
-    if (active && !active.messages.length) {
+  function newChat(force = false) {
+    if (force !== true && active && !active.messages.length && !active.temporary && !active.archived) {
       textarea.current?.focus();
       setMenu(false);
       return;
@@ -997,8 +1013,9 @@ export function App() {
     // Read from the latest render: a toast's action may be an older closure.
     const now = writing.current;
     if (id !== now.chatId) {
-      if (now.draft.trim() || attachmentList.current.length)
-        drafts.current.set(now.chatId, { draft: now.draft, attachments: attachmentList.current });
+      const commandDraft = /^\/[a-z][a-z0-9-]*(?:\s|$)/i.test(now.draft);
+      if (now.draft.trim() && !commandDraft || attachmentList.current.length)
+        drafts.current.set(now.chatId, { draft: commandDraft ? '' : now.draft, attachments: attachmentList.current });
       else drafts.current.delete(now.chatId);
       const kept = drafts.current.get(id);
       drafts.current.delete(id);
@@ -1194,6 +1211,7 @@ export function App() {
     const chat = {
       ...freshChat(),
       title: chatTitle(`${active.title} · branch`, 80),
+      ...(active.temporary && { temporary: true }),
       messages: structuredClone(active.messages.slice(0, at + 1)),
     };
     setChats((current) => cap([chat, ...current]));
@@ -1326,11 +1344,11 @@ export function App() {
     }
   }
 
-  async function send({ retry = false, text, edit } = {}) {
+  async function send({ retry = false, text, edit, slashCommand, modeOverride, useAttachments = false } = {}) {
     if (busy || !active || !online || session?.offline) return;
     const chatId = active.id;
     const id = crypto.randomUUID();
-    const mode = { research: options.research, style: options.style, role: options.role };
+    const mode = { research: options.research, style: options.style, role: options.role, ...modeOverride };
     let messages;
     let versions;
     if (edit) {
@@ -1383,7 +1401,7 @@ export function App() {
     } else {
       const typed = (text ?? draft).trim();
       const files =
-        text === undefined ? attachments.filter((file) => file.state === "ready") : [];
+        text === undefined || useAttachments ? attachments.filter((file) => file.state === "ready") : [];
       if (!typed && !files.length) return;
       const content = composeContent(typed, files);
       if (content.length > MESSAGE_LIMIT) return;
@@ -1448,6 +1466,7 @@ export function App() {
                      follow this reply live from the relay, at no model cost. */
                   run: id,
                   running: true,
+                  ...(slashCommand && { slashCommand }),
                   context,
                   ...(versions && { versions, version: versions.length }),
                 },
@@ -1459,7 +1478,7 @@ export function App() {
     pushChat(chatId);
     clearTimeout(settleTimer.current);
     setSettling(false);
-    if (!retry && !edit && text === undefined) {
+    if (!retry && !edit && (text === undefined || useAttachments)) {
       setDraft("");
       setAttachments([]);
     }
@@ -1482,14 +1501,14 @@ export function App() {
       title: active.messages.length
         ? active.title
         : chatTitle(messages[0].text || messages[0].content),
-      start: { conversationId: chatId, runId: id, messages: input, tz: Intl.DateTimeFormat().resolvedOptions().timeZone, ...(place && { place }), ...(profileOf(prefsRef.current) && { profile: profileOf(prefsRef.current) }),
+      start: { conversationId: chatId, runId: id, messages: input, ...(active.temporary && { temporary: true }), tz: Intl.DateTimeFormat().resolvedOptions().timeZone, ...(place && { place }), ...(!active.temporary && profileOf(prefsRef.current) && { profile: profileOf(prefsRef.current) }),
         ...(lastUser.workContext && {work:{id:lastUser.workContext.id,revision:lastUser.workContext.revision}}) },
     });
   }
 
   /* The conversation as it is sent: what can be sent, wired, and fitted. */
-  function wireHistory(messages) {
-    const sendable = messages.filter(
+  function wireHistory(messages, chat = active) {
+    const sendable = compactedHistory(messages, chat?.compaction).filter(
       (message) => (message.content || message.attachments?.length) && !message.failed,
     );
     const visualTurn = visualContextTurn(sendable);
@@ -1509,10 +1528,10 @@ export function App() {
     const chat = chatsRef.current.find((item) => item.id === chatId);
     const at = chat?.messages.findIndex((message) => message.id === id) ?? -1;
     if (at < 1) return null;
-    const { messages } = wireHistory(chat.messages.slice(0, at));
+    const { messages } = wireHistory(chat.messages.slice(0, at), chat);
     const selectedWork = chat.messages.slice(0, at).findLast(message => message.role === "user")?.workContext;
     return messages.length && messages.at(-1).role === "user"
-      ? { conversationId: chatId, runId: id, messages, ...(cachedPlace(prefsRef.current) && { place: cachedPlace(prefsRef.current) }), ...(profileOf(prefsRef.current) && { profile: profileOf(prefsRef.current) }),
+      ? { conversationId: chatId, runId: id, messages, ...(chat.temporary && { temporary: true }), ...(cachedPlace(prefsRef.current) && { place: cachedPlace(prefsRef.current) }), ...(!chat.temporary && profileOf(prefsRef.current) && { profile: profileOf(prefsRef.current) }),
           ...(selectedWork && {work:{id:selectedWork.id,revision:selectedWork.revision}}) }
       : null;
   }
@@ -2290,6 +2309,10 @@ export function App() {
     }
   }
 
+  const slash = useSlashCommands({ session, request, chat: active, chats, setChats, setDraft, textarea, busy, online,
+    options, setOptions, newChat, selectChat, renameChat, togglePin, stopReply, send,
+    setSettingsOpen, setWorkroomOpen, setSaved, setPrefs, showToast, tellReady });
+
   if (loading || autoDesktopSignIn) return <Opening />;
   /* A guest has no account to hand to the desktop app, so a pending handoff
      still needs a real Google sign-in. */
@@ -2422,6 +2445,8 @@ export function App() {
               onChange={setDraft}
               onUpdateFile={(id, body) => setAttachments(current => current.map(file => file.id === id && file.state === 'ready' ? { ...file, body, chars: body.length, size: new TextEncoder().encode(body).length } : file))}
               onSend={() => send()}
+              onCommand={slash.run}
+              temporary={active?.temporary}
               onStop={stopReply}
               onFiles={addFiles}
               onRemoveFile={removeAttachment}
@@ -2448,7 +2473,7 @@ export function App() {
         data-menu={phone ? menu : undefined}
       >
         <Rail
-          chats={chats}
+          chats={chats.filter(chat => !chat.archived)}
           activeId={activeId}
           busy={anyBusy}
           running={live}
@@ -2684,6 +2709,12 @@ export function App() {
           {announcement.id % 2 ? "​" : ""}
         </p>
         <Toast toasts={toast} onDismiss={id => setToast(current => current.filter(item => item.id !== id))} />
+        {slash.panel && <SlashPanel key={slash.panel.key} panel={slash.panel} onClose={slash.close} request={request}
+          session={session} chat={active} chats={chats} attachments={attachments} onRemoveFile={removeAttachment}
+          prefs={prefs} onPrefs={patch => setPrefs(current => ({ ...current, ...patch }))}
+          options={options} onOptions={patch => setOptions(current => ({ ...current, ...patch }))}
+          cloud={cloud} online={online} onRun={slash.run} onSelect={selectChat} onBranch={branchFrom}
+          onArchive={slash.archive} onDraft={setDraft} />}
         <CommandPalette open={commandOpen} onClose={() => setCommandOpen(false)} chats={chats} onSelect={selectChat} onOpenWork={openWork} actions={[
           { id: "new", label: "New conversation", run: newChat },
           { id: "settings", label: "Settings and appearance", run: () => setSettingsOpen(true) },

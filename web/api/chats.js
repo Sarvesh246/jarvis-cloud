@@ -3,6 +3,7 @@ import { ChatStore } from "../server/chat-store.js";
 import { notifyFeed } from "../server/chat.js";
 import { storageConfigured } from "../server/kv-storage.js";
 import { recallApi } from '../server/recall-api.js';
+import { commandDataApi } from '../server/command-data.js';
 import { settings, authorize, sameOrigin, readJson, json, fail, HttpError } from "../server/security.js";
 
 export default async function handler(req, res) {
@@ -12,6 +13,7 @@ export default async function handler(req, res) {
     if (!storageConfigured())
       throw new HttpError(503, "Conversation sync is not configured.");
     const resource = new URL(req.url, cfg.origin).searchParams.get("resource");
+    if (resource === 'commands') return await commandDataApi(req, res, cfg, user);
     if (resource === "memory") return await memoryApi(req, res, cfg, user);
     if (resource === "retention") return await retentionApi(req, res, cfg, user);
     if (resource === 'recall') return await recallApi(req,res,cfg,user);

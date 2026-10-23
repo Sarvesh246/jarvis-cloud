@@ -34,6 +34,8 @@ import { DESKTOP } from "../lib/desktop.js";
 import { DesktopRecognition } from "../lib/dictation.js";
 import { PasteCard, VoiceOrb } from './EverydayUI.jsx';
 import { LONG_PASTE, pasteName } from '../lib/everyday-ui.js';
+import { SlashMenu } from './SlashMenu.jsx';
+import { SLASH_COMMANDS, parseSlash } from '../lib/slash-commands.js';
 
 export const STYLES = [
   { id: "balanced", label: "Balanced", note: "Vaelo’s usual voice." },
@@ -607,6 +609,8 @@ export const Composer = forwardRef(function Composer(
     onClearWork,
     sendKey = "enter",
     menuDown = false,
+    onCommand,
+    temporary = false,
   },
   textarea,
 ) {
@@ -617,6 +621,8 @@ export const Composer = forwardRef(function Composer(
   }, [conversationId, textarea]);
 
   const [menu, setMenu] = useState(false);
+  const [slashDismissed, setSlashDismissed] = useState(false);
+  useEffect(() => setSlashDismissed(false), [draft, conversationId]);
   const phone = usePhone();
   const picker = useRef(null);
   const photos = useRef(null);
@@ -627,6 +633,8 @@ export const Composer = forwardRef(function Composer(
   const over = length > MESSAGE_LIMIT;
   const reading = attachments.some((file) => file.state === "reading");
   const ready = draft.trim() || attachments.some((file) => file.state === "ready");
+  const localCommand = onCommand && parseSlash(draft)?.command && !parseSlash(draft).command.ai;
+  const stopButton = busy && !localCommand;
   const style = STYLES.find((s) => s.id === options.style);
   const role = ROLES.find((r) => r.id === options.role);
   const pastes = onUpdateFile ? attachments.filter(file => file.state === 'ready' && file.name?.startsWith('Pasted — ') && typeof file.body === 'string') : [];
@@ -667,6 +675,11 @@ export const Composer = forwardRef(function Composer(
   useEffect(() => onDictating?.(dictation.listening), [dictation.listening, onDictating]);
 
   function send() {
+    const command = parseSlash(draft);
+    if (onCommand && command) {
+      if (command.name === 'attach') { onChange(''); picker.current?.click(); return; }
+      onCommand(command); return;
+    }
     if (dictation.processing) return;
     if (DESKTOP && dictation.listening) { dictation.toggle(); return; }
     if (dictation.listening) dictation.toggle();
@@ -693,6 +706,14 @@ export const Composer = forwardRef(function Composer(
         send();
       }}
     >
+      {onCommand && <SlashMenu draft={draft} input={textarea} dismissed={slashDismissed}
+        onDismiss={() => setSlashDismissed(true)} commands={SLASH_COMMANDS.filter(item => !guest || !item.account)}
+        onPick={item => {
+          if (item.name === 'attach') { onChange(''); picker.current?.click(); return; }
+          if (item.args) { onChange(`/${item.name} `); textarea.current?.focus(); }
+          else { onCommand({ name: item.name, args: '', command: item }); }
+        }} />}
+      {temporary && <p className="slash-prompt-badge">Temporary chat · not saved · account memory off</p>}
       {(dictation.listening || dictation.processing || reading) && <ActivityIsland title={dictation.listening ? "Recording your voice" : dictation.processing ? "Transcribing your recording" : "Reading attachments"}><p>{dictation.listening ? "Use the microphone button to stop recording. Your words appear in the message field." : dictation.processing ? "The recording is being transcribed. You can send once the text is ready." : `${attachments.filter(file => file.state === "reading").length} attachment(s) being read. See the file previews below.`}</p></ActivityIsland>}
 
       {panel && (
@@ -806,6 +827,8 @@ export const Composer = forwardRef(function Composer(
                   : options.research && !guest ? "What should Vaelo look into?" : "Write to Vaelo")
           }
           aria-label="Message Vaelo"
+          aria-autocomplete={onCommand ? 'list' : undefined}
+          aria-haspopup={onCommand ? 'listbox' : undefined}
           aria-describedby="composer-status"
           rows={1}
           onKeyDown={(event) => {
@@ -973,13 +996,13 @@ export const Composer = forwardRef(function Composer(
               </button>
             )}
             <button
-              type={busy ? "button" : "submit"}
+              type={stopButton ? "button" : "submit"}
               className="send"
-              data-mode={busy ? "stop" : "send"}
-              aria-label={busy ? "Stop" : "Send"}
-              data-tip={busy ? "Stop (Esc)" : "Send"}
-              disabled={!busy && (!ready || over || reading || offline)}
-              onClick={busy ? () => onStop() : undefined}
+              data-mode={stopButton ? "stop" : "send"}
+              aria-label={stopButton ? "Stop" : "Send"}
+              data-tip={stopButton ? "Stop (Esc)" : localCommand ? 'Run command' : "Send"}
+              disabled={!stopButton && (!ready || !localCommand && (over || reading || offline))}
+              onClick={stopButton ? () => onStop() : undefined}
             >
               <ArrowUp className="send-arrow" size={20} weight="bold" />
               <Stop className="send-stop" size={16} weight="fill" />

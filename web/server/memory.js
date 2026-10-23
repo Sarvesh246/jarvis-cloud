@@ -130,7 +130,7 @@ export const memories = new MemoryStore();
    security control: if it can't be read, the reply goes ahead without it and
    Vaelo isn't asked to note anything new. */
 export async function withMemory(input, user, store = memories, search = searchConversations) {
-  if (user.guest || !store.enabled()) return input;
+  if (user.guest || input.temporary || !store.enabled()) return input;
   try {
     const query=plainContext(input.messages.at(-1)?.content).slice(0,4000);
     const { enabled, notes, recallEnabled, forgotten } = await within(1000,signal=>store.forPrompt(user.sub,query,{signal}));

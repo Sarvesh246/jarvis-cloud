@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { validateUsage, UsageStore } from "../server/usage-store.js";
+import { validateUsage, UsageStore, usageAccount } from "../server/usage-store.js";
 import { usageAuthorized } from "../server/usage-api.js";
 
 const event = { id: "test-event-123", route: "hermes", reported: true,
@@ -12,6 +12,24 @@ test("usage accepts only bounded counters and no invented usage", () => {
     { id: "../secret" }, { route: "https://provider" }, { at: "invalid" }, { input: Infinity }])
     assert.throws(() => validateUsage({ ...event, ...patch }));
   assert.equal(validateUsage({ ...event, reported: false, input: 0, output: 0, cached: 0 }).reported, false);
+});
+
+test('account usage queries constrain both totals and coverage to a server-derived account key', async () => {
+  const queries = [];
+  const store = new UsageStore({ query: async (query, params) => {
+    queries.push({ query, params });
+    if (query.startsWith('SELECT count')) return [{ input: '100', output: '20', cached: '50', attempts: 2, unreported: 1 }];
+    if (query.startsWith('SELECT min')) return [{ since: event.at }];
+    return [];
+  } });
+  const result = await store.accountSummary('alice', 'month', new Date('2026-10-23T12:00:00Z'));
+  assert.equal(result.total, 120); assert.equal(result.unreported, 1);
+  const reads = queries.filter(item => item.query.startsWith('SELECT'));
+  assert.equal(reads.length, 2);
+  for (const read of reads) { assert.match(read.query, /WHERE account_key = \$1/); assert.equal(read.params[0], usageAccount('alice')); assert.notEqual(read.params[0], usageAccount('bob')); }
+  assert.equal(reads[0].params[1], '2026-10-01T00:00:00Z');
+  await assert.rejects(store.accountSummary('alice', 'invalid'));
+  assert.throws(() => validateUsage({ ...event, account: 'alice' }));
 });
 
 test("usage credentials fail closed and reader cannot use a writer credential", () => {

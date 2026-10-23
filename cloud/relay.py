@@ -14,6 +14,7 @@ Standard library only, so it adds no dependency to the image or to CI.
 from __future__ import annotations
 
 import hmac
+import hashlib
 import http.client
 import json
 import os
@@ -1080,7 +1081,9 @@ class Relay:
                     self.usage_reporter.record({"id": usage_id, "at": usage_at,
                         "route": run.route or "unknown", "reported": seen["usage_reported"],
                         "input": usage["prompt_tokens"], "output": usage["completion_tokens"],
-                        "cached": usage["cached_tokens"]})
+                        "cached": usage["cached_tokens"],
+                        **({"account": hashlib.sha256(run.owner.encode()).hexdigest()}
+                           if run.owner.startswith("web:") and not run.owner.startswith("web:guest:") else {})})
                 except Exception:
                     self.report("Usage outbox unavailable; token counters could not be queued")
         return seen

@@ -1328,6 +1328,7 @@ class RelayTests(unittest.TestCase):
         self.assertEqual(len({event["id"] for event in events}), 2)
         self.assertEqual(sum(event["input"] + event["output"] for event in events), 240)
         self.assertTrue(all(event["reported"] for event in events))
+        self.assertTrue(all(event["account"] == __import__('hashlib').sha256(OWNER.encode()).hexdigest() for event in events))
         self.assertEqual(len(hermes.requests), 2)
         traces = [json.loads(line) for line in reports if line.startswith('{"schema": 1, "kind": "vaelo.trace"')]
         self.assertEqual(len(traces), 1)

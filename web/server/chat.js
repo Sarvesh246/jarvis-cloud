@@ -336,7 +336,7 @@ export function chatInput(body, { guest = false } = {}) {
   // A one-fact look-up needs the search result, not an agent working it out.
   const quickLookup = Boolean(freshness) && !mode.research && mode.style !== "thorough" && !work && simpleLookup(last.content);
   const tz = place?.tz || readTz(body.tz);
-  return { conversationId: body.conversationId, runId, messages, ...mode, tier, ...(tz && { tz }),
+  return { conversationId: body.conversationId, runId, messages, ...mode, tier, ...(body.temporary === true && { temporary: true }), ...(tz && { tz }),
     fast: (fast && !freshness) || quickLookup, ...(freshness && { freshness }), ...(place && { place }), ...(profile && { profile }), ...(work && {work}) };
 }
 

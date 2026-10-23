@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { UsageStore, validateUsage } from "./usage-store.js";
-import { readJson, json, fail, HttpError } from "./security.js";
+import { readJson, json, fail, HttpError, settings, authorize } from "./security.js";
 
 export function usageAuthorized(header, key) {
   if (!key || key.length < 32 || typeof header !== "string") return false;
@@ -12,6 +12,14 @@ export default async function handler(req, res) {
   res.setHeader("Cache-Control", "no-store");
   try {
     if (!["GET", "POST"].includes(req.method)) throw new HttpError(405, "Method not allowed.");
+    const query = new URL(req.url, 'https://local').searchParams;
+    if (req.method === 'GET' && query.get('account') === 'me') {
+      const user = await authorize(req, settings());
+      const range = query.get('range') || 'month';
+      if (!['today', 'month', 'all'].includes(range)) throw new HttpError(400, 'Choose today, month or all.');
+      store ??= new UsageStore();
+      return json(res, 200, await store.accountSummary(user.sub, range));
+    }
     const ingest = process.env.USAGE_INGEST_KEY || process.env.JARVIS_API_KEY;
     const key = req.method === "POST" ? ingest : (process.env.USAGE_READ_KEY ||
       (ingest ? createHmac("sha256", ingest).update("usage-dashboard-read-v1").digest("hex") : ""));

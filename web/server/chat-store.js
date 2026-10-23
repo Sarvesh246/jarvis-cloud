@@ -72,6 +72,7 @@ export class ChatStore {
       }
       if (chat?.id !== id || !Array.isArray(chat.messages) || typeof chat.title !== "string")
         throw new HttpError(400, "Invalid conversation data.");
+      if (chat.temporary) throw new HttpError(400, 'Temporary conversations cannot be saved.');
     }
     for (let attempt = 0; attempt < 5; attempt++) {
       const current = await this.manifest();
