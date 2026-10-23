@@ -8,6 +8,7 @@ const DECISION = /\b(?:compar\w*|vs\.?|versus|better|best|buy|upgrade|worth|reco
 const FOLLOWUP = /\b(?:which|what about|how about|does it|is it|has it|battery|camera|faster|cheaper|better|price|cost)\b/i;
 const SUBJECT = /\b(?:iphone|ipad|macbook|imac|airpods|apple watch|galaxy|pixel|oneplus|playstation|xbox|nintendo|geforce|radeon|ryzen|snapdragon|surface|thinkpad|python|react|vue|postgresql|mysql|windows|android|ios|chatgpt|claude|gemini)\b|\b[a-z]{2,}[- ]?\d+(?:\.\d+)*\b|\b(?:compare|vs|versus|buy|recommend\w*|specs?|specifications?|latest)\b/i;
 const LOOKUP = /\b(?:search (?:the )?(?:web|internet|online)|browse|look (?:it |this |that )?up|look up|find (?:sources|citations)|fact[- ]check)\b/i;
+const PRIVATE_IDENTIFIER = /\b(?:badge(?:\s+code)?|(?:project|release|access|reference|confirmation|reservation|booking|invite|ticket|case|invoice|order|account)\s+(?:code|codename|identifier|id|number)|codename)\b/i;
 const PUBLIC_DATA = /^(?:define|definition of|meaning of|pokemon|UK postcode)\s|\b(?:find|search)\s+(?:books?|research papers|scholarly papers|journal articles|magic card)\s+(?:about|on|for|called|titled)?\s*|^(?:search|find|look up)\s+.+\s+(?:on|using|via)\s+\S|\b(?:hacker\s*news|product\s*hunt|npm package|pypi package|decode VIN|food barcode|barcode \d{8,14}|air quality|aqi)\b/i;
 const HEALTH = /\b(?:medication|medicine|prescription|ibuprofen|acetaminophen|paracetamol|aspirin|antibiotics?|insulin|dosage|dose|symptoms?|treatment|pregnan\w*|chest pain)\b/i;
 const LAW_MONEY = /\b(?:legal|laws?|landlord|evict\w*|lease|tax(?:es)?|visa|immigration|invest\w*|stocks?|mortgage|insurance|retirement|401k|roth|ira)\b/i;
@@ -47,11 +48,15 @@ export function localizedQuery(query, place) {
 export function freshnessQuery(content, previous = "") {
   const text = requestText(content).replace(/[’‘]/g, "'").trim();
   if (!text || TRANSFORM.test(text) || OFFLINE.test(text)) return null;
+  const history = (Array.isArray(previous) ? previous : [previous]).map(requestText);
   // A "current" private identifier is resolved from account/conversation
   // evidence, not a public web search. Explicit external lookups still win.
   if (!LOOKUP.test(text) && !/https?:\/\//i.test(text) &&
       /\b(?:fictional|synthetic)\s+(?:badge(?:\s+code)?|(?:project |release )?codename)\b|\bmy\s+(?:current\s+)?(?:badge(?:\s+code)?|saved notes?|remembered preferences?)\b/i.test(text)) return null;
-  const history = (Array.isArray(previous) ? previous : [previous]).map(requestText);
+  if (!LOOKUP.test(text) && !/https?:\/\//i.test(text) &&
+      (PRIVATE_IDENTIFIER.test(text) || /\bcurrent code\b/i.test(text)) &&
+      [text,...history].some(value => PRIVATE_IDENTIFIER.test(value) && /\b(?:fictional|synthetic|my|our)\b/i.test(value)) &&
+      !/\b(?:official|public)\b|\b(?:code|codename|identifier)\s+(?:for|of)\s+(?!(?:my|our|this|the fictional)\b)/i.test(text)) return null;
   const context = [];
   let followup = false;
   if (text.length < 180 && FOLLOWUP.test(text)) {
