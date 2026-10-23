@@ -120,7 +120,8 @@ def solve_item(question):
 def worked_math(messages):
     """Return worked answers only for an explicitly requested, fully supported list."""
     content = next((m.get('content') for m in reversed(messages) if m.get('role') == 'user'), '')
-    if not isinstance(content, str) or len(content) > 2500 or len(messages) != 1:
+    turns = [m for m in messages if m.get('role') != 'system']
+    if not isinstance(content, str) or len(content) > 2500 or len(turns) != 1:
         return None
     content = content.split('\n\n[Vaelo request:')[0].strip()
     prefix, *parts = re.split(r'(?<!\S)(\d+)\)\s+', content)

@@ -27,6 +27,10 @@ class WorkedMathTests(unittest.TestCase):
         def run(text):
             return worked_math([{'role':'user', 'content':text}])
         self.assertIn('x=4', run(prefix+'1) Solve 2x=8.'))
+        self.assertIsNotNone(worked_math([{'role':'system','content':'You are Vaelo.'},
+            {'role':'user','content':prefix+'1) Solve 2x=8.'}]))
+        self.assertIsNone(worked_math([{'role':'user','content':'x means a different variable'},
+            {'role':'user','content':prefix+'1) Solve 2x=8.'}]))
         self.assertIsNotNone(run('Arithmetic exercise. '+prefix+'1) Solve 2x=8. 2) Solve x^2-9=0.'))
         for text in [prefix+'1) Solve 2x=8. 2) Explain entropy.',
                      prefix+'2) Solve 2x=8.', prefix+'1) Solve x^3=8.',
