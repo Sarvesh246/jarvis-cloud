@@ -159,7 +159,7 @@ def failure(error, error_type, prompt, aspect_ratio):
 
 
 class FreeLLMAPIImages(ImageGenProvider):
-    """Text-to-image through the router; editing and reference images are not offered."""
+    """Text-to-image and reference-based editing through the router."""
 
     def __init__(self, environ=None, opener=urlopen):
         self.environ = os.environ if environ is None else environ
@@ -183,7 +183,7 @@ class FreeLLMAPIImages(ImageGenProvider):
         return "auto"
 
     def capabilities(self):
-        return {"modalities": ["text"], "max_reference_images": 0}
+        return {"modalities": ["text", "image"], "max_reference_images": 4}
 
     def generate(self, prompt, aspect_ratio="landscape", *, image_url=None,
                  reference_image_urls=None, **kwargs):
@@ -191,15 +191,23 @@ class FreeLLMAPIImages(ImageGenProvider):
         prompt = (prompt or "").strip()
         if not prompt:
             return failure("A prompt is required.", "invalid_request", prompt, aspect_ratio)
-        if image_url or reference_image_urls:
-            return failure("Editing an existing image is not available here; describe the "
-                           "picture as a new text prompt instead.", "modality_unsupported",
-                           prompt, aspect_ratio)
+        if reference_image_urls is not None and not isinstance(reference_image_urls, list):
+            return failure("Reference images must be a list.", "invalid_request", prompt, aspect_ratio)
+        sources = ([image_url] if image_url else []) + (reference_image_urls or [])
+        if len(sources) > 4:
+            return failure("Use up to four reference images.", "invalid_request", prompt, aspect_ratio)
+        try:
+            sources = [reference_pixels(source, self.environ) for source in sources]
+        except (ValueError, OSError):
+            return failure("The reference image is unavailable. Ask for the image to be attached again; "
+                           "new text-to-image generation is still available.", "reference_unavailable", prompt, aspect_ratio)
         base = router(self.environ)
         if not base:
             return failure(OFFLINE, "router_unconfigured", prompt, aspect_ratio)
-        body = json.dumps({"prompt": prompt[:2000], "n": 1, "size": SIZES[aspect_ratio],
-                           "response_format": "b64_json"}).encode()
+        payload = {"prompt": prompt[:2000], "n": 1, "size": SIZES[aspect_ratio], "response_format": "b64_json"}
+        if sources:
+            payload["reference_images"] = sources
+        body = json.dumps(payload).encode()
         request = Request(base + "/images/generations", data=body, method="POST", headers={
             "Authorization": "Bearer " + self.environ["FREELLMAPI_API_KEY"].strip(),
             "Content-Type": "application/json", "User-Agent": "Vaelo",
@@ -249,10 +257,67 @@ class FreeLLMAPIImages(ImageGenProvider):
         model = str(reply.get("model") or "auto")
         return {
             "success": True, "image": reference, "model": model, "prompt": prompt,
-            "aspect_ratio": aspect_ratio, "modality": "text", "provider": NAME,
+            "aspect_ratio": aspect_ratio, "modality": "image" if sources else "text", "provider": NAME,
             "markdown": f"![short caption]({reference})",
             "note": ("Show the picture by writing exactly this Markdown image in the reply, with "
                      "your own short caption in the brackets: ![caption](" + reference + "). "
                      "Keep the reference unchanged; Vaelo turns it into the picture. Do not "
                      "describe it as a photo of a real product."),
         }
+
+
+def reference_pixels(source, environ=os.environ):
+    """Resolve only supplied inline pixels or unguessable local image references; never fetch URLs/files."""
+    if not isinstance(source, str):
+        raise ValueError("invalid reference")
+    token = re.fullmatch(r"(?:vaelo-image:|https://vaelo-image[.]invalid/)([0-9a-f]{24})", source)
+    if token:
+        source = data_uri(token.group(1), environ)
+    if len(source) > MAX_DOWNLOAD * 2 or not re.fullmatch(r"data:image/(?:png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+", source):
+        raise ValueError("unavailable reference")
+    data = base64.b64decode(source.split(',', 1)[1], validate=True)
+    if len(data) > MAX_DOWNLOAD or not mime(data):
+        raise ValueError("invalid reference pixels")
+    # Workers AI reference inputs must fit within 512x512. Decode before sending,
+    # bound compressed bytes above and rely on Pillow's decompression-bomb guard.
+    from PIL import Image
+    with Image.open(io.BytesIO(data)) as picture:
+        if picture.width * picture.height > 16_000_000:
+            raise ValueError('reference image dimensions too large')
+        picture.load()
+        picture = picture.convert('RGB')
+        picture.thumbnail((512, 512))
+        out = io.BytesIO()
+        picture.save(out, 'JPEG', quality=85)
+    return 'data:image/jpeg;base64,' + base64.b64encode(out.getvalue()).decode()
+
+
+def image_creation_request(messages):
+    content = messages[-1].get('content', '') if messages else ''
+    text = content if isinstance(content, str) else ' '.join(p.get('text', '') for p in content if p.get('type') == 'text')
+    has_source = any('Image generated earlier:' in str(m.get('content', '')) or 'vaelo-image:' in str(m.get('content', '')) or
+                     isinstance(m.get('content'), list) and any(p.get('type') == 'image_url' for p in m['content']) for m in messages)
+    return bool(re.search(r'\b(?:generate|draw|design|edit|create|make|render|redraw|recreate|illustrate|sketch)\b.{0,80}\b(?:image|picture|logo|illustration|photo|art|icon)\b|\b(?:turn|convert|transform)\b.{0,100}\b(?:into|to|as)\s+(?:an?\s+)?(?:cartoon|illustration|image|photo|logo|icon|painting|art)\b', text, re.I) or
+                has_source and re.search(r'\b(?:edit|change|modify|replace|remove|add|make|recolor|redraw|another|again|variation)\b', text, re.I))
+
+
+def image_context(messages, environ=os.environ):
+    """Give the tool short reference handles for pixels supplied in this request."""
+    if not image_creation_request(messages):
+        return messages
+    result = []
+    for message in messages:
+        content = message.get('content')
+        if message.get('role') == 'user' and isinstance(content, list):
+            parts = []
+            for part in content:
+                if part.get('type') == 'image_url':
+                    pixels = reference_pixels(part.get('image_url', {}).get('url'), environ)
+                    ref = keep(base64.b64decode(pixels.split(',', 1)[1]), environ)
+                    token = REFERENCE.fullmatch(ref).group(1)
+                    parts.append({'type': 'text', 'text': '[Supplied reference image for image_generate image_url: https://vaelo-image.invalid/' + token + '] '})
+                else:
+                    parts.append(part)
+            message = {**message, 'content': parts}
+        result.append(message)
+    return result

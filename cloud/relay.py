@@ -68,9 +68,9 @@ try:
 except ModuleNotFoundError:
     from cloud.freshness import source_context
 try:
-    from image_gen import REFERENCE as IMAGE_REFERENCE, data_uri
+    from image_gen import REFERENCE as IMAGE_REFERENCE, data_uri, image_context, image_creation_request
 except ModuleNotFoundError:
-    from cloud.image_gen import REFERENCE as IMAGE_REFERENCE, data_uri
+    from cloud.image_gen import REFERENCE as IMAGE_REFERENCE, data_uri, image_context, image_creation_request
 try:
     from weather import SCHEMA as WEATHER_SCHEMA, REFERENCE as WEATHER_REFERENCE, weather_tool, read_forecast, widget_reference
 except ModuleNotFoundError:
@@ -227,7 +227,7 @@ def with_note(content, note):
 
 def source_image_request(messages,body,contract):
     text=request_text(messages)
-    if (not contract.get('images') or contract.get('required_tools')
+    if (body.get('image_creation') or not contract.get('images') or contract.get('required_tools')
             or contract.get('python_tests') or body.get('freshness') or body.get('research')):
         return False
     if re.search(r'\b(?:generate|draw|design|edit|create|make|animate|produce|render|redraw|recreate|illustrate|sketch)\b.{0,60}\b(?:image|picture|logo|illustration|photo|art|icon)\b|\b(?:turn|convert|transform)\b.{0,100}\b(?:into|to|as)\s+(?:an?\s+)?(?:cartoon|illustration|image|photo|logo|icon|painting|art)\b',text,re.I):
@@ -1317,6 +1317,9 @@ class Relay:
         repetition_retried = False
         verification_feedback = None
         try:
+            if not guest and image_creation_request(messages):
+                messages = image_context(messages)
+                body = {**body, "messages": messages, "fast": None, "image_creation": True}
             literal=supplied_literal(messages)
             if literal is not None:
                 run.route='supplied_literal'

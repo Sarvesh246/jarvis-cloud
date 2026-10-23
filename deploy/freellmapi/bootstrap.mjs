@@ -53,6 +53,7 @@ export function selectCloudModels(db, contextTokens = 128000) {
 export function seedCloudImages(db) {
   const routes = [
     ['cloudflare', '@cf/black-forest-labs/flux-1-schnell', 'FLUX.1 Schnell', 0],
+    ['cloudflare', '@cf/black-forest-labs/flux-2-klein-4b', 'FLUX.2 Klein editing', 1],
   ];
   const insert = db.prepare(`INSERT OR IGNORE INTO media_models
     (platform, model_id, display_name, modality, priority, enabled, quota_label)
@@ -61,5 +62,6 @@ export function seedCloudImages(db) {
   db.transaction(() => {
     for (const [platform, model, display, priority] of routes)
       insert.run(platform, model, display, priority, platform);
+    db.prepare("UPDATE media_models SET meta_json = ? WHERE platform = 'cloudflare' AND model_id = '@cf/black-forest-labs/flux-2-klein-4b'").run(JSON.stringify({requestStyle:'multipart'}));
   })();
 }

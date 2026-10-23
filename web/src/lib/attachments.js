@@ -183,7 +183,7 @@ export function wireMessage(message, { latest = false, images = new Map() } = {}
 export function visualContextTurn(messages) {
   const last=messages.at(-1);
   if(last?.attachments?.some(file=>file.kind==='image')) return messages.length-1;
-  if(!/\b(?:image|photo|picture|screenshot|chart|diagram|shapes?|visual|same one|that one)\b/i.test(plainContext(last?.content)))
+  if(!/\b(?:image|photo|picture|screenshot|chart|diagram|shapes?|visual|same one|that one|edit|recolor|make it|change it|remove|replace)\b/i.test(plainContext(last?.content)))
     return messages.length-1;
   return messages.findLastIndex(message=>message.role==='user'&&message.attachments?.some(file=>file.kind==='image'));
 }
@@ -290,4 +290,23 @@ export async function readAttachment(file) {
   if (body.length > MESSAGE_LIMIT - 2_000)
     return { ...base, state: "too-large", note: "Too much text for one message. Add it to a Workroom workspace or split it into smaller files." };
   return { ...base, state: "ready", body, chars: body.length };
+}
+
+
+// Keep source pixels out of routine history, but restore the latest generated
+// image for a creative follow-up so editing survives cache expiry/server restarts.
+export function withGeneratedImageContext(wired, original) {
+  const last = wired.at(-1);
+  if (!last || last.role !== 'user') return wired;
+  const text = plainContext(last.content);
+  if (!/\b(?:edit|change|modify|replace|remove|add|make|recolor|redraw|generate|create|draw|another|again|variation)\b/i.test(text)) return wired;
+  if (Array.isArray(last.content) && last.content.some(p => p.type === 'image_url')) return wired;
+  const previous = original.slice(0, -1).findLast(m => m.role === 'assistant' && /!\[[^\]\n]*\]\(data:image\//.test(m.content || ''));
+  if (!previous) return wired;
+  const sources = [...previous.content.matchAll(/!\[[^\]\n]*\]\((data:image\/[a-z]+;base64,[A-Za-z0-9+/=]+)\)/g)].slice(-4).map(m => m[1]);
+  if (!sources.length) return wired;
+  return [...wired.slice(0, -1), {...last, content: [
+    ...(typeof last.content === 'string' ? [{type:'text',text:last.content}] : last.content),
+    ...sources.map(url => ({type:'image_url', image_url:{url}})),
+  ]}];
 }

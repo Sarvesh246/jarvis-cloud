@@ -45,18 +45,18 @@ test('fresh cloud databases seed images separately and preserve disabled provide
   const db = new DatabaseSync(':memory:');
   db.exec(`CREATE TABLE api_keys (platform TEXT, enabled INTEGER);
     CREATE TABLE media_models (platform TEXT, model_id TEXT, display_name TEXT, modality TEXT,
-      priority INTEGER, enabled INTEGER, quota_label TEXT, UNIQUE(platform, model_id));
+      priority INTEGER, enabled INTEGER, quota_label TEXT, meta_json TEXT, UNIQUE(platform, model_id));
     INSERT INTO api_keys VALUES ('cloudflare', 1), ('nvidia', 0);`);
   const wrapped = { prepare: sql => db.prepare(sql), transaction: fn => () => fn() };
   seedCloudImages(wrapped);
   assert.deepEqual(db.prepare('SELECT platform, modality, priority FROM media_models').all().map(r => ({...r})),
-    [{ platform: 'cloudflare', modality: 'image', priority: 0 }]);
+    [{ platform: 'cloudflare', modality: 'image', priority: 0 }, { platform: 'cloudflare', modality: 'image', priority: 1 }]);
   db.exec("UPDATE api_keys SET enabled = 1 WHERE platform = 'nvidia'");
   seedCloudImages(wrapped);
-  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM media_models').get().n, 1);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM media_models').get().n, 2);
   db.exec("UPDATE media_models SET enabled = 0 WHERE platform = 'cloudflare'");
   seedCloudImages(wrapped);
-  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM media_models').get().n, 1);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM media_models').get().n, 2);
   assert.equal(db.prepare("SELECT enabled FROM media_models WHERE platform = 'cloudflare'").get().enabled, 0);
   db.close();
 });

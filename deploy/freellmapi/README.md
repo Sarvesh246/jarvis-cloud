@@ -4,7 +4,10 @@ FreeLLMAPI v0.14.2 hosted as an API-only Vercel function in a separate project.
 It uses no Render instance hours and shares no process memory with Hermes.
 Only authenticated health, model-list, chat-completion and image-generation endpoints are exposed.
 Image requests use startup-seeded Cloudflare FLUX.1 Schnell with an enabled
-configured Cloudflare key and its provider allowance.
+configured Cloudflare key and its provider allowance. Reference-based edits use
+FLUX.2 Klein 4B, forwarding up to four bounded inline images as multipart inputs.
+A drift-checked build patch extends the pinned adapter while retaining its auth,
+key budgets, provider logging and error handling.
 The image table is separate from the chat profile; no background catalog sync is needed.
 The dashboard and administrative APIs are unavailable.
 

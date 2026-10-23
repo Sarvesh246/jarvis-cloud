@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { composeContent, decodeText, readAttachment } from "../src/lib/attachments.js";
+import { composeContent, decodeText, readAttachment, withGeneratedImageContext } from "../src/lib/attachments.js";
 
 const utf16le = (text, bom = true) => {
   const bytes = new Uint8Array((bom ? 2 : 0) + text.length * 2);
@@ -62,4 +62,18 @@ test("a file's own fences can't close the block that carries it", () => {
   assert.ok(content.endsWith("\nEnd\n`````"));
   const plain = composeContent("", [{ state: "ready", name: "a.txt", body: "no fences" }]);
   assert.equal(plain, "Attached file: a.txt\n```\nno fences\n```");
+});
+
+
+test('creative follow-ups restore the latest generated pixels while ordinary history stays compact', () => {
+  const uri = 'data:image/png;base64,YWJj';
+  const original = [{role:'user',content:'draw a car'}, {role:'assistant',content:`![red car](${uri})`}, {role:'user',content:'make it blue'}];
+  const wired = [{role:'user',content:'draw a car'}, {role:'assistant',content:'[Image generated earlier: red car]'}, original[2]];
+  const result = withGeneratedImageContext(wired, original);
+  assert.equal(result.at(-1).content[1].image_url.url, uri);
+  assert.equal(wired.at(-1).content, 'make it blue');
+  const ordinary = [...wired.slice(0,-1), {role:'user',content:'what is 2+2?'}];
+  assert.equal(withGeneratedImageContext(ordinary, original), ordinary);
+  const uploaded = [...wired.slice(0,-1), {role:'user',content:[{type:'text',text:'edit this image'}, {type:'image_url',image_url:{url:'data:image/png;base64,b3du'}}]}];
+  assert.equal(withGeneratedImageContext(uploaded, original), uploaded);
 });

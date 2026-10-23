@@ -44,5 +44,5 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run evaluate
-      - run: node --test ../deploy/freellmapi/bootstrap.test.mjs
+      - run: npm test --prefix ../deploy/freellmapi
       - run: npm run build

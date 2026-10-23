@@ -1,3 +1,4 @@
+import { withGeneratedImageContext } from './lib/attachments.js';
 import { openingChat } from "./lib/chat-opening.js";
 import { replyTrace } from "./lib/reply-trace.js";
 import { completedTiming } from './lib/reply-timing.js';
@@ -1499,7 +1500,7 @@ export function App() {
       .filter((message) =>
         typeof message.content === "string" ? message.content.trim() : message.content.length,
       );
-    return fitHistory(wired);
+    return fitHistory(withGeneratedImageContext(wired, sendable));
   }
 
   /* The request behind a reply, rebuilt from the saved conversation (after

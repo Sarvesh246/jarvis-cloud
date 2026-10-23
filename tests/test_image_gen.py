@@ -74,6 +74,41 @@ class ImageProviderTests(unittest.TestCase):
         self.assertTrue(image_gen.data_uri(result["image"].split(":")[1], self.environ))
         self.assertEqual(inherited.read_text(), "container-owned cache boundary")
 
+    def test_edits_send_real_reference_pixels_and_advertise_editing(self):
+        ref = image_gen.keep(PIXEL, self.environ)
+        provider = self.provider({"data": [{"b64_json": base64.b64encode(PIXEL).decode()}]})
+        result = provider.generate("make it blue", image_url="https://vaelo-image.invalid/" + ref.split(':')[1])
+        self.assertTrue(result['success'])
+        self.assertEqual(result['modality'], 'image')
+        self.assertIn('image', provider.capabilities()['modalities'])
+        self.assertEqual(provider.capabilities()['max_reference_images'], 4)
+        body = json.loads(self.sent[0].data)
+        self.assertTrue(body['reference_images'][0].startswith('data:image/jpeg;base64,'))
+        self.assertNotIn('vaelo-image', body['reference_images'][0])
+
+    def test_missing_and_untrusted_references_fail_without_text_only_fallback(self):
+        for source in ['vaelo-image:' + '0'*24, 'https://example.com/private.jpg', '/etc/passwd', 'data:image/jpeg;base64,abcd']:
+            with self.subTest(source=source):
+                provider = self.provider({})
+                result = provider.generate('edit it', image_url=source)
+                self.assertEqual(result['error_type'], 'reference_unavailable')
+                self.assertIn('new text-to-image generation is still available', result['error'])
+        self.assertEqual(self.sent, [])
+
+    def test_followup_context_uses_short_handles_and_avoids_vision_only_route(self):
+        messages = [{'role':'assistant','content':'[Image generated earlier: red car]'},
+                    {'role':'user','content':[{'type':'text','text':'make it blue'},
+                     {'type':'image_url','image_url':{'url':'data:image/png;base64,' + base64.b64encode(PIXEL).decode()}}]}]
+        self.assertTrue(image_gen.image_creation_request(messages))
+        context = image_gen.image_context(messages, self.environ)
+        self.assertTrue(all(p['type']=='text' for p in context[-1]['content']))
+        handle = context[-1]['content'][-1]['text'].split('image_url: ')[1].split(']')[0]
+        self.assertTrue(image_gen.reference_pixels(handle, self.environ).startswith('data:image/jpeg'))
+        self.assertFalse(relay_module.source_image_request(context, {'image_creation':True}, {'images':True}))
+        ordinary = [{'role':'user','content':[{'type':'text','text':'what color is the car?'}, messages[-1]['content'][1]]}]
+        self.assertFalse(image_gen.image_creation_request(ordinary))
+        self.assertIs(image_gen.image_context(ordinary, self.environ), ordinary)
+
     def test_router_down_says_so_plainly(self):
         for error in (URLError("refused"), HTTPError("u", 503, "down", {}, None), TimeoutError()):
             result = self.provider(error).generate("a car")
