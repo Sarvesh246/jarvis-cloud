@@ -106,7 +106,7 @@ def contract_guidance(contract):
     """Generate model guidance from the same requirements the validator uses."""
     parts = []
     if contract.get('translation_only'):
-        parts.append('Return only the translation, without usage, ambiguity notes, explanations or follow-up offers.')
+        parts.append('Return only the faithful translation, without usage, ambiguity notes, explanations or follow-up offers. Preserve specific meaning, time references, negation, names and quantities. Do not replace a time-specific greeting with a generic greeting.')
     if contract.get('translation_single_line'):
         parts.append('Return the translated phrase on one line.')
     if contract.get('no_punctuation'):
