@@ -7,6 +7,7 @@ class AnswerContractTests(unittest.TestCase):
         for kind,value in [('booking','aB_28'),('release','ALDER-918'),('reference','ref-v2')]:
             ask=f'Correction: the {kind} code is {value}. Reply only with the current code.'
             self.assertEqual(supplied_literal([{'role':'user','content':ask}]),value)
+            self.assertEqual(supplied_literal([{'role':'user','content':ask+'\n\n[Vaelo request: obey the requested format]'}]),value)
             self.assertIsNone(supplied_literal([{'role':'user','content':ask+' Explain the difference.'}]))
         self.assertIsNone(supplied_literal([{'role':'user','content':'Return only the current code for my Python program.'}]))
         self.assertIsNone(supplied_literal([{'role':'user','content':'What is the current release code?'}]))

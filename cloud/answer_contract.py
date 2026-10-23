@@ -26,7 +26,10 @@ def supplied_literal(messages):
     if not turns or not isinstance(turns[-1].get('content'),str):
         return None
     text=turns[-1]['content']
-    if len(text)>1000 or 'Attached file:' in text or 'Vaelo workspace:' in text:
+    if len(text)>4000 or 'Attached file:' in text or 'Vaelo workspace:' in text:
+        return None
+    text=text.split('\n\n[Vaelo request:')[0]
+    if len(text)>1000:
         return None
     match=re.fullmatch(r'(?:(?:Correction|Update):\s*)?(?:The|My|Our)\s+(?:fictional\s+)?(?:release|badge|reference|confirmation|booking|reservation|invite|ticket)\s+code\s+is\s+([A-Za-z0-9][A-Za-z0-9_-]{0,63})\.\s*(?:Reply|Return|Respond)\s+(?:with\s+)?(?:only|just)\s+(?:with\s+)?(?:the\s+)?(?:current\s+)?code\.',text.strip(),re.I)
     return match[1] if match else None
