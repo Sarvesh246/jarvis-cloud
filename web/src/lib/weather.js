@@ -12,6 +12,21 @@ const temperature = text => {
 };
 // Night periods read as "Tonight" / "Overnight" / "Friday Night" / "This Evening".
 export const isNightLabel = (label = '') => /\b(?:tonight|overnight|night|evening)\b/i.test(label);
+// Deterministic artwork selection from provider conditions, without model calls.
+export function weatherKind(condition = '') {
+  if (/thunder|storm/i.test(condition)) return 'storm';
+  if (/sleet|freezing|ice pellet|wintry|rain.*snow|snow.*rain/i.test(condition)) return 'sleet';
+  if (/snow|blizzard/i.test(condition)) return 'snow';
+  if (/drizzle/i.test(condition)) return 'drizzle';
+  if (/rain|shower/i.test(condition)) return 'rain';
+  if (/fog|mist|haze/i.test(condition)) return 'mist';
+  if (/partly|mostly sunny|mostly clear/i.test(condition)) return 'partly';
+  if (/cloud|overcast/i.test(condition)) return 'cloud';
+  if (/wind|breezy/i.test(condition)) return 'windy';
+  if (/heat|hot/i.test(condition)) return 'heat';
+  if (/sun|clear|fair/i.test(condition)) return 'clear';
+  return 'unknown';
+}
 // Like weather apps: after dark, clear and partly clear skies swap the sun for
 // the moon. Precipitation, fog, and overcast look the same day or night.
 export function weatherIcon(condition = '', isDay = true) {

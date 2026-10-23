@@ -102,12 +102,37 @@ test('actual weather renderer shows bento cards, sources and streaming fallback'
     const weeklyForecast = { ...forecast, view: 'week', periods: Array.from({length: 7}, (_, i) => ({ ...forecast.periods[i % 3], label: `2026-10-${20 + i}` })) };
     const weeklyContent = '```weather\n' + JSON.stringify(weeklyForecast) + '\n```';
     const weekly = render(weeklyContent);
-    for (const label of ['7-day forecast', 'Weekly forecast', 'Week overview', 'Oct 26']) assert.ok(weekly.includes(label), label);
-    assert.equal((weekly.match(/class="weather-period"/g) || []).length, 7);
+    for (const label of ['7-day forecast', 'Weekly forecast', 'Temperature range', 'Oct 26']) assert.ok(weekly.includes(label), label);
+    assert.equal((weekly.match(/class="weather-week-row"/g) || []).length, 7);
+    assert.equal((weekly.match(/class="weather-period"/g) || []).length, 0);
+    assert.equal((weekly.match(/weather-bento weather-detailed/g) || []).length, 1);
     assert.ok(!weekly.includes('Current conditions'));
     assert.ok(!weekly.includes('weather-now'));
+    assert.equal((detailed.match(/class="weather-hour"/g) || []).length, 24);
+    assert.ok(detailed.includes('12 AM'), 'earlier hours remain in the requested day');
+    assert.ok(detailed.includes('11 PM'), 'the hourly strip includes the end of the day');
+    assert.ok(detailed.includes('weather-scene'), 'daily conditions use the supplied pixel scene');
+    const sparse = structuredClone(forecast);
+    sparse.view = 'day'; sparse.periods = [sparse.periods[0]];
+    sparse.current = null; sparse.periods[0].hours = [];
+    sparse.unit = '°C'; sparse.periods[0].high = 0; sparse.periods[0].low = -12;
+    sparse.periods[0].condition = ''; sparse.periods[0].rain = null;
+    const sparseHtml = render('```weather\n' + JSON.stringify(sparse) + '\n```\n\n[National Weather Service](https://www.weather.gov/)');
+    for (const label of ['0°C', '-12°C', 'Hourly forecast unavailable', 'Conditions unavailable', 'National Weather Service', 'Daily high']) assert.ok(sparseHtml.includes(label), label);
+    assert.ok(!sparseHtml.includes('weather-scene"'), 'missing conditions do not invent a sky');
+    assert.ok(!sparseHtml.includes('Open-Meteo'));
+    assert.ok(!sparseHtml.includes('Rain chance'));
+    const equal = { ...weeklyForecast, periods: weeklyForecast.periods.map(p => ({ ...p, high: 0, low: 0 })) };
+    const equalHtml = render('```weather\n' + JSON.stringify(equal) + '\n```');
+    assert.ok(equalHtml.includes('0°F – 0°F'));
+    assert.ok(!equalHtml.includes('NaN'));
     assert.equal(weatherData('```weather\n' + JSON.stringify({...weeklyForecast,periods: weeklyForecast.periods.slice(0,1)}) + '\n```'), null);
   } finally { await server.close(); }
+});
+
+test('provider conditions select precipitation, night-capable and unknown artwork deterministically', async () => {
+  const { weatherKind } = await import('../src/lib/weather.js');
+  for (const [condition, kind] of [['Thunderstorms', 'storm'], ['Freezing rain', 'sleet'], ['Rain and snow', 'sleet'], ['Snow', 'snow'], ['Drizzle', 'drizzle'], ['Rain showers', 'rain'], ['Fog', 'mist'], ['Partly cloudy', 'partly'], ['Mostly clear', 'partly'], ['Overcast', 'cloud'], ['Windy', 'windy'], ['Hot', 'heat'], ['Clear sky', 'clear'], ['', 'unknown']]) assert.equal(weatherKind(condition), kind, condition);
 });
 
 test('weather icons switch to the moon after dark, like weather apps', async () => {

@@ -21,6 +21,7 @@ sessionStorage.setItem('vaelo-guest-chats', JSON.stringify([{ id: 'weather-fixtu
   { id: 'question', role: 'user', content: view==='week'?'How about this week?':'Weather today in College Station' },
   { id: 'answer', role: 'assistant', content, at: Date.now() },
 ] }]));
+sessionStorage.setItem('vaelo-open-chat:weather-test', 'weather-fixture');
 const originalFetch = window.fetch.bind(window);
 window.fetch = async (input, init) => {
   const url = new URL(typeof input === 'string' ? input : input.url, location.href);
