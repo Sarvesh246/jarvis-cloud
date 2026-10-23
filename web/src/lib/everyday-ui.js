@@ -1,6 +1,7 @@
 // Presentation helpers never fetch or generate content. Limits keep untrusted
 // replies from turning a small interaction into an unbounded render.
 import { withoutFencedCode, withoutInlineCode } from './markdown-fences.js';
+import { plainLine } from './structured.js';
 export const LONG_PASTE = 1800;
 export function pasteName(text) {
   return (String(text).split(/\r?\n/).find(line => line.trim()) || 'Pasted text')
@@ -21,11 +22,12 @@ export function answerChoices(content = '') {
   // A closing question followed by a small explicit list of choices is enough
   // evidence to offer buttons. Instructions/checklists are not questions.
   if (content.length > 12000 || /```|~~~|\[[ xX]\]/.test(content)) return null;
-  const found = content.match(/(?:^|\n)([^\n]{8,240}\?)\s*\n((?:(?:[-*]|\d+[.)]|[A-F][.)])\s+[^\n]+\n?){2,6})\s*$/);
+  const found = content.match(/(?:^|\n)([^\n]{8,300}\?)\s*\n(?:[^\n]{0,40}(?:options|choices|approaches)[^\n]{0,35}:\s*\n)?((?:(?:[-*]|\d+[.)]|[A-F][.)])\s+[^\n]+(?:\n\s*)?){2,6})\s*$/i);
   if (!found) return null;
-  const options = found[2].trim().split('\n').map(line => line.replace(/^(?:[-*]|\d+[.)]|[A-F][.)])\s+/, '').trim());
+  if (/!?\[[^\]]*\]\(/.test(found[2])) return null;
+  const options = found[2].trim().split('\n').filter(line => line.trim()).map(line => plainLine(line.trim().replace(/^(?:[-*]|\d+[.)]|[A-F][.)])\s+/, '')));
   if (options.some(x => !x || x.length > 180) || new Set(options).size !== options.length) return null;
-  return { type: 'question', title: found[1].trim(), options, markdown: content.slice(0, found.index).trim() };
+  return { type: 'question', title: plainLine(found[1]), options, markdown: content.slice(0, found.index).trim() };
 }
 export function audioLinks(content = '') {
   if (content.length > 60000) return [];

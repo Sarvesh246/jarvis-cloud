@@ -13,6 +13,11 @@ test('daily presentation recovers evidenced choices and summaries without a visu
   assert.equal(choice.block.type, 'question');
   assert.deepEqual(choice.block.options, ['A quiet weekend', 'A busy city break']);
   assert.equal(choice.markdown, 'A few directions.');
+  const livePattern = automaticPresentation('What kind of setup would you prefer to begin with—building from scratch, or using a website builder?\n\nConcrete options to consider:\n\n1. **DIY with static files** – create an `index.html` and style it with CSS.\n2. **Use a website builder** – start from a template and customize it.', 'Help me start a personal website.');
+  assert.equal(livePattern.block.type, 'question');
+  assert.equal(livePattern.block.options.length, 2);
+  assert.equal(livePattern.block.options[0], 'DIY with static files – create an index.html and style it with CSS.');
+  assert.equal(answerChoices('Which direction do you prefer?\n\nYour options:\n\n1. First direction\n\n2. Second direction').options.length, 2);
   const summary = automaticPresentation('Here is the situation.\n\n- **Scope:** A small website\n- **Time:** Three weeks\n- **Team:** Two designers', 'Tell me about the project');
   assert.equal(summary.block.type, 'widgets');
   assert.equal(summary.block.items.length, 3);
@@ -30,6 +35,7 @@ test('automatic choices protect literal, plain, code, math and oversized output'
   assert.equal(answerChoices('Tasks?\n- [ ] Task one\n- [ ] Task two'), null);
   assert.equal(answerChoices('x'.repeat(12001)), null);
   assert.equal(answerChoices('Options?\n- Same\n- Same'), null);
+  assert.equal(answerChoices('Which source would you choose?\n- [Source one](https://example.com/one)\n- [Source two](https://example.com/two)'), null);
   const citations = '- **First:** [Source](https://example.com/a)\n- **Second:** Some detail\n- **Third:** More detail';
   assert.equal(automaticPresentation(citations, 'Explain'), null);
 });
