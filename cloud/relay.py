@@ -267,6 +267,16 @@ def fast_route(environ):
     return None
 
 
+def wants_weather_format(text):
+    """An explicit request for something other than the weather widget."""
+    return bool(re.search(r"\b(?:table|plain text|text only|json|csv|markdown|bullet(?:s| points)?|list|in words|no widget|just (?:tell|say))\b", text or "", re.I))
+
+
+def names_other_place(text):
+    """A destination named in the question, so shared coordinates must not stand in for it."""
+    return bool(re.search(r"\b(?:in|for|at|near|around|to)\s+(?!the\b|my\b|me\b|today\b|tomorrow\b|tonight\b|this\b|next\b|here\b|a\b|an\b|\d)[A-Za-z]", text or "", re.I))
+
+
 def answered(seen):
     text = seen["content"].strip()
     return bool(text) and text != "(empty)"
@@ -296,7 +306,7 @@ class ToolOutputGuard:
         # resume that mentions Python or functions must not switch the guard off.
         if isinstance(user, str):
             user = re.sub(r'(?m)^Attached file:[^\n]*\n(`{3,}|~{3,})[^\n]*\n[\s\S]*?\n\1[ \t]*$', '', user)
-            user = re.split(r'\n*Selected Vaelo workspace:', user, 1)[0]
+            user = re.split(r'\n*Selected Vaelo workspace:', user, maxsplit=1)[0]
         # Only explicit technical requests exempt examples, never supplied sources.
         self.examples = isinstance(user, str) and bool(re.search(
             r'\b(?:schema|tool[ -]?call|function[ -]?call|function calling|tool calling|chatml|protocol tokens|reasoning tags)\b|'
@@ -1336,6 +1346,8 @@ class Relay:
                     tool_calls, results = [], []
                     for i, original in enumerate(seen["weather_request"]):
                         arguments = dict(original)
+                        if arguments.get("output") in ("text", "data") and not wants_weather_format(request_text(messages)):
+                            arguments["output"] = "widget"
                         place = body.get("place")
                         if not any(k in arguments for k in ("location", "latitude", "longitude")) and isinstance(place, dict):
                             arguments.update(latitude=place.get("lat"), longitude=place.get("lon"))
@@ -1579,6 +1591,20 @@ class Relay:
             _, notes = split_notes(seen['answer'])
             if notes and body.get('memory_can_note') is True and isinstance(body.get('memory_permission'), str) and not run.trace.counts.get('tool_starts'):
                 run.event('jarvis.memory', {'notes': notes, 'permission': body['memory_permission']})
+            if (run.route == "hermes" and not constrained(seen['contract']) and not seen["forecasts"]
+                    and "weather_forecast" in run.trace.executed_tools
+                    and not WEATHER_REFERENCE.search(seen["answer"]) and isinstance(body.get("place"), dict)
+                    and not names_other_place(request_text(messages)) and not wants_weather_format(request_text(messages))):
+                # The agent fetched a forecast but did not repeat its reference. For a plain
+                # question about where the person is, fetch the same widget ourselves.
+                try:
+                    place = body["place"]
+                    found = widget_reference({}, weather_tool({"latitude": place.get("lat"), "longitude": place.get("lon")}))
+                    if found:
+                        seen["forecasts"].append(found)
+                        run.trace.counts["weather_widget_recoveries"] = 1
+                except Exception:
+                    pass
             for token in ([] if constrained(seen['contract']) else dict.fromkeys([*WEATHER_REFERENCE.findall(seen["answer"]), *seen["forecasts"]])):
                 forecast = read_forecast(token, not_before=forecast_started)
                 if not forecast:

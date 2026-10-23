@@ -1855,6 +1855,32 @@ class RelayTests(unittest.TestCase):
             self.assertEqual(self.finished(relay).outcome, 'complete')
         read.assert_not_called()
 
+    def test_ordinary_weather_question_gets_the_widget_even_if_the_model_asks_for_text(self):
+        _, relay, port = self.boot([])
+        call = 'data: ' + json.dumps({'choices':[{'delta':{'tool_calls':[{'index':0,'function':{'name':'weather_forecast','arguments':json.dumps({'output':'text'})}}]},'finish_reason':'tool_calls'}]})
+        self.fast_provider(relay, [[call, 'data: [DONE]'], [chunk('Clear and mild.', 'stop'), 'data: [DONE]']])
+        result = json.dumps({'success':True,'reference':'[[vaelo-weather:' + 'e'*24 + ']]'})
+        with mock.patch.dict('os.environ', {'FREELLMAPI_URL':'https://router.example','FREELLMAPI_API_KEY':'test'}), mock.patch.object(relay_module,'weather_tool',return_value=result) as tool, mock.patch.object(relay_module,'read_forecast',return_value='WIDGET'):
+            self.call(port, 'POST', '/vaelo/runs', {'id': RUN, 'messages':[{'role':'user','content':"What's the weather today"}], 'fast':'You are Vaelo.'})
+            self.assertEqual(self.finished(relay).outcome, 'complete')
+        self.assertEqual(tool.call_args.args[0]['output'], 'widget')
+        _, frames = self.events(port)
+        self.assertIn('WIDGET', json.dumps(frames))
+
+    def test_agent_weather_answer_without_a_reference_still_gets_the_widget(self):
+        def progress(status):
+            return 'event: hermes.tool.progress\ndata: ' + json.dumps({'tool':'weather_forecast','toolCallId':'w','status':status})
+        stream = [progress('running'), progress('completed'), chunk('Clear, around 60 F.', 'stop'), 'data: [DONE]']
+        for question, expected in (("What's the weather today", True), ('Weather in Paris tomorrow', False)):
+            hermes, relay, port = self.boot([stream])
+            result = json.dumps({'success':True,'reference':'[[vaelo-weather:' + 'f'*24 + ']]'})
+            with mock.patch.object(relay_module,'weather_tool',return_value=result) as tool, mock.patch.object(relay_module,'read_forecast',return_value='WIDGET'):
+                self.call(port, 'POST', '/vaelo/runs', {'id': RUN, 'messages':[{'role':'user','content':question}], 'place':{'lat':30.6,'lon':-96.3}})
+                self.assertEqual(self.finished(relay).outcome, 'complete')
+            self.assertEqual(tool.called, expected, question)
+            _, frames = self.events(port)
+            self.assertEqual('WIDGET' in json.dumps(frames), expected, question)
+
     def test_stop_during_weather_tool_never_emits_forecast(self):
         _, relay, port = self.boot([])
         call = 'data: ' + json.dumps({'choices':[{'delta':{'tool_calls':[{'index':0,'function':{'name':'weather_forecast','arguments':'{}'}}]},'finish_reason':'tool_calls'}]})
