@@ -641,9 +641,13 @@ class Relay:
             response = connection.getresponse()
         except (OSError, http.client.HTTPException):
             connection.close()
+            key='fast_'+route['name']+'_transport_failures'
+            run.trace.counts[key]=run.trace.counts.get(key,0)+1
             if not run.stopped:
                 self.fast_health.failure(route['name'])
             return None
+        key='fast_'+route['name']+'_http_'+str(response.status)
+        run.trace.counts[key]=run.trace.counts.get(key,0)+1
         if response.status == 200:
             run.route = route["name"]
             self.fast_health.success(route['name'])
@@ -1388,6 +1392,9 @@ class Relay:
                         progress={**progress,'status':'completed','label':'Returned code and tests passed' if result.get('status')=='passed' else 'Returned code or tests failed'}
                         run.trace.tool(progress);run.event('hermes.tool.progress',progress)
                         if result.get('status')!='passed':
+                            failure = next((kind for kind in ('AssertionError','SystemExit','ImportError','ModuleNotFoundError','TypeError','SyntaxError')
+                                            if kind in result.get('output','')), 'unavailable' if result.get('status')=='unavailable' else 'other')
+                            run.trace.counts['verification_failure_'+failure]=run.trace.counts.get('verification_failure_'+failure,0)+1
                             errors.append('python_tests_failed')
                         else:
                             run.trace.counts['returned_python_verified']=1
