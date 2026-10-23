@@ -253,6 +253,10 @@ class RelayTests(unittest.TestCase):
         good='```python\ndef f(items): return sorted(items)\nassert f([2,1])==[1,2]\n```'
         hermes,relay,port=self.boot([])
         provider,targets=self.fast_provider(relay,[[chunk(bad,'stop'),'data: [DONE]'],[chunk(good,'stop'),'data: [DONE]']])
+        connect=relay.fast_connect;connections=[]
+        def capture_connection(host,port):
+            connection=connect(host,port);connections.append(connection);return connection
+        relay.fast_connect=capture_connection
         with mock.patch.dict('os.environ',{'FREELLMAPI_URL':'https://router.example/v1','FREELLMAPI_API_KEY':'test','OPENROUTER_API_KEY':'or-test'},clear=True), mock.patch.object(relay_module,'verify_python',side_effect=[{'status':'failed'},{'status':'passed','receipt':{'runtime':'python'}}]) as checked:
             self.call(port,'POST','/vaelo/runs',{'id':RUN,'messages':[
                 {'role':'system','content':'Never access a network. Later corrections override earlier ones.'},
@@ -264,6 +268,7 @@ class RelayTests(unittest.TestCase):
         self.assertEqual(targets,[('router.example',None),('openrouter.ai',None)])
         self.assertEqual(provider.requests[0]['headers']['X-FreeLLM-Task-Type'],'code')
         self.assertNotIn('tools',provider.requests[0]['body'])
+        self.assertEqual([connection.timeout for connection in connections],[relay_module.CODE_SECONDS]*2)
         self.assertIn('jarvis.verification',b''.join(run.frames).decode())
 
     def test_memory_directives_are_server_filtered_and_permission_controls_note_events(self):

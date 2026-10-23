@@ -133,6 +133,7 @@ WEATHER_GUIDANCE = ("\n\nFor current weather or forecasts, use weather_forecast 
 # to Hermes, so it can only ever save time, never lose a reply.
 FAST_MAX_TOKENS = 4000
 FAST_SECONDS = 18
+CODE_SECONDS = 60  # Coding pools may wait for reasoning before sending HTTP headers.
 FAST_SYSTEM_CHARS = CONTEXT_POLICY['fastSystemChars']
 # Effort levels sent to a provider directly. "none" is rejected by models whose reasoning is
 # mandatory, and the free routes pick the model themselves, so it is sent as "minimal".
@@ -600,6 +601,10 @@ class Relay:
         if reasoning:
             payload["reasoning"] = reasoning
         connection = self.fast_connect(route["host"], route["port"])
+        if body.get('standalone_python'):
+            # The chat deadline was expiring before a healthy coding model
+            # sent headers, adding an unnecessary full-agent fallback.
+            connection.timeout=CODE_SECONDS
         run.connection = connection
         run.upstream_requests += 1
         try:
