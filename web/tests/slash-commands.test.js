@@ -41,6 +41,13 @@ test('temporary requests cannot read or write account memory', async () => {
 test('context percentage estimates current content rather than lifetime token consumption', () => {
   const snap = contextSnapshot({ messages: [{ id: 'a', content: 'x'.repeat(3000), usage: { total_tokens: 1000000 } }] }, [], { windowTokens: 128000 });
   assert.equal(snap.tokens, 3048); assert.equal(snap.estimated, true); assert.ok(snap.percent < 3);
+  const measured = contextSnapshot({ messages: [
+    { role: 'assistant', content: 'old', usage: { prompt_tokens: 100000, completion_tokens: 10000 } },
+    { role: 'assistant', content: 'latest', usage: { prompt_tokens: 12961, completion_tokens: 10, cached_tokens: 5000 } },
+    { role: 'user', content: 'x'.repeat(30) },
+  ] }, [], { windowTokens: 128000 });
+  assert.equal(measured.tokens, 12981); assert.equal(measured.source, 'provider');
+  assert.ok(measured.percent > 10 && measured.percent < 11);
 });
 
 test('reminder time parsing is bounded and calendar export escapes content and emits real alarms', () => {

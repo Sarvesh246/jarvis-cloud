@@ -51,7 +51,7 @@ export function SlashPanel({ panel, onClose, request, session, chat, chats, atta
   const nextMonth = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth() + 1, 1));
   const context = <section className="slash-context"><div className="slash-context-title"><span className="slash-ring" style={{ '--context-fill': `${snap.percent * 3.6}deg` }} aria-hidden="true"><span>~{snap.percent.toFixed(0)}%</span></span>
     <div><strong>Estimated context usage</strong><p>~{n(snap.tokens)} / {n(snap.limit)} tokens</p></div></div>
-    <p className="slash-hint">Approximate text estimate with a 2,048-token system-prompt allowance. Routing, images, workspace content and tool results can change actual usage. Some routes support a larger window.</p>
+    <p className="slash-hint">{snap.source === 'provider' ? 'Based on the latest provider-reported input and output, plus newer text. Tool-round accounting can overstate current context; pending images and workspace changes may add more.' : 'Approximate text estimate with a 2,048-token system-prompt allowance. Hidden prompts, images and workspace content can change actual usage.'} Uses Vaelo’s base context budget; some routes support a larger window.</p>
     <p className="slash-hint">{snap.messages} messages · {snap.files} pending files{snap.omitted > 0 ? ` · ${snap.omitted} messages summarized` : ''}. Cumulative token consumption is separate.</p></section>;
   const dispatch = (command, args = '') => { onClose(); onRun({ name: command, args, command: SLASH_COMMANDS.find(item => item.name === command) }); };
   let body;

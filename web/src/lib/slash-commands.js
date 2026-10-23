@@ -80,8 +80,16 @@ export function contextSnapshot(chat, pending = [], policy) {
     + pending.reduce((sum, file) => sum + (file.chars || 0), 0) + (at >= 0 ? chat.compaction.summary.length : 0);
   // Deliberately labeled as an estimate: provider tokenizers and hidden tool
   // prompts differ. Cumulative billed tokens are never used as context size.
-  const tokens = Math.ceil(chars / 3) + 2048;
+  const reportedAt = retained.findLastIndex(message => message.role === 'assistant' &&
+    Number.isSafeInteger(message.usage?.prompt_tokens) && message.usage.prompt_tokens > 0 &&
+    Number.isSafeInteger(message.usage?.completion_tokens) && message.usage.completion_tokens >= 0);
+  const reported = reportedAt >= 0 ? retained[reportedAt].usage : null;
+  const newerChars = reported ? retained.slice(reportedAt + 1).reduce((sum, message) => sum + String(message.content || '').length, 0)
+    + pending.reduce((sum, file) => sum + (file.chars || 0), 0) : 0;
+  // Use only the newest request's report, never a sum of conversation usage.
+  // Its input includes system/workspace prompts invisible to the text counter.
+  const tokens = reported ? reported.prompt_tokens + reported.completion_tokens + Math.ceil(newerChars / 3) : Math.ceil(chars / 3) + 2048;
   const limit = policy.windowTokens;
   return { tokens, limit, percent: Math.min(100, tokens / limit * 100), messages: retained.length,
-    omitted: at + 1, files: pending.length, estimated: true };
+    omitted: at + 1, files: pending.length, estimated: true, source: reported ? 'provider' : 'text' };
 }

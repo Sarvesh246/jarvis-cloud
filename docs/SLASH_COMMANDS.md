@@ -30,7 +30,7 @@ The relay hashes the verified `web:<subject>` ownership key into usage events. T
 
 Recorded tokens are input plus output. Cached input is a subset of input. Unknown token reports make totals a lower bound. All-time means all attributed recorded time, not usage predating account tracking. Monthly periods use UTC; the UI also shows the next period's local time and days remaining. Provider quotas are separate.
 
-Context percentage is explicitly an estimate of the current content against Vaelo's base context budget. Provider tokenizers, larger routed windows, images, workspace content and tool prompts can change actual usage. Cumulative consumed tokens are not used as context size.
+Context percentage is explicitly an estimate against Vaelo's base context budget. When available, it uses only the latest request's reported input and output plus newer text, capturing system prompts invisible to a character counter. Without a report it falls back to a labeled text estimate. Tool-round accounting can overstate current context; larger routed windows, images and workspace changes can also affect it. Cumulative conversation consumption and cached-token counts are never added to context size.
 
 ## Capability boundaries
 
