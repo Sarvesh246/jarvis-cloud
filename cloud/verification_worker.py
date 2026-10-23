@@ -2,9 +2,11 @@
 import ctypes
 import ctypes.util
 import json
+import os
 import resource
 import sys
 import sysconfig
+import types
 
 # Load useful standard-library modules before filesystem access is removed.
 import bisect, collections, copy, datetime, decimal, fractions, functools, heapq
@@ -67,6 +69,9 @@ def main():
     resource.setrlimit(resource.RLIMIT_AS, (192 * 1024 * 1024,) * 2)
     resource.setrlimit(resource.RLIMIT_FSIZE, (32_768,) * 2)
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+    # argparse/unittest format help using terminal dimensions. There is no
+    # terminal in this worker; avoid their otherwise prohibited ioctl probe.
+    os.environ.update(COLUMNS='80', LINES='24', TERM='dumb', NO_COLOR='1')
     # Read and close stdin before confinement. Only stdout/stderr are inherited.
     sys.stdin.close()
     try:
@@ -74,7 +79,9 @@ def main():
     except RuntimeError:
         print('Isolation unavailable; no submitted code was executed.',flush=True)
         raise SystemExit(78)
-    namespace = {"__name__": "__main__"}
+    submitted = types.ModuleType('__main__')
+    sys.modules['__main__'] = submitted
+    namespace = submitted.__dict__
     try:
         if javascript:
             engine.eval(source)
