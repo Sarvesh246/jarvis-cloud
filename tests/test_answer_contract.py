@@ -3,6 +3,14 @@ from cloud.answer_contract import contract_for, validate_answer, constrained, re
 
 
 class AnswerContractTests(unittest.TestCase):
+    def test_translation_only_does_not_publish_ambiguity_or_usage_notes(self):
+        contract=self.contract('Translate "Good morning" into French. Return only the conventional translation with no punctuation.')
+        self.assertTrue(constrained(contract))
+        self.assertFalse(validate_answer('Bonjour',contract)[1])
+        self.assertIn('translation_single_line',validate_answer('Bonjour\nNo ambiguous phrases to note.',contract)[1])
+        self.assertIn('translation_punctuation',validate_answer('Bonjour!',contract)[1])
+        poem=self.contract('Translate the supplied poem into French. Return only the translation in exactly 4 lines.')
+        self.assertFalse(poem['translation_single_line'])
     def test_requested_execution_is_verified_without_requiring_a_tool_name(self):
         python=self.contract('Implement a Python function sum_values(items), then actually execute assertion tests for [], [0] and [1,-2,3].')
         self.assertTrue(python['python_tests'])

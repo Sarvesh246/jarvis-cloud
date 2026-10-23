@@ -2,6 +2,7 @@
 import json
 import ast
 import re
+import unicodedata
 from pathlib import Path
 from decimal import Decimal, InvalidOperation
 
@@ -45,6 +46,7 @@ def request_text(messages):
 def contract_for(messages, tools_available=True):
     text = request_text(messages)
     text = re.sub(r'```[^\n]*\n[\s\S]*?```|~~~[^\n]*\n[\s\S]*?~~~','',text)
+    translation_only=bool(re.search(r'\b(?:return|reply|respond|give)\s+(?:with\s+)?(?:only|just)\s+(?:the\s+)?(?:(?:conventional|literal|direct|final)\s+)?translation\b',text,re.I))
     limits = []
     for match in LIMIT.finditer(text):
         count = number(match[2]) - int(match[1].lower() in ('under', 'fewer than'))
@@ -80,6 +82,9 @@ def contract_for(messages, tools_available=True):
                        or execution_tests and re.search(r'\b(?:implement|write|create|generate)\b',text,re.I)))
     result_count = re.search(r'\b(?:give|return|provide|reply with)\s+(?:only|just)\s+(?:(?:those|these|the)\s+)?(one|two|three|four|five|six|seven|eight|nine|ten|[1-9]\d?)\s+(?:results|answers)\b', text, re.I)
     return {'json': bool(ONLY_JSON.search(text)), 'limits': list(dict.fromkeys(limits))[:8],'required_keys':required,
+            'translation_only':translation_only,
+            'translation_single_line':translation_only and bool(re.match(r'^\s*Translate\s+["“][^"\n]{1,160}["”]\s+(?:into|to)\s+[\w -]{2,40}[.!?]',text,re.I)) and not any(unit=='line' and count>1 for unit,mode,count in limits),
+            'no_punctuation':translation_only and bool(re.search(r'\b(?:no|without)\s+punctuation[.!]?\s*$',text,re.I)),
             'unknown_only':bool(re.search(r'''\b(?:reply|return|respond|answer)\s+(?:with\s+)?(?:only|just)\s+["'`]?UNKNOWN["'`]?\s+if\b''',text,re.I)),
             'exact_keys': bool(re.search(r'\b(?:exact(?:ly)?|only)\s+(?:these\s+)?(?:fields|keys)\b|\bthese exact fields\b',text,re.I)),
             'python_tests': code_tests,
@@ -94,12 +99,18 @@ def contract_for(messages, tools_available=True):
 
 
 def constrained(contract):
-    return bool(contract.get('json') or contract.get('limits') or contract.get('required_tools') or contract.get('python_tests') or contract.get('result_count') or contract.get('images') or contract.get('unknown_only'))
+    return bool(contract.get('json') or contract.get('limits') or contract.get('required_tools') or contract.get('python_tests') or contract.get('result_count') or contract.get('images') or contract.get('unknown_only') or contract.get('translation_only'))
 
 
 def contract_guidance(contract):
     """Generate model guidance from the same requirements the validator uses."""
     parts = []
+    if contract.get('translation_only'):
+        parts.append('Return only the translation, without usage, ambiguity notes, explanations or follow-up offers.')
+    if contract.get('translation_single_line'):
+        parts.append('Return the translated phrase on one line.')
+    if contract.get('no_punctuation'):
+        parts.append('Omit punctuation as requested.')
     if contract.get('unknown_only'):
         parts.append('If the requested fact cannot be determined from the supplied evidence, return exactly UNKNOWN, with no explanation or follow-up. If it can be determined, answer normally from that evidence.')
     if contract.get('json'):
@@ -128,6 +139,10 @@ def contract_guidance(contract):
 def validate_answer(text, contract, executed_tools=()):
     result = text.strip()
     errors = []
+    if contract.get('translation_single_line') and len(result.splitlines())!=1:
+        errors.append('translation_single_line')
+    if contract.get('no_punctuation') and any(unicodedata.category(character).startswith('P') for character in result):
+        errors.append('translation_punctuation')
     if contract.get('unknown_only'):
         if result.upper() == 'UNKNOWN':
             result='UNKNOWN'
@@ -203,6 +218,8 @@ def validate_answer(text, contract, executed_tools=()):
 
 def repair_instruction(errors):
     guidance=[]
+    if any(error.startswith('translation_') for error in errors):
+        guidance.append('Return only the requested translation, with no notes or explanation, obeying the original line and punctuation requirements.')
     if 'unknown_only' in errors:
         guidance.append('If the requested fact is unavailable, return exactly UNKNOWN without an explanation or follow-up. Do not invent a value.')
     if any(error in ('raw_json','required_json_fields','exact_json_fields') for error in errors):
