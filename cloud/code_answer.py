@@ -22,8 +22,21 @@ def returned_python(answer, preserve_input=False):
     code='\n\n'.join(blocks) if blocks else answer
     tree=ast.parse(code)
     calls=[]
-    called={node.value.func.id for node in tree.body if isinstance(node,ast.Expr) and
-            isinstance(node.value,ast.Call) and isinstance(node.value.func,ast.Name)}
+    top_level=[part for node in tree.body if not isinstance(node,(ast.FunctionDef,ast.ClassDef))
+               for part in ast.walk(node)]
+    called={node.func.id for node in top_level if isinstance(node,ast.Call)
+            and isinstance(node.func,ast.Name)}
+    local_functions={node.name:node for node in tree.body if isinstance(node,ast.FunctionDef)}
+    reachable=set(called)
+    pending=list(called)
+    while pending:
+        function=local_functions.get(pending.pop())
+        if function is None:
+            continue
+        for node in ast.walk(function):
+            if isinstance(node,ast.Call) and isinstance(node.func,ast.Name) and node.func.id not in reachable:
+                reachable.add(node.func.id)
+                pending.append(node.func.id)
     for node in tree.body:
         if isinstance(node,ast.FunctionDef) and node.name.startswith('test') and not node.args.args and node.name not in called:
             calls.append(node.name+'()')
@@ -32,7 +45,9 @@ def returned_python(answer, preserve_input=False):
             calls += [f'_vaelo_result=unittest.TestResult()',
                       f'unittest.defaultTestLoader.loadTestsFromTestCase({node.name}).run(_vaelo_result)',
                       'assert _vaelo_result.wasSuccessful(), str(_vaelo_result.failures)+str(_vaelo_result.errors)']
-    runnable_tests=bool(calls) or any(name.startswith('test') for name in called)
+    runnable_tests=bool(calls) or any(name.startswith('test') for name in called) or any(
+        any(isinstance(node,ast.Assert) for node in ast.walk(local_functions[name]))
+        for name in reachable if name in local_functions)
     # Derive independent mutation checks from literal inputs already supplied
     # in the returned assertions, without guessing task-specific answers.
     functions={node.name for node in tree.body if isinstance(node,ast.FunctionDef)

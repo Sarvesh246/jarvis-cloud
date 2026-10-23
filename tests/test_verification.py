@@ -27,6 +27,18 @@ class VerificationInputTests(unittest.TestCase):
 
 @unittest.skipUnless(sys.platform == "linux", "Requires actual Linux seccomp")
 class LinuxVerificationTests(unittest.TestCase):
+    def test_assertion_runner_names_and_main_guard_execute_real_checks(self):
+        from cloud.code_answer import returned_python
+        source = ('def sum_values(items): return sum(items)\n'
+                  'def check_values():\n    assert sum_values([1,-2,3])==2\n'
+                  'def run_checks(): check_values()\n'
+                  'if __name__ == "__main__": run_checks()\n')
+        self.assertEqual(verify(returned_python('```python\n'+source+'```'))['status'],'passed')
+        bad=source.replace('==2','==3')
+        self.assertEqual(verify(returned_python('```python\n'+bad+'```'))['status'],'failed')
+        uncalled=source.replace('if __name__ == "__main__": run_checks()','')
+        self.assertEqual(verify(returned_python('```python\n'+uncalled+'```'))['status'],'failed')
+
     def test_returned_unittest_main_uses_submitted_module_without_terminal_access(self):
         from cloud.code_answer import returned_python
         source = ('import unittest\n'
