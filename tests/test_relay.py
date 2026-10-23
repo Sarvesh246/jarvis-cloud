@@ -192,6 +192,20 @@ class FakeHermes:
 
 
 class RelayTests(unittest.TestCase):
+    def test_complete_supplied_identifier_avoids_provider_and_external_retrieval(self):
+        hermes,relay,port=self.boot([])
+        with mock.patch.object(relay_module,'source_context') as lookup:
+            self.call(port,'POST','/vaelo/runs',{'id':RUN,'messages':[
+                {'role':'user','content':'Correction: the booking code is Alder-926. Reply only with the current code.'}],
+                'freshness':'current booking code'})
+            run=self.finished(relay)
+        self.assertEqual(run.route,'supplied_literal')
+        self.assertEqual(run.outcome,'complete')
+        self.assertEqual(hermes.requests,[])
+        self.assertEqual(run.trace.executed_tools,set())
+        lookup.assert_not_called()
+        self.assertIn('Alder-926',b''.join(run.frames).decode())
+
     def test_native_pool_failure_retains_pixels_through_checked_gateway_vision(self):
         for readable in (True,False):
             with self.subTest(readable=readable):
