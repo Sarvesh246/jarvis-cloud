@@ -92,3 +92,16 @@ class WeatherTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class DayConditionTests(unittest.TestCase):
+    def test_one_drizzly_hour_does_not_make_a_dry_day_rainy(self):
+        from cloud.weather import day_condition
+        hours = [{"condition": "Clear sky", "isDay": True, "rain": 2} for _ in range(9)]
+        hours[4] = {"condition": "Drizzle", "isDay": True, "rain": 8}
+        self.assertEqual(day_condition(hours, 61, 8), "Clear sky")
+
+    def test_a_wet_day_is_still_wet(self):
+        from cloud.weather import day_condition
+        hours = [{"condition": "Rain", "isDay": True, "rain": 80} for _ in range(6)]
+        self.assertEqual(day_condition(hours, 63, 85), "Rain")

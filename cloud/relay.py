@@ -292,11 +292,38 @@ def week_requested(text):
     return bool(re.search(r"\bweek(?:ly|s)?\b|\b(?:7|seven)[- ]days?\b", text or "", re.I))
 
 
-def weather_ask(asked, body):
+def weather_followup(messages):
+    """A short follow-up ("how about this week?") to a weather exchange, which never says "weather"."""
+    asked = request_text(messages)
+    if len(asked.split()) > 10 or not re.search(r"\b(?:week|weekly|tomorrow|tonight|today|weekend|hourly|next)\b", asked, re.I):
+        return False
+    earlier = [m for m in messages if m.get("role") in ("user", "assistant")]
+    for message in reversed(earlier[:-1][-2:]):
+        content = message.get("content")
+        text = content if isinstance(content, str) else " ".join(p.get("text", "") for p in content or [] if isinstance(p, dict))
+        if message.get("role") == "assistant" and re.search(r"vaelo-weather|```weather|\bforecast\b", text, re.I):
+            return True
+        if message.get("role") == "user" and weather_intent(text):
+            return True
+    return False
+
+
+def earlier_place(messages):
+    """A destination named in the earlier weather question, carried into a follow-up."""
+    users = [m.get("content") for m in messages if m.get("role") == "user" and isinstance(m.get("content"), str)]
+    for text in reversed(users[:-1][-3:]):
+        if weather_intent(text) and names_other_place(text):
+            return named_place(text)
+    return None
+
+
+def weather_ask(asked, body, messages=()):
     """Arguments for the widget this question deserves, or None when no place is known."""
     if names_other_place(asked):
         destination = named_place(asked)
         ask = {"location": destination} if destination else None
+    elif messages and earlier_place(messages):
+        ask = {"location": earlier_place(messages)}
     elif isinstance(body.get("place"), dict):
         ask = {"latitude": body["place"].get("lat"), "longitude": body["place"].get("lon")}
     else:
@@ -1628,13 +1655,14 @@ class Relay:
             _, notes = split_notes(seen['answer'])
             if notes and body.get('memory_can_note') is True and isinstance(body.get('memory_permission'), str) and not run.trace.counts.get('tool_starts'):
                 run.event('jarvis.memory', {'notes': notes, 'permission': body['memory_permission']})
-            asked = request_text(messages)
+            original = body["messages"]
+            asked = request_text(original)
             if (not constrained(seen['contract']) and not seen["forecasts"] and not run.stopped
                     and not WEATHER_REFERENCE.search(seen["answer"]) and not wants_weather_format(asked)
-                    and ("weather_forecast" in run.trace.executed_tools or weather_intent(asked))):
+                    and ("weather_forecast" in run.trace.executed_tools or weather_intent(asked) or weather_followup(original))):
                 # A weather question gets the weather widget whatever the model did: it may have
                 # answered from context, asked for plain text, or forgotten the reference.
-                ask = weather_ask(asked, body)
+                ask = weather_ask(asked, body, original)
                 if ask:
                     try:
                         found = widget_reference({}, weather_tool(ask))
@@ -1647,7 +1675,7 @@ class Relay:
                 forecast = read_forecast(token, not_before=forecast_started)
                 if forecast and '"view": "day"' in forecast and week_requested(asked) and not wants_weather_format(asked):
                     # The model fetched a single day for a weekly question; show the week.
-                    ask = weather_ask(asked, body)
+                    ask = weather_ask(asked, body, original)
                     swapped = widget_reference({}, weather_tool(ask)) if ask else None
                     forecast = (read_forecast(swapped, not_before=forecast_started) if swapped else "") or forecast
                 if not forecast:

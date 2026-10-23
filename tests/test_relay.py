@@ -1915,6 +1915,18 @@ class RelayTests(unittest.TestCase):
         self.assertIn('WEEK VIEW', json.dumps(frames))
         self.assertNotIn('"view": "day"', json.dumps(frames))
 
+    def test_a_short_follow_up_after_a_forecast_gets_the_week_widget(self):
+        week = json.dumps({'success':True,'reference':'[[vaelo-weather:' + 'e5'*12 + ']]'})
+        history = [{'role':'user','content':"What's the weather today"},
+                   {'role':'assistant','content':'Clear and sunny.\n\n```weather\n{"view": "day"}\n```'}]
+        for follow, expected in (('How about this week', True), ('How about my resume', False)):
+            _, relay, port = self.boot([[chunk('Mostly dry.', 'stop'), 'data: [DONE]']])
+            with mock.patch.object(relay_module,'weather_tool',return_value=week) as tool, mock.patch.object(relay_module,'read_forecast',return_value='WEEK WIDGET'):
+                self.call(port, 'POST', '/vaelo/runs', {'id': RUN, 'messages':[*history, {'role':'user','content':follow}], 'place':{'lat':30.6,'lon':-96.3}})
+                self.assertEqual(self.finished(relay).outcome, 'complete')
+            self.assertEqual(tool.called, expected, follow)
+            if expected: self.assertEqual(tool.call_args.args[0]['days'], 7)
+
     def test_stop_during_weather_tool_never_emits_forecast(self):
         _, relay, port = self.boot([])
         call = 'data: ' + json.dumps({'choices':[{'delta':{'tool_calls':[{'index':0,'function':{'name':'weather_forecast','arguments':'{}'}}]},'finish_reason':'tool_calls'}]})

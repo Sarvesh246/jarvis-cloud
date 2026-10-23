@@ -117,3 +117,26 @@
   .weather-hour small { font-size: .95rem; }
   .weather-detailed footer { font-size: .85rem; }
 }
+
+/* A single day is the whole card: let it fill the space instead of sitting
+   small in a corner. Weekly cards keep their compact size. */
+.weather-grid:has(> .weather-period:only-child) { grid-template-columns: 1fr; }
+.weather-period:only-child {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas: "name icon" "cond icon" "temps temps";
+  align-items: start;
+  padding: 1.5rem 1.4rem 1.6rem;
+}
+.weather-period:only-child .weather-period-top { display: contents; }
+.prose .weather-period:only-child h3 { grid-area: name; font-size: 1.25rem; }
+.weather-period:only-child .weather-icon { grid-area: icon; align-self: start; font-size: 5.5rem; line-height: 1; }
+.prose .weather-period:only-child .weather-condition { grid-area: cond; margin: .25rem 0 0; font-size: 1.4rem; line-height: 1.3; }
+.weather-period:only-child dl { grid-area: temps; gap: 2.2rem; margin-top: 1.6rem; }
+.weather-period:only-child dt { font-size: .95rem; }
+.weather-period:only-child dd { font-size: 3.4rem; line-height: 1.1; }
+
+@media (max-width: 47.9375rem) {
+  .weather-period:only-child .weather-icon { font-size: 4.6rem; }
+  .weather-period:only-child dd { font-size: 3rem; }
+}

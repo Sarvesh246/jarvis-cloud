@@ -155,6 +155,20 @@ def condition(code):
     return ""
 
 
+def day_condition(hours, daily_code, rain_max):
+    """What the day mostly looks like. Open-Meteo's daily code is the worst hour of the day, so one
+    drizzly hour made a clear, dry day read as rain. Count only hours that are daytime and likely wet."""
+    day = [h for h in hours if h.get("isDay")] or hours
+    wet_rank = {"Thunderstorms": 4, "Snow": 3, "Rain": 2, "Drizzle": 1}
+    wet = [h["condition"] for h in day if h["condition"] in wet_rank and (h["rain"] is None or h["rain"] >= 40)]
+    if wet and (len(wet) >= 3 or (rain_max or 0) >= 60):
+        return max(wet, key=lambda c: (wet_rank[c], wet.count(c)))
+    dry = [h["condition"] for h in day if h["condition"] and h["condition"] not in wet_rank]
+    if dry:
+        return max(dict.fromkeys(dry), key=dry.count)
+    return condition(daily_code) if (rain_max or 0) >= 40 or not hours else "Partly cloudy"
+
+
 def number(value):
     return value if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) else None
 
@@ -204,7 +218,7 @@ def weather_reply(ask, place=None, now=None):
             for j, stamp in enumerate(hourly["time"]):
                 if not stamp.startswith(day): continue
                 hours.append({"time": stamp, "temperature": number(at(hourly, "temperature_2m", j)), "rain": number(at(hourly, "precipitation_probability", j)), "condition": condition(at(hourly, "weather_code", j)), "isDay": at(hourly, "is_day", j) == 1})
-            periods.append({"label": day, "high": number(at(daily, "temperature_2m_max", i)), "low": number(at(daily, "temperature_2m_min", i)), "condition": condition(at(daily, "weather_code", i)), "rain": number(at(daily, "precipitation_probability_max", i)), "wind": number(at(daily, "wind_speed_10m_max", i)), "uv": number(at(daily, "uv_index_max", i)), "sunrise": at(daily, "sunrise", i), "sunset": at(daily, "sunset", i), "hours": hours})
+            periods.append({"label": day, "high": number(at(daily, "temperature_2m_max", i)), "low": number(at(daily, "temperature_2m_min", i)), "condition": day_condition(hours, at(daily, "weather_code", i), number(at(daily, "precipitation_probability_max", i))), "rain": number(at(daily, "precipitation_probability_max", i)), "wind": number(at(daily, "wind_speed_10m_max", i)), "uv": number(at(daily, "uv_index_max", i)), "sunrise": at(daily, "sunrise", i), "sunset": at(daily, "sunset", i), "hours": hours})
         expected = [(start + timedelta(days=i)).isoformat() for i in range((end-start).days + 1)]
         if [p["label"] for p in periods] != expected or not all(p["high"] is not None or p["low"] is not None for p in periods): return None
         # Current conditions are model estimates. Reject stale or undated data.
