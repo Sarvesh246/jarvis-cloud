@@ -228,7 +228,7 @@ def source_image_request(messages,body,contract):
     if (not contract.get('images') or contract.get('required_tools')
             or contract.get('python_tests') or body.get('freshness') or body.get('research')):
         return False
-    if re.search(r'\b(?:generate|draw|design|edit|create|make|animate)\b.{0,60}\b(?:image|picture|logo|illustration|photo|art|icon)\b',text,re.I):
+    if re.search(r'\b(?:generate|draw|design|edit|create|make|animate|produce|render|redraw|recreate|illustrate|sketch)\b.{0,60}\b(?:image|picture|logo|illustration|photo|art|icon)\b|\b(?:turn|convert|transform)\b.{0,100}\b(?:into|to|as)\s+(?:an?\s+)?(?:cartoon|illustration|image|photo|logo|icon|painting|art)\b',text,re.I):
         return False
     explicit=re.search(r'\b(?:use|read|inspect|analy[sz]e)\s+only\s+(?:this|the|these|attached)\s+(?:attached\s+)?images?\b|\bfocus\s+only\s+on\b.{0,180}\bimage\b',text,re.I)
     mixed=re.search(r'Attached file:|Selected Vaelo workspace:','\n'.join(str(message.get('content','')) for message in messages),re.I)
@@ -1197,7 +1197,7 @@ class Relay:
                 run.event('jarvis.complete',{'ok':True})
                 return run.finish('complete')
             guidance = contract_guidance(seen['contract'])
-            if not guest and source_image_request(messages,body,seen['contract']):
+            if not guest and source_image_request(messages,body,seen['contract']) and fast_route(os.environ):
                 body={**body,'source_vision':True,'continue_fast':True,'no_weather_tools':True}
                 run.trace.counts['source_vision']=1
             if not guest and standalone_python(request_text(messages),messages,body,seen['contract']):

@@ -226,8 +226,9 @@ class RelayTests(unittest.TestCase):
                     if not available: return None
                     return io.BytesIO((chunk('{"red":2,"blue":2}','stop')+'\n\ndata: [DONE]\n\n').encode())
                 relay.open_fast = mock.Mock(side_effect=repair)
-                self.start(port,content=source)
-                run = self.finished(relay)
+                with mock.patch.dict('os.environ',{'FREELLMAPI_URL':'https://router.example/v1','FREELLMAPI_API_KEY':'fixture'}):
+                    self.start(port,content=source)
+                    run = self.finished(relay)
                 self.assertEqual(run.outcome,'complete' if available else 'error')
                 self.assertEqual(len(hermes.requests),0)
                 self.assertEqual(relay.open_fast.call_count,2)

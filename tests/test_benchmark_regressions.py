@@ -62,6 +62,8 @@ class BenchmarkRegressions(unittest.TestCase):
         self.assertFalse(source_image_request(natural,{'freshness':'query'},contract_for(natural)))
         natural[0]['content'][0]['text']='Generate a logo using this image.'
         self.assertFalse(source_image_request(natural,{},contract_for(natural)))
+        natural[0]['content'][0]['text']='Turn this photo into a cartoon.'
+        self.assertFalse(source_image_request(natural,{},contract_for(natural)))
 
     def test_requested_python_tests_must_be_delivered_and_parse(self):
         contract = self.contract('Write a Python function f. Include tests for empty input and unchanged input.')
