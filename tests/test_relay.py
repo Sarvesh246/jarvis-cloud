@@ -276,6 +276,16 @@ class RelayTests(unittest.TestCase):
         self.assertEqual([connection.timeout for connection in connections],[relay_module.CODE_IMAGE_SECONDS]*2)
         self.assertIn('jarvis.verification',b''.join(run.frames).decode())
 
+    def test_standalone_python_respects_admission_before_provider_request(self):
+        _,relay,_=self.boot([])
+        run=relay_module.Run(RUN,OWNER)
+        with mock.patch.object(relay.admission,'acquire',return_value=False) as admission, mock.patch.object(relay,'open_fast') as provider:
+            response,error=relay.open(run,{'fast':'Write Python','standalone_python':True},[])
+        admission.assert_called_once_with(run)
+        provider.assert_not_called()
+        self.assertIsNone(response)
+        self.assertEqual(error['code'],'queue_full')
+
     def test_memory_directives_are_server_filtered_and_permission_controls_note_events(self):
         for allowed in (False, True):
             with self.subTest(allowed=allowed):

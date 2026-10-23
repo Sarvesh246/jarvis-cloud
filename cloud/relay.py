@@ -804,6 +804,8 @@ class Relay:
         # Continuing text from a successful direct route needs no agent/tool bootstrap.
         # Empty replies still escalate to Hermes, as do direct-route failures.
         if body.get("fast") and (not recovering or body.get("continue_fast")):
+            if body.get('standalone_python') and not self.admission.acquire(run):
+                return None,None if run.stopped else {'code':'queue_full','status':429,'message':'Vaelo’s reply queue is full or the wait expired. Please try again shortly.'}
             response = self.open_fast(run, messages, body)
             if response is not None:
                 return response, None
