@@ -1330,7 +1330,8 @@ class Relay:
                             errors.append('python_tests_failed')
                         else:
                             run.event('jarvis.verification',{'status':'passed',**result.get('receipt',{})})
-                            if seen['contract'].get('execution_disclosure'):
+                            if (seen['contract'].get('execution_disclosure') and not seen['contract'].get('limits')
+                                    and not seen['contract'].get('json') and not seen['contract'].get('code_only')):
                                 checked += '\n\nFinal verification: the returned Python code and tests passed in the isolated Python runtime.'
                     if errors:
                         for error in errors:

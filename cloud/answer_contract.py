@@ -63,6 +63,7 @@ def contract_for(messages, tools_available=True):
             'preserve_input': code_tests and bool(re.search(r'\bdo not mutate (?:the )?input\b|\bnonmutation\b',text,re.I)),
             'verify_returned_python': code_tests and tools_available and not re.search(r"\b(?:do not|don't|never) (?:run|execute)\b",text,re.I),
             'execution_disclosure': code_tests and bool(re.search(r'\bwhether\b.{0,60}\b(?:ran|run|executed)\b',text,re.I)),
+            'code_only':bool(re.search(r'\bcode[ -]only\b|\b(?:return|give|output)\s+(?:only|just)\s+(?:the\s+)?code\b',text,re.I)),
             'supplied_constraints': supplied_constraints,
             'result_count': number(result_count[1]) if result_count else None,
             'images': any(isinstance(m.get('content'),list) and any(isinstance(p,dict) and p.get('type')=='image_url' for p in m['content']) for m in messages),
@@ -157,7 +158,7 @@ def validate_answer(text, contract, executed_tools=()):
                     errors.append('input_mutation')
         except (ValueError, SyntaxError, RecursionError):
             errors.append('invalid_python_tests')
-        prose=re.sub(r'```[\s\S]*?```','',result)
+        prose=result if contract.get('code_only') else re.sub(r'```[\s\S]*?```','',result)
         if contract.get('execution_disclosure') and not re.search(r'\b(?:ran|run|execute(?:d)?|execution)\b',prose,re.I):
             errors.append('missing_execution_disclosure')
     if contract.get('result_count'):
