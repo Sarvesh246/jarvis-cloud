@@ -22,6 +22,12 @@ import threading
 import time
 import uuid
 try:
+    from code_answer import returned_python
+    from verification import verify as verify_python
+except ModuleNotFoundError:
+    from cloud.code_answer import returned_python
+    from cloud.verification import verify as verify_python
+try:
     from admission import Admission
 except ModuleNotFoundError:
     from cloud.admission import Admission
@@ -1313,6 +1319,19 @@ class Relay:
                 if (constrained(seen['contract']) and answered(seen) and seen['finished']
                         and not seen['failed'] and not seen['truncated'] and not run.stopped):
                     checked, errors = validate_answer(split_notes(seen['answer'])[0], seen['contract'],run.trace.executed_tools)
+                    if not errors and seen['contract'].get('verify_returned_python'):
+                        arguments=returned_python(checked,seen['contract'].get('preserve_input'))
+                        progress={'tool':'python_verify','toolCallId':'returned_python_'+str(attempt),'status':'running','label':'Checking the returned code and tests'}
+                        run.trace.tool(progress);run.event('hermes.tool.progress',progress)
+                        result=verify_python(arguments)
+                        progress={**progress,'status':'completed','label':'Returned code and tests passed' if result.get('status')=='passed' else 'Returned code or tests failed'}
+                        run.trace.tool(progress);run.event('hermes.tool.progress',progress)
+                        if result.get('status')!='passed':
+                            errors.append('python_tests_failed')
+                        else:
+                            run.event('jarvis.verification',{'status':'passed',**result.get('receipt',{})})
+                            if seen['contract'].get('execution_disclosure'):
+                                checked += '\n\nFinal verification: the returned Python code and tests passed in the isolated Python runtime.'
                     if errors:
                         for error in errors:
                             key = 'contract_' + error

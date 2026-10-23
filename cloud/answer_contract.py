@@ -60,6 +60,9 @@ def contract_for(messages, tools_available=True):
     return {'json': bool(ONLY_JSON.search(text)), 'limits': list(dict.fromkeys(limits))[:8],'required_keys':required,
             'exact_keys': bool(re.search(r'\b(?:exact(?:ly)?|only)\s+(?:these\s+)?(?:fields|keys)\b|\bthese exact fields\b',text,re.I)),
             'python_tests': code_tests,
+            'preserve_input': code_tests and bool(re.search(r'\bdo not mutate (?:the )?input\b|\bnonmutation\b',text,re.I)),
+            'verify_returned_python': code_tests and tools_available and not re.search(r"\b(?:do not|don't|never) (?:run|execute)\b",text,re.I),
+            'execution_disclosure': code_tests and bool(re.search(r'\bwhether\b.{0,60}\b(?:ran|run|executed)\b',text,re.I)),
             'supplied_constraints': supplied_constraints,
             'result_count': number(result_count[1]) if result_count else None,
             'images': any(isinstance(m.get('content'),list) and any(isinstance(p,dict) and p.get('type')=='image_url' for p in m['content']) for m in messages),
@@ -84,6 +87,9 @@ def contract_guidance(contract):
                      'The final answer must contain the test source for every requested case, even if the tests already ran privately. '
                      'A statement that tests passed is not test code. Make a deep pre-call copy to check nonmutation and check aliasing independently. '
                      'Obey any instruction not to execute; otherwise report execution only if the matching verifier result passed.')
+        parts.append('Ensure every test actually runs: call assertion test functions or use unittest.main(exit=False). '
+                     'Test unchanged INPUT against a deep pre-call copy, not by comparing a merged OUTPUT with an unmerged input. '
+                     'Use independent expected outputs for nested and touching intervals. For immutable inputs, use sorted copies and copy mutable result elements.')
     if contract.get('result_count'):
         parts.append(f'Return only the {contract["result_count"]} requested result items. Without another specified format, use one result per line. Omit calculations and preamble.')
     if contract.get('required_tools'):
@@ -142,8 +148,18 @@ def validate_answer(text, contract, executed_tools=()):
             definitions = any(isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and not n.name.startswith('test') for n in ast.walk(tree))
             assertions = any(isinstance(n, ast.Assert) or isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.func.attr.startswith('assert') for n in ast.walk(tree))
             if not definitions or not assertions: errors.append('missing_runnable_tests')
+            if contract.get('preserve_input'):
+                arguments={arg.arg for node in tree.body if isinstance(node,ast.FunctionDef) for arg in node.args.args}
+                if any(isinstance(node,ast.Call) and isinstance(node.func,ast.Attribute) and
+                       isinstance(node.func.value,ast.Name) and node.func.value.id in arguments and
+                       node.func.attr in ('sort','reverse','append','extend','insert','pop','remove','clear','update')
+                       for node in ast.walk(tree)):
+                    errors.append('input_mutation')
         except (ValueError, SyntaxError, RecursionError):
             errors.append('invalid_python_tests')
+        prose=re.sub(r'```[\s\S]*?```','',result)
+        if contract.get('execution_disclosure') and not re.search(r'\b(?:ran|run|execute(?:d)?|execution)\b',prose,re.I):
+            errors.append('missing_execution_disclosure')
     if contract.get('result_count'):
         lines = [line.strip() for line in result.splitlines() if line.strip()]
         count = len(lines)
@@ -164,4 +180,7 @@ def repair_instruction(errors):
             'For a missing_tool check, actually invoke that exact named tool; another runtime is not a substitute. '
             'For results_only, return the requested number of result items, one per line, with no preamble or calculations. '
             'For missing_runnable_tests or invalid_python_tests, deliver the complete implementation and runnable Python assertions or unittest code in Python fences, including every requested case. '
+            'For input_mutation, never sort or modify the supplied input; sort copies and copy returned mutable elements. '
+            'For python_tests_failed, correct the implementation AND independent expected values, then return runnable tests that actually call their assertions. '
+            'For missing_execution_disclosure, explicitly state whether tests were executed; never invent an execution. '
             'If it is unavailable, do not claim execution. Do not quote or reuse the discarded candidate.]')

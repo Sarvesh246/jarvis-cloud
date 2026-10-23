@@ -13,6 +13,7 @@ export async function runCase(item, { origin, headers, request = fetch, timeoutM
   const row = { case: item.id, capability: item.capability, run: runId, outcome: 'incomplete',
     first_answer_ms: null, headers_ms: null, total_ms: null, retries: 0, tools: 0, tool_names: [] };
   let answer = '', completed = false;
+  const completedTools=new Set();
   const deadline = AbortSignal.timeout(timeoutMs);
   const conversationId = randomUUID();
   const body = { conversationId, runId, messages: item.messages, research: Boolean(item.research) };
@@ -46,12 +47,20 @@ export async function runCase(item, { origin, headers, request = fetch, timeoutM
           throw new Error('terminal_event');
         }
         if (name === 'jarvis.retry') { row.retries++; answer = ''; }
+        if (name === 'jarvis.verification' && data?.status==='passed') {
+          row.verifications ??= [];
+          row.verifications.push(Object.fromEntries(['runtime','source_sha256','tests_sha256'].filter(key=>typeof data[key]==='string').map(key=>[key,data[key]])));
+        }
         if (name === 'jarvis.evidence' && data) row.evidence = Object.fromEntries(
           ['pages_extracted','search_snippets'].filter(key=>Number.isInteger(data[key])&&data[key]>=0).map(key=>[key,data[key]]));
         if (name === 'hermes.tool.progress' && data?.status !== 'completed') {
           row.tools++;
           const tool=data.tool || data.tool_name || data.name || data.function_name;
           if(['python_verify','javascript_verify','calculate','date_difference','evaluate_constraints','weather_forecast','web_search','web_extract','image_gen'].includes(tool) && !row.tool_names.includes(tool)) row.tool_names.push(tool);
+        }
+        if(name==='hermes.tool.progress' && data?.status==='completed') {
+          const tool=data.tool || data.tool_name || data.name || data.function_name;
+          if(row.tool_names.includes(tool)) completedTools.add(tool);
         }
         const content = data?.choices?.[0]?.delta?.content;
         if (typeof content === 'string' && content.trim()) row.first_answer_ms ??= Math.round(performance.now() - began);
@@ -92,11 +101,12 @@ export async function runCase(item, { origin, headers, request = fetch, timeoutM
   row.quality = checkAnswer(answer, item.checks);
   row.quality.passed = row.outcome === 'complete' && !row.degraded && row.quality.passed;
   if(item.checks?.requiresTool) {
-    const toolPresent = row.tool_names.includes(item.checks.requiresTool);
+    const toolPresent = completedTools.has(item.checks.requiresTool);
     row.quality.passed = row.outcome === 'complete' && !row.degraded && toolPresent &&
       (row.quality.checks === 0 ? Boolean(answer.trim()) : row.quality.passed);
     row.quality.checks++;
   }
+  row.completed_tool_names=[...completedTools];
   if (captureAnswers) row.answer_for_review = answer.slice(0, 12000);
   return row;
 }

@@ -7,7 +7,7 @@ import sys
 import sysconfig
 
 # Load useful standard-library modules before filesystem access is removed.
-import bisect, collections, datetime, decimal, fractions, functools, heapq
+import bisect, collections, copy, datetime, decimal, fractions, functools, heapq
 import itertools, math, random, re, statistics, typing, unittest
 
 

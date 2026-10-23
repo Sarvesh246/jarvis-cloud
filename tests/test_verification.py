@@ -27,6 +27,12 @@ class VerificationInputTests(unittest.TestCase):
 
 @unittest.skipUnless(sys.platform == "linux", "Requires actual Linux seccomp")
 class LinuxVerificationTests(unittest.TestCase):
+    def test_returned_answer_executes_uncalled_tests_and_detects_mutation(self):
+        from cloud.code_answer import returned_python
+        answer='```python\ndef f(items):\n    items[0]=9\n    return items\n```\n```python\ndef test_case():\n    assert f([1]) == [9]\n```'
+        self.assertEqual(verify(returned_python(answer,True))['status'],'failed')
+        good=answer.replace('items[0]=9\n    return items','return [9]')
+        self.assertEqual(verify(returned_python(good,True))['status'],'passed')
     def test_operator_selected_runtime_is_used_and_missing_runtime_fails_closed(self):
         with mock.patch.dict('os.environ',{'VAELO_VERIFIER_PYTHON':'/nonexistent/vaelo-python'}):
             self.assertEqual(self.run_code('pass')['status'],'unavailable')

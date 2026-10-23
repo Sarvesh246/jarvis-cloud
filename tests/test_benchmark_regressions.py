@@ -9,6 +9,7 @@ from cloud.admission import Admission
 from cloud.memory_output import NoteFilter, split_notes
 from cloud.runtime_contract import fail_closed_vision
 from cloud.relay import Run
+from cloud.code_answer import returned_python
 
 
 class BenchmarkRegressions(unittest.TestCase):
@@ -61,6 +62,23 @@ class BenchmarkRegressions(unittest.TestCase):
         self.assertFalse(validate_answer(answer, contract)[1])
         self.assertTrue(validate_answer(answer.replace('assert f', 'assert ? f'), contract)[1])
         self.assertIn('BOTH the complete Python implementation AND complete runnable',contract_guidance(contract))
+        immutable=self.contract('Write a Python function. Do not mutate the input. Include tests. State whether you ran the tests.')
+        bad='```python\ndef f(items):\n    items.sort()\n    return items\n\nassert f([2,1]) == [1,2]\n```'
+        self.assertIn('input_mutation',validate_answer(bad,immutable)[1])
+        self.assertIn('missing_execution_disclosure',validate_answer(bad,immutable)[1])
+        self.assertFalse(self.contract('Write Python. Include tests. Do not execute anything.')['verify_returned_python'])
+
+    def test_returned_test_functions_execute_and_nonmutation_is_checked_against_a_pre_call_copy(self):
+        answer='```python\ndef f(items):\n    items[0]=9\n    return items\n```\n```python\ndef test_case():\n    assert f([1]) == [9]\n```'
+        prepared=returned_python(answer,True)
+        self.assertIn('test_case()',prepared['tests'])
+        self.assertIn('_vaelo_before=copy.deepcopy(_vaelo_input)',prepared['tests'])
+        scope={}
+        exec(prepared['source'],scope)
+        with self.assertRaisesRegex(AssertionError,'mutated its input'):
+            exec(prepared['tests'],scope)
+        uncalled=returned_python('```python\ndef f(x): return x\ndef test_case(fixture):\n    assert f(fixture)==fixture\n```')
+        self.assertIn('No runnable assertion tests',uncalled['tests'])
 
     def test_supplied_option_grammar_computes_every_judgment_without_a_model_tool_roundtrip(self):
         for price in (900, 1200, 1201):

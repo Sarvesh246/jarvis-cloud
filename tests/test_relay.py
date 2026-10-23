@@ -231,6 +231,23 @@ class RelayTests(unittest.TestCase):
                 self.assertNotIn('"red": null',wire)
                 if not available: self.assertIn('image_processing_unavailable',wire)
 
+    def test_returned_python_tests_are_verified_before_publication(self):
+        answer='```python\ndef f(x): return list(x)\n```\n```python\nassert f([])==[]\n```\nI did not execute these tests.'
+        for status in ('passed','failed'):
+            with self.subTest(status=status), mock.patch.object(relay_module,'verify_python',return_value={'status':status,'receipt':{'runtime':'python','source_sha256':'a'*64,'tests_sha256':'b'*64}}) as checked:
+                hermes,relay,port=self.boot([[chunk(answer,'stop'),'data: [DONE]']]*2)
+                self.start(port,content='Write a Python function. Include tests. State honestly whether you ran the tests.')
+                run=self.finished(relay)
+                self.assertEqual(run.outcome,'complete' if status=='passed' else 'error')
+                self.assertTrue(checked.called)
+                wire=b''.join(run.frames).decode()
+                if status=='passed':
+                    self.assertIn('jarvis.verification',wire)
+                    self.assertIn('Final verification',wire)
+                else:
+                    self.assertNotIn('I did not execute',wire)
+                    self.assertIn('python_tests_failed',wire)
+
     def test_memory_directives_are_server_filtered_and_permission_controls_note_events(self):
         for allowed in (False, True):
             with self.subTest(allowed=allowed):

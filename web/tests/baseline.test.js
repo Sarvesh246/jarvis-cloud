@@ -105,7 +105,11 @@ test('a correct number is insufficient when execution through a named tool is re
   const row=await runCase(executable,{origin:'https://example.test',headers:{},request});
   assert.equal(row.outcome,'complete');assert.equal(row.quality.passed,false);
   const withTool=async()=>new Response(frame(0,'hermes.tool.progress',{tool:'python_verify',status:'running'})+frame(1,'message',{choices:[{delta:{content:'391'}}]})+frame(2,'jarvis.complete',{ok:true}));
-  assert.equal((await runCase(executable,{origin:'https://example.test',headers:{},request:withTool})).quality.passed,true);
+  assert.equal((await runCase(executable,{origin:'https://example.test',headers:{},request:withTool})).quality.passed,false);
+  const finishedTool=async()=>new Response(frame(0,'hermes.tool.progress',{tool:'python_verify',status:'running'})+
+    frame(1,'hermes.tool.progress',{tool:'python_verify',status:'completed'})+
+    frame(2,'message',{choices:[{delta:{content:'391'}}]})+frame(3,'jarvis.complete',{ok:true}));
+  assert.equal((await runCase(executable,{origin:'https://example.test',headers:{},request:finishedTool})).quality.passed,true);
 });
 
 test('benchmark deadline cancels the stream and requests cleanup', async () => {
