@@ -64,7 +64,7 @@ export function PasteCard({ file, onUpdate, onRemove, limit }) {
 export function QuestionCard({ data, onAnswer, disabled = false, framed = false }) {
   const id = useId(), [selected, setSelected] = useState('');
   return <section className="question-card" aria-labelledby={framed ? undefined : id} aria-label={framed ? data.title || 'Choose a direction' : undefined}>{!framed && <h3 id={id}>{data.title || 'Choose a direction'}</h3>}
-    <div role="group" aria-label="Suggested answers">{data.options.map(option => <button type="button" key={option} disabled={disabled || !onAnswer} aria-pressed={selected === option} onClick={() => { setSelected(option); onAnswer?.(option); }}>{option}<ArrowRight size={16} /></button>)}</div>
+    <div role="group" aria-label="Suggested answers">{data.options.map((option, index) => <button type="button" key={option} disabled={disabled || !onAnswer} aria-pressed={selected === option} onClick={() => { setSelected(option); onAnswer?.(option); }}><span>{option}{data.details?.[index] && <small>{data.details[index]}</small>}</span><ArrowRight size={16} /></button>)}</div>
     <p>{onAnswer ? 'Choose an answer to add it to your message, or write your own.' : 'Use these choices when writing your answer.'}</p>
   </section>;
 }

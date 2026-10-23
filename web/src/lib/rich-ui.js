@@ -60,6 +60,7 @@ export function parseRichUI(source, expectedType) {
         break;
       case 'question':
         if (!items('options', 6) || data.options.length < 2 || !data.options.every(x => text(x) && x.trim() && x.length <= 180) || new Set(data.options).size !== data.options.length) return null;
+        if (data.details !== undefined && (!Array.isArray(data.details) || data.details.length !== data.options.length || !data.details.every(value => text(value) && value.length <= 1000))) return null;
         break;
       case "overview":
       case "widgets":

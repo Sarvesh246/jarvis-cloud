@@ -19,18 +19,51 @@ export function measuredUsage(usage) {
   return { input, output, total: input + output };
 }
 export function answerChoices(content = '') {
-  // A closing question followed by a small explicit list of choices is enough
-  // evidence to offer buttons. Instructions/checklists are not questions.
   if (content.length > 12000 || /```|~~~|\[[ xX]\]/.test(content)) return null;
-  const leading = content.match(/(?:^|\n)([^\n]{8,300}\?)\s*\n(?:[^\n]{0,40}(?:options|choices|approaches)[^\n]{0,35}:\s*\n)?((?:(?:[-*]|\d+[.)]|[A-F][.)])\s+[^\n]+(?:\n\s*)?){2,6})\s*$/i);
-  const trailing = !leading && content.match(/(?:^|\n)((?:(?:(?:[-*]|\d+[.)]|[A-F][.)])\s+|\*\*(?=\S))[^\n]+(?:\n\s*)?){2,6})\s*\n([^\n]{8,300}\?)\s*$/i);
-  const found = leading || (trailing && { index: trailing.index, 1: trailing[2], 2: trailing[1] });
-  if (!found) return null;
-  if (trailing && /^(?:(?:[-*]|\d+[.)]|[A-F][.)])\s+|\*\*)/.test(content.slice(0, trailing.index).trim().split('\n').at(-1) || '')) return null;
-  if (/!?\[[^\]]*\]\(/.test(found[2])) return null;
-  const options = found[2].trim().split('\n').filter(line => line.trim()).map(line => plainLine(line.trim().replace(/^(?:[-*]|\d+[.)]|[A-F][.)])\s+/, '')));
-  if (options.some(x => !x || x.length > 180) || new Set(options).size !== options.length) return null;
-  return { type: 'question', title: plainLine(found[1]), options, markdown: content.slice(0, found.index).trim() };
+  // Providers use bullets, numbered choices, or bold-labelled paragraphs.
+  // Read the actual list and its nearby question rather than requiring a
+  // particular heading, whitespace, or question-before-options order.
+  const lines = content.split('\n');
+  const groups = []; let offset = 0, group = null;
+  const row = line => {
+    const listed = line.match(/^\s*(?:[-*]|\d+[.)]|[A-F][.)])\s+(.+)$/);
+    if (listed) return listed[1];
+    return /^\*\*[^*]+\*\*\s*[^\s*]/.test(line) ? line : null;
+  };
+  for (const line of lines) {
+    const choice = row(line);
+    if (choice) {
+      if (!group) group = { start: offset, end: offset, rows: [] };
+      group.rows.push(choice); group.end = offset + line.length;
+    } else if (line.trim() && /^ {2,}\S/.test(line) && group) {
+      group.rows[group.rows.length - 1] += ' ' + line.trim(); group.end = offset + line.length;
+    } else if (line.trim() && group) { groups.push(group); group = null; }
+    offset += line.length + 1;
+  }
+  if (group) groups.push(group);
+  for (const candidate of groups.reverse()) {
+    if (candidate.rows.length < 2 || candidate.rows.length > 6) continue;
+    const before = content.slice(0, candidate.start).replace(/(?:^|\n)\s*(?:\*\*)?(?:(?:concrete|your|the|two|available|possible|starting)\s+)?(?:options|choices|approaches)(?:\s+to consider)?\s*:?(?:\*\*)?\s*$/i, '').trimEnd();
+    const after = content.slice(candidate.end).trim();
+    const leading = before.match(/(?:^|\n)([^\n]{8,500}\?)\s*$/);
+    const trailing = after.match(/^([^\n]{8,500}\?)$/);
+    if (!leading && !trailing) continue;
+    const options = [], details = [];
+    let invalid = false;
+    for (const value of candidate.rows) {
+      if (/!?\[[^\]]*\]\(/.test(value)) { invalid = true; break; }
+      const named = value.match(/^\*\*([^*]{1,120})\*\*\s*[:—–-]?\s*(.*)$/);
+      const label = plainLine(named ? named[1].replace(/[:—–-]$/, '') : value);
+      const detail = named ? plainLine(named[2]) : '';
+      if (!label || label.length > 180 || detail.length > 1000) { invalid = true; break; }
+      options.push(label); details.push(detail);
+    }
+    if (invalid || new Set(options).size !== options.length) continue;
+    return { type: 'question', title: plainLine(trailing?.[1] || leading[1]), options,
+      ...(details.some(Boolean) ? { details } : {}),
+      markdown: [leading && !trailing ? before.slice(0, leading.index).trim() : before, trailing ? '' : after].filter(Boolean).join('\n\n') };
+  }
+  return null;
 }
 export function audioLinks(content = '') {
   if (content.length > 60000) return [];

@@ -44,6 +44,7 @@
 .question-card > div { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,200px),1fr)); gap: 10px; }
 .question-card button { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 16px; min-height: 48px; text-align: start; border: 1px solid var(--hairline); border-radius: var(--r-md); background: var(--canvas); color: var(--ink); font: inherit; overflow-wrap: anywhere; }
 .question-card button svg { flex: none; }
+.question-card button small { display: block; margin-top: 8px; color: var(--muted); font: 14px/1.55 var(--font-ui); }
 .question-card button[aria-pressed=true] { border-color: var(--gilt-ink, var(--ink)); background: var(--sunken); }
 .question-card > p { margin: 12px 0 0; color: var(--muted); font: 14px/1.5 var(--font-ui); }
 .prose .question-card > p { margin: 12px 0 0; font: 14px/1.5 var(--font-ui); }
