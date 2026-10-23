@@ -826,6 +826,13 @@ class Relay:
                 # the independent native coding route before the full gateway.
                 run.trace.counts['native_code_fallbacks'] = run.trace.counts.get('native_code_fallbacks',0)+1
                 response = self.open_fast(run,messages,{**body,'code_repair':True})
+            elif (response is None and body.get('standalone_python') and body.get('code_repair')
+                    and not run.stopped and os.environ.get('OPENROUTER_API_KEY')
+                    and (fast_route(os.environ) or {}).get('name')=='router'):
+                # The independent repair pool can be unavailable. A fresh native
+                # coding request still preserves the task without agent setup.
+                run.trace.counts['native_code_primary_recoveries']=run.trace.counts.get('native_code_primary_recoveries',0)+1
+                response=self.open_fast(run,messages,{**body,'code_repair':False})
             if response is not None:
                 return response, None
             run.trace.counts['fast_fallbacks'] = run.trace.counts.get('fast_fallbacks',0)+1
@@ -1414,7 +1421,7 @@ class Relay:
                             request = [*messages, {'role':'user', 'content':repair_instruction(errors)}]
                             seen.update(content='', answer='')
                             image_only = source_image_request(messages,body,seen['contract']) and not run.trace.executed_tools
-                            if image_only:
+                            if image_only or body.get('standalone_python'):
                                 # Keep the image and its task in the final user
                                 # turn; adapters may inspect only that turn.
                                 request = [dict(message) for message in messages]

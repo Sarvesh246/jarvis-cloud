@@ -230,6 +230,18 @@ class RelayTests(unittest.TestCase):
                     self.assertTrue(provider.call_args_list[1].args[2]['code_repair'])
                 relay.admission.release(run)
 
+    def test_unavailable_independent_code_repair_uses_fresh_native_primary(self):
+        _,relay,_=self.boot([])
+        run=relay_module.Run(RUN,OWNER)
+        native=object()
+        env={'FREELLMAPI_URL':'https://router.example/v1','FREELLMAPI_API_KEY':'fixture','OPENROUTER_API_KEY':'fixture'}
+        with mock.patch.dict('os.environ',env,clear=True), mock.patch.object(relay,'open_fast',side_effect=[None,native]) as provider:
+            response,error=relay.open(run,{'standalone_python':True,'code_repair':True,'fast':'Implement and test Python.'},[])
+        self.assertIs(response,native)
+        self.assertIsNone(error)
+        self.assertFalse(provider.call_args_list[1].args[2]['code_repair'])
+        relay.admission.release(run)
+
     def test_supplied_constraints_are_computed_before_generation_without_forcing_another_model_call(self):
         hermes, relay, port = self.boot([[chunk('OptionB meets every constraint.','stop'),'data: [DONE]']])
         prompt = ('OptionA costs $900, battery 12 hours, weight 1.2 kg. OptionB costs $1100, battery 15 hours, weight 1.3 kg. '
@@ -310,6 +322,10 @@ class RelayTests(unittest.TestCase):
         self.assertEqual(checked.call_count,2)
         self.assertEqual(targets,[('router.example',None),('openrouter.ai',None)])
         self.assertEqual(provider.requests[0]['headers']['X-FreeLLM-Task-Type'],'code')
+        repair_messages=provider.requests[1]['body']['messages']
+        self.assertEqual(sum(message['role']=='user' for message in repair_messages),1)
+        self.assertIn('Write a Python function f(items)',repair_messages[-1]['content'])
+        self.assertIn('python_tests_failed',repair_messages[-1]['content'])
         self.assertNotIn('tools',provider.requests[0]['body'])
         self.assertEqual([connection.timeout for connection in connections],[relay_module.CODE_IMAGE_SECONDS]*2)
         self.assertIn('jarvis.verification',b''.join(run.frames).decode())
