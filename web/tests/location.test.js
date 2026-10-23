@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { locate, placeFor, cachedPlace, forgetPlace, cityNames } from '../src/lib/location.js';
+import { chatInput } from '../server/chat.js';
 
 function browser(t) {
   const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
@@ -206,6 +207,45 @@ test('a quick send never waits on the phone for an everyday question', async t =
   assert.equal(stale.lat, 41.88, 'an old place goes along at once');
   assert.ok(performance.now() - started < 200);
   assert.equal(b.positions.length, 2, 'and is refreshed in the background');
+});
+
+test('a desktop weather send retains coordinates arriving after six seconds through the chat boundary', async t => {
+  const b = browser(t);
+  t.mock.timers.enable({apis:['setTimeout']});
+  let settled = false;
+  const waiting = placeFor({location:true}, {needed:true});
+  waiting.then(() => { settled = true; });
+  t.mock.timers.tick(8000);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(settled, false, 'weather must wait while the browser can still return a position');
+  b.grant();
+  const place = await waiting;
+  const input = chatInput({
+    conversationId: '0ef3a063-f0d0-44f7-b9dc-774137b1d86c',
+    messages: [{role:'user', content:'What is the weather today?'}],
+    place,
+  });
+  assert.deepEqual([input.place.lat, input.place.lon], [41.88, -87.63]);
+  assert.equal(b.requests.length, 1, 'city lookup may still be pending when the request carries coordinates');
+});
+
+test('weather location waits remain bounded if the browser never calls back', async t => {
+  browser(t);
+  t.mock.timers.enable({apis:['setTimeout']});
+  const waiting = placeFor({location:true}, {needed:true});
+  t.mock.timers.tick(10500);
+  assert.equal(await waiting, null);
+});
+
+test('weather sends handle browser failure promptly and respect disabled location sharing', async t => {
+  const b = browser(t);
+  assert.equal(await placeFor({location:false}, {needed:true}), null);
+  assert.equal(b.positions.length, 0);
+  for (const code of [1, 2, 3]) {
+    const waiting = placeFor({location:true}, {needed:true});
+    b.positions.at(-1).reject({code});
+    assert.equal(await waiting, null);
+  }
 });
 
 import { needsPlace } from '../src/lib/location.js';

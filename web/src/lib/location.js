@@ -4,6 +4,9 @@
    looked up once so a question like "weather today" can be searched by name. */
 
 const FRESH_MS = 30 * 60 * 1000;
+const POSITION_TIMEOUT_MS = 10000;
+// Let the browser deliver its success/error callback before the send deadline.
+const PLACE_WAIT_MS = POSITION_TIMEOUT_MS + 500;
 const GEOCODER = "https://api.bigdatacloud.net/data/reverse-geocode-client";
 let cached = null;
 let pending = null;
@@ -28,7 +31,7 @@ function position(signal) {
       navigator.geolocation.getCurrentPosition(finish(resolve), finish(reject), {
         enableHighAccuracy: false,
         maximumAge: 10 * 60 * 1000,
-        timeout: 10000,
+        timeout: POSITION_TIMEOUT_MS,
       });
     } catch (error) { finish(reject)(error); }
   });
@@ -104,7 +107,7 @@ export function locate({ force = false } = {}) {
 }
 
 /* Questions whose answer depends on where the person is. Only these are
-   worth holding a reply for while the phone works out its position. */
+   worth holding a reply for while the browser works out its position. */
 const LOCAL = /\b(?:weather|forecast|temperature|rain(?:ing)?|snow(?:ing)?|humid(?:ity)?|sunrise|sunset|near(?:by| me)|local|around here|my (?:area|location|city|town)|closest|nearest|open now|directions? to)\b/i;
 export function needsPlace(text) {
   return LOCAL.test(String(text || ''));
@@ -113,7 +116,7 @@ export function needsPlace(text) {
 /* What a request carries right now: nothing unless switched on, never waits
    long, and never fails a reply because location was unavailable.
 
-   With `{ needed }` the reply does not wait on the phone's position unless the
+   With `{ needed }` the reply does not wait on the browser's position unless the
    question depends on it: a known place, even an old one, goes along at once
    and is refreshed in the background, and with no place yet a short wait is
    all an everyday question gets. Waiting on GPS used to hold every message for
@@ -121,7 +124,9 @@ export function needsPlace(text) {
 export async function placeFor(prefs, quick) {
   if (!prefs?.location) return null;
   const started = generation;
-  const limit = quick ? (quick.needed ? 6000 : 800) : 10500;
+  // Desktop location providers can need most of the browser's ten-second
+  // window. Sending earlier silently drops an otherwise successful position.
+  const limit = quick && !quick.needed ? 800 : PLACE_WAIT_MS;
   if (quick && cached) {
     const stale = Date.now() - cached.at >= FRESH_MS;
     if (!stale) return cached.place;
