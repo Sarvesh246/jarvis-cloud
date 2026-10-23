@@ -74,6 +74,9 @@
 .composer .attachment > .file-badge, .composer .attachment > .attachment-thumb { grid-row: 1 / 3; }
 .composer .attachment-name { grid-column: 2; white-space: normal; overflow-wrap: anywhere; }
 .composer .attachment-meta { grid-column: 2; font-size: 14px; }
+.composer:not([data-phone]) .attachment > svg { grid-column: 1; grid-row: 1 / 3; }
+.composer:not([data-phone]) .attachment-name { grid-row: 1; align-self: end; max-width: 100%; font: 500 14px/1.35 var(--font-ui); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.composer:not([data-phone]) .attachment-meta { grid-row: 2; align-self: start; min-width: 0; overflow: hidden; text-overflow: ellipsis; font: 14px/1.4 var(--font-ui); }
 .composer .attachment-remove { grid-column: 3; grid-row: 1 / 3; min-width: 36px; min-height: 36px; }
 .saved-row { border: 1px solid var(--hairline); border-radius: var(--r-md); margin-bottom: 10px; background: var(--surface); gap: 14px; padding: 16px; }
 .saved-preview { position: relative; border-radius: var(--r-lg); background: var(--surface); padding: var(--card-pad); }

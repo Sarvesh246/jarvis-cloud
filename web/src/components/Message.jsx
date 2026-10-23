@@ -477,7 +477,7 @@ export function AttachmentList({ items, onRemove }) {
           ) : (
             <FileBadge name={file.name} kind={file.kind} />
           )}
-          <span className="attachment-name">{file.name}</span>
+          <span className="attachment-name" title={file.name}>{file.name}</span>
           <span className="attachment-meta">
             {file.state === "reading"
               ? "Reading…"
