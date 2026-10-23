@@ -816,6 +816,20 @@ class Relay:
                 return response,None
             if run.stopped:
                 return None,None
+            if (body.get('vision_repair') and os.environ.get('OPENROUTER_API_KEY')
+                    and (fast_route(os.environ) or {}).get('name') == 'router'):
+                # A failed reading and an unavailable independent repair pool
+                # do not prove the native image pool is unavailable. Give its
+                # fresh modality-aware selection the bounded repair request.
+                run.trace.counts['native_vision_primary_recoveries'] = 1
+                response = self.open_fast(run, messages, {**body,
+                    'source_vision': True, 'vision_repair': False,
+                    'fast': 'Inspect the original attached pixels afresh. Follow the original task and its requested fields and format. Never replace readable values with null or claim missing pixels when the image is attached.',
+                    'no_weather_tools': True})
+                if response is not None:
+                    return response, None
+                if run.stopped:
+                    return None, None
             if os.environ.get('VAELO_VISION_CACHE_WRITABLE') != '1':
                 return None, {'code':'image_processing_unavailable',
                     'message':'The attached image could not be analyzed. Please retry or attach a clearer image.'}

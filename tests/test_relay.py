@@ -192,6 +192,23 @@ class FakeHermes:
 
 
 class RelayTests(unittest.TestCase):
+    def test_unavailable_image_repair_pool_uses_fresh_native_pixels(self):
+        _, relay, _ = self.boot([])
+        run = relay_module.Run(RUN, OWNER)
+        messages = [{'role':'user','content':[{'type':'text','text':'Return ONLY JSON with red, blue.'},
+                    {'type':'image_url','image_url':{'url':'data:image/png;base64,pixels'}}]}]
+        response = mock.Mock()
+        env = {'FREELLMAPI_URL':'https://router.example/v1','FREELLMAPI_API_KEY':'fixture',
+               'OPENROUTER_API_KEY':'fixture'}
+        with mock.patch.dict('os.environ',env,clear=True), mock.patch.object(relay,'open_fast',side_effect=[None,response]) as native:
+            actual, error = relay.open(run, {'source_vision':True,'vision_repair':True}, messages)
+        self.assertIs(actual,response)
+        self.assertIsNone(error)
+        self.assertEqual(native.call_args.args[1],messages)
+        self.assertFalse(native.call_args.args[2]['vision_repair'])
+        self.assertTrue(native.call_args.args[2]['source_vision'])
+        self.assertEqual(run.trace.counts['native_vision_primary_recoveries'],1)
+
     def test_complete_supplied_identifier_avoids_provider_and_external_retrieval(self):
         hermes,relay,port=self.boot([])
         with mock.patch.object(relay_module,'source_context') as lookup:
