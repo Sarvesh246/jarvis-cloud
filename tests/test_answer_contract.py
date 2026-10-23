@@ -1,8 +1,15 @@
 import unittest
-from cloud.answer_contract import contract_for, validate_answer, constrained, repair_instruction
+from cloud.answer_contract import contract_for, validate_answer, constrained, repair_instruction, supplied_literal
 
 
 class AnswerContractTests(unittest.TestCase):
+    def test_supplied_identifiers_are_copied_without_guessing_or_suppressing_other_requests(self):
+        for kind,value in [('booking','aB_28'),('release','ALDER-918'),('reference','ref-v2')]:
+            ask=f'Correction: the {kind} code is {value}. Reply only with the current code.'
+            self.assertEqual(supplied_literal([{'role':'user','content':ask}]),value)
+            self.assertIsNone(supplied_literal([{'role':'user','content':ask+' Explain the difference.'}]))
+        self.assertIsNone(supplied_literal([{'role':'user','content':'Return only the current code for my Python program.'}]))
+        self.assertIsNone(supplied_literal([{'role':'user','content':'What is the current release code?'}]))
     def test_field_descriptions_do_not_erase_the_required_object_fields(self):
         contract=self.contract('Return ONLY JSON with units and revenue, using numeric values.')
         self.assertEqual(contract['required_keys'],['units','revenue'])

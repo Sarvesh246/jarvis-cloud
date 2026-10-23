@@ -11,6 +11,21 @@ import re
 NUMBER = r'(\d+(?:\.\d+)?)'
 
 
+def sequence_sum(messages):
+    turns=[m for m in messages if m.get('role')!='system']
+    if len(turns)!=1 or not isinstance(turns[0].get('content'),str):
+        return None
+    text=turns[0]['content'].split('\n\n[Vaelo request:')[0].strip()
+    match=re.fullmatch(r'The first (\d{1,12}) positive (?:(odd|even) )?integers are added together\. Reply only with their sum\.',text,re.I)
+    if not match:
+        match=re.fullmatch(r'(?:What is|Calculate|Compute) the sum of the first (\d{1,12}) positive (?:(odd|even) )?(?:integers|numbers)\?\s*(?:Reply|Answer) (?:with )?(?:only|just) (?:the )?number\.',text,re.I)
+    if not match:
+        return None
+    count=int(match[1])
+    kind=(match[2] or '').lower()
+    return str(count*count if kind=='odd' else count*(count+1) if kind=='even' else count*(count+1)//2)
+
+
 def display(value):
     value = Fraction(value)
     if value.denominator == 1:

@@ -1,9 +1,16 @@
 import unittest
 from fractions import Fraction
-from cloud.bounded_math import polynomial, solve_item, worked_math, display
+from cloud.bounded_math import polynomial, solve_item, worked_math, display, sequence_sum
 
 
 class WorkedMathTests(unittest.TestCase):
+    def test_sequence_formulas_match_independently_enumerated_terms(self):
+        for n in (0,1,2,7,31,58,99):
+            for kind,start in [('odd',1),('even',2)]:
+                text=f'The first {n} positive {kind} integers are added together. Reply only with their sum.'
+                self.assertEqual(sequence_sum([{'role':'user','content':text}]),str(sum(range(start,2*n+start,2))))
+        self.assertIsNone(sequence_sum([{'role':'user','content':'Prove that the first n positive odd integers sum to n squared.'}]))
+        self.assertIsNone(sequence_sum([{'role':'user','content':'The first 10 negative odd integers are added together. Reply only with their sum.'}]))
     def test_equations_are_solved_from_coefficients(self):
         for equation, result in [('Solve 4(x-3)=3x+8.', 'x=20'),
                                  ('Solve x^2-7x+12=0.', 'x=3, 4'),

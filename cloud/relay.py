@@ -41,14 +41,14 @@ except ModuleNotFoundError:
     from cloud.memory_output import NoteFilter, split_notes
 try:
     from calculation import direct_calculation
-    from bounded_math import worked_math
+    from bounded_math import worked_math, sequence_sum
 except ModuleNotFoundError:
     from cloud.calculation import direct_calculation
-    from cloud.bounded_math import worked_math
+    from cloud.bounded_math import worked_math, sequence_sum
 try:
-    from answer_contract import contract_for, constrained, validate_answer, repair_instruction, request_text, contract_guidance
+    from answer_contract import contract_for, constrained, validate_answer, repair_instruction, request_text, contract_guidance, supplied_literal
 except ModuleNotFoundError:
-    from cloud.answer_contract import contract_for, constrained, validate_answer, repair_instruction, request_text, contract_guidance
+    from cloud.answer_contract import contract_for, constrained, validate_answer, repair_instruction, request_text, contract_guidance, supplied_literal
 from contextlib import contextmanager
 try:
     from provider_health import RouteHealth
@@ -1226,9 +1226,16 @@ class Relay:
         repetition_retried = False
         verification_feedback = None
         try:
+            literal=supplied_literal(messages)
+            if literal is not None:
+                run.route='supplied_literal'
+                run.emit('data: '+json.dumps({'choices':[{'delta':{'content':literal}}]}))
+                run.trace.counts['deterministic_answers']=1
+                run.event('jarvis.complete',{'ok':True})
+                return run.finish('complete')
             exact=direct_calculation(messages,body.get('tier','normal'))
             if exact is None:
-                exact=worked_math(messages)
+                exact=worked_math(messages) or sequence_sum(messages)
             if exact is not None and not validate_answer(exact,seen['contract'])[1]:
                 run.route='calculator'
                 progress={'tool':'calculate','toolCallId':'exact_arithmetic','status':'running','label':'Checking the calculation'}
