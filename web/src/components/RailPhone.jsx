@@ -17,7 +17,7 @@ import { AUDIENCES, CUSTOM_WORKSPACE, WORKSPACES } from "../../shared/workspaces
 import { groupChats, previewOf, searchChats, timeLabel } from "../lib/format.js";
 import { collectWork, searchWork } from "../lib/library.js";
 import { usePinnedReorder } from "../lib/use-pinned-reorder.js";
-import { dragProps } from "../lib/gesture.js";
+import { useDrag } from "../lib/use-drag.js";
 import { buzz } from "../lib/haptics.js";
 import "./rail-phone.css";
 
@@ -47,8 +47,23 @@ function SwipeRow({ id, openId, setOpenId, actions, active, className = "", chil
   const restRef = useRef(rest);
   restRef.current = rest;
   const moved = useRef(false);
+  const [leaving, setLeaving] = useState(false);
+  const row = useRef(null);
+  const timers = useRef([]);
+  useEffect(() => () => timers.current.forEach(clearTimeout), []);
 
-  const handlers = dragProps({
+  /* Removing slides the row away and folds its height shut before the
+     removal is handed on, so the rows beneath glide up rather than jump */
+  const leave = (run) => {
+    const el = row.current;
+    if (!el || matchMedia("(prefers-reduced-motion: reduce)").matches) return run();
+    el.style.height = `${el.offsetHeight}px`;
+    void el.offsetHeight;
+    setLeaving(true);
+    timers.current.push(setTimeout(run, 260));
+  };
+
+  const handlers = useDrag({
     axis: "x",
     start: () => {
       moved.current = false;
@@ -57,21 +72,30 @@ function SwipeRow({ id, openId, setOpenId, actions, active, className = "", chil
       moved.current = true;
       setX(clamp(restRef.current + dx, -(width + OVERSHOOT), 0));
     },
-    end: (dx) => {
+    end: (dx, dy, event, g) => {
       const next = clamp(restRef.current + dx, -(width + OVERSHOOT), 0);
-      const opening = next < -OPEN_AT;
+      const speed = dx / Math.max(1, g?.ms ?? 1);
+      /* A quick flick decides it whatever the distance */
+      const opening = speed < -0.5 ? true : speed > 0.5 ? false : next < -OPEN_AT;
       if (opening && restRef.current === 0) buzz();
       setOpenId(opening ? id : open ? null : openId);
       setX(null);
-      setTimeout(() => (moved.current = false), 300);
+      timers.current.push(setTimeout(() => (moved.current = false), 300));
     },
     cancel: () => setX(null),
   });
 
   return (
-    <div className={`rp-row ${className}`} data-active={active || undefined} data-swiped={open || undefined} {...handlers}>
+    <div
+      ref={row}
+      className={`rp-row ${className}`}
+      data-active={active || undefined}
+      data-swiped={open || undefined}
+      data-leaving={leaving || undefined}
+      {...handlers}
+    >
       <div className="rp-actions" style={{ width }} aria-hidden={!open} inert={!open}>
-        {actions.map(({ key, label, Icon, tone, onClick, disabled }) => (
+        {actions.map(({ key, label, Icon, tone, onClick, disabled, leaves }) => (
           <button
             key={key}
             className="rp-action"
@@ -79,7 +103,8 @@ function SwipeRow({ id, openId, setOpenId, actions, active, className = "", chil
             disabled={disabled}
             onClick={() => {
               setOpenId(null);
-              onClick();
+              if (leaves) leave(onClick);
+              else onClick();
             }}
           >
             <Icon size={20} />
@@ -117,7 +142,7 @@ function ChatRow({ chat, active, busy, running, excerpt, openId, setOpenId, onSe
       active={active}
       actions={[
         { key: "pin", label: chat.pinned ? "Unpin" : "Pin", Icon: chat.pinned ? PushPinSlash : PushPin, onClick: () => onPin(chat.id) },
-        { key: "remove", label: "Remove", Icon: Trash, tone: "clay", disabled: busy, onClick: () => onDelete(chat.id) },
+        { key: "remove", label: "Remove", Icon: Trash, tone: "clay", disabled: busy, leaves: true, onClick: () => onDelete(chat.id) },
       ]}
     >
       <button
@@ -170,7 +195,7 @@ function Library({ items, query, filter, setFilter, activeId, openId, setOpenId,
                 openId={openId}
                 setOpenId={setOpenId}
                 className="rp-work"
-                actions={[{ key: "delete", label: "Remove", Icon: Trash, tone: "clay", onClick: () => onDelete(entry) }]}
+                actions={[{ key: "delete", label: "Remove", Icon: Trash, tone: "clay", leaves: true, onClick: () => onDelete(entry) }]}
               >
                 <button
                   className="rp-work-link"
@@ -366,7 +391,7 @@ export function PhoneRail({
 
   /* Pulled down from the top of the list, the search field opens */
   const pulled = useRef(0);
-  const pulling = dragProps({
+  const pulling = useDrag({
     axis: "y",
     claim: (dx, dy) => view !== "work" && !searchOpen && (pane.current?.scrollTop ?? 1) <= 0 && dy > 0,
     move: (dx, dy) => {

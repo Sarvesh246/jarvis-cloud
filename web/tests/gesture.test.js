@@ -84,3 +84,16 @@ test("secondary mouse buttons do not start gestures", () => {
   handlers.onPointerUp(pointer(30, 10));
   assert.deepEqual(calls, []);
 });
+
+test("a drag carries on when fresh handlers take over mid-gesture", () => {
+  const calls = [];
+  const store = { g: null };
+  const make = () => dragProps({ move: (dx) => calls.push(["move", dx]), end: (dx) => calls.push(["end", dx]) }, store);
+  const target = {};
+  const touch = (x) => ({ touches: [{ clientX: x, clientY: 10 }], changedTouches: [{ clientX: x, clientY: 10 }], currentTarget: target });
+  make().onTouchStart(touch(100));
+  make().onTouchMove(touch(70));
+  make().onTouchMove(touch(50));
+  make().onTouchEnd(touch(50));
+  assert.deepEqual(calls, [["move", -30], ["move", -50], ["end", -50]]);
+});

@@ -305,6 +305,37 @@
   transition: none;
 }
 
+/* Springs back with a little life when released */
+.rp-face:not([data-dragging]) {
+  transition: transform 340ms cubic-bezier(0.22, 1.1, 0.36, 1);
+}
+
+.rp-row {
+  transition:
+    height 240ms var(--ease),
+    opacity 200ms var(--ease);
+}
+
+.rp-row[data-leaving] {
+  height: 0 !important;
+  opacity: 0;
+  border-bottom-color: transparent;
+  pointer-events: none;
+}
+
+.rp-row[data-leaving] .rp-face {
+  transform: translateX(-110%) !important;
+  transition: transform 220ms var(--ease);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rp-row,
+  .rp-face:not([data-dragging]),
+  .rp-row[data-leaving] .rp-face {
+    transition-duration: 1ms;
+  }
+}
+
 .rp-dot {
   flex: none;
   width: 6px;

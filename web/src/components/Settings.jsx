@@ -4,7 +4,7 @@ import { notifySupport } from "../lib/preferences.js";
 import { forgetPlace, locate, locationSupport } from "../lib/location.js";
 import { allowNotifications, DESKTOP, STORE_BUILD } from "../lib/desktop.js";
 import { usePhone } from "../lib/use-phone.js";
-import { dragProps } from "../lib/gesture.js";
+import { useDrag } from "../lib/use-drag.js";
 import { buzz } from "../lib/haptics.js";
 import { DesktopUpdates } from "./DesktopUpdates.jsx";
 import { InstallSteps } from "./Onboarding.jsx";
@@ -126,7 +126,7 @@ function PhoneSettings({ open, user, prefs, onChange, onClose, onTools, onWelcom
     page.current?.removeAttribute("data-dragging");
     page.current?.style.removeProperty("--drag");
   };
-  const back = dragProps({
+  const back = useDrag({
     axis: "x",
     start: (event) => {
       const x = event.touches ? event.touches[0].clientX : event.clientX;

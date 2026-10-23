@@ -6,13 +6,14 @@
    `claim` runs once the movement is clearly a drag of the kind wanted
    (`axis`: "x" or "y"); returning false hands the gesture back to scrolling.
    Anything handed back never calls `move` or `end`. */
-export function dragProps({ axis = "x", slop = 6, start, claim, move, end, cancel }) {
-  let g = null;
+export function dragProps(options, store = { g: null }) {
+  const { axis = "x", slop = 6, start, claim, move, end, cancel } = options;
   const begin = (x, y, event) => {
-    g = { x0: x, y0: y, claimed: false, dead: false, target: event.currentTarget };
-    start?.(event, g);
+    store.g = { x0: x, y0: y, t0: performance.now(), claimed: false, dead: false, target: event.currentTarget };
+    start?.(event, store.g);
   };
   const update = (x, y, event) => {
+    const g = store.g;
     if (!g || g.dead) return;
     const dx = x - g.x0;
     const dy = y - g.y0;
@@ -37,11 +38,11 @@ export function dragProps({ axis = "x", slop = 6, start, claim, move, end, cance
     move?.(dx, dy, event);
   };
   const finish = (x, y, event, cancelled) => {
-    const done = g;
-    g = null;
+    const done = store.g;
+    store.g = null;
     if (!done || done.dead) return;
     if (cancelled) cancel?.(event, done);
-    else end?.(x - done.x0, y - done.y0, event, done);
+    else end?.(x - done.x0, y - done.y0, event, { ...done, ms: performance.now() - done.t0 });
   };
   return {
     onPointerDown(event) {
@@ -76,3 +77,4 @@ export function dragProps({ axis = "x", slop = 6, start, claim, move, end, cance
     },
   };
 }
+
