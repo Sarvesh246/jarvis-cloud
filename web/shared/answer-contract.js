@@ -8,7 +8,7 @@ export function constrainedAnswer(content = "") {
     .split(/\n\n(?:Attached file: |\[Vaelo request:|\[Selected Vaelo workspace:)/)[0]
     .replace(/```[^\n]*\n[\s\S]*?```|~~~[^\n]*\n[\s\S]*?~~~/g, '');
   return patterns.some(pattern => pattern.test(text)) ||
-    /\bpython\b/i.test(text) && /\b(?:include|provide|show|supply|return|with)\s+(?:runnable\s+|unit\s+|the\s+|assertion\s+)?tests\b/i.test(text) ||
+    /\bpython\b/i.test(text) && /\b(?:include|provide|show|supply|return|with|run|execute)\s+(?:(?:runnable|unit|the|these|following|assertion|synchronous)\s+)*(?:tests|assertions)\b/i.test(text) ||
     /\b(?:only|just)\s+(?:(?:with|one|a|an|the|valid|single|final|those|these|two|three|four|five|six|seven|eight|nine|ten|\d+)\s+)*(?:json|csv|code|answer|results?|number|word|sentence|line|object)\b|\b(?:json|csv|code|prose|text)[ -]only\b|\braw (?:json|csv|text)\b|\bplain text\b/i.test(text);
 }
 

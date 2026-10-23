@@ -3,6 +3,16 @@ from cloud.answer_contract import contract_for, validate_answer, constrained, re
 
 
 class AnswerContractTests(unittest.TestCase):
+    def test_requested_execution_is_verified_without_requiring_a_tool_name(self):
+        python=self.contract('Implement a Python function sum_values(items), then actually execute assertion tests for [], [0] and [1,-2,3].')
+        self.assertTrue(python['python_tests'])
+        self.assertTrue(python['verify_returned_python'])
+        self.assertTrue(constrained(python))
+        js=self.contract('Implement JavaScript sumValues(items), then actually execute synchronous assertions for [], [0] and [1,-2,3].')
+        self.assertIn('javascript_verify',js['required_tools'])
+        self.assertIn('missing_tool_javascript_verify',validate_answer('All passed.',js)[1])
+        self.assertFalse(self.contract('Implement JavaScript sumValues(items). Do not execute assertions.')['required_tools'])
+        self.assertFalse(self.contract('Translate "execute JavaScript assertions" into Spanish.')['required_tools'])
     def test_supplied_identifiers_are_copied_without_guessing_or_suppressing_other_requests(self):
         for kind,value in [('booking','aB_28'),('release','ALDER-918'),('reference','ref-v2')]:
             ask=f'Correction: the {kind} code is {value}. Reply only with the current code.'

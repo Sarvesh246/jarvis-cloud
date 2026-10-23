@@ -70,8 +70,14 @@ def contract_for(messages, tools_available=True):
     tools=re.findall(r'(?:^|[.!?]\s+|\n)(?:please\s+|actually\s+)?(?:use|run|execute|invoke|call)\s+(?:the\s+)?(python_verify|javascript_verify|calculate|date_difference|evaluate_constraints)\b',text,re.I)
     supplied_constraints = bool(re.search(r'\b(?:hard|numerical|numeric) constraints?\b', text, re.I)
                                 and re.search(r'\b(?:at most|at least|less than|greater than)\s+\$?\d', text, re.I))
+    execution_tests = bool(re.search(r'\b(?:run|execute)\s+(?:(?:the|these|following|synchronous|assertion|unit|runnable)\s+)*(?:tests|assertions)\b',text,re.I)
+                           and not re.search(r"\b(?:do not|don't|never)\s+(?:actually\s+)?(?:run|execute)\b",text,re.I)
+                           and not re.match(r'\s*(?:translate|paraphrase|proofread)\b',text,re.I))
+    if execution_tests and re.search(r'\bJavaScript\b',text,re.I) and not re.search(r'\bNode(?:\.js)?\b',text,re.I):
+        tools.append('javascript_verify')
     code_tests = bool(re.search(r'\bpython\b', text, re.I) and
-                      re.search(r'\b(?:include|provide|show|supply|return|with)\s+(?:runnable\s+|unit\s+|the\s+|assertion\s+)?tests\b', text, re.I))
+                      (re.search(r'\b(?:include|provide|show|supply|return|with)\s+(?:runnable\s+|unit\s+|the\s+|assertion\s+)?tests\b', text, re.I)
+                       or execution_tests and re.search(r'\b(?:implement|write|create|generate)\b',text,re.I)))
     result_count = re.search(r'\b(?:give|return|provide|reply with)\s+(?:only|just)\s+(?:(?:those|these|the)\s+)?(one|two|three|four|five|six|seven|eight|nine|ten|[1-9]\d?)\s+(?:results|answers)\b', text, re.I)
     return {'json': bool(ONLY_JSON.search(text)), 'limits': list(dict.fromkeys(limits))[:8],'required_keys':required,
             'unknown_only':bool(re.search(r'''\b(?:reply|return|respond|answer)\s+(?:with\s+)?(?:only|just)\s+["'`]?UNKNOWN["'`]?\s+if\b''',text,re.I)),
