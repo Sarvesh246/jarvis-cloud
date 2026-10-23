@@ -211,22 +211,26 @@ class RelayTests(unittest.TestCase):
                 hermes, relay, port = self.boot([[chunk('{"red":null,"blue":null}','stop'),'data: [DONE]']])
                 source = [{'type':'text','text':'Use only this image. Return ONLY JSON with red, blue.'},
                           {'type':'image_url','image_url':{'url':'data:image/png;base64,originalPixels'}}]
+                calls=[]
                 def repair(run,messages,body):
+                    calls.append(body)
                     self.assertIsInstance(messages[-1]['content'],list)
                     supplied = next(m['content'] for m in messages if isinstance(m.get('content'),list))
                     self.assertEqual(supplied[1],source[1])
                     self.assertTrue(supplied[0]['text'].startswith(source[0]['text']))
                     self.assertTrue(body['no_weather_tools'])
-                    if not available: return None
                     run.connection = mock.Mock()
                     run.route = 'router'
+                    if len(calls)==1:
+                        return io.BytesIO((chunk('{"red":null,"blue":null}','stop')+'\n\ndata: [DONE]\n\n').encode())
+                    if not available: return None
                     return io.BytesIO((chunk('{"red":2,"blue":2}','stop')+'\n\ndata: [DONE]\n\n').encode())
                 relay.open_fast = mock.Mock(side_effect=repair)
                 self.start(port,content=source)
                 run = self.finished(relay)
                 self.assertEqual(run.outcome,'complete' if available else 'error')
-                self.assertEqual(len(hermes.requests),1)
-                relay.open_fast.assert_called_once()
+                self.assertEqual(len(hermes.requests),0)
+                self.assertEqual(relay.open_fast.call_count,2)
                 wire = b''.join(run.frames).decode()
                 self.assertNotIn('"red": null',wire)
                 if not available: self.assertIn('image_processing_unavailable',wire)
@@ -268,7 +272,7 @@ class RelayTests(unittest.TestCase):
         self.assertEqual(targets,[('router.example',None),('openrouter.ai',None)])
         self.assertEqual(provider.requests[0]['headers']['X-FreeLLM-Task-Type'],'code')
         self.assertNotIn('tools',provider.requests[0]['body'])
-        self.assertEqual([connection.timeout for connection in connections],[relay_module.CODE_SECONDS]*2)
+        self.assertEqual([connection.timeout for connection in connections],[relay_module.CODE_IMAGE_SECONDS]*2)
         self.assertIn('jarvis.verification',b''.join(run.frames).decode())
 
     def test_memory_directives_are_server_filtered_and_permission_controls_note_events(self):

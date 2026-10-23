@@ -127,6 +127,10 @@ def validate_answer(text, contract, executed_tools=()):
                              parse_constant=lambda value: (_ for _ in ()).throw(ValueError(value)))
             if contract.get('images') and isinstance(value, dict) and len(value) > 1 and all(v is None for v in value.values()):
                 errors.append('image_reading_empty')
+            if (contract.get('images') and isinstance(value,dict) and len(value)>=4
+                    and sum(item is None for item in value.values())>=len(value)-1
+                    and any(isinstance(item,str) and re.search(r'\bimage\b.{0,30}\b(?:not provided|not attached|missing|unavailable)\b',item,re.I) for item in value.values())):
+                errors.append('image_reading_empty')
             if contract.get('required_keys') and (not isinstance(value,dict) or
                     any(key not in value for key in contract['required_keys'])):
                 errors.append('required_json_fields')

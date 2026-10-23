@@ -8,7 +8,7 @@ from cloud.constraints import evaluate_constraints, supplied_constraints
 from cloud.admission import Admission
 from cloud.memory_output import NoteFilter, split_notes
 from cloud.runtime_contract import fail_closed_vision
-from cloud.relay import Run
+from cloud.relay import Run, source_image_request
 from cloud.code_answer import returned_python, standalone_python
 
 
@@ -54,6 +54,14 @@ class BenchmarkRegressions(unittest.TestCase):
         self.assertTrue(constrained(contract))
         self.assertIn('image_reading_unavailable',validate_answer("I don't see an image attached to your message.",contract)[1])
         self.assertFalse(validate_answer('There are three red shapes and one blue square.',contract)[1])
+        contract['json']=True
+        self.assertIn('image_reading_empty',validate_answer('{"red":null,"blue":null,"jan":null,"ref":"Image not provided"}',contract)[1])
+        natural=[{'role':'user','content':[{'type':'text','text':'Count the red shapes.'},
+            {'type':'image_url','image_url':{'url':'data:image/png;base64,pixels'}}]}]
+        self.assertTrue(source_image_request(natural,{},contract_for(natural)))
+        self.assertFalse(source_image_request(natural,{'freshness':'query'},contract_for(natural)))
+        natural[0]['content'][0]['text']='Generate a logo using this image.'
+        self.assertFalse(source_image_request(natural,{},contract_for(natural)))
 
     def test_requested_python_tests_must_be_delivered_and_parse(self):
         contract = self.contract('Write a Python function f. Include tests for empty input and unchanged input.')
