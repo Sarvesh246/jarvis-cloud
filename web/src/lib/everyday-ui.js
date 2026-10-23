@@ -22,8 +22,11 @@ export function answerChoices(content = '') {
   // A closing question followed by a small explicit list of choices is enough
   // evidence to offer buttons. Instructions/checklists are not questions.
   if (content.length > 12000 || /```|~~~|\[[ xX]\]/.test(content)) return null;
-  const found = content.match(/(?:^|\n)([^\n]{8,300}\?)\s*\n(?:[^\n]{0,40}(?:options|choices|approaches)[^\n]{0,35}:\s*\n)?((?:(?:[-*]|\d+[.)]|[A-F][.)])\s+[^\n]+(?:\n\s*)?){2,6})\s*$/i);
+  const leading = content.match(/(?:^|\n)([^\n]{8,300}\?)\s*\n(?:[^\n]{0,40}(?:options|choices|approaches)[^\n]{0,35}:\s*\n)?((?:(?:[-*]|\d+[.)]|[A-F][.)])\s+[^\n]+(?:\n\s*)?){2,6})\s*$/i);
+  const trailing = !leading && content.match(/(?:^|\n)((?:(?:(?:[-*]|\d+[.)]|[A-F][.)])\s+|\*\*(?=\S))[^\n]+(?:\n\s*)?){2,6})\s*\n([^\n]{8,300}\?)\s*$/i);
+  const found = leading || (trailing && { index: trailing.index, 1: trailing[2], 2: trailing[1] });
   if (!found) return null;
+  if (trailing && /^(?:(?:[-*]|\d+[.)]|[A-F][.)])\s+|\*\*)/.test(content.slice(0, trailing.index).trim().split('\n').at(-1) || '')) return null;
   if (/!?\[[^\]]*\]\(/.test(found[2])) return null;
   const options = found[2].trim().split('\n').filter(line => line.trim()).map(line => plainLine(line.trim().replace(/^(?:[-*]|\d+[.)]|[A-F][.)])\s+/, '')));
   if (options.some(x => !x || x.length > 180) || new Set(options).size !== options.length) return null;

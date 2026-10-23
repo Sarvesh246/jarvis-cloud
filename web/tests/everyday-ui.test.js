@@ -18,6 +18,11 @@ test('daily presentation recovers evidenced choices and summaries without a visu
   assert.equal(livePattern.block.options.length, 2);
   assert.equal(livePattern.block.options[0], 'DIY with static files – create an index.html and style it with CSS.');
   assert.equal(answerChoices('Which direction do you prefer?\n\nYour options:\n\n1. First direction\n\n2. Second direction').options.length, 2);
+  const closingQuestion = answerChoices('One question before anything else: how technical do you want to get?\n\n- **Static site with a generator** — you write Markdown, the tool builds a fast site, and you host it free on GitHub Pages or Netlify. More setup, more control.\n- **No-code website builder** — drag-and-drop editor, custom domain included, minimal setup. Less control, but live in an afternoon.\n\nWhich fits you better?');
+  assert.equal(closingQuestion.title, 'Which fits you better?');
+  assert.equal(closingQuestion.options.length, 2);
+  assert.match(closingQuestion.markdown, /how technical/);
+  assert.equal(answerChoices('**First option** — one approach.\n\n**Second option** — another approach.\n\nWhich would you choose?').options.length, 2);
   const summary = automaticPresentation('Here is the situation.\n\n- **Scope:** A small website\n- **Time:** Three weeks\n- **Team:** Two designers', 'Tell me about the project');
   assert.equal(summary.block.type, 'widgets');
   assert.equal(summary.block.items.length, 3);
@@ -35,6 +40,7 @@ test('automatic choices protect literal, plain, code, math and oversized output'
   assert.equal(answerChoices('Tasks?\n- [ ] Task one\n- [ ] Task two'), null);
   assert.equal(answerChoices('x'.repeat(12001)), null);
   assert.equal(answerChoices('Options?\n- Same\n- Same'), null);
+  assert.equal(answerChoices(Array.from({length:7},(_,i)=>`- Choice ${i+1}`).join('\n')+'\n\nWhich would you prefer?'), null);
   assert.equal(answerChoices('Which source would you choose?\n- [Source one](https://example.com/one)\n- [Source two](https://example.com/two)'), null);
   const citations = '- **First:** [Source](https://example.com/a)\n- **Second:** Some detail\n- **Third:** More detail';
   assert.equal(automaticPresentation(citations, 'Explain'), null);
