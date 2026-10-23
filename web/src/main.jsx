@@ -7,8 +7,10 @@ import "./design/base.css";
 import "./design/personal.css";
 import { App } from "./App.jsx";
 import { DESKTOP, installDesktopTransport } from "./lib/desktop.js";
+import { trackViewport } from "./lib/viewport.js";
 
 installDesktopTransport();
+trackViewport();
 
 // Programmatic focus after a tap can inherit the composer's focus ring on
 // Safari. Keep focus in place, but reserve control outlines for keyboards.

@@ -332,3 +332,21 @@ a:hover {
   transition-duration: 0.01ms !important;
   scroll-behavior: auto !important;
 }
+
+/* While the phone keyboard is up the app is only as tall as what is visible
+   (lib/viewport.js), the home-indicator gap is gone, and sheets fit above it. */
+html[data-keyboard] .shell,
+html[data-keyboard] .stage,
+html[data-keyboard] .workspace,
+html[data-keyboard] .rail {
+  height: var(--app-h);
+}
+
+html[data-keyboard] .dock {
+  padding-bottom: var(--s-2);
+}
+
+html[data-keyboard] .sheet,
+html[data-keyboard] .sheet[data-tall] {
+  max-height: calc(var(--app-h) - 1rem);
+}

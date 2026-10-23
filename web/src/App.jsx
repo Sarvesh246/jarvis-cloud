@@ -1104,7 +1104,7 @@ export function App() {
     setChats(current => current.map(chat => chat.id === entry.chatId ? removeLibraryItem(chat, entry.id) : chat));
     pushChat(entry.chatId);
     showToast({
-      text: "Artifact deleted from the library. Conversation kept.",
+      text: "Artifact deleted",
       action: "Undo",
       onAction: () => {
         setChats(current => current.map(chat => chat.id === entry.chatId ? restoreLibraryItem(chat, entry.id) : chat));

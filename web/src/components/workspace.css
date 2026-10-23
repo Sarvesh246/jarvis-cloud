@@ -718,3 +718,55 @@ body.resizing iframe {
   }
 }
 }
+
+/* On a phone the title and its close button share the top line; the tools sit
+   on their own line below. The top clears the frosted band iOS draws over an
+   installed app, with an opaque strip behind it so nothing blurs. */
+@media (max-width: 47.9375rem), (pointer: coarse) and (max-height: 31.25rem) {
+  .ws-head {
+    --ws-top: calc(env(safe-area-inset-top) + 20px);
+    align-items: flex-start;
+    flex-wrap: wrap;
+    row-gap: var(--s-3);
+    min-height: 0;
+    padding: calc(var(--ws-top) + var(--s-2)) var(--s-3) var(--s-3) var(--s-4);
+    position: relative;
+  }
+
+  .ws-head::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto;
+    height: var(--ws-top);
+    background: var(--surface);
+    pointer-events: none;
+  }
+
+  .ws-title-group {
+    flex: 1 1 0;
+  }
+
+  .ws-head > .icon-button {
+    flex: none;
+    margin-top: -0.25rem;
+  }
+
+  .ws-actions {
+    flex: 1 0 100%;
+    justify-content: flex-start;
+    gap: var(--s-2);
+  }
+
+  .ws-actions .block-tool {
+    min-height: 2.5rem;
+  }
+
+  .ws-actions:empty {
+    display: none;
+  }
+
+  .ws-head h2 {
+    white-space: normal;
+    line-height: 1.25;
+  }
+}

@@ -358,6 +358,12 @@ export function Workspace({
     download(`vaelo-snippet.${ext}`, text);
   }
 
+  const closeButton = (
+    <button className="icon-button" aria-label="Close workspace" data-tip="Close (Esc)" onClick={onClose}>
+      <X size={19} />
+    </button>
+  );
+
   return (
     <aside
       ref={panel}
@@ -391,6 +397,7 @@ export function Workspace({
             {titles[item.kind]}
           </h2>
         </div>
+        {phone && closeButton}
         <div className="ws-actions">
           {item.kind === "document" && onVerifyDocument && (
             <button className="block-tool" onClick={() => onVerifyDocument(item.messageId, titles.document)}>
@@ -427,9 +434,7 @@ export function Workspace({
               <Printer size={16} />
             </button>
           )}
-          <button className="icon-button" aria-label="Close workspace" data-tip="Close (Esc)" onClick={onClose}>
-            <X size={19} />
-          </button>
+          {!phone && closeButton}
         </div>
       </header>
       {!phone && views.length > 1 && views.some((view) => view.id === item.kind) && (

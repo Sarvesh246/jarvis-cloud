@@ -5,14 +5,14 @@ import { runInNewContext } from "node:vm";
 
 const source = readFileSync(new URL("../public/sw.js", import.meta.url), "utf8");
 const origin = "https://vaelo.example";
-const shell = "vaelo-shell-v6";
+const shell = "vaelo-shell-v7";
 const deferred = () => {
   let resolve;
   const promise = new Promise(done => { resolve = done; });
   return { promise, resolve };
 };
 
-function worker({ network = async () => new Response("network", { headers: { "Content-Type": "text/html; charset=utf-8" } }), storage = {} } = {}) {
+function worker({ network = async request => new Response("network", { headers: { "Content-Type": /\/assets\//.test(request?.url || "") ? "text/javascript" : "text/html; charset=utf-8" } }), storage = {} } = {}) {
   const handlers = {}, entries = new Map(), deleted = [], fetched = [], writes = [];
   const key = request => new URL(typeof request === "string" ? request : request.url, origin).href;
   const cache = {
@@ -138,7 +138,7 @@ test("ordinary online, cached and offline fetches preserve shell and hashed asse
   let online = true;
   const w = worker({ network: async request => {
     if (!online) throw new TypeError("offline");
-    return new Response(`public ${new URL(request.url).pathname} 🌦️`, { headers: { "Content-Type": "text/html" } });
+    return new Response(`public ${new URL(request.url).pathname} 🌦️`, { headers: { "Content-Type": /\/assets\//.test(request.url) ? "text/javascript" : "text/html" } });
   } });
   const paths = [["/", "navigate"], ["/prefs.js", "cors"], ["/assets/app-123.js", "cors"]];
   for (const [path, mode] of paths) {

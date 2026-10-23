@@ -3,7 +3,7 @@
    its hashed scripts, styles, fonts and icons). Anything under /api, which
    is where signed-in data lives, always goes to the network and is never
    cached. */
-const SHELL = "vaelo-shell-v6";
+const SHELL = "vaelo-shell-v7";
 const PRECACHE = ["/", "/prefs.js"];
 
 // Storage is optional at runtime (private browsing, eviction and quota errors).
@@ -11,6 +11,8 @@ const PRECACHE = ["/", "/prefs.js"];
 // successful download into a failed request just because it cannot be saved.
 function saveResponse(event, key, response) {
   if (!response.ok) return;
+  // A build file that is gone can come back as a page; never keep that.
+  if (typeof key !== "string" && /text\/html/i.test(response.headers.get("Content-Type") || "")) return;
   const copy = response.clone();
   event.waitUntil(
     caches.open(SHELL).then((cache) => cache.put(key, copy)).catch(() => {}),

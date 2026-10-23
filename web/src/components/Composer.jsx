@@ -669,7 +669,8 @@ export const Composer = forwardRef(function Composer(
   const taken = (event) => {
     onFiles([...event.target.files]);
     event.target.value = "";
-    textarea.current?.focus();
+    /* On a phone a picked file should not throw the keyboard back up */
+    if (!phone) textarea.current?.focus();
   };
 
   return (
@@ -820,6 +821,7 @@ export const Composer = forwardRef(function Composer(
                   aria-haspopup="dialog"
                   onClick={() => {
                     buzz();
+                    document.activeElement?.blur?.();
                     setMenu(true);
                   }}
                 >
@@ -833,6 +835,7 @@ export const Composer = forwardRef(function Composer(
                   aria-expanded={menu}
                   onClick={() => {
                     buzz();
+                    document.activeElement?.blur?.();
                     setMenu(true);
                   }}
                 >
