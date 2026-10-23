@@ -601,7 +601,7 @@
   .toast-region {
     left: 16px;
     right: 16px;
-    bottom: calc(env(safe-area-inset-bottom) + 8.5rem);
+    bottom: calc(env(safe-area-inset-bottom) + 4.5rem);
     width: auto;
     transform: none;
   }

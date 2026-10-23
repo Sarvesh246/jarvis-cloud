@@ -538,8 +538,10 @@ export function App() {
   };
 
   function showToast(next) {
-    /* The toast keeps its own time, pausing while it is being read */
-    setToast(current => [...current, { id: crypto.randomUUID(), ...next }].slice(-6));
+    /* The toast keeps its own time, pausing while it is being read. Only
+       the latest action is shown, so repeated actions replace it rather
+       than stacking */
+    setToast([{ id: crypto.randomUUID(), ...next }]);
   }
 
   /* A fresh launch owns a new conversation. The chat this tab already had open (a reload, or the
