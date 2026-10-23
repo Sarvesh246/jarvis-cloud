@@ -1,8 +1,16 @@
 import unittest
-from cloud.answer_contract import contract_for, validate_answer, constrained
+from cloud.answer_contract import contract_for, validate_answer, constrained, repair_instruction
 
 
 class AnswerContractTests(unittest.TestCase):
+    def test_repairs_keep_the_original_task_without_unrelated_tool_or_code_requirements(self):
+        image=repair_instruction(['raw_json','required_json_fields'])
+        self.assertIn('No Markdown fence',image)
+        self.assertNotIn('Python',image)
+        self.assertNotIn('invoke',image)
+        code=repair_instruction(['python_tests_failed'])
+        self.assertIn('independently derived expected values',code)
+        self.assertNotIn('JSON',code)
     def test_explicit_named_verification_requires_that_exact_executed_tool(self):
         contract=self.contract('Actually use javascript_verify to check this. Return ONLY JSON.')
         self.assertEqual(contract['required_tools'],['javascript_verify'])

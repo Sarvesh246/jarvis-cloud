@@ -613,6 +613,15 @@ class Relay:
         }
         if not body.get("no_weather_tools"):
             payload["tools"] = [{"type": "function", "function": WEATHER_SCHEMA}]
+        image_contract = contract_for(messages)
+        if ((body.get('source_vision') or body.get('vision_repair')) and
+                image_contract.get('json') and image_contract.get('required_keys')):
+            # Ask the native provider for an object, rather than depending only
+            # on prompting and a second generation to repair Markdown/prose.
+            # Array-only requests have no required object fields and stay free.
+            payload['response_format'] = {'type':'json_object'}
+            if route['name'] == 'openrouter':
+                payload['provider'] = {'require_parameters':True}
         reasoning = direct_reasoning(body)
         if reasoning:
             payload["reasoning"] = reasoning
@@ -807,6 +816,12 @@ class Relay:
             if body.get('standalone_python') and not self.admission.acquire(run):
                 return None,None if run.stopped else {'code':'queue_full','status':429,'message':'Vaelo’s reply queue is full or the wait expired. Please try again shortly.'}
             response = self.open_fast(run, messages, body)
+            if (response is None and body.get('standalone_python') and not body.get('code_repair')
+                    and not run.stopped and os.environ.get('OPENROUTER_API_KEY')):
+                # A transport timeout is not a request for agent planning. Try
+                # the independent native coding route before the full gateway.
+                run.trace.counts['native_code_fallbacks'] = run.trace.counts.get('native_code_fallbacks',0)+1
+                response = self.open_fast(run,messages,{**body,'code_repair':True})
             if response is not None:
                 return response, None
             run.trace.counts['fast_fallbacks'] = run.trace.counts.get('fast_fallbacks',0)+1

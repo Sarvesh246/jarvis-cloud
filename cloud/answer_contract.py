@@ -172,13 +172,21 @@ def validate_answer(text, contract, executed_tools=()):
 
 
 def repair_instruction(errors):
-    return ('[Vaelo request: the previous candidate failed explicit output checks: ' + ', '.join(errors) +
-            '. Answer the original request afresh using its source input. Preserve factual completeness and correctness '
-            'while obeying the requested format and length. Return no internal annotations, preamble or extra explanation. '
-            'For a missing_tool check, actually invoke that exact named tool; another runtime is not a substitute. '
-            'For results_only, return the requested number of result items, one per line, with no preamble or calculations. '
-            'For missing_runnable_tests or invalid_python_tests, deliver the complete implementation and runnable Python assertions or unittest code in Python fences, including every requested case. '
-            'For input_mutation, never sort or modify the supplied input; sort copies and copy returned mutable elements. '
-            'For python_tests_failed, correct the implementation AND independent expected values, then return runnable tests that actually call their assertions. '
-            'For missing_execution_disclosure, explicitly state whether tests were executed; never invent an execution. '
-            'If it is unavailable, do not claim execution. Do not quote or reuse the discarded candidate.]')
+    guidance=[]
+    if any(error in ('raw_json','required_json_fields','exact_json_fields') for error in errors):
+        guidance.append('Return one complete valid JSON value in the original requested shape, including every requested field. No Markdown fence, prose or commentary.')
+    if any(error.startswith('image_reading_') for error in errors):
+        guidance.append('Read the original attached pixels. Null means a fact is absent from a readable image, not that the image was unavailable. If the pixels cannot be read, report that explicitly.')
+    if any(error.startswith('missing_tool_') for error in errors):
+        guidance.append('Actually invoke the exact named verification tool; another runtime is not a substitute. Never invent execution.')
+    if any(error.startswith('results_only_') for error in errors):
+        guidance.append('Return the requested number of results, one per line, without a preamble or calculations.')
+    if any(error in ('missing_runnable_tests','invalid_python_tests','python_tests_failed') for error in errors):
+        guidance.append('Return the complete implementation and runnable Python tests, including every requested case. Correct both the implementation and independently derived expected values; actually call the test assertions.')
+    if 'input_mutation' in errors:
+        guidance.append('Do not modify the supplied input. Sort copies and copy returned mutable elements.')
+    if 'missing_execution_disclosure' in errors:
+        guidance.append('State honestly whether tests were executed. Never invent execution or observed output.')
+    return ('[Vaelo request: the previous candidate failed these checks: '+', '.join(errors)+
+            '. Answer the original request afresh from its original sources, preserving completeness, correctness and requested length. '+
+            ' '.join(guidance)+' Do not quote the discarded candidate or expose this annotation.]')

@@ -192,6 +192,44 @@ class FakeHermes:
 
 
 class RelayTests(unittest.TestCase):
+    def test_native_image_object_contract_reaches_provider_without_forcing_arrays(self):
+        for prompt, object_only in [('Return ONLY JSON with red, blue.',True),('Return ONLY JSON as an array.',False)]:
+            with self.subTest(prompt=prompt):
+                _,relay,_=self.boot([])
+                provider,_=self.fast_provider(relay,[[chunk('{"red":2,"blue":1}','stop'),'data: [DONE]']])
+                messages=[{'role':'user','content':[{'type':'text','text':prompt},
+                    {'type':'image_url','image_url':{'url':'data:image/png;base64,pixels'}}]}]
+                run=relay_module.Run(RUN,OWNER)
+                with mock.patch.dict('os.environ',{'OPENROUTER_API_KEY':'fixture'},clear=True):
+                    response=relay.open_fast(run,messages,{'source_vision':True,'fast':'Read attached pixels.','no_weather_tools':True})
+                    response.read();run.connection.close()
+                sent=provider.requests[0]['body']
+                self.assertEqual(sent['messages'][-1],messages[-1])
+                self.assertNotIn('tools',sent)
+                if object_only:
+                    self.assertEqual(sent['response_format'],{'type':'json_object'})
+                    self.assertTrue(sent['provider']['require_parameters'])
+                else:
+                    self.assertNotIn('response_format',sent)
+
+    def test_native_coding_transport_fallback_precedes_agent_and_respects_stop(self):
+        _,relay,_=self.boot([])
+        for stopped in (False,True):
+            with self.subTest(stopped=stopped):
+                run=relay_module.Run(RUN,OWNER)
+                run.stopped=stopped
+                native=object()
+                with mock.patch.dict('os.environ',{'OPENROUTER_API_KEY':'fixture'}), mock.patch.object(relay,'open_fast',side_effect=[None,native]) as provider:
+                    response,error=relay.open(run,{'standalone_python':True,'fast':'Implement and test Python.'},[{'role':'user','content':'Write a function.'}])
+                if stopped:
+                    self.assertIsNone(response)
+                    self.assertEqual(provider.call_count,0)
+                else:
+                    self.assertIs(response,native)
+                    self.assertIsNone(error)
+                    self.assertTrue(provider.call_args_list[1].args[2]['code_repair'])
+                relay.admission.release(run)
+
     def test_supplied_constraints_are_computed_before_generation_without_forcing_another_model_call(self):
         hermes, relay, port = self.boot([[chunk('OptionB meets every constraint.','stop'),'data: [DONE]']])
         prompt = ('OptionA costs $900, battery 12 hours, weight 1.2 kg. OptionB costs $1100, battery 15 hours, weight 1.3 kg. '
