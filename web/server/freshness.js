@@ -48,6 +48,8 @@ export function localizedQuery(query, place) {
 export function freshnessQuery(content, previous = "") {
   const text = requestText(content).replace(/[’‘]/g, "'").trim();
   if (!text || TRANSFORM.test(text) || OFFLINE.test(text)) return null;
+  if (!LOOKUP.test(text) && !/https?:\/\//i.test(text) &&
+      /\b(?:from|using|use|based on)\s+(?:(?:only|solely)\s+)?(?:(?:the|my|this|these)\s+)?(?:selected|saved|attached|uploaded|provided)\s+(?:(?:project|source)\s+)?(?:workspace|workroom|brief|document|file|text)\b|\b(?:use|using)\s+(?:only|solely)\s+(?:(?:the|this)\s+)?(?:source|image|document|file|text)\b/i.test(text)) return null;
   const history = (Array.isArray(previous) ? previous : [previous]).map(requestText);
   // A "current" private identifier is resolved from account/conversation
   // evidence, not a public web search. Explicit external lookups still win.

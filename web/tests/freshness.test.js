@@ -7,6 +7,13 @@ import { chatInput, guestInput, streamChat } from "../server/chat.js";
 const conversationId = "123e4567-e89b-12d3-a456-426614174000";
 const question = "Compare the iPhone 15 Pro and iPhone 18 Pro Max";
 
+test('selected workspace facts and supplied sources do not trigger automatic public searches', () => {
+  assert.equal(freshnessQuery('From this selected workspace and its saved document, return only JSON with project, owner, approved_budget, launch.'), null);
+  assert.equal(freshnessQuery('Use only this source. Return the current launch date.'), null);
+  assert.equal(freshnessQuery('Using the attached project brief, what is the launch date?'), null);
+  assert.equal(freshnessQuery('From this selected workspace, search the web for current laptop prices.'), 'From this selected workspace, search the web for current laptop prices.');
+});
+
 test('current private badge codes use account evidence without a public search', () => {
   assert.equal(freshnessQuery('Same synthetic test. What is the current fictional badge code?'),null);
   assert.equal(freshnessQuery('What is my current badge code?'),null);
