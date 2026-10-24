@@ -141,6 +141,7 @@ form>.work-action-bar { position:sticky; bottom:0; z-index:1; background:var(--c
 .work-slot-drop { color:var(--muted); font-size:var(--t-xs); font-style:italic; }
 .work-doc { display:flex; flex-wrap:wrap; align-items:center; gap:var(--s-2) var(--s-3); margin-top:var(--s-3); }
 .work-doc>svg { color:var(--gilt); flex-shrink:0; }
+.workroom .work-preview-button { flex-shrink:0; white-space:nowrap; text-align:center; }
 .work-doc-name { flex:1 1 12rem; display:grid; min-width:0; }
 .work-doc-name strong { font-weight:var(--w-ui); overflow-wrap:anywhere; }
 .work-doc-name span { color:var(--muted); font-size:var(--t-xs); }

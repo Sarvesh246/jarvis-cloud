@@ -72,7 +72,7 @@ function DocumentSlot({ slot, docs, disabled, onFiles, onPaste, onRemove, onPrev
     {docs.map(doc => <div className="work-doc" key={doc.id}>
       <FileBadge name={doc.name} />
       <span className="work-doc-name"><strong>{doc.name}</strong><span>{documentSize(doc.chars ?? doc.text?.length ?? 0)}{typeof doc.text === 'string' ? ' · not saved yet' : ''}</span></span>
-      <button type="button" className="work-text-button" aria-expanded={preview?.id === doc.id} onClick={() => onPreview(doc)}>{preview?.id === doc.id ? 'Hide preview' : 'Preview'}</button>
+      <button type="button" className="work-preview-button" aria-expanded={preview?.id === doc.id} onClick={() => onPreview(doc)}>{preview?.id === doc.id ? 'Hide preview' : 'Preview'}</button>
       <button type="button" className="icon-button" disabled={disabled} aria-label={`Remove ${doc.name}`} onClick={() => onRemove(doc.id)}><Trash size={18} weight="light" /></button>
       {preview?.id === doc.id && <pre className="work-doc-preview" tabIndex={0}>{preview.text ?? 'You’re offline, so this file can’t be shown right now.'}</pre>}
     </div>)}
