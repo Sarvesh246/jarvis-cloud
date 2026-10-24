@@ -505,6 +505,7 @@ export function App() {
   }
   const active = chats.find((chat) => chat.id === activeId);
   const messages = active?.messages || [];
+  const messageCount = messages.filter((message) => message.role !== "assistant" || message.content?.trim()).length;
   /* "Busy" is about the conversation in front of you; the others carry on
      in the background and show their state in the rail. */
   const busy = Boolean(live[activeId]);
@@ -2551,7 +2552,7 @@ export function App() {
             onFind={() => setCommandOpen(true)}
             title={displayChatTitle(active)}
             kicker={active?.workContext?.title}
-            meta={messages.length ? `${messages.length} ${messages.length === 1 ? "message" : "messages"}` : undefined}
+            meta={messageCount ? `${messageCount} ${messageCount === 1 ? "message" : "messages"}` : undefined}
             canRename={messages.length > 0 && !busy}
             onRename={renameChat}
             onOpenRail={() => {
