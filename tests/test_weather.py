@@ -5,6 +5,7 @@ from unittest.mock import patch
 from cloud.weather import validate, weather_reply, weather_tool, shared_location_label, us_city, keep, read_forecast, REFERENCE
 import tempfile
 import os
+from pathlib import Path
 
 
 def messages(*texts):
@@ -12,6 +13,16 @@ def messages(*texts):
 
 
 class WeatherTests(unittest.TestCase):
+    def test_weather_storage_does_not_use_the_inherited_cache_directory(self):
+        with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {'HERMES_HOME': directory}):
+            inherited = Path(directory) / 'cache'
+            inherited.write_text('Inherited cache is unavailable', encoding='utf-8')
+            payload = '```weather\n{"verified":true}\n```'
+            token = REFERENCE.fullmatch(keep(payload))[1]
+            self.assertEqual(read_forecast(token), payload)
+            self.assertEqual(inherited.read_text(encoding='utf-8'), 'Inherited cache is unavailable')
+            self.assertTrue((Path(directory) / 'vaelo-weather-cache' / (token + '.txt')).is_file())
+
     def test_optional_null_tool_fields_are_omitted_before_validation(self):
         with patch('cloud.weather.weather_reply', return_value=None) as lookup:
             result = json.loads(weather_tool({'latitude': 30.6, 'longitude': -96.3,

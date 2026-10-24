@@ -18,6 +18,8 @@ jobs:
           docker run --rm --entrypoint /opt/jarvis/verification-env/bin/python vaelo-ci /opt/jarvis/check_verification_runtime.py
       - name: Verify uploaded pixels and vision cache as the actual gateway user
         run: docker run --rm vaelo-ci /opt/hermes/.venv/bin/python /opt/jarvis/check_vision_runtime.py
+      - name: Verify weather reference cache as the actual gateway user
+        run: docker run --rm vaelo-ci /opt/hermes/.venv/bin/python /opt/jarvis/check_weather_runtime.py
   bootstrap:
     runs-on: ubuntu-latest
     steps:

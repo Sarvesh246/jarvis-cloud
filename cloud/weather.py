@@ -80,14 +80,16 @@ def validate(ask):
 
 
 def folder():
-    return Path(os.environ.get("HERMES_HOME") or "/opt/data") / "cache" / "vaelo-weather"
+    # The pinned image's inherited cache can belong to a different user.
+    # Own a sibling under the runtime home, as the image/vision caches do.
+    return Path(os.environ.get("HERMES_HOME") or "/opt/data") / "vaelo-weather-cache"
 
 
 def keep(reply):
     if len(reply.encode("utf-8")) > 60000:
         raise ValueError("Forecast exceeds presentation limit")
     where = folder()
-    where.mkdir(parents=True, exist_ok=True)
+    where.mkdir(parents=True, exist_ok=True, mode=0o700)
     files = sorted(where.glob("*.txt"), key=lambda p: p.stat().st_mtime, reverse=True)
     for i, path in enumerate(files):
         if re.fullmatch(r"[0-9a-f]{24}\.txt", path.name) and (i >= 63 or time.time() - path.stat().st_mtime > 3600):
