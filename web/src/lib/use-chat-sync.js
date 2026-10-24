@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ChatSync, readSyncCache, syncKey } from "./chat-sync.js";
 import { readEvents } from "../stream.js";
-import { persistentChats } from './slash-history.js';
+import { persistentChats, withLocalDrafts } from './slash-history.js';
 
 /* Storage is checked this often while the live feed is down, and only this
    rarely while it is up: then the feed says the moment anything changes. */
@@ -36,7 +36,7 @@ export function useChatSync({ session, chats, setChats, busyId, onConflict }) {
       base: readSyncCache(session.user.sub)?.base || {},
       deleted: readSyncCache(session.user.sub)?.deleted || [],
       busy: () => Boolean(latest.current.busyId),
-      onChange: saved => setChats(current => [...saved, ...current.filter(chat => chat.temporary)]), onStatus: setIssue,
+      onChange: saved => setChats(current => withLocalDrafts(saved, current)), onStatus: setIssue,
       onConflict: () => latest.current.onConflict(),
       request: async (path, body) => {
         const response = await fetch(path, {

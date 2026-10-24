@@ -75,20 +75,27 @@ function useNotify(prefs, onChange) {
    on, and a refusal is said plainly rather than left looking enabled. */
 function useLocate(prefs, onChange) {
   const [problem, setProblem] = useState("");
+  const attempt = useRef(0);
+  useEffect(() => () => { attempt.current++; }, []);
   async function toggle(on) {
+    const id = ++attempt.current;
     setProblem("");
     if (!on) {
       forgetPlace();
       return onChange({ location: false });
     }
+    // Save consent before acquisition: a granted browser permission can still
+    // time out. Future messages should retry rather than silently stay off.
+    onChange({ location: true });
     try {
       await locate({ force: true });
-      onChange({ location: true });
     } catch (error) {
+      if (attempt.current !== id) return;
+      if (error?.code === 1) onChange({ location: false });
       setProblem(
         error?.code === 1
           ? "Location is blocked for Vaelo. Allow it in your browser’s or system’s settings, then try again."
-          : "Vaelo couldn’t work out where you are just now.",
+          : "Location sharing is on, but your position is unavailable right now. Vaelo will try again with your next message.",
       );
     }
   }

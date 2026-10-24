@@ -417,7 +417,13 @@ ${TEACHING_GUIDANCE}${richGuidanceFor(input.messages)}${placeNote(input.place)}$
     body: JSON.stringify({
       id: input.runId,
       tier: input.tier,
-      messages: [system, ...input.messages],
+      // Hermes can compact earlier context. Keep the currently shared place
+      // beside the active question as well, including when a past reply said
+      // location was unavailable. Never modify the stored transcript.
+      messages: [system, ...input.messages.map((message, index) =>
+        index === input.messages.length - 1 && input.place
+          ? { ...message, content: withNote(message.content, placeNote(input.place).trim()) }
+          : message)],
       memory_can_note: Boolean(input.memory?.canNote),
       ...(input.memory?.canNote && { memory_permission: await memoryPermission(cfg, user.sub, input.runId) }),
       ...(input.place && { place: input.place }),

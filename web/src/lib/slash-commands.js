@@ -88,8 +88,9 @@ export function contextSnapshot(chat, pending = [], policy) {
     + pending.reduce((sum, file) => sum + (file.chars || 0), 0) : 0;
   // Use only the newest request's report, never a sum of conversation usage.
   // Its input includes system/workspace prompts invisible to the text counter.
-  const tokens = reported ? reported.prompt_tokens + reported.completion_tokens + Math.ceil(newerChars / 3) : Math.ceil(chars / 3) + 2048;
+  const empty = !retained.length && !pending.length && at < 0;
+  const tokens = empty ? 0 : reported ? reported.prompt_tokens + reported.completion_tokens + Math.ceil(newerChars / 3) : Math.ceil(chars / 3) + 2048;
   const limit = policy.windowTokens;
   return { tokens, limit, percent: Math.min(100, tokens / limit * 100), messages: retained.length,
-    omitted: at + 1, files: pending.length, estimated: true, source: reported ? 'provider' : 'text' };
+    omitted: at + 1, files: pending.length, estimated: true, source: empty ? 'empty' : reported ? 'provider' : 'text' };
 }

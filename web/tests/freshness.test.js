@@ -184,6 +184,9 @@ test("the relay request names the place and tells a direct answer to use the sou
       return new Response('event: jarvis.complete\ndata: {"ok":true}\n\n: end\n\n');
     });
   assert.match(sent.messages[0].content, /approximate location[\s\S]*Chicago/);
+  assert.match(sent.messages.at(-1).content, /approximate location[\s\S]*Chicago/);
+  assert.match(sent.messages.at(-1).content, /without asking for location again/);
+  assert.doesNotMatch(input.messages.at(-1).content, /approximate location/, 'request enrichment does not mutate history');
   assert.match(sent.fast, /approximate location[\s\S]*Chicago/);
   assert.match(sent.fast, /Live-source context follows/);
   // Search context must never outrank the forecast tool, however the question is worded.

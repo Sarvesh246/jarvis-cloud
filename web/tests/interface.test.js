@@ -271,7 +271,8 @@ test("pinned conversations lead the index and search finds words said inside the
   const now = new Date("2026-10-14T12:00:00").getTime();
   const chats = [
     { id: "a", title: "Trip", updated: now, messages: [{ content: "Book the train to Lyon" }] },
-    { id: "b", title: "Budget", updated: now - 3 * 86_400_000, pinned: true, messages: [] },
+    { id: "b", title: "Budget", updated: now - 3 * 86_400_000, pinned: true, messages: [{ content: 'Plan my budget' }] },
+    { id: "empty", title: "New conversation", updated: now, pinned: true, messages: [] },
   ];
   assert.deepEqual(
     groupChats(chats, now).map((group) => [group.label, group.items.map((c) => c.id)]),
@@ -284,6 +285,7 @@ test("pinned conversations lead the index and search finds words said inside the
   assert.equal(hit.chat.id, "a");
   assert.match(hit.excerpt, /train to Lyon/);
   assert.equal(searchChats(chats, "  "), null);
+  assert.deepEqual(searchChats(chats, 'New conversation'), []);
 });
 
 test("each message carries its own mode, so the system prompt (and Hermes session) never changes", () => {

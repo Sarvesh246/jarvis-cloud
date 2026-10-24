@@ -1,3 +1,5 @@
+import { hasConversation } from './slash-history.js';
+
 export function greeting(date = new Date()) {
   const hour = date.getHours();
   if (hour < 5) return "Still up";
@@ -24,7 +26,7 @@ export function groupChats(chats, now = Date.now()) {
     { label: "Yesterday", items: [] },
     { label: "Earlier", items: [] },
   ];
-  [...chats]
+  chats.filter(hasConversation)
     .sort((a, b) => (b.updated || 0) - (a.updated || 0))
     .forEach((chat) => {
       const at = chat.updated || 0;
@@ -68,6 +70,7 @@ export function searchChats(chats, query) {
   if (!needle) return null;
   const results = [];
   for (const chat of chats) {
+    if (!hasConversation(chat)) continue;
     if (chat.title.toLowerCase().includes(needle)) {
       results.push({ chat, excerpt: "" });
       continue;

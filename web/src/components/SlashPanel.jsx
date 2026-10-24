@@ -33,10 +33,20 @@ export function SlashPanel({ panel, onClose, request, session, chat, chats, atta
   }, []);
   useEffect(() => {
     if (!path || !signedIn) return;
-    let current = true; setLoading(true); setData(null); setError('');
-    request(path).then(value => { if (current) setData(value); }).catch(e => { if (current) setError(e.message || 'Could not load this panel.'); })
-      .finally(() => { if (current) setLoading(false); });
-    return () => { current = false; };
+    let current = true, checking = false;
+    setLoading(true); setData(null); setError('');
+    async function refresh() {
+      if (checking || !current) return;
+      checking = true;
+      try { const value = await request(path); if (current) { setData(value); setError(''); } }
+      catch (e) { if (current) setError(e.message || 'Could not load this panel.'); }
+      finally { checking = false; if (current) setLoading(false); }
+    }
+    void refresh();
+    const wake = () => { if (!document.hidden) void refresh(); };
+    const timer = panel.name === 'usage' ? setInterval(wake, 5000) : null;
+    if (timer) addEventListener('focus', wake);
+    return () => { current = false; clearInterval(timer); removeEventListener('focus', wake); };
   }, [path, session?.user?.sub]);
   async function mutate(body, endpoint = path) {
     if (locked.current) return false;
@@ -51,18 +61,18 @@ export function SlashPanel({ panel, onClose, request, session, chat, chats, atta
   const nextMonth = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth() + 1, 1));
   const context = <section className="slash-context"><div className="slash-context-title"><span className="slash-ring" style={{ '--context-fill': `${snap.percent * 3.6}deg` }} aria-hidden="true"><span>~{snap.percent.toFixed(0)}%</span></span>
     <div><strong>Estimated context usage</strong><p>~{n(snap.tokens)} / {n(snap.limit)} tokens</p></div></div>
-    <p className="slash-hint">{snap.source === 'provider' ? 'Based on the latest provider-reported input and output, plus newer text. Tool-round accounting can overstate current context; pending images and workspace changes may add more.' : 'Approximate text estimate with a 2,048-token system-prompt allowance. Hidden prompts, images and workspace content can change actual usage.'} Uses Vaelo’s base context budget; some routes support a larger window.</p>
+    <p className="slash-hint">{snap.source === 'empty' ? 'No conversation tokens have been used yet. A system-prompt allowance is added when you start a conversation.' : snap.source === 'provider' ? 'Based on the latest provider-reported input and output, plus newer text. Tool-round accounting can overstate current context; pending images and workspace changes may add more.' : 'Approximate text estimate with a 2,048-token system-prompt allowance. Hidden prompts, images and workspace content can change actual usage.'} Uses Vaelo’s base context budget; some routes support a larger window.</p>
     <p className="slash-hint">{snap.messages} messages · {snap.files} pending files{snap.omitted > 0 ? ` · ${snap.omitted} messages summarized` : ''}. Cumulative token consumption is separate.</p></section>;
   const dispatch = (command, args = '') => { onClose(); onRun({ name: command, args, command: SLASH_COMMANDS.find(item => item.name === command) }); };
   let body;
   if (panel.name === 'usage') body = <><label>Period (UTC)<select value={range} onChange={e => setRange(e.target.value)}><option value="today">Today</option><option value="month">This month</option><option value="all">All recorded time</option></select></label>
     {data && <><UsageMeter usage={{ prompt_tokens: data.input, completion_tokens: data.output, total_tokens: data.total }} />{context}
-      <dl className="slash-stats"><div><dt>Cloud tokens consumed</dt><dd>{n(data.total)}</dd></div><div><dt>Cached input (included above)</dt><dd>{n(data.cached)}</dd></div><div><dt>Requests / attempts</dt><dd>{n(data.attempts)}</dd></div><div><dt>Incomplete token reports</dt><dd>{n(data.unreported)}</dd></div></dl>
+      <dl className="slash-stats"><div><dt>Recorded cloud tokens</dt><dd>{n(data.total)}</dd></div><div><dt>Cached input (included above)</dt><dd>{n(data.cached)}</dd></div><div><dt>Requests / attempts</dt><dd>{n(data.attempts)}</dd></div><div><dt>Incomplete token reports</dt><dd>{n(data.unreported)}</dd></div></dl>
       <p>{n(data.input)} input · {n(data.output)} output · {n(chatTokens)} reported tokens in this chat</p>
       {range === 'month' && <p className="slash-hint">Next monthly reporting period: {nextMonth.toLocaleString()} ({Math.ceil((nextMonth - Date.now()) / 86400000)} days). All-time totals are retained.</p>}
       <p className="slash-hint">Only this signed-in account’s cloud usage, across devices. Local FreeLLMAPI usage is excluded. {data.since ? `Account tracking began ${new Date(data.since).toLocaleString()}.` : 'No attributed usage recorded yet.'} Earlier unattributed service totals cannot be assigned to your account.</p>
       {data.unreported > 0 && <p className="slash-error">Recorded totals are a lower bound because some attempts did not report tokens.</p>}
-      <p className="slash-hint">Checked {new Date(data.checkedAt).toLocaleString()}. These counters do not represent provider credits or remaining quota.</p></>}{!data && context}</>;
+      <p className="slash-hint">Checked {new Date(data.checkedAt).toLocaleString()}. Refreshes automatically while open. These counters do not represent provider credits or remaining quota.</p></>}{!data && context}</>;
   else if (panel.name === 'context') body = <>{context}<div className="slash-stack">{attachments.map(file => <p key={file.id}>{file.name} · {n(file.chars)} characters</p>)}
     {chat?.workContext && <p>Workspace: {chat.workContext.title}</p>}<p className="slash-hint">Last request left out {chat?.messages.findLast(m => m.context)?.context?.dropped || 0} earlier messages to fit the request limits.</p></div>
     <button onClick={() => dispatch('compact')}>Summarize earlier context with /compact</button></>;

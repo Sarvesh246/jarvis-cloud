@@ -49,7 +49,10 @@ export class UsageStore {
         reported = usage_events.reported OR EXCLUDED.reported,
         input_tokens = GREATEST(usage_events.input_tokens, EXCLUDED.input_tokens),
         output_tokens = GREATEST(usage_events.output_tokens, EXCLUDED.output_tokens),
-        cached_tokens = GREATEST(usage_events.cached_tokens, EXCLUDED.cached_tokens)`,
+        cached_tokens = GREATEST(usage_events.cached_tokens, EXCLUDED.cached_tokens),
+        account_key = COALESCE(usage_events.account_key, EXCLUDED.account_key)
+      WHERE usage_events.account_key IS NULL OR EXCLUDED.account_key IS NULL
+        OR usage_events.account_key = EXCLUDED.account_key`,
     [e.id, e.route, e.reported, e.input, e.output, e.cached, e.at, e.account]);
   }
   async accountSummary(sub, range = 'month', now = new Date()) {

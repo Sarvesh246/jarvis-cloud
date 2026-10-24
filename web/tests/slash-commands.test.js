@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { SLASH_COMMANDS, parseSlash, slashMatches, promptForCommand, contextSnapshot } from '../src/lib/slash-commands.js';
-import { compactedHistory, persistentChats } from '../src/lib/slash-history.js';
+import { compactedHistory, persistentChats, hasConversation, withLocalDrafts } from '../src/lib/slash-history.js';
 import { parseReminder, reminderCalendar } from '../src/lib/reminders.js';
 import { chatInput } from '../server/chat.js';
 import { withMemory } from '../server/memory.js';
@@ -27,7 +27,27 @@ test('compaction keeps the transcript and starts using a summary only after its 
   assert.equal(messages.length, 3);
   assert.equal(compactedHistory(messages.slice(0, 1), { through: 'b', summary: 'not yet' }).length, 1);
   assert.equal(compactedHistory(messages.slice(0, 2), { through: 'b', summary: 'boundary' }).length, 2);
-  assert.deepEqual(persistentChats([{ id: 'saved' }, { id: 'private', temporary: true }]), [{ id: 'saved' }]);
+  const saved = { id: 'saved', messages: [{ role: 'user', content: 'Hello' }] };
+  assert.deepEqual(persistentChats([saved, { id: 'draft', messages: [] }, { ...saved, id: 'private', temporary: true }]), [saved]);
+});
+
+test('history excludes empty drafts while keeping attachment-only and real conversations', () => {
+  const drafts = [{ id: 'empty', messages: [] }, { id: 'blank', messages: [{ content: '  ' }, { role: 'assistant', content: '', running: true }] }];
+  const files = { id: 'file', messages: [{ role: 'user', content: '', attachments: [{ name: 'photo.png' }] }] };
+  const real = { id: 'real', messages: [{ content: 'Hello' }] };
+  assert.deepEqual(drafts.map(hasConversation), [false, false]);
+  assert.deepEqual(persistentChats([...drafts, files, real]), [files, real]);
+  assert.deepEqual(withLocalDrafts([real], [...drafts, files]), [real, ...drafts]);
+  assert.deepEqual(withLocalDrafts([real], [{ id: 'real', messages: [] }]), [real], 'a synced conversation supersedes its draft without duplication');
+  assert.equal(hasConversation({ messages: [{ content: [{ type: 'image_url', image_url: { url: 'data:image/png;base64,x' } }] }] }), true);
+});
+
+test('an untouched conversation has zero context tokens; real pending content includes overhead', () => {
+  const policy = { windowTokens: 128000 };
+  assert.equal(contextSnapshot(null, [], policy).tokens, 0);
+  const empty = contextSnapshot({ messages: [] }, [], policy);
+  assert.equal(empty.tokens, 0); assert.equal(empty.percent, 0); assert.equal(empty.source, 'empty');
+  assert.equal(contextSnapshot({ messages: [] }, [{ chars: 300 }], policy).tokens, 2148);
 });
 
 test('temporary requests cannot read or write account memory', async () => {
