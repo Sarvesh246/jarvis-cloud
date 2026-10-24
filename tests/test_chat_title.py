@@ -18,9 +18,12 @@ class ChatTitleTests(unittest.TestCase):
 
     def test_titles_do_not_require_a_second_call_when_metadata_is_omitted(self):
         for prompt, expected in [
-            ('Can you please help me parse CSV files in Python?', 'parse CSV files in Python'),
+            ('Can you please help me parse CSV files in Python?', 'parse CSV files Python'),
             ('What is 17 times 23?', '17 times 23'),
-            ('Weather in College Station today', 'Weather in College Station today'),
+            ('Weather in College Station today', 'Weather College Station today'),
+            ('Help me write a polite email asking my professor for an extension on my biology lab report.', 'email professor extension biology lab report'),
+            ('Return only JSON with ok set to true.', 'JSON response'),
+            ('Explain C++ templates with a short example.', 'C++ templates'),
         ]:
             self.assertEqual(fallback_title([{'role': 'user', 'content': prompt}]), expected)
         self.assertEqual(fallback_title([{'role': 'user', 'content': [{'type': 'image_url'}]}]), 'Image discussion')
@@ -35,6 +38,11 @@ class ChatTitleTests(unittest.TestCase):
         self.assertEqual(original[0]['content'], 'Specialized coding instructions.')
         self.assertIs(title_messages(original, False), original)
         self.assertIn('_vaelo_title', title_messages(original, True, json_mode=True)[0]['content'])
+        multiple = [{'role': 'system', 'content': 'Weather tool instructions.'}, *original]
+        titled = title_messages(multiple, True)
+        self.assertEqual(titled[0]['content'], multiple[0]['content'])
+        self.assertIn('<vaelo-title>', titled[1]['content'])
+        self.assertEqual(multiple[1]['content'], 'Specialized coding instructions.')
 
     def test_every_chunk_boundary_preserves_exact_answer(self):
         source = '<vaelo-title>Plan a Chicago weekend</vaelo-title>\n{"ok":true}'

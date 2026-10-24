@@ -23,7 +23,9 @@ def title_messages(messages, enabled, *, json_mode=False):
         return messages
     guide = JSON_TITLE_GUIDANCE if json_mode else TITLE_GUIDANCE
     result = list(messages)
-    at = next((i for i, message in enumerate(result) if message.get('role') == 'system'), None)
+    # Some provider adapters retain only the last system message. Attach the
+    # metadata contract there, after route-specific instructions are settled.
+    at = next((i for i in range(len(result) - 1, -1, -1) if result[i].get('role') == 'system'), None)
     if at is None:
         result.insert(0, {'role': 'system', 'content': guide.strip()})
     else:
@@ -45,8 +47,16 @@ def fallback_title(messages):
         text = re.sub(r"^(?:(?:can|could|would|will) you\s+|please\s+|help me\s+(?:(?:to|with)\s+)?|(?:i want|i need|i would like|i'd like)\s+(?:you\s+)?to\s+|what(?:'s| is)\s+(?:the\s+)?)", '', text, flags=re.I)
     text = re.sub(r'https?://\S+', '', text)
     text = re.sub(r'\b[^\s@]+@[^\s@]+\.[^\s@]+\b|\b(?:sk-|gsk_|AIza)[\w-]+|\b\d{3}[- ]\d{2}[- ]\d{4}\b|\b\d{7,}\b', '', text)
-    text = re.sub(r'[`*_#<>]', '', text)
-    words = re.findall(r"[^\W_]+(?:[.'’+/#-][^\W_]+)*|[×÷=]", text, flags=re.UNICODE)
+    text = re.sub(r'[`*_<>]', '', text)
+    if re.search(r'\b(?:return|respond|reply)\s+only\s+json\b', text, re.I):
+        return 'JSON response'
+    words = re.findall(r"C\+\+|C#|[^\W_]+(?:[.'’+/#-][^\W_]+)*|[×÷=]", text, flags=re.UNICODE)
+    filler = set(('a an the i me my you your we our it its this that these those can could would will '
+                  'please help assist want need like to of for on in with and or is are be am do does '
+                  'what why how about explain write polite asking just only short concise briefly '
+                  'example examples show tell give').split())
+    keywords = [word for word in words if word.casefold() not in filler]
+    words = keywords or words
     candidate = ' '.join(words[:6])
     # Oversized source prompts must still produce a bounded fallback.
     candidate = candidate[:120]

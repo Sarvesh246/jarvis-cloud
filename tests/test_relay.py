@@ -918,7 +918,7 @@ class RelayTests(unittest.TestCase):
 
     def test_model_omission_and_calculator_shortcuts_emit_one_title_before_completion(self):
         for prompt, scripts, expected, requests in [
-            ('Can you please help me parse CSV files in Python?', [[chunk('Use csv.DictReader.', 'stop'), 'data: [DONE]']], 'parse CSV files in Python', 1),
+            ('Can you please help me parse CSV files in Python?', [[chunk('Use csv.DictReader.', 'stop'), 'data: [DONE]']], 'parse CSV files Python', 1),
             ('What is 17 times 23?', [], '17 times 23', 0),
         ]:
             with self.subTest(prompt=prompt):
@@ -984,6 +984,7 @@ class RelayTests(unittest.TestCase):
                 self.assertEqual(len(provider.requests), 1)
                 system = '\n'.join(message['content'] for message in provider.requests[0]['body']['messages'] if message['role'] == 'system')
                 self.assertIn(relay_module.TITLE_GUIDANCE, system)
+                self.assertIn(relay_module.TITLE_GUIDANCE, [message for message in provider.requests[0]['body']['messages'] if message['role'] == 'system'][-1]['content'])
                 _, frames = self.events(port, owner=owner)
                 self.assertEqual([json.loads(data)['title'] for _, name, data in frames if name == 'jarvis.title'], ['Python CSV parsing'])
                 content = ''.join(json.loads(data).get('choices', [{}])[0].get('delta', {}).get('content', '')
