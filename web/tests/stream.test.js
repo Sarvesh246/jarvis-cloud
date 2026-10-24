@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import { readEvents } from "../src/stream.js";
-import { REPLY_FORMAT_GUIDANCE, RESPONSE_STANDARDS, streamChat } from "../server/chat.js";
+import { chatInput, REPLY_FORMAT_GUIDANCE, RESPONSE_STANDARDS, streamChat } from "../server/chat.js";
 
 test("SSE parser preserves split UTF-8, tool events and content across chunk boundaries", async () => {
   const text =
@@ -38,12 +38,12 @@ test("proxy fixes the model, scopes memory and never places the backend key in t
     res,
     { backend: "https://backend.example", apiKey: "private-test-key" },
     { sub: "owner", name: "Maya", email: "owner@gmail.com" },
-    {
+    chatInput({
       conversationId: "c5ec5f03-1fd1-4f38-83df-b664bf78f998",
       runId: "0d9e8f7a-6b5c-4d3e-8f1a-2b3c4d5e6f70",
-      messages: [{ role: "user", content: "Hello" }],
-      fast: true,
-    },
+      messages: [{ role: "user", content: "hello vaelo" }],
+      place: { lat: 41.88, lon: -87.63, city: 'Chicago', tz: 'America/Chicago' },
+    }),
     async (url, options) => {
       if (url.endsWith("/health")) return Response.json({ status: "ok" });
       if (url.endsWith("/vaelo/runs")) {
@@ -59,9 +59,13 @@ test("proxy fixes the model, scopes memory and never places the backend key in t
   assert.equal(sent.options.headers["X-Hermes-Session-Key"], "web:owner");
   assert.equal(JSON.parse(sent.options.body).id, "0d9e8f7a-6b5c-4d3e-8f1a-2b3c4d5e6f70");
   assert.equal(JSON.parse(sent.options.body).generate_title, true);
+  assert.equal(JSON.parse(sent.options.body).no_weather_tools, true);
+  assert.equal(JSON.parse(sent.options.body).place, undefined);
+  assert.doesNotMatch(JSON.stringify(JSON.parse(sent.options.body).messages), /shared coordinates|41\.88|-87\.63/);
   const context = JSON.parse(sent.options.body).messages[0].content;
   assert.match(context, /"display_name":"Maya"/);
   const fastPrompt = JSON.parse(sent.options.body).fast;
+  assert.doesNotMatch(fastPrompt, /weather|shared coordinates|41\.88|-87\.63/i);
   assert.ok(context.includes(RESPONSE_STANDARDS));
   assert.ok(fastPrompt.includes(RESPONSE_STANDARDS));
   assert.ok(fastPrompt.length <= 8000, "direct prompt fits the relay limit");

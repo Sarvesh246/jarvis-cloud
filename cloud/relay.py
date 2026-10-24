@@ -687,7 +687,7 @@ class Relay:
             return None
         payload = {
             "model": route["model"],
-            "messages": [{"role": "system", "content": body["fast"] + WEATHER_GUIDANCE},
+            "messages": [{"role": "system", "content": body["fast"] + ("" if body.get('no_weather_tools') else WEATHER_GUIDANCE)},
                          *[m for m in messages if m.get("role") != "system"]],
             "stream": True,
             "stream_options": {"include_usage": True},
@@ -751,7 +751,7 @@ class Relay:
             return None, {"message": "Guest mode is not available right now.", "status": 503}
         payload = {
             "model": route["model"],
-            "messages": [{"role": "system", "content": WEATHER_GUIDANCE}, *messages],
+            "messages": ([{"role": "system", "content": WEATHER_GUIDANCE}] if not (body or {}).get('no_weather_tools') else []) + messages,
             "stream": True,
             "stream_options": {"include_usage": True},
             "max_tokens": GUEST_MAX_TOKENS,
@@ -1890,6 +1890,7 @@ def make_handler(relay):
                 owner,
                 {"messages": messages, "model_options": body.get("model_options"), "fast": fast,
                  'generate_title': body.get('generate_title') is True,
+                 'no_weather_tools': body.get('no_weather_tools') is True,
                  'memory_can_note': body.get('memory_can_note') is True and not owner.startswith(GUEST_OWNER),
                  'memory_permission': body.get('memory_permission') if isinstance(body.get('memory_permission'), str) and len(body['memory_permission']) <= 2048 else None,
                  "freshness": body.get("freshness"), "place": body.get("place"),

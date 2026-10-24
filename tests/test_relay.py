@@ -1072,6 +1072,26 @@ class RelayTests(unittest.TestCase):
         self.assertEqual([tool["function"]["name"] for tool in sent["body"]["tools"]], ["weather_forecast"])
         self.assertEqual(relay.guest_active, 0)
 
+    def test_greeting_routes_omit_weather_instructions_and_tools(self):
+        for owner in (OWNER, 'web:guest:greeting'):
+            with self.subTest(owner=owner):
+                hermes, relay, port = self.boot([])
+                provider, _ = self.fast_provider(relay, [[chunk('Hello Sarvesh!', 'stop'), 'data: [DONE]']])
+                with mock.patch.dict('os.environ', {'FREELLMAPI_URL': 'https://router.example',
+                                                   'FREELLMAPI_API_KEY': 'fixture'}, clear=True):
+                    self.call(port, 'POST', '/vaelo/runs', {
+                        'id': RUN, 'messages': [{'role': 'system', 'content': 'You are Vaelo.'},
+                                                {'role': 'user', 'content': 'hello vaelo'}],
+                        'fast': 'You are Vaelo.', 'no_weather_tools': True,
+                    }, owner=owner)
+                    run = self.finished(relay)
+                self.assertEqual(run.outcome, 'complete')
+                self.assertEqual(hermes.requests, [])
+                sent = provider.requests[0]['body']
+                self.assertNotIn('tools', sent)
+                self.assertNotIn('weather_forecast', json.dumps(sent['messages']))
+                self.assertNotIn(relay_module.WEATHER_GUIDANCE, json.dumps(sent['messages']))
+
     def test_guests_use_the_router_with_only_public_weather_and_no_host_access(self):
         hermes, relay, port = self.boot([])
         provider, _ = self.fast_provider(

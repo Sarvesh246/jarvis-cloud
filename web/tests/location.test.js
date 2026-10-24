@@ -3,6 +3,21 @@ import assert from 'node:assert/strict';
 import { locate, placeFor, cachedPlace, forgetPlace, cityNames } from '../src/lib/location.js';
 import { chatInput } from '../server/chat.js';
 
+test('greetings omit shared-location context without losing the local timezone or disabling later weather', () => {
+  const base = { conversationId: '0ef3a063-f0d0-44f7-b9dc-774137b1d86c', place: { lat: 41.88, lon: -87.63, city: 'Chicago', tz: 'America/Chicago' } };
+  for (const content of ['hello vaelo', 'hi', 'good morning', 'thanks vaelo']) {
+    const input = chatInput({ ...base, messages: [{ role: 'user', content }] });
+    assert.equal(input.smalltalk, true, content);
+    assert.equal(input.place, undefined, content);
+    assert.equal(input.tz, 'America/Chicago');
+  }
+  for (const content of ['hello vaelo, what is the weather today?', 'good coffee near me', 'what is the weather this week?']) {
+    const input = chatInput({ ...base, messages: [{ role: 'user', content }] });
+    assert.notEqual(input.smalltalk, true, content);
+    assert.deepEqual([input.place.lat, input.place.lon], [41.88, -87.63]);
+  }
+});
+
 function browser(t) {
   const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
   const originalFetch = globalThis.fetch;
