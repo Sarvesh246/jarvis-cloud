@@ -1,6 +1,6 @@
 import { usePinnedReorder } from "../lib/use-pinned-reorder.js";
 import { movePinned } from "../lib/rich-ui.js";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   BookmarkSimple,
   GearSix,
@@ -81,6 +81,16 @@ function useSwipe(id, openId, setOpenId) {
 
 function Row({ chat, active, busy, running, excerpt, openId, setOpenId, onSelect, onDelete, onPin }) {
   const swipe = useSwipe(chat.id, openId, setOpenId);
+  const titleRef = useRef(null);
+  const [overflow, setOverflow] = useState(0);
+  useLayoutEffect(() => {
+    const element = titleRef.current;
+    const measure = () => setOverflow(Math.max(0, element.scrollWidth - element.clientWidth));
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [chat.title]);
   const settle = () => setOpenId(null);
   return (
     <div
@@ -131,7 +141,7 @@ function Row({ chat, active, busy, running, excerpt, openId, setOpenId, onSelect
           aria-current={active ? "page" : undefined}
           onClick={() => onSelect(chat.id)}
         >
-          <span className="rail-title">{chat.title}</span>
+          <span ref={titleRef} className="rail-title" data-overflow={overflow > 0 || undefined} style={{ '--title-travel': `${-overflow}px`, '--title-duration': `${Math.max(3, overflow / 32)}s` }}><span className="rail-title-text">{chat.title}</span></span>
           {running && <span className="rail-running" role="img" aria-label="Vaelo is replying here" />}
           {excerpt && <span className="rail-excerpt">{excerpt}</span>}
         </button>

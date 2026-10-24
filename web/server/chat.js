@@ -416,6 +416,7 @@ ${TEACHING_GUIDANCE}${richGuidanceFor(input.messages)}${placeNote(input.place)}$
     headers: relayHeaders(cfg, user),
     body: JSON.stringify({
       id: input.runId,
+      generate_title: input.messages.filter(message => message.role === 'user').length === 1 && !input.messages.some(message => message.role === 'assistant'),
       tier: input.tier,
       // Hermes can compact earlier context. Keep the currently shared place
       // beside the active question as well, including when a past reply said

@@ -58,6 +58,7 @@ test("proxy fixes the model, scopes memory and never places the backend key in t
   assert.equal(sent.options.headers.Authorization, "Bearer private-test-key");
   assert.equal(sent.options.headers["X-Hermes-Session-Key"], "web:owner");
   assert.equal(JSON.parse(sent.options.body).id, "0d9e8f7a-6b5c-4d3e-8f1a-2b3c4d5e6f70");
+  assert.equal(JSON.parse(sent.options.body).generate_title, true);
   const context = JSON.parse(sent.options.body).messages[0].content;
   assert.match(context, /"display_name":"Maya"/);
   const fastPrompt = JSON.parse(sent.options.body).fast;

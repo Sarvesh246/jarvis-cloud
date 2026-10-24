@@ -1036,7 +1036,7 @@ export function App() {
      next minute-long safety check, which also makes a clash less likely. */
   function renameChat(title) {
     setChats((current) =>
-      current.map((chat) => (chat.id === activeId ? { ...chat, title } : chat)),
+      current.map((chat) => (chat.id === activeId ? { ...chat, title, titleManual: true } : chat)),
     );
     pushChat(activeId);
   }
@@ -1599,7 +1599,7 @@ export function App() {
       frame = 0;
       if (received.trim()) trace.mark("first_render_commit");
       received = normalizeReplySpacing(received);
-      updateMessage({ content: placeImages(cleanAnswer(stripMemoryNotes(received)), generated, succeeded), ...(reasoning && { reasoning: reasoning.slice(-12000) }) });
+      updateMessage({ content: placeImages(cleanAnswer(stripMemoryNotes(received)), generated, succeeded), ...(reasoning && { reasoning }) });
     };
     const schedule = () => {
       if (!frame) frame = requestAnimationFrame(flush);
@@ -1660,6 +1660,13 @@ export function App() {
         completed = true;
         releaseHeld();
         updateMessage(message => ({ truncated: false, ...completedTiming(message, data.timing) }));
+      }
+      if (name === 'jarvis.title') {
+        if (runs.current.get(chatId) !== slot || typeof data.title !== 'string' || !data.title.trim() || data.title.length > 120) return;
+        setChats(current => current.map(chat => chat.id === chatId && !chat.titleManual && chat.messages.filter(message => message.role === 'user').length === 1
+          ? { ...chat, title: data.title.trim() } : chat));
+        pushChat(chatId);
+        return;
       }
       /* The answer was cut off and Vaelo is carrying it on: what follows
          joins the words already written. */
@@ -1742,8 +1749,9 @@ export function App() {
       if (typeof data.id === "string" && data.id.startsWith("chatcmpl-")) runId = data.id;
       const choice = data.choices?.[0];
       if (data.usage) updateMessage({ usage: data.usage });
-      if (choice?.delta?.reasoning_content) {
-        reasoning += choice.delta.reasoning_content;
+      const thought = choice?.delta?.reasoning_content || choice?.delta?.reasoning;
+      if (typeof thought === 'string' && thought) {
+        reasoning += thought;
         schedule();
       }
       if (choice?.delta?.content) {

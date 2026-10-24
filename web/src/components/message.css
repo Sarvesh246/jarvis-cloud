@@ -269,9 +269,10 @@
 .live-line .process-line {
   grid-area: 1 / 1;
   min-width: 0;
-  overflow: hidden;
+  width: max-content;
+  justify-self: start;
+  padding-block: 0.15em;
   white-space: nowrap;
-  text-overflow: ellipsis;
   animation:
     line-in var(--dur-2) var(--ease) both,
     shimmer 2.8s linear infinite;
@@ -772,24 +773,6 @@
   animation: fade var(--dur-2) var(--ease) both;
 }
 
-/* The model's newest thought, streaming in under the live line the way
-   Claude and ChatGPT show theirs: a two-line window held to its foot, so the
-   latest words are always the ones in view and older ones fade off the top. */
-.process-sub[data-thought] {
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  /* Always two lines tall, so the fade at the top lands on empty space
-     rather than on the only line there is. */
-  min-height: calc(2 * 1.45em);
-  max-height: calc(2 * 1.45em);
-  overflow: hidden;
-  font-style: italic;
-  line-height: 1.45;
-  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 0.9em);
-  mask-image: linear-gradient(to bottom, transparent, #000 0.9em);
-}
-
 .process-notes {
   margin: 0 0 0 0.3rem;
   padding: 0 0 0 var(--s-4);
@@ -1094,3 +1077,15 @@
   border-left-color: var(--hairline-strong);
   background: transparent;
 }
+
+.process-toggle {
+  flex: 0 1 auto;
+  max-width: 100%;
+  min-height: 2rem;
+  text-align: left;
+}
+.process-toggle .live-line { overflow: hidden; }
+.process-toggle > svg { flex: none; transition: transform var(--dur-2) var(--ease); }
+.process-toggle[aria-expanded="true"] > svg { transform: rotate(180deg); }
+.process[data-live] .process-detail { flex-basis: 100%; min-width: 0; }
+.reasoning-text { overflow-wrap: anywhere; }

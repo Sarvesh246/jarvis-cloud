@@ -897,6 +897,25 @@ class RelayTests(unittest.TestCase):
             owner=owner,
         )
 
+    def test_title_is_extracted_from_same_reply_before_exact_answer_validation(self):
+        answer = '<vaelo-title>Comparing city museums</vaelo-title>\n{"ok":true}'
+        hermes, relay, port = self.boot([[chunk(answer[:18]), chunk(answer[18:], 'stop'), 'data: [DONE]']])
+        self.call(port, 'POST', '/vaelo/runs', {
+            'id': RUN, 'generate_title': True,
+            'messages': [{'role': 'system', 'content': 'Be helpful.'},
+                         {'role': 'user', 'content': 'Return only JSON with ok set to true.'}],
+        })
+        run = self.finished(relay)
+        self.assertEqual(run.outcome, 'complete')
+        self.assertEqual(len(hermes.requests), 1)
+        self.assertIn('<vaelo-title>', hermes.requests[0]['body']['messages'][0]['content'])
+        _, frames = self.events(port)
+        titles = [json.loads(data)['title'] for _, name, data in frames if name == 'jarvis.title']
+        self.assertEqual(titles, ['Comparing city museums'])
+        content = ''.join(json.loads(data).get('choices', [{}])[0].get('delta', {}).get('content', '')
+                          for _, name, data in frames if name == 'message' and data != '[DONE]')
+        self.assertEqual(content.strip(), '{"ok":true}')
+
     def events(self, port, after=-1, owner=OWNER):
         status, text = self.call(
             port, "GET", f"/vaelo/runs/{RUN}/events?after={after}", owner=owner

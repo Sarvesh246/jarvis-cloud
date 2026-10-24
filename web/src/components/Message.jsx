@@ -32,7 +32,7 @@ import { Mark } from "./Mark.jsx";
 import { Rolling } from "./Rolling.jsx";
 import { Rendered, SourceStrip, imageTiles, useCopy, useSources } from "./blocks/Blocks.jsx";
 import { summarizeSteps, toolDetail, toolInfo } from "../lib/tools.js";
-import { LONG_QUIET_MS, QUIET_MS, afterStep, clock, stillLine, thinkingPreview } from "../lib/live.js";
+import { LONG_QUIET_MS, QUIET_MS, afterStep, clock, stillLine } from "../lib/live.js";
 import { formatSize } from "../lib/attachments.js";
 import { isLongReply } from "../lib/library.js";
 import { orderPlan, planSummary } from "../lib/plan.js";
@@ -197,6 +197,18 @@ function Reasoning({ text }) {
   );
 }
 
+function LiveReasoning({ text }) {
+  const panel = useRef(null);
+  const following = useRef(true);
+  useLayoutEffect(() => {
+    if (following.current && panel.current) panel.current.scrollTop = panel.current.scrollHeight;
+  }, [text]);
+  return <p ref={panel} className="reasoning-text" tabIndex={0} onScroll={() => {
+    const element = panel.current;
+    following.current = element.scrollHeight - element.scrollTop - element.clientHeight < 32;
+  }}>{text}</p>;
+}
+
 /* The one plain sentence for what Vaelo is doing right now. Shared by the
    reply's live line and the "jump to latest" pill, so status reads the same
    wherever you are looking. */
@@ -240,8 +252,8 @@ function LiveLine({ text }) {
   }, [lines]);
 
   useLayoutEffect(() => {
-    /* scrollWidth rounds down; a pixel of slack keeps the last letter whole */
-    if (current.current) setWidth(current.current.scrollWidth + 1);
+    /* Measure the intrinsic text, rather than its stretched grid cell. */
+    if (current.current) setWidth(current.current.getBoundingClientRect().width + 1);
   }, [lines]);
 
   return (
@@ -284,26 +296,28 @@ function Process({ message, live, phase }) {
 
   if (live) {
     const line = liveLine(message, phase, quietMs);
-    const thought = !running && !message.content ? thinkingPreview(message.reasoning) : "";
     const sub =
       running && message.live
         ? message.live
-        : thought ||
-          (quietMs >= LONG_QUIET_MS && phase !== "waking" && message.approval?.state !== "pending"
+        : (quietMs >= LONG_QUIET_MS && phase !== "waking" && message.approval?.state !== "pending"
             ? "Some steps take a minute or two on the free models. Vaelo is still connected and working."
             : "");
     return (
       <div className="process" data-live="true">
-        <span className="process-head">
+        <button className="process-head process-toggle" aria-expanded={open} onClick={() => setOpen(value => !value)}>
           <LiveLine text={line} />
           {elapsed >= 3 && <span className="process-time">{clock(elapsed)}</span>}
-        </span>
+          <CaretDown size={13} />
+        </button>
         {sub && (
-          <span className="process-sub" data-thought={thought ? "true" : undefined} key={thought ? "thought" : sub}>
-            {thought ? <span>{sub}</span> : sub}
+          <span className="process-sub" key={sub}>
+            {sub}
           </span>
         )}
-        {steps.length > 1 && <Steps items={steps} now={now} />}
+        {open && <div className="process-detail">
+          {message.reasoning ? <LiveReasoning text={message.reasoning} /> : <p className="process-sub">Waiting for thinking updates…</p>}
+          {steps.length > 0 && <Steps items={steps} now={now} />}
+        </div>}
       </div>
     );
   }

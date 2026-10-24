@@ -516,3 +516,21 @@
 @media (prefers-reduced-motion: reduce) {
   .rail-running { animation: none; opacity: 1; }
 }
+
+.rail-title-text { display: inline-block; }
+@media (hover: hover) and (pointer: fine) {
+  .rail-row:hover .rail-title[data-overflow],
+  .rail-row:focus-within .rail-title[data-overflow] { text-overflow: clip; }
+  .rail-row:hover .rail-title[data-overflow] .rail-title-text,
+  .rail-row:focus-within .rail-title[data-overflow] .rail-title-text {
+    animation: title-pan var(--title-duration) linear 600ms infinite alternate;
+  }
+}
+@keyframes title-pan {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(var(--title-travel)); }
+}
+:root[data-motion="reduce"] .rail-title-text { animation: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  .rail-title-text { animation: none !important; }
+}

@@ -23,6 +23,10 @@ import threading
 import time
 import uuid
 try:
+    from chat_title import TitleFilter, TITLE_GUIDANCE
+except ModuleNotFoundError:
+    from cloud.chat_title import TitleFilter, TITLE_GUIDANCE
+try:
     from code_answer import returned_python, returned_javascript, standalone_python
     from verification import verify as verify_python
 except ModuleNotFoundError:
@@ -1029,6 +1033,8 @@ class Relay:
         seen.update(finished=False, protocol_done=False, failed=False, dropped=False, held=None, truncated=False,
                     attempt_answer=False, repetitive=False, invalid_output=False, weather_call={}, weather_request=None)
         seen["output_guard"] = ToolOutputGuard(seen.get("request", []))
+        if seen.get('title_filter'):
+            seen['title_filter'] = TitleFilter()
         seen["repetition_guard"] = RepetitionGuard(seen["answer"])
         usage = {"prompt_tokens": 0, "completion_tokens": 0, "cached_tokens": 0}
         seen["usage"] = usage
@@ -1166,6 +1172,14 @@ class Relay:
             seen["failed"] = True
             return
         content = delta.get("content")
+        title_filter = seen.get('title_filter')
+        if title_filter and (isinstance(content, str) or choice.get('finish_reason')):
+            content = title_filter.feed(content or '', final=bool(choice.get('finish_reason')))
+            delta['content'] = content
+            frame = ('event: ' + name + '\n' if name != 'message' else '') + 'data: ' + json.dumps(payload)
+            if title_filter.title and not seen.get('title_sent'):
+                run.event('jarvis.title', {'title': title_filter.title})
+                seen['title_sent'] = True
         calls = delta.get("tool_calls")
         if calls is not None:
             # The direct model interprets language and context via a real tool
@@ -1291,6 +1305,14 @@ class Relay:
         run.trace.mark("execution_started")
         forecast_started = time.time()
         messages = body["messages"]
+        generate_title = body.get('generate_title') is True and sum(m.get('role') == 'user' for m in messages) == 1 and not any(m.get('role') == 'assistant' for m in messages)
+        if generate_title:
+            messages = [dict(m) for m in messages]
+            if messages and messages[0].get('role') == 'system':
+                messages[0]['content'] += TITLE_GUIDANCE
+            body = {**body, 'messages': messages}
+            if isinstance(body.get('fast'), str):
+                body['fast'] += TITLE_GUIDANCE
         guest = run.owner.startswith(GUEST_OWNER)
         if guest:
             refusal = self.guest_admit(run.owner)
@@ -1305,6 +1327,8 @@ class Relay:
                 "finished": False, "failed": False, "dropped": False, "forecasts": [], "forecast_evidence": []}
         seen['contract'] = contract_for(messages, tools_available=not guest)
         seen['note_filter'] = NoteFilter()
+        if generate_title:
+            seen['title_filter'] = TitleFilter()
         def preserve_forecast():
             if run.stopped or not seen["forecast_evidence"]:
                 return False
@@ -1865,6 +1889,7 @@ def make_handler(relay):
                 run_id,
                 owner,
                 {"messages": messages, "model_options": body.get("model_options"), "fast": fast,
+                 'generate_title': body.get('generate_title') is True,
                  'memory_can_note': body.get('memory_can_note') is True and not owner.startswith(GUEST_OWNER),
                  'memory_permission': body.get('memory_permission') if isinstance(body.get('memory_permission'), str) and len(body['memory_permission']) <= 2048 else None,
                  "freshness": body.get("freshness"), "place": body.get("place"),
