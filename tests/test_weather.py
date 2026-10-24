@@ -12,6 +12,20 @@ def messages(*texts):
 
 
 class WeatherTests(unittest.TestCase):
+    def test_optional_null_tool_fields_are_omitted_before_validation(self):
+        with patch('cloud.weather.weather_reply', return_value=None) as lookup:
+            result = json.loads(weather_tool({'latitude': 30.6, 'longitude': -96.3,
+                'location': None, 'days': None, 'start_date': None, 'unit': None, 'output': None}))
+        self.assertFalse(result['success'])
+        self.assertEqual(lookup.call_args.args[0], {'latitude': 30.6, 'longitude': -96.3})
+
+    def test_provider_diagnostics_exclude_exception_text_and_credentials(self):
+        with patch('cloud.weather.geocode', side_effect=OSError('secret-url-with-key')):
+            result = json.loads(weather_tool({'location': 'College Station, TX'}))
+        self.assertFalse(result['success'])
+        self.assertEqual(result['diagnostics'], {'geocoding': 'OSError', 'geocoding_fallback': 'OSError'})
+        self.assertNotIn('secret', json.dumps(result))
+
     def test_model_arguments_are_validated_without_reading_user_phrases(self):
         for args in ({'days': 7}, {'day_offset': 4, 'days': 2}, {'start_date': '2026-10-23', 'unit': 'celsius'}):
             validate(args)
@@ -143,3 +157,22 @@ class NationalWeatherServiceFallbackTests(unittest.TestCase):
     def test_no_fallback_outside_the_us(self):
         with patch('cloud.weather.get', side_effect=TimeoutError), patch('cloud.weather.meteo_config', return_value=''):
             self.assertIsNone(weather_reply({}, {"lat": 48.85, "lon": 2.35}))
+
+    def test_named_us_destinations_also_keep_day_week_and_celsius_widgets_on_provider_failure(self):
+        us_city.cache_clear()
+        place = {'name': 'College Station', 'admin1': 'Texas', 'country_code': 'US', 'latitude': 30.6, 'longitude': -96.3}
+        def get(url, *args, **kwargs):
+            if 'open-meteo' in url:
+                raise TimeoutError()
+            return self.feed()(url)
+        with patch('cloud.weather.geocode', return_value=[place]), patch('cloud.weather.get', side_effect=get), patch('cloud.weather.meteo_config', return_value=''):
+            for days in (1, 7):
+                reply = weather_reply({'location': 'College Station, TX', 'days': days, 'unit': 'celsius'}, now=datetime(2026, 10, 23, 15, tzinfo=timezone.utc))
+                data = json.loads(reply.split('\n')[1])
+                self.assertEqual(data['view'], 'day' if days == 1 else 'week')
+                self.assertEqual(len(data['periods']), days)
+                self.assertEqual(data['unit'], '°C')
+                self.assertEqual(data['windUnit'], 'km/h')
+                self.assertEqual(data['periods'][0]['high'], 29.44)
+                self.assertIn('National Weather Service', reply)
+        us_city.cache_clear()

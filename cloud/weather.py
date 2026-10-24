@@ -9,6 +9,7 @@ import os
 import secrets
 import time
 from pathlib import Path
+from contextvars import ContextVar
 
 try:
     from .data_sources import get, geocode, meteo_config
@@ -32,6 +33,14 @@ SCHEMA = {
 # Models sometimes drop or add a bracket when they copy the reference back, so
 # accept any bracketing of the exact 24-hex token. The token is the credential.
 REFERENCE = re.compile(r"\[{0,2}vaelo-weather:([0-9a-f]{24})\]{0,2}")
+_diagnostics = ContextVar('weather_diagnostics', default=None)
+
+
+def diagnose(stage, error):
+    details = _diagnostics.get()
+    if details is not None:
+        # Record only bounded failure categories, never URLs, keys or bodies.
+        details[stage] = str(getattr(error, 'code', None) or type(error).__name__)[:40]
 
 
 def widget_reference(arguments, result):
@@ -105,12 +114,16 @@ def read_forecast(token, *, not_before=0):
 
 
 def weather_tool(arguments, **kwargs):
+    diagnostics = {}
+    context = _diagnostics.set(diagnostics)
     try:
+        if isinstance(arguments, dict):
+            arguments = {k: v for k, v in arguments.items() if v is not None or k not in SCHEMA['parameters']['properties']}
         validate(arguments)
         place = {"lat": arguments.get("latitude"), "lon": arguments.get("longitude")}
         reply = weather_reply(arguments, place)
         if not reply:
-            return json.dumps({"success": False, "error": "Forecast unavailable for those coordinates, location or dates. Ask for a city if none was provided; otherwise use live research. Never reuse an earlier forecast as new evidence."})
+            return json.dumps({"success": False, "diagnostics": diagnostics, "error": "Forecast unavailable for those coordinates, location or dates. Ask for a city if none was provided; otherwise use live research. Never reuse an earlier forecast as new evidence."})
         fallback = reply.split("\n```\n\n", 1)[-1]
         if arguments.get("output") == "data":
             return json.dumps({"success": True, "forecast": fallback, "instruction": "Return these verified values in exactly the user's requested format. Do not include a forecast widget or reference."})
@@ -118,8 +131,11 @@ def weather_tool(arguments, **kwargs):
         return json.dumps({"success": True, "reference": reference,
                            "forecast": fallback,
                            "instruction": "Include reference EXACTLY once in your final answer, on its own line without backticks. Vaelo renders the verified forecast itself. Do not copy or invent a weather JSON block. Answer in the user's language. For a simple forecast, the reference is sufficient. Add grounded advice only if asked. Never copy a reference from a prior turn; use this fresh result."})
-    except (ValueError, TypeError, OSError):
-        return json.dumps({"success": False, "error": "Invalid or unavailable forecast request; correct the tool arguments or use live research."})
+    except (ValueError, TypeError, OSError) as error:
+        diagnose('request_or_cache', error)
+        return json.dumps({"success": False, "diagnostics": diagnostics, "error": "Invalid or unavailable forecast request; correct the tool arguments or use live research."})
+    finally:
+        _diagnostics.reset(context)
 
 @lru_cache(maxsize=256)
 def us_city(lat, lon):
@@ -175,9 +191,11 @@ def number(value):
 
 def meteo_reply(ask, place=None, now=None):
     """Execute validated model tool arguments, never parse the user's wording."""
+    stage = 'request'
     try:
         validate(ask)
         if ask.get("location"):
+            stage = 'geocoding'
             rows = geocode(ask["location"])
             if not rows:
                 return None
@@ -189,6 +207,7 @@ def meteo_reply(ask, place=None, now=None):
             label = shared_location_label(place)
         else:
             return None
+        stage = 'configuration'
         key = meteo_config()
         unit = ask.get("unit") or ("fahrenheit" if 18 <= lat <= 72 and -180 <= lon <= -65 else "celsius")
         params = {"latitude": lat, "longitude": lon, "timezone": "auto", "forecast_days": 16,
@@ -197,6 +216,7 @@ def meteo_reply(ask, place=None, now=None):
                   "hourly": "temperature_2m,precipitation_probability,weather_code,is_day,relative_humidity_2m,wind_speed_10m",
                   "daily": "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max,uv_index_max,sunrise,sunset"}
         if key: params["apikey"] = key
+        stage = 'open_meteo'
         data = get("https://" + ("customer-api" if key else "api") + ".open-meteo.com/v1/forecast", params)
         current = data.get("current", {})
         instant = now or datetime.now(timezone.utc)
@@ -232,7 +252,8 @@ def meteo_reply(ask, place=None, now=None):
         fallback = f"Weather for {label}\n\n| Day | Conditions | High ({temp_unit}) | Low ({temp_unit}) |\n|---|---|---|---|\n"
         fallback += "\n".join(f"| {p['label']} | {p['condition']} | {p['high'] if p['high'] is not None else '—'} | {p['low'] if p['low'] is not None else '—'} |" for p in periods)
         return "```weather\n" + json.dumps(payload, ensure_ascii=False) + "\n```\n\n" + fallback + "\n\n[Open-Meteo](https://open-meteo.com/) · Model forecast; times are local to " + data["timezone"] + "."
-    except Exception:
+    except Exception as error:
+        diagnose(stage, error)
         return None  # A failed lookup is evidence of unavailability, never a forecast.
 
 
@@ -297,20 +318,46 @@ def nws_reply(ask, place, now=None):
         snapshot = {"time": first["startTime"][:16], "temperature": number(first.get("temperature")), "feels": None,
                     "humidity": humidity, "wind": wind(first.get("windSpeed")), "condition": nws_condition(first.get("shortForecast")),
                     "isDay": bool(first.get("isDaytime"))} if start == today else None
+        celsius = ask.get('unit') == 'celsius'
+        if celsius:
+            def convert(value):
+                return round((value - 32) * 5 / 9, 2) if value is not None else None
+            for period in periods:
+                period['high'], period['low'] = convert(period['high']), convert(period['low'])
+                period['wind'] = round(period['wind'] * 1.609344, 2) if period['wind'] is not None else None
+                for hour in period['hours']:
+                    hour['temperature'] = convert(hour['temperature'])
+            if snapshot:
+                snapshot['temperature'] = convert(snapshot['temperature'])
+                snapshot['wind'] = round(snapshot['wind'] * 1.609344, 2) if snapshot['wind'] is not None else None
+        unit = '°C' if celsius else '°F'
         instant = now or datetime.now(timezone.utc)
         payload = {"version": 1, "view": "day" if start == end else "week" if len(periods) == 7 else "range", "title": label,
-                   "timezone": point.get("timeZone", ""), "unit": "°F", "windUnit": "mph", "localTime": first["startTime"][:16],
+                   "timezone": point.get("timeZone", ""), "unit": unit, "windUnit": "km/h" if celsius else "mph", "localTime": first["startTime"][:16],
                    "retrieved": instant.isoformat(), "current": snapshot, "periods": periods}
-        fallback = f"Weather for {label}\n\n| Day | Conditions | High (°F) | Low (°F) |\n|---|---|---|---|\n"
+        fallback = f"Weather for {label}\n\n| Day | Conditions | High ({unit}) | Low ({unit}) |\n|---|---|---|---|\n"
         fallback += "\n".join(f"| {p['label']} | {p['condition']} | {p['high'] if p['high'] is not None else '—'} | {p['low'] if p['low'] is not None else '—'} |" for p in periods)
         return "```weather\n" + json.dumps(payload, ensure_ascii=False) + "\n```\n\n" + fallback + "\n\n[National Weather Service](https://www.weather.gov/) · Forecast times are local to " + (point.get("timeZone") or "the location") + "."
-    except Exception:
+    except Exception as error:
+        diagnose('nws', error)
         return None
 
 
 def weather_reply(ask, place=None, now=None):
     """Open-Meteo first; for US coordinates, the National Weather Service when that is unreachable."""
     reply = meteo_reply(ask, place, now)
-    if reply is None and not ask.get("location") and isinstance(place, dict):
-        reply = nws_reply(ask, place, now)
+    if reply is None:
+        if ask.get('location'):
+            try:
+                points = geocode(ask['location'])
+                point = points[0] if points else {}
+                # A named US destination deserves the same provider fallback
+                # as shared coordinates; never substitute the user's location.
+                place = {'lat': point['latitude'], 'lon': point['longitude'],
+                         'city': point.get('name'), 'region': point.get('admin1')} if point.get('country_code') == 'US' else None
+            except Exception as error:
+                diagnose('geocoding_fallback', error)
+                place = None
+        if isinstance(place, dict):
+            reply = nws_reply(ask, place, now)
     return reply

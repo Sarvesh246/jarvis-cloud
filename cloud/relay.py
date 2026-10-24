@@ -1446,8 +1446,11 @@ class Relay:
                     self.relay(run, response, seen)
                 if seen["weather_request"] is not None and not run.stopped:
                     tool_calls, results = [], []
+                    forecast_success = False
+                    known_destination = False
                     for i, original in enumerate(seen["weather_request"]):
-                        arguments = dict(original)
+                        arguments = {key: value for key, value in original.items()
+                                     if value is not None or key not in WEATHER_SCHEMA['parameters']['properties']}
                         if arguments.get("output") in ("text", "data") and not wants_weather_format(request_text(messages)):
                             arguments["output"] = "widget"
                         if week_requested(request_text(messages)) and not wants_weather_format(request_text(messages)) and not arguments.get("start_date"):
@@ -1455,6 +1458,7 @@ class Relay:
                         place = body.get("place")
                         if not any(k in arguments for k in ("location", "latitude", "longitude")) and isinstance(place, dict):
                             arguments.update(latitude=place.get("lat"), longitude=place.get("lon"))
+                        known_destination |= bool(arguments.get('location')) or all(arguments.get(key) is not None for key in ('latitude', 'longitude'))
                         progress = {"tool": "weather_forecast", "toolCallId": f"weather_lookup_{attempt}_{i}", "status": "running", "label": "Checking the forecast"}
                         run.trace.tool(progress)
                         run.event("hermes.tool.progress", progress)
@@ -1466,6 +1470,9 @@ class Relay:
                             run.event("hermes.tool.progress", progress)
                         try:
                             verified = json.loads(result)
+                            forecast_success |= verified.get('success') is True
+                            run.event('jarvis.forecast', {'ok': verified.get('success') is True,
+                                'diagnostics': verified.get('diagnostics', {})})
                             evidence = verified.get("forecast")
                             if (verified.get("success") is True and isinstance(evidence, str)
                                     and 0 < len(evidence) <= 60000 and len(seen["forecast_evidence"]) < 8):
@@ -1480,6 +1487,12 @@ class Relay:
                         call_id = f"weather_lookup_{i}"
                         tool_calls.append({"id": call_id, "type": "function", "function": {"name": "weather_forecast", "arguments": json.dumps(arguments)}})
                         results.append({"role": "tool", "tool_call_id": call_id, "content": result})
+                    if forecast_question and known_destination and not forecast_success:
+                        # A failed live lookup is not permission to invent a
+                        # plausible table of temperatures from memory.
+                        run.event('jarvis.error', {'code': 'weather_unavailable', 'message':
+                            'The live forecast is unavailable right now. Please try again shortly.'})
+                        return run.finish('error')
                     # The same interpreting model writes the response after
                     # seeing real results. Failures cannot reuse old forecasts,
                     # and compound questions can include grounded explanations.

@@ -1895,6 +1895,32 @@ class RelayTests(unittest.TestCase):
                 search.assert_not_called()
                 self.assertEqual(hermes.requests[0]['body']['messages'], messages)
 
+    def test_null_optional_weather_arguments_do_not_block_shared_coordinates(self):
+        _, relay, port = self.boot([])
+        args = {'location': None, 'latitude': None, 'longitude': None, 'unit': None, 'output': None}
+        call = 'data: ' + json.dumps({'choices': [{'delta': {'tool_calls': [{'index': 0, 'function': {
+            'name': 'weather_forecast', 'arguments': json.dumps(args)}}]}, 'finish_reason': 'tool_calls'}]})
+        self.fast_provider(relay, [[call, 'data: [DONE]'], [chunk('Forecast checked.', 'stop'), 'data: [DONE]']])
+        result = json.dumps({'success': True, 'reference': '[[vaelo-weather:' + 'a9' * 12 + ']]'})
+        with mock.patch.dict('os.environ', {'FREELLMAPI_URL': 'https://router.example', 'FREELLMAPI_API_KEY': 'test'}), mock.patch.object(relay_module, 'weather_tool', return_value=result) as tool, mock.patch.object(relay_module, 'read_forecast', return_value='WIDGET'):
+            self.call(port, 'POST', '/vaelo/runs', {'id': RUN, 'messages': [{'role': 'user', 'content': 'whats the weather today?'}], 'fast': 'You are Vaelo.', 'place': {'lat': 30.6, 'lon': -96.3}})
+            self.assertEqual(self.finished(relay).outcome, 'complete')
+        tool.assert_called_once_with({'latitude': 30.6, 'longitude': -96.3})
+
+    def test_failed_forecast_for_a_known_city_cannot_be_replaced_by_invented_temperatures(self):
+        _, relay, port = self.boot([])
+        call = 'data: ' + json.dumps({'choices': [{'delta': {'tool_calls': [{'index': 0, 'function': {
+            'name': 'weather_forecast', 'arguments': '{"location":"College Station, TX"}'}}]}, 'finish_reason': 'tool_calls'}]})
+        provider, _ = self.fast_provider(relay, [[call, 'data: [DONE]'], [chunk('Typical high 78 F.', 'stop'), 'data: [DONE]']])
+        with mock.patch.dict('os.environ', {'FREELLMAPI_URL': 'https://router.example', 'FREELLMAPI_API_KEY': 'test'}), mock.patch.object(relay_module, 'weather_tool', return_value=json.dumps({'success': False, 'diagnostics': {'open_meteo': '403'}})):
+            self.call(port, 'POST', '/vaelo/runs', {'id': RUN, 'messages': [{'role': 'user', 'content': 'whats the weather today?'}], 'fast': 'You are Vaelo.'})
+            self.assertEqual(self.finished(relay).outcome, 'error')
+        self.assertEqual(len(provider.requests), 1)
+        frames = json.dumps(self.events(port)[1])
+        self.assertIn('weather_unavailable', frames)
+        self.assertNotIn('78 F', frames)
+        self.assertIn('jarvis.forecast', frames)
+
     def test_recovery_retains_destinations_with_capitalized_prepositions(self):
         for preposition in ('in', 'In', 'IN', 'For', 'Near'):
             asked = f'whats the weather today? {preposition} College Station, TX.'
