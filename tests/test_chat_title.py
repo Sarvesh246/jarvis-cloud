@@ -1,8 +1,41 @@
 import unittest
-from cloud.chat_title import TitleFilter, concise_title
+import json
+from cloud.chat_title import TitleFilter, concise_title, fallback_title, title_messages
 
 
 class ChatTitleTests(unittest.TestCase):
+    def test_json_mode_extracts_title_without_changing_the_requested_object(self):
+        source = '{"_vaelo_title":"Image color counts","_vaelo_answer":{"red":2,"blue":1}}'
+        for split in range(len(source) + 1):
+            reader = TitleFilter(json_mode=True)
+            answer = reader.feed(source[:split]) + reader.feed(source[split:], final=True)
+            self.assertEqual(json.loads(answer), {'red': 2, 'blue': 1})
+            self.assertEqual(reader.title, 'Image color counts')
+        reader = TitleFilter(json_mode=True)
+        raw = '{"red":2,"blue":1}'
+        self.assertEqual(reader.feed(raw, final=True), raw)
+        self.assertIsNone(reader.title)
+
+    def test_titles_do_not_require_a_second_call_when_metadata_is_omitted(self):
+        for prompt, expected in [
+            ('Can you please help me parse CSV files in Python?', 'parse CSV files in Python'),
+            ('What is 17 times 23?', '17 times 23'),
+            ('Weather in College Station today', 'Weather in College Station today'),
+        ]:
+            self.assertEqual(fallback_title([{'role': 'user', 'content': prompt}]), expected)
+        self.assertEqual(fallback_title([{'role': 'user', 'content': [{'type': 'image_url'}]}]), 'Image discussion')
+        private = fallback_title([{'role': 'user', 'content': 'Help me email alice@example.com about invoice 123456789.'}])
+        self.assertNotIn('alice', private)
+        self.assertNotIn('123456789', private)
+
+    def test_guidance_is_added_at_the_transport_boundary_without_mutating_history(self):
+        original = [{'role': 'system', 'content': 'Specialized coding instructions.'}, {'role': 'user', 'content': 'Write a parser.'}]
+        titled = title_messages(original, True)
+        self.assertIn('<vaelo-title>', titled[0]['content'])
+        self.assertEqual(original[0]['content'], 'Specialized coding instructions.')
+        self.assertIs(title_messages(original, False), original)
+        self.assertIn('_vaelo_title', title_messages(original, True, json_mode=True)[0]['content'])
+
     def test_every_chunk_boundary_preserves_exact_answer(self):
         source = '<vaelo-title>Plan a Chicago weekend</vaelo-title>\n{"ok":true}'
         for split in range(len(source) + 1):

@@ -916,6 +916,55 @@ class RelayTests(unittest.TestCase):
                           for _, name, data in frames if name == 'message' and data != '[DONE]')
         self.assertEqual(content, '{"ok":true}')
 
+    def test_model_omission_and_calculator_shortcuts_emit_one_title_before_completion(self):
+        for prompt, scripts, expected, requests in [
+            ('Can you please help me parse CSV files in Python?', [[chunk('Use csv.DictReader.', 'stop'), 'data: [DONE]']], 'parse CSV files in Python', 1),
+            ('What is 17 times 23?', [], '17 times 23', 0),
+        ]:
+            with self.subTest(prompt=prompt):
+                hermes, relay, port = self.boot(scripts)
+                self.call(port, 'POST', '/vaelo/runs', {'id': RUN, 'generate_title': True,
+                    'tier': 'quick', 'messages': [{'role': 'system', 'content': 'Be helpful.'}, {'role': 'user', 'content': prompt}]})
+                self.assertEqual(self.finished(relay).outcome, 'complete')
+                self.assertEqual(len(hermes.requests), requests)
+                frames = self.events(port)[1]
+                titles = [(i, json.loads(data)) for i, (_, name, data) in enumerate(frames) if name == 'jarvis.title']
+                self.assertEqual(len(titles), 1)
+                self.assertEqual(titles[0][1], {'source': 'fallback', 'title': expected})
+                self.assertLess(titles[0][0], next(i for i, (_, name, _) in enumerate(frames) if name == 'jarvis.complete'))
+                self.assertTrue(any(name == 'jarvis.title' for _, name, _ in self.events(port, after=frames[titles[0][0]][0] - 1)[1]))
+
+    def test_native_json_image_reply_carries_title_in_the_same_provider_call(self):
+        hermes, relay, port = self.boot([])
+        source = json.dumps({'_vaelo_title': 'Image color counts', '_vaelo_answer': {'red': 2, 'blue': 1}})
+        provider, _ = self.fast_provider(relay, [[chunk(source[:21]), chunk(source[21:]), 'data: [DONE]']])
+        with mock.patch.dict('os.environ', {'FREELLMAPI_URL': 'https://router.example', 'FREELLMAPI_API_KEY': 'fixture', 'VAELO_VISION_CACHE_WRITABLE': '1'}, clear=True):
+            self.call(port, 'POST', '/vaelo/runs', {'id': RUN, 'generate_title': True, 'messages': [
+                {'role': 'system', 'content': 'Be helpful.'}, {'role': 'user', 'content': [
+                    {'type': 'text', 'text': 'Use only this image. Return ONLY JSON with red, blue.'},
+                    {'type': 'image_url', 'image_url': {'url': 'data:image/png;base64,pixels'}}]}]})
+            run = self.finished(relay)
+        self.assertEqual(run.outcome, 'complete')
+        self.assertEqual(len(provider.requests), 1)
+        self.assertEqual(hermes.requests, [])
+        request = provider.requests[0]['body']
+        self.assertEqual(request['response_format'], {'type': 'json_object'})
+        self.assertIn('_vaelo_title', request['messages'][0]['content'])
+        frames = self.events(port)[1]
+        self.assertEqual([json.loads(data)['title'] for _, name, data in frames if name == 'jarvis.title'], ['Image color counts'])
+        content = ''.join(json.loads(data).get('choices', [{}])[0].get('delta', {}).get('content', '') for _, name, data in frames if name == 'message' and data != '[DONE]')
+        self.assertEqual(json.loads(content), {'red': 2, 'blue': 1})
+
+    def test_replaced_native_coding_prompt_retains_title_guidance(self):
+        _, relay, _ = self.boot([])
+        provider, _ = self.fast_provider(relay, [[chunk('answer', 'stop'), 'data: [DONE]']])
+        run = relay_module.Run(RUN, OWNER)
+        with mock.patch.dict('os.environ', {'FREELLMAPI_URL': 'https://router.example', 'FREELLMAPI_API_KEY': 'fixture'}, clear=True):
+            response, _ = relay.open(run, {'standalone_python': True, 'generate_title': True, 'fast': 'Specialized coding instructions.'}, [{'role': 'user', 'content': 'Write a parser.'}])
+            response.read(); run.connection.close()
+        self.assertEqual(len(provider.requests), 1)
+        self.assertIn(relay_module.TITLE_GUIDANCE, provider.requests[0]['body']['messages'][0]['content'])
+
     def test_title_uses_the_same_direct_reply_call_for_members_and_guests(self):
         for owner in (OWNER, 'web:guest:title-fixture'):
             with self.subTest(owner=owner):

@@ -23,9 +23,9 @@ import threading
 import time
 import uuid
 try:
-    from chat_title import TitleFilter, TITLE_GUIDANCE
+    from chat_title import TitleFilter, TITLE_GUIDANCE, title_messages, fallback_title
 except ModuleNotFoundError:
-    from cloud.chat_title import TitleFilter, TITLE_GUIDANCE
+    from cloud.chat_title import TitleFilter, TITLE_GUIDANCE, title_messages, fallback_title
 try:
     from code_answer import returned_python, returned_javascript, standalone_python
     from verification import verify as verify_python
@@ -505,6 +505,9 @@ class Run:
         self.prompt_tokens = self.completion_tokens = self.cached_tokens = 0
         self.images = set()  # generated-image references already handed to the reader
         self.completed_at = None
+        self.title_sent = False
+        self.fallback_title = None
+        self.title_json_mode = False
 
     def emit(self, frame, optional=False, reserved=False):
         """Number and keep one SSE frame (without its trailing blank line). Relayed frames
@@ -539,7 +542,12 @@ class Run:
             self.stop()
 
     def event(self, name, data):
+        if name == 'jarvis.title':
+            self.title_sent = True
+            data = {'source': 'model', **data}
         if name == 'jarvis.complete':
+            if self.fallback_title and not self.title_sent:
+                self.event('jarvis.title', {'title': self.fallback_title, 'source': 'fallback'})
             self.completed_at = self.completed_at or time.time()
             data = {**data, 'timing': {
                 'completedAt': round(self.completed_at * 1000),
@@ -704,6 +712,8 @@ class Relay:
             payload['response_format'] = {'type':'json_object'}
             if route['name'] == 'openrouter':
                 payload['provider'] = {'require_parameters':True}
+        run.title_json_mode = bool(body.get('generate_title') and payload.get('response_format'))
+        payload['messages'] = title_messages(payload['messages'], body.get('generate_title'), json_mode=run.title_json_mode)
         reasoning = direct_reasoning(body)
         if reasoning:
             payload["reasoning"] = reasoning
@@ -756,6 +766,8 @@ class Relay:
             "stream_options": {"include_usage": True},
             "max_tokens": GUEST_MAX_TOKENS,
         }
+        run.title_json_mode = False
+        payload['messages'] = title_messages(payload['messages'], (body or {}).get('generate_title'))
         if not (body or {}).get("no_weather_tools"):
             payload["tools"] = [{"type": "function", "function": WEATHER_SCHEMA}]
         reasoning = direct_reasoning(body or {})
@@ -950,7 +962,8 @@ class Relay:
         if not self.admission.acquire(run):
             return None, None if run.stopped else {'code': 'queue_full', 'status': 429,
                 'message': 'Vaelo’s reply queue is full or the wait expired. Please try again shortly.'}
-        payload = {"model": "jarvis", "messages": messages, "stream": True}
+        run.title_json_mode = False
+        payload = {"model": "jarvis", "messages": title_messages(messages, body.get('generate_title')), "stream": True}
         if isinstance(body.get("model_options"), dict):
             payload["model_options"] = body["model_options"]
         data = json.dumps(payload).encode()
@@ -1034,7 +1047,7 @@ class Relay:
                     attempt_answer=False, repetitive=False, invalid_output=False, weather_call={}, weather_request=None)
         seen["output_guard"] = ToolOutputGuard(seen.get("request", []))
         if seen.get('title_filter'):
-            seen['title_filter'] = TitleFilter()
+            seen['title_filter'] = TitleFilter(json_mode=run.title_json_mode)
         seen["repetition_guard"] = RepetitionGuard(seen["answer"])
         usage = {"prompt_tokens": 0, "completion_tokens": 0, "cached_tokens": 0}
         seen["usage"] = usage
@@ -1105,6 +1118,10 @@ class Relay:
             return  # keepalive comments: readers get their own
         text = "\n".join(data)
         if text == "[DONE]":
+            title_filter = seen.get('title_filter')
+            if title_filter and title_filter.buffer and not seen.get('failed') and not seen.get('invalid_output'):
+                tail = title_filter.feed('', final=True)
+                self.inspect(run, 'data: ' + json.dumps({'choices': [{'delta': {'content': tail}}]}), seen)
             seen["protocol_done"] = True
             seen["finished"] = True
             for pending in seen["output_guard"].feed(frame, final=True):
@@ -1306,13 +1323,9 @@ class Relay:
         forecast_started = time.time()
         messages = body["messages"]
         generate_title = body.get('generate_title') is True and sum(m.get('role') == 'user' for m in messages) == 1 and not any(m.get('role') == 'assistant' for m in messages)
+        body = {**body, 'generate_title': generate_title}
         if generate_title:
-            messages = [dict(m) for m in messages]
-            if messages and messages[0].get('role') == 'system':
-                messages[0]['content'] += TITLE_GUIDANCE
-            body = {**body, 'messages': messages}
-            if isinstance(body.get('fast'), str):
-                body['fast'] += TITLE_GUIDANCE
+            run.fallback_title = fallback_title(messages)
         guest = run.owner.startswith(GUEST_OWNER)
         if guest:
             refusal = self.guest_admit(run.owner)
