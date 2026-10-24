@@ -284,7 +284,7 @@ def weather_intent(text):
                 and not re.search(r"\b(?:explain|translate|poem|essay|write|code|function|api|why|how does|what causes|meaning of|history of)\b", text, re.I))
 
 
-_PLACE = re.compile(r"\b(?:in|for|at|near|around)\s+([A-Z][\w.'-]*(?:[ ,]+[A-Z][\w.'-]*){0,3})")
+_PLACE = re.compile(r"\b(?i:in|for|at|near|around)\s+([A-Z][\w.'-]*(?:[ ,]+[A-Z][\w.'-]*){0,3})")
 
 
 def named_place(text):
@@ -1330,12 +1330,18 @@ class Relay:
         if generate_title:
             seen['title_filter'] = TitleFilter()
         def preserve_forecast():
-            if run.stopped or not seen["forecast_evidence"]:
+            if run.stopped:
                 return False
             # The lookup succeeded even if the subsequent language-model call
-            # failed. Keep its exact dated values and source, with an explicit
-            # notice that the requested explanation/format could not finish.
-            text = "The forecast was retrieved, but Vaelo could not finish the accompanying explanation or requested format. Here are the source values:\n\n" + "\n\n".join(seen["forecast_evidence"])
+            # failed. Keep the provider's complete widget, not just its text
+            # fallback. Explicit text/data requests still keep their evidence.
+            forecasts = [] if constrained(seen['contract']) or wants_weather_format(request_text(body['messages'])) else [
+                forecast for token in dict.fromkeys(seen['forecasts'])
+                if (forecast := read_forecast(token, not_before=forecast_started))]
+            evidence = forecasts or seen['forecast_evidence']
+            if not evidence:
+                return False
+            text = "The forecast was retrieved, but Vaelo could not finish the accompanying explanation or requested format. Here is the verified forecast:\n\n" + "\n\n".join(evidence)
             run.emit("data: " + json.dumps({"choices": [{"delta": {"content": text}}]}))
             run.trace.counts["forecast_evidence_fallbacks"] = 1
             run.event("jarvis.complete", {"ok": True, "degraded": True})
@@ -1396,7 +1402,11 @@ class Relay:
                 messages = [*messages[:-1], {**messages[-1], 'content': with_note(messages[-1]['content'], guidance)}]
             run.event("jarvis.status", {"message": "Vaelo is working…"})
             query = body.get("freshness")
-            if isinstance(query, str) and query.strip() and len(query) <= 600:
+            # Let the model interpret forecasts through its dedicated tool.
+            # Search snippets here tempt it to write a table without fetching
+            # the day/hour data needed by the weather widgets.
+            forecast_question = weather_intent(request_text(messages)) or weather_followup(messages)
+            if isinstance(query, str) and query.strip() and len(query) <= 600 and not forecast_question:
                 run.event("jarvis.status", {"message": "Checking current sources…"})
                 # The evidence rides inside the person's own newest message. Hermes
                 # treats the last user message as the active task and, when a long
@@ -1705,8 +1715,11 @@ class Relay:
                         run.trace.counts["weather_widget_unavailable"] = 1
             for token in ([] if constrained(seen['contract']) else dict.fromkeys([*WEATHER_REFERENCE.findall(seen["answer"]), *seen["forecasts"]])):
                 forecast = read_forecast(token, not_before=forecast_started)
-                if forecast and '"view": "day"' in forecast and week_requested(asked) and not wants_weather_format(asked):
-                    # The model fetched a single day for a weekly question; show the week.
+                text_forecast = forecast and '```weather' not in forecast and re.search(r'(?m)^\s*\|.+\|', forecast)
+                if forecast and not wants_weather_format(asked) and (text_forecast or '"view": "day"' in forecast and week_requested(asked)):
+                    # Hermes may choose output=text for an ordinary forecast,
+                    # bypassing the direct tool-call guard. Fetch the structured
+                    # day/week payload rather than publishing that table alone.
                     ask = weather_ask(asked, body, original)
                     swapped = widget_reference({}, weather_tool(ask)) if ask else None
                     forecast = (read_forecast(swapped, not_before=forecast_started) if swapped else "") or forecast

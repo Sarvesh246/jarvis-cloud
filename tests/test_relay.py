@@ -1882,6 +1882,76 @@ class RelayTests(unittest.TestCase):
         self.assertNotIn('tools', provider.requests[1]['body'])
         self.assertEqual(provider.requests[1]['body']['messages'][-1]['role'], 'tool')
 
+    def test_plain_forecasts_and_followups_do_not_receive_competing_search_snippets(self):
+        history = [{'role': 'user', 'content': 'whats the weather today?'},
+                   {'role': 'assistant', 'content': 'Today\'s weather forecast is mild.'}]
+        for question in ('whats the weather today?', 'how about this week'):
+            with self.subTest(question=question):
+                hermes, relay, port = self.boot([[chunk('What city?', 'stop'), 'data: [DONE]']])
+                messages = [*history, {'role': 'user', 'content': question}] if 'week' in question else history[:1]
+                with mock.patch.object(relay_module, 'source_context') as search:
+                    self.call(port, 'POST', '/vaelo/runs', {'id': RUN, 'messages': messages, 'freshness': question})
+                    self.assertEqual(self.finished(relay).outcome, 'complete')
+                search.assert_not_called()
+                self.assertEqual(hermes.requests[0]['body']['messages'], messages)
+
+    def test_recovery_retains_destinations_with_capitalized_prepositions(self):
+        for preposition in ('in', 'In', 'IN', 'For', 'Near'):
+            asked = f'whats the weather today? {preposition} College Station, TX.'
+            self.assertEqual(relay_module.weather_ask(asked, {}), {'location': 'College Station, TX'})
+
+    def test_day_and_week_widgets_survive_a_failed_model_writeup(self):
+        history = [{'role': 'user', 'content': 'whats the weather today?'},
+                   {'role': 'assistant', 'content': 'Weather forecast: mild today.'}]
+        for days in (1, 7):
+            with self.subTest(days=days):
+                _, relay, port = self.boot([])
+                arguments = {'days': days}
+                call = 'data: ' + json.dumps({'choices': [{'delta': {'tool_calls': [{'index': 0,
+                    'function': {'name': 'weather_forecast', 'arguments': json.dumps(arguments)}}]}, 'finish_reason': 'tool_calls'}]})
+                provider, _ = self.fast_provider(relay, [[call, 'data: [DONE]']])
+                original = relay.open
+                def open_once(run, body, messages, recovering=False):
+                    return (None, {'message': 'Unavailable'}) if run.upstream_requests else original(run, body, messages, recovering=recovering)
+                marker = '[[vaelo-weather:' + 'a7' * 12 + ']]'
+                widget = '```weather\n' + json.dumps({'view': 'week' if days == 7 else 'day', 'periods': [{}] * days}) + '\n```\n\n[Provider](https://open-meteo.com/)'
+                result = json.dumps({'success': True, 'reference': marker, 'forecast': '| Day | High |\n|---|---|\n| Today | 71°F |'})
+                messages = [*history, {'role': 'user', 'content': 'how about this week'}] if days == 7 else history[:1]
+                with mock.patch.dict('os.environ', {'FREELLMAPI_URL': 'https://router.example', 'FREELLMAPI_API_KEY': 'test'}), mock.patch.object(relay_module, 'weather_tool', return_value=result), mock.patch.object(relay_module, 'read_forecast', return_value=widget) as read, mock.patch.object(relay, 'open', side_effect=open_once):
+                    self.call(port, 'POST', '/vaelo/runs', {'id': RUN, 'messages': messages, 'fast': 'You are Vaelo.', 'place': {'lat': 30.6, 'lon': -96.3}})
+                    run = self.finished(relay)
+                self.assertEqual(run.outcome, 'complete')
+                self.assertEqual(len(provider.requests), 1)
+                self.assertIn(widget, ''.join(json.loads(data).get('choices', [{}])[0].get('delta', {}).get('content', '') for _, name, data in self.events(port)[1] if name == 'message' and data != '[DONE]'))
+                self.assertTrue(read.call_args.kwargs['not_before'] > 0)
+                self.assertEqual(run.trace.counts['forecast_evidence_fallbacks'], 1)
+
+    def test_agent_text_reference_recovers_day_and_week_widgets_unless_explicitly_requested(self):
+        history = [{'role': 'user', 'content': 'whats the weather today?'},
+                   {'role': 'assistant', 'content': 'Weather forecast: mild today.'}]
+        for question, days in [('whats the weather today?', 1), ('how about this week', 7), ('weather as a table', None)]:
+            with self.subTest(question=question):
+                old, fresh = 'c7' * 12, 'd7' * 12
+                _, relay, port = self.boot([[chunk('[[vaelo-weather:' + old + ']]', 'stop'), 'data: [DONE]']])
+                table = '| Day | High |\n|---|---|\n| Today | 71°F |'
+                widget = '```weather\n' + json.dumps({'view': 'week' if days == 7 else 'day'}) + '\n```'
+                def read(token, **kwargs):
+                    return table if token == old else widget
+                result = json.dumps({'success': True, 'reference': '[[vaelo-weather:' + fresh + ']]'})
+                messages = [*history, {'role': 'user', 'content': question}] if days == 7 else [{'role': 'user', 'content': question}]
+                with mock.patch.object(relay_module, 'read_forecast', side_effect=read), mock.patch.object(relay_module, 'weather_tool', return_value=result) as tool:
+                    self.call(port, 'POST', '/vaelo/runs', {'id': RUN, 'messages': messages, 'place': {'lat': 30.6, 'lon': -96.3}})
+                    self.assertEqual(self.finished(relay).outcome, 'complete')
+                content = ''.join(json.loads(data).get('choices', [{}])[0].get('delta', {}).get('content', '') for _, name, data in self.events(port)[1] if name == 'message' and data != '[DONE]')
+                if days is None:
+                    tool.assert_not_called()
+                    self.assertIn(table, content)
+                else:
+                    self.assertEqual(tool.call_count, 1)
+                    self.assertEqual(tool.call_args.args[0].get('days', 1), days)
+                    self.assertIn(widget, content)
+                    self.assertNotIn(table, content)
+
     def test_completed_forecast_survives_a_failed_model_writeup(self):
         for success in (True, False):
             with self.subTest(success=success):
