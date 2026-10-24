@@ -914,7 +914,47 @@ class RelayTests(unittest.TestCase):
         self.assertEqual(titles, ['Comparing city museums'])
         content = ''.join(json.loads(data).get('choices', [{}])[0].get('delta', {}).get('content', '')
                           for _, name, data in frames if name == 'message' and data != '[DONE]')
-        self.assertEqual(content.strip(), '{"ok":true}')
+        self.assertEqual(content, '{"ok":true}')
+
+    def test_title_uses_the_same_direct_reply_call_for_members_and_guests(self):
+        for owner in (OWNER, 'web:guest:title-fixture'):
+            with self.subTest(owner=owner):
+                hermes, relay, port = self.boot([])
+                source = '<vaelo-title>Python CSV parsing</vaelo-title>\r\nUse csv.DictReader.'
+                provider, _ = self.fast_provider(relay, [[*[chunk(c) for c in source], chunk(finish='stop'), 'data: [DONE]']])
+                with mock.patch.dict('os.environ', {'FREELLMAPI_URL': 'https://router.example',
+                                                   'FREELLMAPI_API_KEY': 'fixture'}, clear=True):
+                    self.call(port, 'POST', '/vaelo/runs', {
+                        'id': RUN, 'generate_title': True, 'fast': 'Be helpful.',
+                        'messages': [{'role': 'system', 'content': 'Be helpful.'},
+                                     {'role': 'user', 'content': 'Help me parse a CSV using Python.'}],
+                    }, owner=owner)
+                    run = self.finished(relay)
+                self.assertEqual(run.outcome, 'complete')
+                self.assertEqual(hermes.requests, [])
+                self.assertEqual(len(provider.requests), 1)
+                system = '\n'.join(message['content'] for message in provider.requests[0]['body']['messages'] if message['role'] == 'system')
+                self.assertIn(relay_module.TITLE_GUIDANCE, system)
+                _, frames = self.events(port, owner=owner)
+                self.assertEqual([json.loads(data)['title'] for _, name, data in frames if name == 'jarvis.title'], ['Python CSV parsing'])
+                content = ''.join(json.loads(data).get('choices', [{}])[0].get('delta', {}).get('content', '')
+                                  for _, name, data in frames if name == 'message' and data != '[DONE]')
+                self.assertEqual(content, 'Use csv.DictReader.')
+
+    def test_followup_does_not_spend_tokens_on_title_guidance(self):
+        hermes, relay, port = self.boot([[chunk('Use the delimiter argument.', 'stop'), 'data: [DONE]']])
+        self.call(port, 'POST', '/vaelo/runs', {
+            'id': RUN, 'generate_title': True,
+            'messages': [{'role': 'system', 'content': 'Be helpful.'},
+                         {'role': 'user', 'content': 'Help me parse a CSV using Python.'},
+                         {'role': 'assistant', 'content': 'Use csv.DictReader.'},
+                         {'role': 'user', 'content': 'What about semicolons?'}],
+        })
+        self.assertEqual(self.finished(relay).outcome, 'complete')
+        self.assertEqual(len(hermes.requests), 1)
+        self.assertNotIn(relay_module.TITLE_GUIDANCE, hermes.requests[0]['body']['messages'][0]['content'])
+        _, frames = self.events(port)
+        self.assertFalse(any(name == 'jarvis.title' for _, name, _ in frames))
 
     def events(self, port, after=-1, owner=OWNER):
         status, text = self.call(

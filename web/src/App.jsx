@@ -18,7 +18,7 @@ import { normalizeReplySpacing, normalizeSavedReplySpacing } from "./lib/reply-s
 import { requestForReply, imagesForReply } from "./lib/adaptive-ui.js";
 import { fullImages } from "./lib/image-store.js";
 import { cachedPlace, needsPlace, placeFor } from "./lib/location.js";
-import { chatTitle, displayChatTitle } from './lib/titles.js';
+import { chatTitle, displayChatTitle, withGeneratedTitle } from './lib/titles.js';
 import { liveReply, readSyncCache } from "./lib/chat-sync.js";
 import { useChatSync } from "./lib/use-chat-sync.js";
 import { CommandPalette } from "./components/CommandPalette.jsx";
@@ -1662,9 +1662,8 @@ export function App() {
         updateMessage(message => ({ truncated: false, ...completedTiming(message, data.timing) }));
       }
       if (name === 'jarvis.title') {
-        if (runs.current.get(chatId) !== slot || typeof data.title !== 'string' || !data.title.trim() || data.title.length > 120) return;
-        setChats(current => current.map(chat => chat.id === chatId && !chat.titleManual && chat.messages.filter(message => message.role === 'user').length === 1
-          ? { ...chat, title: data.title.trim() } : chat));
+        if (runs.current.get(chatId) !== slot) return;
+        setChats(current => current.map(chat => chat.id === chatId ? withGeneratedTitle(chat, data.title, id) : chat));
         pushChat(chatId);
         return;
       }

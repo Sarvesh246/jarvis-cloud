@@ -21,3 +21,14 @@ export function displayChatTitle(chat) {
   if (typeof original === 'string' && original.length > 48 && chat.title === original.slice(0, 48)) return chatTitle(original);
   return chat?.title || 'New conversation';
 }
+
+// A replayed first-response event must belong to this reply and must never
+// overwrite a manual rename, a branch, or a replacement first response.
+export function withGeneratedTitle(chat, value, replyId) {
+  if (chat.titleManual || typeof value !== 'string' || value.length > 120 || /[<>`*\u0000-\u001f]/u.test(value)) return chat;
+  if (chat.messages.filter(message => message.role === 'user').length !== 1 ||
+      chat.messages.find(message => message.role === 'assistant')?.id !== replyId) return chat;
+  const title = value.replace(/\s+/g, ' ').trim();
+  if (!title || Array.from(title).length > 48 || title.split(' ').length > 6) return chat;
+  return title === chat.title ? chat : { ...chat, title };
+}

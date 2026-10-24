@@ -1,5 +1,5 @@
 import unittest
-from cloud.chat_title import TitleFilter
+from cloud.chat_title import TitleFilter, concise_title
 
 
 class ChatTitleTests(unittest.TestCase):
@@ -8,7 +8,7 @@ class ChatTitleTests(unittest.TestCase):
         for split in range(len(source) + 1):
             reader = TitleFilter()
             answer = reader.feed(source[:split]) + reader.feed(source[split:], final=True)
-            self.assertEqual(answer.lstrip('\n'), '{"ok":true}')
+            self.assertEqual(answer, '{"ok":true}')
             self.assertEqual(reader.title, 'Plan a Chicago weekend')
 
     def test_missing_metadata_preserves_answer(self):
@@ -26,3 +26,20 @@ class ChatTitleTests(unittest.TestCase):
         reader = TitleFilter()
         self.assertEqual(reader.feed('<vaelo-title>' + 'a' * 121 + '</vaelo-title>\nanswer'), 'answer')
         self.assertIsNone(reader.title)
+
+    def test_metadata_newline_is_removed_across_individual_chunks(self):
+        for newline in ('\n', '\r\n'):
+            source = '<vaelo-title>Python CSV parsing</vaelo-title>' + newline + '  exact\n\ntext'
+            reader = TitleFilter()
+            answer = ''.join(reader.feed(char) for char in source) + reader.feed('', final=True)
+            self.assertEqual(answer, '  exact\n\ntext')
+            self.assertEqual(reader.title, 'Python CSV parsing')
+
+    def test_short_search_keywords_and_unicode_are_preserved(self):
+        for title in ('iPhone 18 battery comparison', 'Chicago weekend itinerary', 'Python CSV parsing', '日本語の旅行計画', 'Café menu ☕'):
+            self.assertEqual(concise_title(title), title)
+        self.assertEqual(concise_title('  "Python   CSV parsing"  '), 'Python CSV parsing')
+        self.assertEqual(concise_title('Compare iPhone 18 battery life and camera performance in detail'), 'Compare iPhone 18 battery life and')
+        self.assertEqual(concise_title('PostgreSQL connection pooling configuration troubleshooting'), 'PostgreSQL connection pooling configuration')
+        for title in ('', '   ', '<script>bad</script>', '**Markdown title**', 'x' * 121):
+            self.assertIsNone(concise_title(title))
