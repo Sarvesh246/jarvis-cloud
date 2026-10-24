@@ -142,7 +142,7 @@ function Row({ chat, active, busy, running, excerpt, openId, setOpenId, onSelect
           onClick={() => onSelect(chat.id)}
         >
           <span ref={titleRef} className="rail-title" data-overflow={overflow > 0 || undefined} style={{ '--title-travel': `${-overflow}px`, '--title-duration': `${Math.max(3, overflow / 32)}s` }}><span className="rail-title-text">{chat.title}</span></span>
-          {running && <span className="rail-running" role="img" aria-label="Vaelo is replying here" />}
+          {running && <span className="sr-only" role="img" aria-label="Vaelo is replying here" />}
           {excerpt && <span className="rail-excerpt">{excerpt}</span>}
         </button>
         <button

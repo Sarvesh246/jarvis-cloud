@@ -347,7 +347,8 @@
   transition: transform var(--dur-2) var(--ease);
 }
 
-.rp-row[data-active] .rp-dot {
+.rp-row[data-active] .rp-dot,
+.rp-row[data-running] .rp-dot {
   transform: scale(1);
 }
 

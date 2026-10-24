@@ -39,7 +39,7 @@ const clamp = (n, low, high) => Math.max(low, Math.min(high, n));
 /* A row that slides left under a finger to show its actions. It follows the
    finger, clamped; past 60px it snaps open to the width of its actions, and
    anything less springs back. Only one row is open at a time. */
-function SwipeRow({ id, openId, setOpenId, actions, active, className = "", children, onActivate }) {
+function SwipeRow({ id, openId, setOpenId, actions, active, running, className = "", children, onActivate }) {
   const [x, setX] = useState(null);
   const width = ACTION * actions.length;
   const open = openId === id;
@@ -90,6 +90,7 @@ function SwipeRow({ id, openId, setOpenId, actions, active, className = "", chil
       ref={row}
       className={`rp-row ${className}`}
       data-active={active || undefined}
+      data-running={running || undefined}
       data-swiped={open || undefined}
       data-leaving={leaving || undefined}
       {...handlers}
@@ -140,6 +141,7 @@ function ChatRow({ chat, active, busy, running, excerpt, openId, setOpenId, onSe
       openId={openId}
       setOpenId={setOpenId}
       active={active}
+      running={running}
       actions={[
         { key: "pin", label: chat.pinned ? "Unpin" : "Pin", Icon: chat.pinned ? PushPinSlash : PushPin, onClick: () => onPin(chat.id) },
         { key: "remove", label: "Remove", Icon: Trash, tone: "clay", disabled: busy, leaves: true, onClick: () => onDelete(chat.id) },
@@ -153,7 +155,7 @@ function ChatRow({ chat, active, busy, running, excerpt, openId, setOpenId, onSe
       >
         <span className="rp-line">
           <span className="rp-title">{chat.title}</span>
-          {running && <span className="rail-running" role="img" aria-label="Vaelo is replying here" />}
+          {running && <span className="sr-only" role="img" aria-label="Vaelo is replying here" />}
           <span className="rp-time">{timeLabel(chat.updated)}</span>
         </span>
         {preview && <span className="rp-excerpt">{preview}</span>}
