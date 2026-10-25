@@ -55,12 +55,21 @@ export async function indexConversation(sub, id, entry, chat) {
     [owner,id,entry.version,title,JSON.stringify(excerpts),document,entry.updated,path,`memory/${owner}.json`]);
 }
 
-export function suppresses(text, forgotten=[]) {
-  const words=new Set(terms(text));
+export function suppresses(text, forgotten=[], title='') {
+  // Retrieval queries need only a few terms; privacy checks must inspect every
+  // word of the bounded excerpt, including the title sent alongside it.
+  const words=new Set(terms(`${title}\n${text}`, Infinity));
   return forgotten.some(note => {
     const keys=terms(note).filter(word=>!['prefer','like','likes','want','user','person','reply'].includes(word));
     return keys.length && keys.filter(word=>words.has(word)).length >= Math.min(2,keys.length);
   });
+}
+
+export function recalledExcerpts(rows, query, forgotten=[]) {
+  const candidates=rows.flatMap(row => (Array.isArray(row.excerpts)?row.excerpts:[])
+    .filter(item=>typeof item?.text==='string' && !suppresses(item.text,[...forgotten,...(Array.isArray(row.forgotten)?row.forgotten:[])],row.title))
+    .map(item=>({...item,chat:row.chat_id,title:row.title,updated:Number(row.updated)})));
+  return rankExcerpts(candidates,query,{limit:4,budget:3200});
 }
 
 export async function searchConversations(sub, query, {exclude, forgotten=[], signal}={}) {
@@ -76,8 +85,5 @@ export async function searchConversations(sub, query, {exclude, forgotten=[], si
     ORDER BY ts_rank_cd(c.document,to_tsquery('english',$3)) DESC,c.updated DESC LIMIT 6`,
     [owner,`chats/${owner}/index.json`,words.map(word=>`'${word.replace(/'/g,"''")}'`).join(' | '),exclude || '',`memory/${owner}.json`],
     {fetchOptions:{signal:signal || AbortSignal.timeout(1200)}});
-  const candidates=rows.flatMap(row => (Array.isArray(row.excerpts)?row.excerpts:[])
-    .filter(item=>typeof item.text==='string' && !suppresses(item.text,[...forgotten,...(Array.isArray(row.forgotten)?row.forgotten:[])]))
-    .map(item=>({...item,chat:row.chat_id,title:row.title,updated:Number(row.updated)})));
-  return rankExcerpts(candidates,query,{limit:4,budget:3200});
+  return recalledExcerpts(rows,query,forgotten);
 }
