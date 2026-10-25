@@ -49,3 +49,13 @@ CLAUDE.md
 .claude/.skipper-*
 .skipper/*
 !.skipper/receipts/
+
+# Chat verification artifacts
+.codex/chat.lock
+.codex/visual/
+.codex/recovered/
+playwright-report/
+test-results/
+coverage/
+traces/
+
