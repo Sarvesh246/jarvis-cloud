@@ -7,11 +7,14 @@ const RELATIONSHIP_NAMESPACES = new Set([
   'http://purl.oclc.org/ooxml/officeDocument/relationships',
 ]);
 const local = value => value.split(':').at(-1).replace(/^@_/, '');
-function tree(xml) {
+function tree(xml, numericEntities=false) {
   if (/<!\s*(?:DOCTYPE|ENTITY)/i.test(xml) || XMLValidator.validate(xml) !== true)
     throw Error('This document contains unsupported or malformed XML.');
   const parser = new XMLParser({ preserveOrder:true, ignoreAttributes:false, parseTagValue:false,
-    trimValues:false, processEntities:true, ignoreDeclaration:true });
+    trimValues:false, processEntities:true, ignoreDeclaration:true,
+    // This parser enables numeric references through htmlEntities. Limit named
+    // references to XML's five entities and decode once, before reading cells.
+    htmlEntities:numericEntities?{amp:'&',lt:'<',gt:'>',quot:'"',apos:"'"}:false });
   let nodes = 0;
   const convert = (entries, depth=0, namespaces={}) => {
     if (depth > 64) throw Error('The document structure is too deeply nested.');
@@ -37,6 +40,21 @@ const all = (nodes, name) => nodes.flatMap(node => [...(node.name===name?[node]:
 const text = nodes => nodes.map(node=>node.text+text(node.children)).join('');
 const child = (node,name) => node.children.find(item=>item.name===name);
 const quote = value => JSON.stringify(String(value));
+
+// Spreadsheet strings may also carry pronunciation hints (rPh) and metadata.
+// Only direct text and authored rich-text runs contribute to the cell value.
+function spreadsheetText(node) {
+  return (node?.children||[]).map(item=>item.name==='t'?text(item.children):
+    item.name==='r'?item.children.filter(run=>run.name==='t').map(run=>text(run.children)).join(''):'').join('');
+}
+
+function spreadsheetFormula(formula, cached) {
+  if (!formula) return '';
+  const expression=text(formula.children);
+  const source=expression?`formula ${quote('='+expression)}`:
+    `formula text unavailable${formula.attrs.t==='shared'?`; shared group ${quote(formula.attrs.si??'?')}`:''}`;
+  return ` [${source}; ${cached?'cached value, not calculated here':'cached value unavailable'}]`;
+}
 
 function paragraphs(nodes) {
   let output='';
@@ -105,7 +123,7 @@ export function extractOffice(bytes, extension) {
   const read = name => {
     if (!files[name]) throw Error('A required document part is missing.');
     if (files[name].length>MAX_XML) throw Error('A document part is too large.');
-    return tree(new TextDecoder('utf-8',{fatal:true}).decode(files[name]));
+    return tree(new TextDecoder('utf-8',{fatal:true}).decode(files[name]),extension==='xlsx');
   };
   const sections=[];
   let readable=false;
@@ -126,7 +144,7 @@ export function extractOffice(bytes, extension) {
   } else if (extension==='xlsx') {
     const workbook=read('xl/workbook.xml');
     const relationships=all(read('xl/_rels/workbook.xml.rels'),'Relationship');
-    const strings=files['xl/sharedStrings.xml']?all(read('xl/sharedStrings.xml'),'si').map(si=>all(si.children,'t').map(t=>text(t.children)).join('')):[];
+    const strings=files['xl/sharedStrings.xml']?all(read('xl/sharedStrings.xml'),'si').map(spreadsheetText):[];
     for (const sheet of all(workbook,'sheet')) {
       const relation=relationships.find(r=>r.attrs.Id===sheet.attrs.id);
       if (!relation || relation.attrs.TargetMode==='External') throw Error('A sheet has an unsupported external source.');
@@ -136,13 +154,13 @@ export function extractOffice(bytes, extension) {
       const rows=all(read(name),'row').map(row=>all(row.children,'c').map(cell=> {
         const cached=text(child(cell,'v')?.children||[]);
         if(cell.attrs.t==='s'&&!/^\d{1,8}$/.test(cached)) throw Error('A shared spreadsheet value is invalid.');
-        let value=cell.attrs.t==='s'?strings[Number(cached)]:cell.attrs.t==='inlineStr'?all(cell.children,'t').map(t=>text(t.children)).join(''):cached;
+        const value=cell.attrs.t==='s'?strings[Number(cached)]:cell.attrs.t==='inlineStr'?spreadsheetText(child(cell,'is')):cached;
         if (value===undefined) throw Error('A shared spreadsheet value is missing.');
         const formula=child(cell,'f');
         // Preserve the original value and formula. No formulas are executed,
         // and numeric Excel dates are not silently interpreted as plain counts.
         readable ||= Boolean(value||formula);
-        return `${cell.attrs.r||'?'}=${quote(value)}${cell.attrs.t==='b'?' [boolean]':''}${cell.attrs.s?` [style ${cell.attrs.s}]`:''}${formula?` [formula ${quote('='+text(formula.children))}; ${child(cell,'v')?'cached value, not calculated here':'cached value unavailable'}]`:''}`;
+        return `${cell.attrs.r||'?'}=${quote(value)}${cell.attrs.t==='b'?' [boolean]':''}${cell.attrs.s?` [style ${cell.attrs.s}]`:''}${spreadsheetFormula(formula,child(cell,'v'))}`;
       }).join('\t')).join('\n');
       sections.push(`[Sheet ${quote(sheet.attrs.name)}]\n${rows}`);
     }
@@ -150,7 +168,7 @@ export function extractOffice(bytes, extension) {
       const styles=read('xl/styles.xml');
       const formats=all(styles,'numFmt').map(item=>`${item.attrs.numFmtId}: ${quote(item.attrs.formatCode)}`).join('\n');
       const indexed=all(styles,'cellXfs').flatMap(item=>item.children.filter(c=>c.name==='xf')).map((item,i)=>`${i}: number format ${item.attrs.numFmtId||'0'}`).join('\n');
-      sections.push(`[Spreadsheet number formats; preserve serial values unless a date format is established]\n${formats}\nCell styles:\n${indexed}\nDate system: ${all(workbook,'workbookPr')[0]?.attrs.date1904==='1'?'1904':'1900 (includes Excel leap-day compatibility)'}`);
+      sections.push(`[Spreadsheet number formats; preserve serial values unless a date format is established]\n${formats}\nCell styles:\n${indexed}\nDate system: ${['1','true'].includes(all(workbook,'workbookPr')[0]?.attrs.date1904)?'1904':'1900 (includes Excel leap-day compatibility)'}`);
     }
   } else throw Error('This document format is unsupported.');
   const body='[Office text extraction only. Embedded images, charts, macros and external data are not included or executed.]\n'+sections.join('\n\n').trim();
