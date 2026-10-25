@@ -66,15 +66,35 @@ function cells(line) {
   return parts.map(cell => cellText(plain(cell.replace(/\\\|/g, '|'))));
 }
 
-const DIVIDER = /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?\s*$/;
+const INDENTED_CODE = /^(?: {4}| {0,3}\t)/;
+
+function dividerWidth(line) {
+  const text = line.endsWith('\r') ? line.slice(0, -1) : line;
+  // Reject invalid characters before splitting. Overlapping whitespace in
+  // one large separator regex otherwise backtracks on malformed long lines.
+  if (INDENTED_CODE.test(text) || /[^ |:\t-]/.test(text) ||
+      /^ {0,3}-[\t ]+\S/.test(text) || /^ *-+[\t ]*$/.test(text)) return 0;
+  const parts = text.trim().split('|');
+  if (parts[0] === '') parts.shift();
+  if (parts.at(-1) === '') parts.pop();
+  return parts.length && parts.every(part => /^:?-+:?$/.test(part.trim())) ? parts.length : 0;
+}
 
 /* GitHub-style Markdown tables, outside code fences */
 export function parseTables(content = "") {
   const lines = withoutCode(content).split("\n");
   const tables = [];
   for (let i = 0; i < lines.length - 1; i += 1) {
-    if (!lines[i].includes("|") || !DIVIDER.test(lines[i + 1])) continue;
+    // GFM permits one hyphen per separator cell, but a bare "- | ..."
+    // starts a list and a hyphen-only line underlines a heading.
+    // Four-space/tab indentation belongs to a code block.
+    if (!lines[i].includes("|") || INDENTED_CODE.test(lines[i])) continue;
+    const width = dividerWidth(lines[i + 1]);
+    if (!width) continue;
     const columns = cells(lines[i]);
+    // A mismatched header/separator is prose, not a table. Count with the
+    // same escaped-pipe rules used for the data to avoid inventing columns.
+    if (columns.length !== width) continue;
     const rows = [];
     let j = i + 2;
     for (; j < lines.length && lines[j].includes("|") && lines[j].trim(); j += 1) {
