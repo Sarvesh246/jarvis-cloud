@@ -4,13 +4,23 @@ import { transcriptOf } from '../components/PhoneSheets.jsx';
 import { download } from '../components/blocks/Blocks.jsx';
 import { allowNotifications, copyText } from './desktop.js';
 
-export function useSlashCommands({ session, request, chat, chats, setChats, setDraft, textarea, busy, online, options, setOptions,
+export function useSlashCommands({ session, request, chat, chats, setChats, setDraft, draftStore, writing, textarea, busy, online, options, setOptions,
   newChat, selectChat, renameChat, togglePin, stopReply, send, setSettingsOpen, setWorkroomOpen, setSaved, setPrefs, showToast, tellReady }) {
   const [panel, setPanel] = useState(null);
   const reminderOwner = session?.user && !session.user.guest && !session.offline ? session.user.sub : null;
   const reminderScope = useMemo(() => ({ owner: reminderOwner }), [reminderOwner]);
-  const latest = useRef(null), executing = useRef(false), reminderCheck = useRef(null);
-  latest.current = { request, showToast, tellReady, reminderScope };
+  const commandScope = useMemo(() => ({ active: true, epoch: 0 }), [chat?.id, session?.user?.sub, session?.user?.guest, session?.offline]);
+  const latest = useRef(null), reminderCheck = useRef(null);
+  latest.current = { request, showToast, tellReady, reminderScope, commandScope, setDraft };
+  useEffect(() => {
+    commandScope.active = true;
+    return () => {
+      commandScope.active = false;
+      commandScope.epoch++;
+      commandScope.attempt?.unsubscribe?.();
+      commandScope.attempt = null;
+    };
+  }, [commandScope]);
   useEffect(() => {
     if (!reminderScope.owner) return;
     let active = true, checking = false;
@@ -68,14 +78,23 @@ export function useSlashCommands({ session, request, chat, chats, setChats, setD
     if (archived) { newChat(true); showToast({ text: 'Conversation archived.', action: 'Undo', onAction: () => archive(id, false) }); }
   }
   async function run({ name, args = '', command = SLASH_COMMANDS.find(item => item.name === name) }) {
-    if (executing.current) return;
+    const epoch = commandScope.epoch;
+    const ownsScope = () => commandScope.active && commandScope.epoch === epoch && latest.current.commandScope === commandScope &&
+      (!writing || writing.current.chatId === chat?.id);
+    if (!ownsScope() || commandScope.attempt) return;
     if (!command) { showToast({ text: `Unknown command /${name}. Use /help to browse commands. To send a literal slash, add a space before it.` }); return; }
     if (command.account && (!session?.user || session.user.guest)) { showToast({ text: `Sign in to use /${name}.` }); return; }
     const needIdle = command.ai || ['branch', 'archive', 'temporary'].includes(name);
     if (needIdle && busy) { showToast({ text: 'Stop the current response before using this command.' }); return; }
     if (command.ai && !online) { showToast({ text: 'Reconnect to send an AI request.' }); return; }
     if (command.args.startsWith('<') && !args) { setDraft(`/${name} `); showToast({ text: `Add ${command.args.slice(1, -1)} after /${name}.` }); return; }
-    executing.current = true;
+    const attempt = { edited: false };
+    // Keystrokes belong to the composer store and need not rerender this hook.
+    // Remember every edit, including edits that restore the original text.
+    attempt.unsubscribe = draftStore?.subscribe(() => { attempt.edited = true; });
+    commandScope.attempt = attempt;
+    const owns = () => ownsScope() && commandScope.attempt === attempt;
+    const finishDraft = value => { if (owns() && !attempt.edited) latest.current.setDraft(value); };
     try {
       if (name === 'stop') { stopReply(); setDraft(''); }
       else if (name === 'new') { setDraft(''); newChat(); }
@@ -99,17 +118,23 @@ export function useSlashCommands({ session, request, chat, chats, setChats, setD
         if (!['md', 'json', 'txt'].includes(args)) throw new Error('Choose /export md, /export json or /export txt.');
         const content = args === 'json' ? JSON.stringify(chat, null, 2) : `# ${chat.title}\n\n${transcriptOf(chat)}`;
         const safe = chat.title.replace(/[^a-z0-9]+/gi, '-').slice(0, 60) || 'conversation';
-        if (!await download(`${safe}.${args}`, content, args === 'json' ? 'application/json' : args === 'md' ? 'text/markdown' : 'text/plain')) throw new Error('Export was cancelled.');
-        setDraft('');
+        const saved = await download(`${safe}.${args}`, content, args === 'json' ? 'application/json' : args === 'md' ? 'text/markdown' : 'text/plain');
+        if (!owns()) return;
+        if (!saved) throw new Error('Export was cancelled.');
+        finishDraft('');
       } else if (name === 'copy' && args) {
         if (!['last', 'chat'].includes(args)) throw new Error('Choose /copy last or /copy chat.');
         const text = args === 'chat' ? transcriptOf(chat) : chat.messages.findLast(item => item.role === 'assistant' && item.content)?.content;
         if (!text) throw new Error('There is no answer to copy yet.');
-        await copyText(text); setDraft(''); showToast({ text: 'Copied.' });
+        await copyText(text);
+        if (!owns()) return;
+        finishDraft(''); latest.current.showToast({ text: 'Copied.' });
       } else if (name === 'shortcuts' && args) {
-        const data = await request('/api/chats?resource=commands'); const shortcut = data.shortcuts.find(item => item.name === args);
+        const data = await request('/api/chats?resource=commands');
+        if (!owns()) return;
+        const shortcut = data.shortcuts.find(item => item.name === args);
         if (!shortcut) throw new Error('That shortcut does not exist. Use /shortcuts to manage saved prompts.');
-        setDraft(shortcut.prompt);
+        finishDraft(shortcut.prompt);
       } else if (command.ai) {
         if (['compact', 'continue', 'retry'].includes(name) && !chat?.messages.length) throw new Error('Start a conversation before using this command.');
         if (name === 'retry' && !chat.messages.some(m => m.role === 'user')) throw new Error('There is no request to retry.');
@@ -117,13 +142,16 @@ export function useSlashCommands({ session, request, chat, chats, setChats, setD
         // Pass mode with the request instead of relying on a future React render.
         void send(name === 'retry' ? { retry: true } : { text: promptForCommand(name, args), slashCommand: name,
           modeOverride: ['research', 'check'].includes(name) && !session.user.guest ? { research: true } : undefined, useAttachments: true })
-          .catch(error => showToast({ text: error.message || 'The AI request could not start.' }));
+          .catch(error => { if (ownsScope()) latest.current.showToast({ text: error.message || 'The AI request could not start.' }); });
       } else {
         if (['remind', 'schedule'].includes(name)) { void allowNotifications().catch(() => false); }
         setDraft(''); setPanel({ name, args, key: crypto.randomUUID() });
       }
-    } catch (error) { showToast({ text: error.message || 'This command could not finish. Try again.' }); }
-    finally { executing.current = false; }
+    } catch (error) { if (owns()) latest.current.showToast({ text: error.message || 'This command could not finish. Try again.' }); }
+    finally {
+      attempt.unsubscribe?.();
+      if (commandScope.attempt === attempt) commandScope.attempt = null;
+    }
   }
   return { run, panel, close, archive };
 }

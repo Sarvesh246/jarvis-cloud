@@ -2325,7 +2325,7 @@ export function App() {
     }
   }
 
-  const slash = useSlashCommands({ session, request, chat: active, chats, setChats, setDraft, textarea, busy, online,
+  const slash = useSlashCommands({ session, request, chat: active, chats, setChats, setDraft, draftStore, writing, textarea, busy, online,
     options, setOptions, newChat, selectChat, renameChat, togglePin, stopReply, send,
     setSettingsOpen, setWorkroomOpen, setSaved, setPrefs, showToast, tellReady });
 
