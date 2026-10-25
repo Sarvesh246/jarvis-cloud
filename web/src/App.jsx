@@ -11,6 +11,8 @@ import React, {
   useRef,
   useState,
 } from "react";
+import { createComposerDraft } from './lib/composer-draft.js';
+import { useEventCallback } from './lib/use-event-callback.js';
 import { ArrowDown, FileArrowUp, IconContext, Quotes } from "@phosphor-icons/react";
 import { readEvents } from "./stream.js";
 import { cleanAnswer } from "../shared/answer-cleanup.js";
@@ -93,6 +95,7 @@ const RAIL_KEY = "vaelo-rail-collapsed";
    to read while offline. Only the account id and display name are kept. */
 const LAST_USER_KEY = "vaelo-last-user";
 const GUEST_CHATS_KEY = "vaelo-guest-chats";
+const ICON_DEFAULTS = { weight: 'light', size: 20 };
 
 /* The conversation open in this tab or app window. Session storage outlives
    a reload but not a fresh launch, which is exactly the line we want. */
@@ -393,7 +396,8 @@ export function App() {
   const [error, setError] = useState("");
   const [chats, setChats] = useState([]);
   const [activeId, setActiveId] = useState(null);
-  const [draft, setDraft] = useState("");
+  const [draftStore] = useState(createComposerDraft);
+  const setDraft = draftStore.set;
   const [attachments, renderAttachments] = useState([]);
   // Reserve file slots immediately, including multiple additions before React renders.
   const attachmentList = useRef(attachments);
@@ -405,8 +409,8 @@ export function App() {
   /* What was being written in each conversation, kept while you look at
      another one, so switching never throws away a half-written message. */
   const drafts = useRef(new Map());
-  const writing = useRef({ draft: "", attachments: [] });
-  writing.current = { chatId: activeId, draft, attachments };
+  const writing = useRef({ attachments: [] });
+  writing.current = { chatId: activeId, attachments };
   const [options, setOptions] = useState({ research: false, style: "balanced", role: "none" });
   /* Every conversation can have a reply in flight at once. `live` is what
      the screen renders from (conversation id to its face phase); `runs`
@@ -524,11 +528,9 @@ export function App() {
       ? "concern"
       : settling
         ? "settling"
-        : draft.trim() || dictating
+        : dictating
           ? "listening"
           : "idle";
-
-  const length = useMemo(() => composeContent(draft, attachments).length, [draft, attachments]);
 
   const announce = (text) => setAnnouncement((current) => ({ id: current.id + 1, text }));
 
@@ -1011,8 +1013,9 @@ export function App() {
   function selectChat(id) {
     pinned.current = true;
     setAway(false);
-    // Read from the latest render: a toast's action may be an older closure.
-    const now = writing.current;
+    // A toast may hold an older closure; the draft can also be newer than
+    // the last shell render. Read both owners synchronously at the switch.
+    const now = { ...writing.current, draft: draftStore.getSnapshot() };
     if (id !== now.chatId) {
       const commandDraft = /^\/[a-z][a-z0-9-]*(?:\s|$)/i.test(now.draft);
       if (now.draft.trim() && !commandDraft || attachmentList.current.length)
@@ -1400,7 +1403,7 @@ export function App() {
         if (kept.length) versions = kept;
       }
     } else {
-      const typed = (text ?? draft).trim();
+      const typed = (text ?? draftStore.getSnapshot()).trim();
       const files =
         text === undefined || useAttachments ? attachments.filter((file) => file.state === "ready") : [];
       if (!typed && !files.length) return;
@@ -2321,6 +2324,19 @@ export function App() {
     options, setOptions, newChat, selectChat, renameChat, togglePin, stopReply, send,
     setSettingsOpen, setWorkroomOpen, setSaved, setPrefs, showToast, tellReady });
 
+  // Streaming changes the shell every frame. Keep the writing surface out
+  // of those renders while each event still targets the current chat/run.
+  const composerSend = useEventCallback(() => send());
+  const composerStop = useEventCallback(() => stopReply());
+  const composerFiles = useEventCallback(addFiles);
+  const composerRemove = useEventCallback(removeAttachment);
+  const composerCommand = useEventCallback(slash.run);
+  const composerOptions = useCallback(patch => setOptions(current => ({ ...current, ...patch })), []);
+  const composerUpdateFile = useCallback((id, body) => setAttachments(current => current.map(file =>
+    file.id === id && file.state === 'ready' ? { ...file, body, chars: body.length, size: new TextEncoder().encode(body).length } : file)), [setAttachments]);
+  const composerClearWork = useEventCallback(() => setChats(current => current.map(chat => chat.id === activeId
+    ? { ...chat, updated: Date.now(), workContext: undefined } : chat)));
+
   if (loading || autoDesktopSignIn) return <Opening />;
   /* A guest has no account to hand to the desktop app, so a pending handoff
      still needs a real Google sign-in. */
@@ -2444,34 +2460,31 @@ export function App() {
             <Composer
               ref={textarea}
               conversationId={activeId}
-              draft={draft}
+              draftStore={draftStore}
               busy={busy}
               offline={!online || !!session.offline}
               attachments={attachments}
               options={options}
-              length={length}
-              onChange={setDraft}
-              onUpdateFile={(id, body) => setAttachments(current => current.map(file => file.id === id && file.state === 'ready' ? { ...file, body, chars: body.length, size: new TextEncoder().encode(body).length } : file))}
-              onSend={() => send()}
-              onCommand={slash.run}
+              onUpdateFile={composerUpdateFile}
+              onSend={composerSend}
+              onCommand={composerCommand}
               temporary={active?.temporary}
-              onStop={stopReply}
-              onFiles={addFiles}
-              onRemoveFile={removeAttachment}
-              onOptions={(patch) => setOptions((current) => ({ ...current, ...patch }))}
+              onStop={composerStop}
+              onFiles={composerFiles}
+              onRemoveFile={composerRemove}
+              onOptions={composerOptions}
               onDictating={setDictating}
               guest={guest}
               sendKey={prefs.sendKey}
               menuDown={!messages.length}
               workContext={active?.workContext}
-              onClearWork={() => setChats(current => current.map(chat => chat.id === activeId
-                ? {...chat,updated:Date.now(),workContext:undefined} : chat))}
+              onClearWork={composerClearWork}
             />
           </div>
   );
 
   return (
-    <IconContext.Provider value={{ weight: "light", size: 20 }}>
+    <IconContext.Provider value={ICON_DEFAULTS}>
       <PresentationContext.Provider value={prefs.presentation}>
       <div
         className="shell"
@@ -2592,6 +2605,7 @@ export function App() {
               <Welcome
                 name={phone ? session.user.name : prefs.callMe || session.user.name}
                 phase={phase}
+                draftStore={draftStore}
                 recent={chats
                   .filter((chat) => chat.id !== activeId && chat.messages.length)
                   .sort((a, b) => (b.updated || 0) - (a.updated || 0))

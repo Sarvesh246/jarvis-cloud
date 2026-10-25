@@ -1,4 +1,4 @@
-import React, { forwardRef, useEffect, useLayoutEffect, useRef, useState } from "react";
+import React, { forwardRef, memo, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
   ArrowUp,
   Binoculars,
@@ -25,7 +25,8 @@ import {
 } from "@phosphor-icons/react";
 import { AttachmentList } from "./Message.jsx";
 import { Sheet } from "./Sheet.jsx";
-import { MESSAGE_LIMIT } from "../lib/attachments.js";
+import { MESSAGE_LIMIT, composeContent, composedLength } from "../lib/attachments.js";
+import { useComposerSize } from '../lib/use-composer-size.js';
 import { usePhone } from "../lib/use-phone.js";
 import { buzz } from "../lib/haptics.js";
 import "./composer.css";
@@ -587,15 +588,13 @@ function ToolsSheet({ open, options, onOptions, onClose, guest, onAttach }) {
   );
 }
 
-export const Composer = forwardRef(function Composer(
+export const Composer = memo(forwardRef(function Composer(
   {
-    draft,
+    draftStore,
     busy,
     offline,
     attachments,
     options,
-    length,
-    onChange,
     onSend,
     onStop,
     onFiles,
@@ -614,6 +613,10 @@ export const Composer = forwardRef(function Composer(
   },
   textarea,
 ) {
+  const draft = useSyncExternalStore(draftStore.subscribe, draftStore.getSnapshot);
+  const onChange = draftStore.set;
+  const attachmentLength = useMemo(() => composeContent('', attachments).length, [attachments]);
+  const length = composedLength(draft, attachmentLength);
   // The desktop composer moves into the welcome on a new chat. Focus after
   // that box mounts, including the first authenticated page load.
   useLayoutEffect(() => {
@@ -622,8 +625,9 @@ export const Composer = forwardRef(function Composer(
 
   const [menu, setMenu] = useState(false);
   const [slashDismissed, setSlashDismissed] = useState(false);
-  useEffect(() => setSlashDismissed(false), [draft, conversationId]);
+  useEffect(() => { if (slashDismissed) setSlashDismissed(false); }, [draft, conversationId]);
   const phone = usePhone();
+  const nativeSize = useComposerSize(textarea, draft, phone);
   const picker = useRef(null);
   const photos = useRef(null);
   const camera = useRef(null);
@@ -637,8 +641,8 @@ export const Composer = forwardRef(function Composer(
   const stopButton = busy && !localCommand;
   const style = STYLES.find((s) => s.id === options.style);
   const role = ROLES.find((r) => r.id === options.role);
-  const pastes = onUpdateFile ? attachments.filter(file => file.state === 'ready' && file.name?.startsWith('Pasted — ') && typeof file.body === 'string') : [];
-  const visibleAttachments = attachments.filter(file => !pastes.includes(file));
+  const pastes = useMemo(() => onUpdateFile ? attachments.filter(file => file.state === 'ready' && file.name?.startsWith('Pasted — ') && typeof file.body === 'string') : [], [attachments, onUpdateFile]);
+  const visibleAttachments = useMemo(() => attachments.filter(file => !pastes.includes(file)), [attachments, pastes]);
   const suggestions = !draft.trim() && !busy && !dictation.listening && attachments.some(file => file.state === 'ready')
     ? [['Summarize', 'Summarize the attached files and highlight the main points.'], ['Find next steps', 'Read the attached files and identify the next actions, with references to the relevant sections.'], ...(attachments.filter(file => file.state === 'ready').length > 1 ? [['Compare files', 'Compare the attached files. Show the important similarities and differences.']] : [])] : [];
   /* On a phone, dictation takes the place of the box: what is being said
@@ -664,13 +668,6 @@ export const Composer = forwardRef(function Composer(
           text: `${length.toLocaleString()} / ${MESSAGE_LIMIT.toLocaleString()} characters. Trim the message or a file.`,
         }
       : null;
-
-  useEffect(() => {
-    const el = textarea.current;
-    if (!el) return;
-    el.style.height = "auto";
-    el.style.height = `${Math.min(el.scrollHeight, phone ? 132 : 208)}px`;
-  }, [draft, textarea, phone]);
 
   useEffect(() => onDictating?.(dictation.listening), [dictation.listening, onDictating]);
 
@@ -803,6 +800,7 @@ export const Composer = forwardRef(function Composer(
         <textarea
           dir="auto"
           ref={textarea}
+          data-native-size={nativeSize || undefined}
           value={draft}
           onChange={(event) => onChange(event.target.value)}
           onPaste={(event) => {
@@ -1002,7 +1000,13 @@ export const Composer = forwardRef(function Composer(
               aria-label={stopButton ? "Stop" : "Send"}
               data-tip={stopButton ? "Stop (Esc)" : localCommand ? 'Run command' : "Send"}
               disabled={!stopButton && (!ready || !localCommand && (over || reading || offline))}
-              onClick={stopButton ? () => onStop() : undefined}
+              onClick={stopButton ? event => {
+                // Cancellation can turn this same DOM node into a submit
+                // button before the click's default action. Keep that click
+                // from sending the next draft as soon as Stop completes.
+                event.preventDefault();
+                onStop();
+              } : undefined}
             >
               <ArrowUp className="send-arrow" size={20} weight="bold" />
               <Stop className="send-stop" size={16} weight="fill" />
@@ -1034,4 +1038,4 @@ export const Composer = forwardRef(function Composer(
       )}
     </form>
   );
-});
+}));

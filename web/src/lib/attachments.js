@@ -123,6 +123,14 @@ export function composeContent(text = "", attachments = []) {
   return [String(text).trim(), ...files].filter(Boolean).join("\n\n");
 }
 
+/* Cache composeContent('', attachments).length when files change. Counting
+   a keystroke then never scans fences or rebuilds a large attached document.
+   The two-character separator exactly matches the outbound payload. */
+export function composedLength(text, attachmentLength = 0) {
+  const words = String(text).trim().length;
+  return words + attachmentLength + (words && attachmentLength ? 2 : 0);
+}
+
 /* One message as Hermes receives it. Images go along only with the message
    they were attached to; later turns carry a short note instead, since the
    reply already said what was in them. */

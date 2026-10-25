@@ -48,6 +48,12 @@
   opacity: 0.85;
 }
 
+/* Let the engine grow/shrink the writing field without a JS layout read on
+   every edit. Older engines use the measured fallback in useComposerSize. */
+.composer-main > textarea[data-native-size] {
+  field-sizing: content;
+}
+
 .composer-bar {
   display: flex;
   align-items: center;

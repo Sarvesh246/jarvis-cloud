@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useSyncExternalStore } from "react";
 import { CapabilityBento } from './EverydayUI.jsx';
 import { ArrowRight } from "@phosphor-icons/react";
 import { Mark } from "./Mark.jsx";
@@ -33,16 +33,21 @@ const today = () => new Date().toLocaleDateString(undefined, { weekday: "long", 
    under them, then ways to begin, where you left off and what is waiting on
    you. `dock` is the message box itself, so it is the real composer, not a
    picture of one. */
-export function Welcome({ name, phase, onPick, recent = [], onOpen, plain = false, dock, waiting = [], onWorkroom }) {
+function DraftMark({ phase, draftStore }) {
+  const hasDraft = useSyncExternalStore(draftStore.subscribe, draftStore.hasText);
+  return <Mark size={64} state={phase === 'idle' && hasDraft ? 'listening' : phase} />;
+}
+
+export function Welcome({ name, phase, draftStore, onPick, recent = [], onOpen, plain = false, dock, waiting = [], onWorkroom }) {
   const phone = usePhone();
-  if (phone) return <PhoneWelcome name={name} phase={phase} onPick={onPick} />;
+  if (phone) return <PhoneWelcome name={name} phase={phase} draftStore={draftStore} onPick={onPick} />;
   const who = firstName(name);
   return (
     <section className="welcome" aria-label="Start a conversation">
       <p className="desk-meta">
         <span>{today()}</span>
       </p>
-      <Mark size={64} state={phase} />
+      <DraftMark phase={phase} draftStore={draftStore} />
       <h1 className="kinetic-greeting">
         {plain ? "Hello" : greeting()}
         {who ? (
@@ -120,11 +125,11 @@ export function Welcome({ name, phase, onPick, recent = [], onOpen, plain = fals
 }
 
 /* The phone welcome from d864aef, with its composer fixed below the page. */
-function PhoneWelcome({ name, phase, onPick }) {
+function PhoneWelcome({ name, phase, draftStore, onPick }) {
   const who = firstName(name);
   return (
     <section className="welcome" aria-label="Start a conversation">
-      <Mark size={64} state={phase} />
+      <DraftMark phase={phase} draftStore={draftStore} />
       <h1 className="kinetic-greeting">
         {greeting()}
         {who ? (

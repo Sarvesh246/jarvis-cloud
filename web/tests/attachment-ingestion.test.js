@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
+import { createComposerDraft } from '../src/lib/composer-draft.js';
 
 // Run App's actual ingestion handler with a render snapshot and delayed reads.
 const app = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8');
@@ -11,19 +12,20 @@ const handler = app.slice(app.indexOf('  async function addFiles('), app.indexOf
 function fixture(initial = [], { guest = false } = {}) {
   let rendered = initial, serial = 0, focused = 0;
   const reads = [], notices = [], images = new Map(), drafts = new Map();
-  const writing = { current: { chatId: 'first', draft: '', attachments: initial } };
+  const writing = { current: { chatId: 'first', attachments: initial } };
+  const draftStore = createComposerDraft();
   const api = runInNewContext(`${state}\n${handler}\n${selection}\n({addFiles, setAttachments, removeAttachment, selectChat})`, {
     useState: () => [initial, value => { rendered = typeof value === 'function' ? value(rendered) : value; }],
     useRef: value => ({ current: value }), useCallback: fn => fn,
     crypto: { randomUUID: () => `file-${++serial}` }, guest,
     IMAGE_LIMIT: 4, activeId: 'first', writing, pinned: {current:false},
-    setAway(){}, setDraft(){}, setActiveId(){}, setSaved(){}, setError(){}, setMenu(){}, setWorkspace(){}, setQuote(){},
+    setAway(){}, draftStore, setDraft: draftStore.set, setActiveId(){}, setSaved(){}, setError(){}, setMenu(){}, setWorkspace(){}, setQuote(){},
     isImage: file => file.kind === 'image',
     readAttachment(file) { return new Promise((resolve, reject) => reads.push({ file, resolve, reject })); },
     showToast: value => notices.push(value.text), imageData: { current: images },
     drafts: { current: drafts }, textarea: { current: { focus: () => focused++ } },
   });
-  return { ...api, reads, notices, images, drafts, writing,
+  return { ...api, reads, notices, images, drafts, writing, draftStore,
     get items() { return rendered; }, get focused() { return focused; },
     finish() { for (const read of reads) read.resolve(read.file.kind === 'image'
       ? { kind: 'image', state: 'ready', data: `full:${read.file.name}`, thumb: 'small' }
@@ -129,4 +131,18 @@ test('switching before the render keeps the newly reserved files in their origin
   assert.equal(f.items.length, 0);
   assert.equal(f.drafts.get('first').attachments[0].state, 'ready');
   assert.equal(f.images.size, 1);
+});
+
+test('switching reads the newest keystroke even without a shell render and restores it exactly', () => {
+  const f = fixture();
+  f.draftStore.set('Half-written');
+  f.draftStore.set(text => `${text} final words 日本語 👋`);
+  f.selectChat('second');
+  assert.equal(f.drafts.get('first').draft, 'Half-written final words 日本語 👋');
+  assert.equal(f.draftStore.getSnapshot(), '');
+  f.writing.current.chatId = 'second';
+  f.draftStore.set('Second draft');
+  f.selectChat('first');
+  assert.equal(f.draftStore.getSnapshot(), 'Half-written final words 日本語 👋');
+  assert.equal(f.drafts.get('second').draft, 'Second draft');
 });

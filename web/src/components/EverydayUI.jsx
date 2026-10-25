@@ -1,4 +1,4 @@
-import React, { useId, useRef, useState } from 'react';
+import React, { memo, useId, useRef, useState } from 'react';
 import { FileText, ArrowRight, ArrowClockwise } from '@phosphor-icons/react';
 import { fileFormat, measuredUsage } from '../lib/everyday-ui.js';
 import { Mark } from './Mark.jsx';
@@ -54,13 +54,13 @@ export function ContextMeter({ context }) {
 export function VoiceOrb({ active, heard, time }) {
   return <span className="voice-orb" data-active={active || undefined} data-heard={heard || undefined} aria-hidden="true"><i /><i /><i /><span>{time}</span></span>;
 }
-export function PasteCard({ file, onUpdate, onRemove, limit }) {
+export const PasteCard = memo(function PasteCard({ file, onUpdate, onRemove, limit }) {
   const [editing, setEditing] = useState(false), [value, setValue] = useState(file.body || '');
   return <details className="paste-card"><summary><FileBadge name={file.name} /><span>{file.name}<small>{file.chars.toLocaleString()} characters · pasted text</small></span></summary>
     {editing ? <><textarea aria-label={`Edit ${file.name}`} value={value} maxLength={limit} onChange={event => setValue(event.target.value)} /><small>{value.length.toLocaleString()} characters</small></> : <pre className="block-plain" tabIndex={0}>{file.body}</pre>}
     <div className="paste-card-actions">{editing ? <><button type="button" className="block-tool" disabled={!value.trim()} onClick={() => { onUpdate(file.id, value); setEditing(false); }}>Save text</button><button type="button" className="block-tool" onClick={() => setEditing(false)}>Cancel</button></> : <button type="button" className="block-tool" onClick={() => { setValue(file.body); setEditing(true); }}>Edit text</button>}<button type="button" className="block-tool" onClick={() => onRemove(file.id)}>Remove</button></div>
   </details>;
-}
+});
 export function QuestionCard({ data, onAnswer, disabled = false, framed = false }) {
   const id = useId(), [selected, setSelected] = useState('');
   return <section className="question-card" aria-labelledby={framed ? undefined : id} aria-label={framed ? data.title || 'Choose a direction' : undefined}>{!framed && <h3 id={id}>{data.title || 'Choose a direction'}</h3>}

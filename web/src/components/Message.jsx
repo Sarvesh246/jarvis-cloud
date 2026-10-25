@@ -478,7 +478,7 @@ function Edit({ initial, onSave, onCancel }) {
   );
 }
 
-export function AttachmentList({ items, onRemove }) {
+export const AttachmentList = memo(function AttachmentList({ items, onRemove }) {
   if (!items?.length) return null;
   return (
     <ul className="attachments" aria-label="Attached files">
@@ -516,7 +516,7 @@ export function AttachmentList({ items, onRemove }) {
       ))}
     </ul>
   );
-}
+});
 
 /* A request that needs a person's say-so is shown for what it is: exactly
    what Vaelo wants to run, with the answers Hermes accepts. The reply waits

@@ -13,7 +13,7 @@ export function SlashMenu({ draft, input, onPick, commands, dismissed, onDismiss
   const [position, setPosition] = useState(null);
   const menu = useRef(null);
   const index = Math.min(selected, Math.max(0, (matches?.length || 0) - 1));
-  useEffect(() => setSelected(0), [draft]);
+  useEffect(() => { if (selected !== 0) setSelected(0); }, [draft]);
   useLayoutEffect(() => {
     if (!open) return;
     const anchor = input.current?.closest('.composer');
