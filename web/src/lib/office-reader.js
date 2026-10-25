@@ -57,13 +57,18 @@ function spreadsheetFormula(formula, cached) {
 }
 
 function paragraphs(nodes) {
+  // Rows and cells belong to their nearest table/row. A descendant scan also
+  // finds nested tables' rows/cells, repeating their text at every outer level.
+  const tableParts = (entries, name) => entries.flatMap(item=>item.name===name?[item]:
+    item.name==='tbl'?[]:tableParts(item.children,name));
   let output='';
   for (const node of nodes) {
     if (node.name==='tbl') {
-      output += all(node.children,'tr').map(row=>all(row.children,'tc').map(cell=>paragraphs(cell.children).trim()).join('\t')).join('\n')+'\n';
+      output += tableParts(node.children,'tr').map(row=>tableParts(row.children,'tc').map(cell=>paragraphs(cell.children).trim()).join('\t')).join('\n')+'\n';
     } else if (node.name==='p') {
       const inline = entries => entries.map(item=> item.name==='t'?text(item.children):
-        item.name==='tab'?'\t':item.name==='br'?'\n':inline(item.children)).join('');
+        item.name==='tab'?'\t':['br','cr'].includes(item.name)?'\n':
+        item.name==='noBreakHyphen'?'\u2011':item.name==='softHyphen'?'\u00ad':inline(item.children)).join('');
       output += inline(node.children)+'\n';
     } else output += paragraphs(node.children);
   }
@@ -123,7 +128,7 @@ export function extractOffice(bytes, extension) {
   const read = name => {
     if (!files[name]) throw Error('A required document part is missing.');
     if (files[name].length>MAX_XML) throw Error('A document part is too large.');
-    return tree(new TextDecoder('utf-8',{fatal:true}).decode(files[name]),extension==='xlsx');
+    return tree(new TextDecoder('utf-8',{fatal:true}).decode(files[name]),extension==='xlsx'||extension==='docx');
   };
   const sections=[];
   let readable=false;
