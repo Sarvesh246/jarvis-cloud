@@ -695,12 +695,19 @@
 /* Editing a sent message reopens it as a writing slip in place */
 .edit {
   border-bottom: 1px solid var(--gilt);
+  scroll-margin-block: 1.5rem 4rem;
 }
 
 .edit textarea {
   display: block;
   width: 100%;
   min-height: 3rem;
+  /* Keep the actions beside a manageable writing area, even for pasted logs.
+     Dynamic viewport units also shrink it when a mobile keyboard opens. */
+  max-height: min(24rem, 45vh);
+  max-height: min(24rem, 45dvh);
+  overflow-y: auto;
+  overflow-wrap: anywhere;
   padding: 0;
   border: 0;
   background: none;

@@ -428,16 +428,22 @@ function Plan({ plan }) {
 function Edit({ initial, onSave, onCancel }) {
   const [value, setValue] = useState(initial);
   const field = useRef(null);
+  useLayoutEffect(() => {
+    const el = field.current;
+    const scrollTop = el.scrollTop;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+    el.scrollTop = scrollTop;
+  }, [value]);
   useEffect(() => {
     const el = field.current;
     el.focus();
     el.setSelectionRange(el.value.length, el.value.length);
+    // The bounded editor opens at the caret, including for long messages.
+    el.scrollTop = el.scrollHeight;
+    // Include the actions when the surrounding conversation scrolls into view.
+    el.form.scrollIntoView({ block: "end", behavior: "instant" });
   }, []);
-  useEffect(() => {
-    const el = field.current;
-    el.style.height = "auto";
-    el.style.height = `${el.scrollHeight}px`;
-  }, [value]);
   return (
     <form
       className="edit"
@@ -449,6 +455,7 @@ function Edit({ initial, onSave, onCancel }) {
       <textarea
         ref={field}
         value={value}
+        dir="auto"
         aria-label="Edit your message"
         onChange={(event) => setValue(event.target.value)}
         onKeyDown={(event) => {
