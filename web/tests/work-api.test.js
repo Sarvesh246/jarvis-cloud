@@ -27,6 +27,41 @@ async function request(token, overrides = {}) {
 }
 function response() { return { headers: {}, setHeader(key, value) { this.headers[key] = value; }, end(text) { this.body = JSON.parse(text); } }; }
 
+test("ambiguous terms preserve saved answers and revisions until corrected", async () => {
+  const app = setup(runCheck), token = await signSession(user, cfg);
+  const otherToken = await signSession({ ...user, sub: 'account-two' }, cfg);
+  const invoke = async (body, session = token) => {
+    const res = response(); await app.handler(await request(session, { body }), res); return res;
+  };
+  for (const side of ['before', 'after']) {
+    const input = { before: 'Rent: $1,500', after: 'Rent: $1,500', [side]: 'Rent: $1,620\nrent: $1,500' };
+    const saved = await invoke({ action: 'save', base: null, record: {
+      id: `terms-${side}`, workspaceId: 'lease-review', title: 'Lease terms', documents: [],
+      check: { id: 'terms-change', input },
+    } });
+    assert.equal(saved.statusCode, 200);
+    const body = { action: 'run', id: saved.body.record.id, base: saved.body.record.revision };
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const rejected = await invoke(body);
+      assert.equal(rejected.statusCode, 400);
+      assert.match(rejected.body.error, /Line 2 .*“rent”.*only once/);
+      const read = response();
+      await app.handler(await request(token, { method: 'GET', url: `/api/work?id=${body.id}` }), read);
+      assert.deepEqual(read.body.record, saved.body.record, 'rejection cannot store a false result or change the revision');
+    }
+    assert.equal((await invoke(body, otherToken)).statusCode, 404);
+    const corrected = await invoke({ action: 'save', base: saved.body.record.revision,
+      record: { ...saved.body.record, check: { id: 'terms-change', input: { before: 'Rent: $1,500', after: 'Rent: $1,620' } } } });
+    assert.equal(corrected.statusCode, 200);
+    const run = await invoke({ ...body, base: corrected.body.record.revision });
+    assert.equal(run.statusCode, 200);
+    assert.deepEqual(run.body.record.output.result.changes, [{ term: 'Rent', before: '$1,500', after: '$1,620' }]);
+    const read = response();
+    await app.handler(await request(token, { method: 'GET', url: `/api/work?id=${body.id}` }), read);
+    assert.deepEqual(read.body.record, run.body.record);
+  }
+});
+
 test("group choice duplicate rejection preserves saved answers and recovers after correction", async () => {
   const app = setup(runCheck), token = await signSession(user, cfg);
   const invoke = async body => {

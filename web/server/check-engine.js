@@ -195,7 +195,11 @@ function termsChange(a, now) {
     linesOf(text, label).forEach((line, i) => {
       const [term, value] = splitPair(line);
       requireInput(value, lineHelp(label, i + 1, 'put a colon between the term and what it says.', 'Rent: $1,500'));
-      terms.set(term.toLowerCase(), { term, value });
+      const key = term.toLowerCase();
+      // A repeated name would discard the earlier value and can make
+      // conflicting terms appear unchanged. Each side needs one value per term.
+      requireInput(!terms.has(key), lineHelp(label, i + 1, `“${term}” should be listed only once.`, 'Rent: $1,500'));
+      terms.set(key, { term, value });
     });
     return terms;
   };

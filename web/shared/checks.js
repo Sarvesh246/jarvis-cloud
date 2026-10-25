@@ -66,7 +66,7 @@ const definitions = [
     fields: [
       field('before', 'paste', 'The old terms', 'One per line, like “Rent: $1,500” or “Notice: 2 months”.', true),
       field('after', 'paste', 'The new terms', 'Use the same words as the old ones, like “Rent: $1,620”.', true),
-      field('startsOn', 'date', 'When do the new terms start?', 'Optional. Like “1 Nov” or “next month”.'),
+      field('startsOn', 'date', 'When do the new terms start?', 'Optional. Like “1 Nov” or “in a month”.'),
     ],
   },
   {
