@@ -26,11 +26,14 @@ export function readPlan(data) {
   const items = [];
   for (const raw of source.todos) {
     if (!raw || typeof raw !== "object") continue;
-    const id = String(raw.id ?? "").trim().slice(0, 80);
+    // Tool fields are JSON values, not necessarily strings. In particular an
+    // object with its own `toString` can throw during coercion mid-reply.
+    const id = (typeof raw.id === "string" ? raw.id :
+      typeof raw.id === "number" && Number.isFinite(raw.id) ? String(raw.id) : "").trim().slice(0, 80);
     const content = typeof raw.content === "string" ? raw.content.replace(/\s+/g, " ").trim() : "";
     if (!id || !content || seen.has(id)) continue;
     seen.add(id);
-    const status = String(raw.status || "").toLowerCase();
+    const status = typeof raw.status === "string" ? raw.status.toLowerCase() : "";
     const parent = typeof raw.parent === "string" ? raw.parent.trim() : "";
     items.push({
       id,
@@ -55,9 +58,12 @@ export function mergePlan(previous, next, now = Date.now()) {
   const items = next.items.map((item) => {
     const old = before.get(item.id);
     if (!isFinished(item)) return item;
-    return { ...item, doneAt: old && isFinished(old) && old.doneAt ? old.doneAt : now };
+    return { ...item, doneAt: old && isFinished(old) ? old.doneAt ?? now : now };
   });
-  return { items, ...(next.revision !== undefined && { revision: next.revision }), updatedAt: now };
+  // Tool progress can omit a revision. Apply that snapshot as before, but
+  // retain the watermark that rejects older numbered frames after reconnect.
+  const revision = next.revision ?? previous?.revision;
+  return { items, ...(revision !== undefined && { revision }), updatedAt: now };
 }
 
 /* Open items first, in Hermes's priority order; finished ones beneath, oldest
