@@ -17,6 +17,7 @@
     "test:typing-ui": "node scripts/verify-typing-performance.mjs",
     "test:table-ui": "node scripts/verify-mobile-tables.mjs",
     "test:editing-ui": "node scripts/verify-message-editing.mjs",
+    "test:backup-ui": "node scripts/verify-backup-status.mjs",
     "baseline": "node scripts/baseline.mjs",
     "evaluate": "node scripts/evaluate-capabilities.mjs",
     "benchmark:compare": "node scripts/compare-benchmarks.mjs",

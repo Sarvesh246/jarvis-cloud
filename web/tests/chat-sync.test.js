@@ -53,6 +53,65 @@ function setup() {
   };
   return { blob, store, request, device };
 }
+
+test('a failed local backup remains visible after an otherwise successful sync', async () => {
+  const { device } = setup();
+  let full = true;
+  const storage = memoryStorage();
+  const write = storage.setItem;
+  storage.setItem = (key, value) => {
+    if (full) throw new DOMException('Quota exceeded', 'QuotaExceededError');
+    return write(key, value);
+  };
+  const a = device([chat()], storage);
+  try {
+    a.sync.observe(a.chats);
+    assert.match(a.issue, /Local backup is full/);
+    await a.sync.tick();
+    assert.match(a.issue, /Local backup is full/, 'sync success must not hide a failed local backup');
+    full = false;
+    a.sync.observe(a.chats);
+    await a.sync.tick();
+    assert.equal(a.issue, '', 'a successful backup and sync clear the warning');
+    assert.deepEqual(readSyncCache('owner', storage).chats, a.chats);
+  } finally { a.sync.stop(); }
+});
+
+test('a failed sync does not claim changes are saved when the local backup also failed', async () => {
+  const { device } = setup();
+  const storage = memoryStorage();
+  storage.setItem = () => { throw new DOMException('Storage unavailable', 'SecurityError'); };
+  const a = device([chat()], storage);
+  try {
+    a.sync.observe(a.chats);
+    a.sync.request = async () => { throw new TypeError('Offline'); };
+    await a.sync.tick();
+    assert.match(a.issue, /Local backup is full/);
+    assert.doesNotMatch(a.issue, /changes are saved/);
+    assert.deepEqual(a.sync.current.get('chat-one'), chat(), 'unsaved edits remain in memory');
+  } finally { a.sync.stop(); }
+});
+
+test('backup recovery restores an outstanding remote sync warning', async () => {
+  const { device } = setup();
+  let full = true;
+  const storage = memoryStorage();
+  const write = storage.setItem;
+  storage.setItem = (key, value) => {
+    if (full) throw new DOMException('Quota exceeded', 'QuotaExceededError');
+    return write(key, value);
+  };
+  const a = device([chat()], storage);
+  try {
+    a.sync.observe(a.chats);
+    a.sync.request = async () => { throw new TypeError('Offline'); };
+    await a.sync.tick();
+    full = false;
+    a.sync.observe(a.chats);
+    assert.match(a.issue, /Conversations aren’t syncing yet/);
+    assert.deepEqual(readSyncCache('owner', storage).chats, a.chats);
+  } finally { a.sync.stop(); }
+});
 const chat = (id = "chat-one", text = "Hello") => ({ id, title: "A conversation", updated: 1,
   messages: [{ id: "message-one", role: "user", text }], works: { doc: { versions: ["draft"] } }, pinned: true });
 

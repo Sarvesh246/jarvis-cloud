@@ -84,6 +84,8 @@ export class ChatSync {
     this.saveTimer = null;
     this.retryAt = 0;
     this.conflicts = 0;
+    this.backupFailed = false;
+    this.syncIssue = "";
     // Leaving the page writes the backup at once rather than after the pause.
     this.flush = () => { if (this.saveTimer) this.persist(); };
     globalThis.addEventListener?.("pagehide", this.flush);
@@ -115,7 +117,20 @@ export class ChatSync {
     try {
       this.storage.setItem(syncKey(this.sub), JSON.stringify({ chats: [...this.current.values()], base: this.base, deleted: [...this.deleted] }));
       this.storage.removeItem(`jarvis-chats:${this.sub}`);
-    } catch { this.onStatus("Local backup is full. Keep this tab open until sync completes."); }
+      if (this.backupFailed) {
+        this.backupFailed = false;
+        this.status(this.syncIssue);
+      }
+    } catch {
+      this.backupFailed = true;
+      this.status(this.syncIssue);
+    }
+  }
+  status(issue) {
+    this.syncIssue = issue;
+    this.onStatus(this.backupFailed
+      ? "Local backup is full. Keep this tab open until sync completes."
+      : issue);
   }
   dirty(id) { return fingerprint(this.current.get(id)) !== (this.base[id]?.fingerprint || null); }
   emit() {
@@ -227,9 +242,9 @@ export class ChatSync {
       }
       if (failure) throw failure;
       if (!blocked.size) this.conflicts = 0;
-      this.onStatus("");
+      this.status("");
     } catch (error) {
-      if (!this.stopped) this.onStatus(error.status === 409 ? "" :
+      if (!this.stopped) this.status(error.status === 409 ? "" :
         "Conversations aren’t syncing yet. Your changes are saved on this device; retrying automatically.");
       if (error.status === 409) this.again = true;
     } finally {
