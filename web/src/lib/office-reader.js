@@ -2,6 +2,10 @@ import { unzipSync } from 'fflate';
 import { XMLParser, XMLValidator } from 'fast-xml-parser';
 
 const MAX_XML = 4_000_000, MAX_EXPANDED = 16_000_000, MAX_TEXT = 158_000;
+const RELATIONSHIP_NAMESPACES = new Set([
+  'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
+  'http://purl.oclc.org/ooxml/officeDocument/relationships',
+]);
 const local = value => value.split(':').at(-1).replace(/^@_/, '');
 function tree(xml) {
   if (/<!\s*(?:DOCTYPE|ENTITY)/i.test(xml) || XMLValidator.validate(xml) !== true)
@@ -9,13 +13,22 @@ function tree(xml) {
   const parser = new XMLParser({ preserveOrder:true, ignoreAttributes:false, parseTagValue:false,
     trimValues:false, processEntities:true, ignoreDeclaration:true });
   let nodes = 0;
-  const convert = (entries, depth=0) => {
+  const convert = (entries, depth=0, namespaces={}) => {
     if (depth > 64) throw Error('The document structure is too deeply nested.');
     return entries.flatMap(entry => Object.entries(entry).filter(([key])=>key!==':@').map(([key,value])=> {
       if (++nodes > 200000) throw Error('The document has too many elements.');
+      const attributes=Object.entries(entry[':@']||{});
+      const declarations=attributes.filter(([key])=>key.startsWith('@_xmlns:')).map(([key,value])=>[key.slice(8),value]);
+      const scope=declarations.length?{...namespaces,...Object.fromEntries(declarations)}:namespaces;
+      // A slide has both a numeric id and a namespaced relationship id.
+      // Keep the latter independent of attribute order and prefix spelling.
+      const relationshipId=attributes.find(([key])=> {
+        const match=/^@_([^:]+):id$/.exec(key);
+        return match && RELATIONSHIP_NAMESPACES.has(scope[match[1]]);
+      })?.[1];
       return {name:local(key), text:key==='#text'?String(value):'',
-        attrs:Object.fromEntries(Object.entries(entry[':@']||{}).map(([k,v])=>[local(k),String(v)])),
-        children:Array.isArray(value)?convert(value,depth+1):[]};
+        attrs:Object.fromEntries(attributes.map(([k,v])=>[local(k),String(v)])), relationshipId,
+        children:Array.isArray(value)?convert(value,depth+1,scope):[]};
     }));
   };
   return convert(parser.parse(xml));
@@ -39,6 +52,44 @@ function paragraphs(nodes) {
   return output;
 }
 
+function presentationSlides(files, read) {
+  const manifest='ppt/presentation.xml', rels='ppt/_rels/presentation.xml.rels';
+  // Preserve support for older, minimal archives with no presentation metadata.
+  if (!files[manifest] && !files[rels]) return Object.keys(files)
+    .filter(name=>/^ppt\/slides\/slide\d+\.xml$/.test(name))
+    .map(name=>({name,number:name.match(/slide(\d+)/)[1]}))
+    .sort((a,b)=>a.number-b.number);
+  const presentation=read(manifest).find(node=>node.name==='presentation');
+  const relationships=read(rels).find(node=>node.name==='Relationships');
+  const lists=presentation?.children.filter(node=>node.name==='sldIdLst');
+  if (!relationships || lists?.length!==1) throw Error('The presentation slide list is missing or invalid.');
+  const byId=new Map();
+  for (const relation of relationships.children.filter(node=>node.name==='Relationship')) {
+    const id=relation.attrs.Id;
+    if (!id || byId.has(id)) throw Error('The presentation has invalid or duplicate slide relationships.');
+    byId.set(id,relation.attrs);
+  }
+  const seen=new Set();
+  return lists[0].children.filter(node=>node.name==='sldId').map((slide,index)=> {
+    const relation=byId.get(slide.relationshipId);
+    if (!relation || ![...RELATIONSHIP_NAMESPACES].some(namespace=>relation.Type===`${namespace}/slide`) ||
+        (relation.TargetMode && relation.TargetMode!=='Internal'))
+      throw Error('A presentation slide has a missing or unsupported source.');
+    let name;
+    try {
+      const target=relation.Target;
+      if (!target || /^(?:[a-z][a-z\d+.-]*:|\/\/)|[\\?#\u0000-\u0020]/i.test(target)) throw Error();
+      // Resolve package paths only; this URL is never fetched.
+      const url=new URL(target,'https://office.invalid/ppt/presentation.xml');
+      name=decodeURIComponent(url.pathname).slice(1);
+      if (!/^ppt\/slides\/[^/\\]+\.xml$/.test(name)) throw Error();
+    } catch { throw Error('A presentation slide source is invalid.'); }
+    if (!files[name] || seen.has(name)) throw Error('A presentation slide source is missing or repeated.');
+    seen.add(name);
+    return {name,number:index+1};
+  });
+}
+
 export function extractOffice(bytes, extension) {
   let expanded=0, entries=0;
   const names=new Set();
@@ -46,7 +97,7 @@ export function extractOffice(bytes, extension) {
     if (++entries>2048 || names.has(file.name)) throw Error('The document archive has duplicate or too many entries.');
     names.add(file.name);
     if (/\\|(?:^|\/)\.\.(?:\/|$)|^\//.test(file.name)) throw Error('The document archive has invalid paths.');
-    const selected = /^(?:word\/(?:document|footnotes|endnotes|header\d+|footer\d+)\.xml|xl\/(?:workbook\.xml|_rels\/workbook\.xml\.rels|sharedStrings\.xml|styles\.xml|worksheets\/[^/]+\.xml)|ppt\/slides\/slide\d+\.xml)$/.test(file.name);
+    const selected = /^(?:word\/(?:document|footnotes|endnotes|header\d+|footer\d+)\.xml|xl\/(?:workbook\.xml|_rels\/workbook\.xml\.rels|sharedStrings\.xml|styles\.xml|worksheets\/[^/]+\.xml)|ppt\/(?:presentation\.xml|_rels\/presentation\.xml\.rels|slides\/[^/]+\.xml))$/.test(file.name);
     if (selected && (file.originalSize>MAX_XML || (expanded+=file.originalSize)>MAX_EXPANDED))
       throw Error('The expanded document exceeds its reading limit.');
     return selected;
@@ -67,10 +118,10 @@ export function extractOffice(bytes, extension) {
       sections.push(`[${name}]\n${body}`);
     }
   } else if (extension==='pptx') {
-    for (const name of Object.keys(files).filter(n=>/^ppt\/slides\/slide\d+\.xml$/.test(n)).sort((a,b)=>parseInt(a.match(/slide(\d+)/)[1])-parseInt(b.match(/slide(\d+)/)[1]))) {
+    for (const {name,number} of presentationSlides(files,read)) {
       const body=all(read(name),'p').map(p=>all(p.children,'t').map(t=>text(t.children)).join('')).join('\n');
       readable ||= Boolean(body.trim());
-      sections.push(`[Slide ${name.match(/slide(\d+)/)[1]}]\n${body}`);
+      sections.push(`[Slide ${number}]\n${body}`);
     }
   } else if (extension==='xlsx') {
     const workbook=read('xl/workbook.xml');
