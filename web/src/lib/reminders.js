@@ -7,13 +7,15 @@ export function parseReminder(args, now = Date.now()) {
 }
 export function reminderCalendar(item) {
   const date = value => new Date(value).toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z');
-  const escape = text => text.replace(/\\/g, '\\\\').replace(/\r?\n/g, '\\n').replace(/,/g, '\\,').replace(/;/g, '\\;');
+  // Every TEXT value stays on one logical content line, including CR-only
+  // source text. Escape backslashes first so literal \\n is not a line break.
+  const escape = text => text.replace(/\\/g, '\\\\').replace(/\r\n|[\r\n]/g, '\\n').replace(/,/g, '\\,').replace(/;/g, '\\;');
   const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Vaelo//Reminders//EN', 'BEGIN:VEVENT',
-    `UID:${item.id}@vaelo`, `DTSTAMP:${date(Date.now())}`, `DTSTART:${date(item.at)}`, `DTEND:${date(item.at + 60000)}`,
+    `UID:${escape(item.id)}@vaelo`, `DTSTAMP:${date(Date.now())}`, `DTSTART:${date(item.at)}`, `DTEND:${date(item.at + 60000)}`,
     `SUMMARY:${escape(item.text)}`, ...(item.repeat === 'once' ? [] : [`RRULE:FREQ=${item.repeat === 'daily' ? 'DAILY' : 'WEEKLY'}`]),
     'BEGIN:VALARM', 'TRIGGER:PT0S', 'ACTION:DISPLAY', `DESCRIPTION:${escape(item.text)}`, 'END:VALARM', 'END:VEVENT', 'END:VCALENDAR'];
-  // Fold at 60 code points to keep international text below the 75-octet
-  // iCalendar limit too (a code point can occupy four UTF-8 bytes).
+  // Fold by UTF-8 bytes without splitting a code point. The continuation's
+  // leading space also counts toward the 75-octet iCalendar limit.
   return lines.map(line => {
     const parts = []; let part = '', bytes = 0;
     for (const ch of line) { const size = new TextEncoder().encode(ch).length;
