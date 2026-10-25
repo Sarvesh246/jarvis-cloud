@@ -26,3 +26,36 @@ test('command data isolates accounts, updates shortcuts and claims each reminder
   const bad = req({ action: 'shortcut-save', name: 'review', prompt: 'hijack' }); bad.headers.origin = 'https://evil.test';
   await assert.rejects(commandDataApi(bad, reply(), cfg, { sub: 'alice' }, record), /origin/);
 });
+
+test('competing devices claim one overdue occurrence and preserve fixed repeat intervals', async () => {
+  for (const repeat of ['once', 'daily', 'weekly']) {
+    const record = new AccountRecord('reminders', { empty: () => ({ shortcuts: [], reminders: [] }), check: checkCommandData }, memoryStorage());
+    const run = async (body, now) => { const res = reply(); await commandDataApi(req(body), res, cfg, { sub: 'alice' }, record, () => now); return res.body; };
+    const { reminders: [item] } = await run({ action: 'reminder-add', text: 'Review café notes', at: 10000, repeat }, 0);
+    const now = 30 * 86400000;
+    const body = { action: 'reminder-delivered', id: item.id, at: item.at };
+    const results = await Promise.allSettled([run(body, now), run(body, now), run(body, now)]);
+    assert.equal(results.filter(r => r.status === 'fulfilled').length, 1);
+    for (const result of results.filter(r => r.status === 'rejected')) assert.equal(result.reason.status, 409);
+    const stored = (await record.read('alice')).data.reminders[0];
+    assert.equal(stored.text, item.text);
+    if (repeat === 'once') { assert.equal(stored.done, true); assert.equal(stored.at, item.at); }
+    else {
+      const step = (repeat === 'daily' ? 1 : 7) * 86400000;
+      assert.equal(stored.done, false); assert.ok(stored.at > now); assert.ok(stored.at <= now + step);
+      assert.equal((stored.at - item.at) % step, 0);
+      await assert.rejects(run(body, now), /already changed/);
+    }
+  }
+});
+
+test('a lost claim acknowledgement retains the existing at-most-once delivery boundary', async () => {
+  const record = new AccountRecord('reminders', { empty: () => ({ shortcuts: [], reminders: [] }), check: checkCommandData }, memoryStorage());
+  const created = reply();
+  await commandDataApi(req({ action: 'reminder-add', text: 'Review', at: 10000, repeat: 'once' }), created, cfg, { sub: 'alice' }, record, () => 0);
+  const item = created.body.reminders[0], body = { action: 'reminder-delivered', id: item.id, at: item.at };
+  const lost = reply(); lost.end = () => { throw Error('Connection lost after commit'); };
+  await assert.rejects(commandDataApi(req(body), lost, cfg, { sub: 'alice' }, record, () => 20000), /Connection lost/);
+  assert.equal((await record.read('alice')).data.reminders[0].done, true);
+  await assert.rejects(commandDataApi(req(body), reply(), cfg, { sub: 'alice' }, record, () => 20000), /already changed/);
+});

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { SLASH_COMMANDS, promptForCommand } from './slash-commands.js';
 import { transcriptOf } from '../components/PhoneSheets.jsx';
 import { download } from '../components/blocks/Blocks.jsx';
@@ -7,31 +7,44 @@ import { allowNotifications, copyText } from './desktop.js';
 export function useSlashCommands({ session, request, chat, chats, setChats, setDraft, textarea, busy, online, options, setOptions,
   newChat, selectChat, renameChat, togglePin, stopReply, send, setSettingsOpen, setWorkroomOpen, setSaved, setPrefs, showToast, tellReady }) {
   const [panel, setPanel] = useState(null);
-  const [reminderTick, setReminderTick] = useState(0);
-  const latest = useRef(null), executing = useRef(false);
-  latest.current = { request, showToast, tellReady };
+  const reminderOwner = session?.user && !session.user.guest && !session.offline ? session.user.sub : null;
+  const reminderScope = useMemo(() => ({ owner: reminderOwner }), [reminderOwner]);
+  const latest = useRef(null), executing = useRef(false), reminderCheck = useRef(null);
+  latest.current = { request, showToast, tellReady, reminderScope };
   useEffect(() => {
-    if (!session?.user || session.user.guest || session.offline) return;
+    if (!reminderScope.owner) return;
     let active = true, checking = false;
+    // Revoke the previous account even before its passive cleanup runs.
+    const owns = () => active && latest.current.reminderScope === reminderScope;
     async function check() {
-      if (!active || checking || !navigator.onLine) return;
+      if (!owns() || checking || !navigator.onLine) return;
       checking = true;
       try {
         const data = await latest.current.request('/api/chats?resource=commands&view=reminders');
-        if (!active) return;
+        if (!owns()) return;
         for (const item of data.reminders.filter(item => !item.done && item.at <= Date.now())) {
-          if (!active) break;
+          if (!owns()) break;
           try { await latest.current.request('/api/chats?resource=commands', { action: 'reminder-delivered', id: item.id, at: item.at }); }
           catch { continue; }
-          if (active) { latest.current.showToast({ text: `Reminder: ${item.text}` }); void latest.current.tellReady('Vaelo reminder', item.text, { reminder: true }); }
+          if (!owns()) break;
+          latest.current.showToast({ text: `Reminder: ${item.text}` });
+          // An unavailable system notification must not interrupt delivery of
+          // the remaining reminders; the in-app toast already delivered this one.
+          try { void Promise.resolve(latest.current.tellReady('Vaelo reminder', item.text, { reminder: true })).catch(() => {}); }
+          catch { /* Some notification implementations can throw synchronously. */ }
         }
       } catch { /* Retry account reminders on the next poll, never invent delivery. */ }
       finally { checking = false; }
     }
+    reminderCheck.current = check;
     void check(); const timer = setInterval(check, 30000);
     addEventListener('focus', check); addEventListener('online', check);
-    return () => { active = false; clearInterval(timer); removeEventListener('focus', check); removeEventListener('online', check); };
-  }, [session?.user?.sub, session?.offline, reminderTick]);
+    return () => {
+      active = false;
+      if (reminderCheck.current === check) reminderCheck.current = null;
+      clearInterval(timer); removeEventListener('focus', check); removeEventListener('online', check);
+    };
+  }, [reminderScope]);
   // A failed/stopped compaction never replaces history. The full transcript
   // stays visible and synced; only subsequent request context is shortened.
   useEffect(() => {
@@ -44,7 +57,12 @@ export function useSlashCommands({ session, request, chat, chats, setChats, setD
     });
     if (changed) setChats(next);
   }, [chats, setChats]);
-  function close() { setPanel(null); setReminderTick(tick => tick + 1); requestAnimationFrame(() => textarea.current?.focus({ preventScroll: true })); }
+  function close() {
+    setPanel(null);
+    // Refresh without replacing a poll that may already have claimed an alert.
+    void reminderCheck.current?.();
+    requestAnimationFrame(() => textarea.current?.focus({ preventScroll: true }));
+  }
   function archive(id, archived = true) {
     setChats(current => current.map(item => item.id === id ? { ...item, archived, updated: Date.now() } : item));
     if (archived) { newChat(true); showToast({ text: 'Conversation archived.', action: 'Undo', onAction: () => archive(id, false) }); }
