@@ -49,3 +49,15 @@ export function compactNumber(value) {
   if (value !== 0 && (Math.abs(value) < .001 || Math.abs(value) >= 1e15)) return value.toExponential(2);
   return new Intl.NumberFormat(undefined, { notation: Math.abs(value) >= 10000 ? 'compact' : 'standard', maximumSignificantDigits: 4 }).format(value);
 }
+
+export function chartChange(points) {
+  const valid = points.filter(point => Number.isFinite(point.value));
+  if (valid.length < 2) return '—';
+  const first = valid[0].value, last = valid.at(-1).value;
+  if (first === 0) return `${compactNumber(last - first)} absolute`;
+  let change = (last - first) / Math.abs(first) * 100;
+  // Opposite finite endpoints can overflow during subtraction even when
+  // their percentage change is small. Keep ordinary rounding unchanged.
+  if (!Number.isFinite(change)) change = (last / Math.abs(first) - Math.sign(first)) * 100;
+  return Number.isFinite(change) ? `${change.toFixed(1)}%` : '—';
+}

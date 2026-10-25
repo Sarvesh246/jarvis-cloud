@@ -2,7 +2,7 @@ import { SeriesChart } from "./SeriesChart.jsx";
 import { stackedSeries } from "../../lib/rich-ui.js";
 import React, { useId, useMemo, useState } from 'react';
 import { usePhone } from '../../lib/use-phone.js';
-import { chartData, compactNumber, lineGeometry, temporalColumn } from '../../lib/charts.js';
+import { chartChange, chartData, compactNumber, lineGeometry, temporalColumn } from '../../lib/charts.js';
 import { barScale, smoothChartPath } from '../../lib/output-redesign.js';
 
 const COLLAPSED_ROWS = 8;
@@ -73,7 +73,7 @@ function Sparkline({ points }) {
 }
 function DataMosaic({ points, kind }) {
   const [chosen, setChosen] = useState(null);
-  const max = Math.max(...points.map(point => point.value), 1);
+  const max = Math.max(...points.map(point => point.value)) || 1;
   const total = points.reduce((sum, point) => sum + point.value, 0);
   return <><div className="data-mosaic" data-kind={kind} role="group" aria-label={kind === 'heatmap' ? 'Value heatmap' : 'Proportional value tiles'}>{points.map((point, index) => <button type="button" key={point.index ?? index} aria-pressed={chosen === index} onClick={() => setChosen(index)} style={{'--share':kind === 'heatmap' ? 1 : Math.max(.01, point.value / total * 100), '--intensity': .08 + point.value / max * .48}}><span>{point.label}</span><strong>{point.text}</strong></button>)}</div><p className="chart-reading" aria-live="polite">{chosen === null ? (kind === 'heatmap' ? 'Darker cells have higher values. Select a cell to inspect it.' : 'Tile width follows each supplied value. Zero values keep a readable minimum size.') : `${points[chosen]?.label}: ${points[chosen]?.text}`}</p></>;
 }
@@ -146,6 +146,6 @@ function LineChart({ points, label }) {
       </div>}
     </div>
     <p className="sr-only" aria-live="polite">{selected?.label}: {selected?.text || 'No value'}. All {points.length} rows are plotted in table order.</p>
-    <div className="line-stats"><span>Low<b>{points.filter(p => Number.isFinite(p.value)).reduce((a, b) => !a || b.value < a.value ? b : a, null)?.text || '—'}</b></span><span>High<b>{points.filter(p => Number.isFinite(p.value)).reduce((a, b) => !a || b.value > a.value ? b : a, null)?.text || '—'}</b></span><span>Change<b>{(() => { const valid = points.filter(p => Number.isFinite(p.value)); if (valid.length < 2) return '—'; const first = valid[0].value, last = valid.at(-1).value; return first === 0 ? `${compactNumber(last - first)} absolute` : `${((last - first) / Math.abs(first) * 100).toFixed(1)}%`; })()}</b></span></div>
+    <div className="line-stats"><span>Low<b>{points.filter(p => Number.isFinite(p.value)).reduce((a, b) => !a || b.value < a.value ? b : a, null)?.text || '—'}</b></span><span>High<b>{points.filter(p => Number.isFinite(p.value)).reduce((a, b) => !a || b.value > a.value ? b : a, null)?.text || '—'}</b></span><span>Change<b>{chartChange(points)}</b></span></div>
   </div>;
 }

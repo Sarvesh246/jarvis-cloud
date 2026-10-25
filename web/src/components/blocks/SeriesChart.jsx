@@ -6,7 +6,7 @@ export function SeriesChart({ data }) {
   const totals = data.points.map((p) =>
     p.values.reduce((sum, n, i) => sum + (hidden.includes(i) ? 0 : n), 0),
   );
-  const max = Math.max(1, ...totals),
+  const max = Math.max(...totals) || 1,
     point = data.points[selected];
   return (
     <section className="series-chart" aria-label="Stacked breakdown">
@@ -47,7 +47,9 @@ export function SeriesChart({ data }) {
                 <i
                   key={j}
                   style={{
-                    flex: hidden.includes(j) ? 0 : value,
+                    // Flex factors below one leave unused space; large raw
+                    // numbers can also exceed the browser's CSS range.
+                    flex: hidden.includes(j) || !totals[i] ? 0 : value / totals[i] * 100,
                     display: hidden.includes(j) ? "none" : undefined,
                   }}
                 />

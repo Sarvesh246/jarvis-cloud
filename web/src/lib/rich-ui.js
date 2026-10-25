@@ -214,7 +214,7 @@ export function stackedSeries(columns, rows, values, label) {
   if (totals.some((n) => !Number.isFinite(n))) return null;
   return {
     points,
-    max: Math.max(1, ...totals),
+    max: Math.max(...totals) || 1,
     columns: values.map((index) => columns[index]),
   };
 }
