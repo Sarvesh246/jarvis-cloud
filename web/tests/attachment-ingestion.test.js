@@ -146,3 +146,32 @@ test('switching reads the newest keystroke even without a shell render and resto
   assert.equal(f.draftStore.getSnapshot(), 'Half-written final words 日本語 👋');
   assert.equal(f.drafts.get('second').draft, 'Second draft');
 });
+
+test('batched switches and late file completion retain both conversations drafts', async () => {
+  const f = fixture();
+  f.draftStore.set('First draft');
+  const pending = f.addFiles(files(1, 'image'));
+  f.selectChat('second');
+  f.draftStore.set('Second draft');
+  f.selectChat('first');
+  f.finish(); await pending;
+  assert.equal(f.draftStore.getSnapshot(), 'First draft');
+  assert.equal(f.items[0].state, 'ready');
+  assert.equal(f.images.get(f.items[0].id), 'full:image-0');
+  assert.equal(f.drafts.get('second').draft, 'Second draft');
+  f.selectChat('second');
+  assert.equal(f.items.length, 0);
+  assert.equal(f.draftStore.getSnapshot(), 'Second draft');
+  assert.equal(f.drafts.get('first').attachments[0].state, 'ready');
+});
+
+test('a read completing immediately after a switch cannot refocus the departed composer', async () => {
+  const f = fixture();
+  const pending = f.addFiles(files(1));
+  f.selectChat('second');
+  const focusedAtSwitch = f.focused;
+  f.finish(); await pending;
+  assert.equal(f.focused, focusedAtSwitch);
+  assert.equal(f.items.length, 0);
+  assert.equal(f.drafts.get('first').attachments[0].state, 'ready');
+});

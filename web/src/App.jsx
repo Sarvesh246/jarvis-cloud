@@ -1023,8 +1023,13 @@ export function App() {
       else drafts.current.delete(now.chatId);
       const kept = drafts.current.get(id);
       drafts.current.delete(id);
+      // Draft writes notify subscribers synchronously. Publish the new owner
+      // and file list first, so another switch before React paints cannot
+      // save the destination's draft over the conversation we just left.
+      const restoredAttachments = kept?.attachments || [];
+      writing.current = { chatId: id, attachments: restoredAttachments };
+      setAttachments(restoredAttachments);
       setDraft(kept?.draft || "");
-      setAttachments(kept?.attachments || []);
     }
     setActiveId(id);
     setSaved(false);
