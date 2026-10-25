@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { BellSimple, CaretLeft, MapPin, CaretRight, DeviceMobile, QrCode, Sparkle, SignOut, X } from "@phosphor-icons/react";
 import { notifySupport } from "../lib/preferences.js";
 import { forgetPlace, locate, locationSupport } from "../lib/location.js";
@@ -56,16 +56,31 @@ const GROUPS = [
 
 /* The notification switch, shared by both layouts: asking the system for
    permission, and saying plainly when it is refused. */
-function useNotify(prefs, onChange) {
+function useNotify(prefs, onChange, { open, owner }) {
   const [problem, setProblem] = useState("");
-  async function toggle(on) {
+  const attempt = useRef(0);
+  const scope = useMemo(() => ({ open, owner }), [open, owner]);
+  const latest = useRef(null);
+  latest.current = { scope, onChange };
+  useEffect(() => {
     setProblem("");
-    if (!on) return onChange({ notify: false });
+    return () => { attempt.current++; };
+  }, [scope]);
+  async function toggle(on) {
+    if (!scope.open || latest.current.scope !== scope) return;
+    const id = ++attempt.current;
+    // A permission dialog can outlive this panel, account, or a newer choice.
+    // Render identity also revokes it before passive cleanup gets to run.
+    const owns = () => attempt.current === id && latest.current.scope === scope;
+    setProblem("");
+    if (!on) return latest.current.onChange({ notify: false });
     try {
-      if (await allowNotifications()) onChange({ notify: true });
+      const allowed = await allowNotifications();
+      if (!owns()) return;
+      if (allowed) latest.current.onChange({ notify: true });
       else setProblem(DESKTOP ? "Allow notifications for Vaelo in your system settings." : "Notifications are blocked for Vaelo. Allow them in your browser’s settings.");
     } catch {
-      setProblem("This browser can’t show notifications.");
+      if (owns()) setProblem("This browser can’t show notifications.");
     }
   }
   return { problem, toggle, support: notifySupport() };
@@ -109,7 +124,7 @@ function PhoneSettings({ open, user, prefs, onChange, onClose, onTools, onWelcom
   const page = useRef(null);
   const edge = useRef(false);
   const [install, setInstall] = useState(false);
-  const notify = useNotify(prefs, onChange);
+  const notify = useNotify(prefs, onChange, { open, owner: user?.sub });
   const place = useLocate(prefs, onChange);
   const guest = !!user?.guest;
   const initial = (user?.name || "?").trim().charAt(0).toUpperCase();
@@ -330,7 +345,7 @@ function WideSettings({ open, user, prefs, onChange, onClose, onTools, onWelcome
       siblings.forEach((node, index) => { node.inert = previous[index]; });
     };
   }, [open]);
-  const notify = useNotify(prefs, onChange);
+  const notify = useNotify(prefs, onChange, { open, owner: user?.sub });
   const place = useLocate(prefs, onChange);
   return (
     <div ref={surface} className="settings-surface">
