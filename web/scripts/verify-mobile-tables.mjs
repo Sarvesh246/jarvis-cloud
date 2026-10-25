@@ -46,6 +46,25 @@ const content = `### Key take-aways & trade-offs
 |---|---|
 | https://example.test/${'reference'.repeat(20)} | A long URL stays inside the table. |
 | Other | Ordinary words stay readable. |
+
+### Laptop dimensions and references
+
+| Specification | Value | Source |
+|---|---|---|
+| Dimensions | 344.9×255.35×22.5-23.99 mm | Lenovo-Russia spec sheet |
+| Dimensions in bold | **344.9×255.35×22.5-23.99 mm** | Manufacturer specification |
+| Long word | Pneumonoultramicroscopicsilicovolcanoconiosis | Published terminology |
+| Serial number | ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ | Product label |
+| Nonbreaking spaces | 344.9\u00a0×\u00a0255.35\u00a0×\u00a022.5–23.99\u00a0mm | Manufacturer specification |
+| Code | \`ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ\` | Product label |
+| A very long label Pneumonoultramicroscopicsilicovolcanoconiosis | Ordinary prose remains readable. | Manufacturer specification |
+
+### Long headers
+
+| ExtraordinarilyLongSpecificationIdentifier | Value |
+|---|---|
+| Dimensions | 344.9x255.35x22.5-23.99 mm |
+| Reference | Manufacturer specification |
 `;
 const results = [];
 for (const engine of ['chromium', 'webkit']) {
@@ -59,6 +78,7 @@ for (const engine of ['chromium', 'webkit']) {
       { width: 1440, height: 1000, phone: false },
     ]) {
       for (const theme of ['dark', 'light']) {
+        if (process.env.TABLE_CASE && process.env.TABLE_CASE !== `${engine}-${profile.width}-${theme}`) continue;
         const context = await browser.newContext({ viewport: { width: profile.width, height: profile.height }, isMobile: profile.phone, hasTouch: profile.phone, serviceWorkers: 'block' });
         const page = await context.newPage();
         page.setDefaultTimeout(15000);
@@ -87,7 +107,7 @@ for (const engine of ['chromium', 'webkit']) {
         });
         await page.goto(origin);
         const tables = page.locator('.message .table-block');
-        await tables.nth(3).waitFor().catch(async error => {
+        await tables.nth(5).waitFor().catch(async error => {
           console.error({ errors, body: (await page.locator('body').innerText()).slice(0, 5000) });
           throw error;
         });
@@ -121,7 +141,7 @@ for (const engine of ['chromium', 'webkit']) {
               assert.ok(geometry.cells.slice(1).every(width => width >= 144 && width <= 200), `${id}: prose columns have balanced reading widths`);
               const splitWords = await tables.evaluateAll(elements => {
                 const split = [];
-                for (const table of elements) {
+                for (const table of elements.slice(0, 4)) {
                   const walker = document.createTreeWalker(table.querySelector('table'), NodeFilter.SHOW_TEXT);
                   for (let node = walker.nextNode(); node; node = walker.nextNode()) {
                     if (node.parentElement.closest('a,code,.sr-only')) continue;
@@ -179,6 +199,36 @@ for (const engine of ['chromium', 'webkit']) {
             await first.evaluate(element => element.scrollIntoView({ block: 'start' }));
             await page.screenshot({ path: join(output, `${id}-tradeoffs-scrolled.png`) });
           }
+          const edgeCases = tables.nth(4);
+          await edgeCases.evaluate(element => element.scrollIntoView({ block: 'start' }));
+          const overflow = await tables.locator('td, th').evaluateAll(cells => {
+            const failures = [];
+            for (const cell of cells) {
+              const bounds = cell.getBoundingClientRect();
+              const walker = document.createTreeWalker(cell, NodeFilter.SHOW_TEXT);
+              for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+                if (node.parentElement.closest('.sr-only')) continue;
+                const range = document.createRange();
+                range.selectNodeContents(node);
+                for (const rect of range.getClientRects()) {
+                  if (rect.left < bounds.left - 1 || rect.right > bounds.right + 1) failures.push(node.textContent);
+                }
+              }
+            }
+            return failures;
+          });
+          assert.deepEqual(overflow, [], `${id}: long values stay inside their own cells`);
+          assert.equal(await edgeCases.locator('tbody tr').first().locator('td').nth(presentation !== 'minimal' && !profile.phone ? 2 : 1).textContent(), '344.9×255.35×22.5-23.99 mm', 'Dimension text is preserved');
+          if (profile.phone) assert.equal(await edgeCases.locator('tbody tr').first().locator('wbr').count(), 2, 'Dimensions have natural wrap points');
+          await edgeCases.evaluate(element => {
+            const scroll = element.querySelector('.table-scroll');
+            scroll.scrollLeft = 0;
+            scroll.scrollTop = 0;
+          });
+          await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+          await page.screenshot({ path: join(output, `${id}-long-values.png`) });
+          await edgeCases.locator('.table-scroll').evaluate(element => { element.scrollLeft = element.scrollWidth; });
+          await page.screenshot({ path: join(output, `${id}-long-values-scrolled.png`) });
           // Every column remains reachable, including the last cell in a wide table.
           const directory = tables.nth(1);
           await directory.evaluate(element => element.scrollIntoView({ block: 'start' }));

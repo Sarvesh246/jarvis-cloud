@@ -503,10 +503,17 @@ export function SourceStrip({ sources, onOpen, arriving = false }) {
 
 /* ---------- Tables ---------- */
 
-function inline(node, key) {
-  if (node.type === "text") return node.value;
+function inline(node, key, wrapDimensions = false) {
+  if (node.type === "text") {
+    if (!wrapDimensions) return node.value;
+    // Add layout opportunities between dimensions without changing copied or
+    // exported values, or inserting breaks inside an individual measurement.
+    const parts = node.value.split(/(?<=\d[×✕⨉xX])(?=\d)/u);
+    if (parts.length === 1) return node.value;
+    return parts.map((part, i) => <React.Fragment key={i}>{i > 0 && <wbr />}{part}</React.Fragment>);
+  }
   if (node.type !== "element") return null;
-  const kids = (node.children || []).map((child, i) => inline(child, i));
+  const kids = (node.children || []).map((child, i) => inline(child, i, wrapDimensions && node.tagName !== "code"));
   switch (node.tagName) {
     case "pre": {
       const code = node.children?.find(child => child.tagName === "code");
@@ -706,7 +713,7 @@ function TableBlock({ node, "data-src": src }) {
                     }
                   >
                     <button onClick={() => toggle(i)} aria-label={`Sort by ${data.columns[i]}`} data-tip="Sort by this column">
-                      {inline(head, i)}
+                      <span className="table-header-label">{inline(head, i, phone)}</span>
                       <span className="sort-mark" aria-hidden="true">{sort.column === i ? sort.direction === "asc" ? "↑" : "↓" : <ArrowsDownUp size={12} />}</span>
                     </button>
                   </th>
@@ -716,7 +723,7 @@ function TableBlock({ node, "data-src": src }) {
             <tbody>
               {visible.map((r) => isSectionRow(data.rows[r]) ? (
                 <tr key={r} className="table-section">
-                  <th scope="rowgroup" colSpan={data.columns.length + (enhance && toolsOpen ? 1 : 0)}>{inline(data.cells[r][0], 0)}</th>
+                  <th scope="rowgroup" colSpan={data.columns.length + (enhance && toolsOpen ? 1 : 0)}>{inline(data.cells[r][0], 0, phone)}</th>
                 </tr>
               ) : (
                 <tr key={r} data-selected={toolsOpen && selected.includes(r) || undefined} onClick={enhance && toolsOpen ? event => { if (event.target.closest('a,button,input')) return; setSelected(items => items.includes(r) ? items.filter(i => i !== r) : [...items, r]); } : undefined}>
@@ -725,7 +732,7 @@ function TableBlock({ node, "data-src": src }) {
                     <td key={i} data-numeric={numeric[i] || undefined} data-different={differences.has(`${r}:${i}`) || undefined}>
                       {best.has(`${r}:${i}`) && <span className="table-best" aria-label="Best value">★</span>}
                       {differences.has(`${r}:${i}`) && <span className="sr-only">Different: </span>}
-                      {/\b(?:score|rating)\b/i.test(data.columns[i]) && Number.isFinite(toNumber(data.rows[r][i])) ? <span className="table-score"><i aria-hidden="true"><b style={{width:`${Math.max(0, toNumber(data.rows[r][i])) / Math.max(1, ...data.rows.map(row => toNumber(row[i])).filter(Number.isFinite)) * 100}%`}} /></i>{inline(cell, i)}</span> : inline(cell, i)}
+                      {/\b(?:score|rating)\b/i.test(data.columns[i]) && Number.isFinite(toNumber(data.rows[r][i])) ? <span className="table-score"><i aria-hidden="true"><b style={{width:`${Math.max(0, toNumber(data.rows[r][i])) / Math.max(1, ...data.rows.map(row => toNumber(row[i])).filter(Number.isFinite)) * 100}%`}} /></i>{inline(cell, i, phone)}</span> : inline(cell, i, phone)}
                     </td>
                   ))}
                 </tr>

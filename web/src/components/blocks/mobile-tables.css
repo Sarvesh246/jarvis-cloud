@@ -17,7 +17,7 @@
   grid-column: 1 / -1;
   min-width: 0;
   white-space: normal;
-  overflow-wrap: normal;
+  overflow-wrap: break-word;
   font-size: 18px;
   line-height: 1.3;
 }
@@ -100,12 +100,13 @@
   min-width: 6rem;
   max-width: clamp(10rem, 44vw, 12rem);
   word-break: normal;
-  overflow-wrap: normal;
+  overflow-wrap: break-word;
   hyphens: none;
 }
 
-/* URLs and code can contain long strings without spaces. Keep those inside
-   their column while ordinary prose always wraps between complete words. */
+/* Prefer full words and natural breaks (including dimension separators).
+   Emergency wrapping keeps oversized words and identifiers in their own cell.
+   URLs and code can use every available break without widening the table. */
 .prose.prose .table-block[data-phone] td a,
 .prose.prose .table-block[data-phone] td code {
   overflow-wrap: anywhere;
@@ -118,7 +119,7 @@
   font-size: 14px;
   line-height: 1.4;
   white-space: normal;
-  overflow-wrap: normal;
+  overflow-wrap: break-word;
   word-break: normal;
 }
 
@@ -127,6 +128,10 @@
   flex: none;
   align-items: center;
   font-size: 12px;
+}
+
+.prose.prose .table-block[data-phone] .table-header-label {
+  min-width: 0;
 }
 
 .prose.prose .table-block[data-phone] td {
