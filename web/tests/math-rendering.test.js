@@ -76,7 +76,7 @@ test('relative links and nested code keep their source through the real renderer
   try {
     const { Rendered } = await server.ssrLoadModule('/src/components/blocks/Blocks.jsx');
     const render = (content, live) => renderToStaticMarkup(React.createElement(Rendered,
-      { content, sources: [], onOpen() {}, live, requestText: 'Use plain text.' }));
+      { content, sources: [], onOpen() {}, live, requestText: 'No widgets.' }));
     for (const live of [false, true]) {
       const html = render('[cost](/cost/$a_b$/view) and \\(x^2\\).', live);
       assert.match(html, /href="\/cost\/\$a_b\$\/view"/);

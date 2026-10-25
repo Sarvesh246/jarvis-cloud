@@ -58,12 +58,12 @@ export async function requestRevision({ csrf, source, start, end, instruction, s
         held += choice.delta.content;
         if (held.length >= JOIN_WINDOW || choice.finish_reason) release();
       } else text += choice.delta.content;
-      onText?.(normalizeReplySpacing(text));
+      onText?.(normalizeReplySpacing(text, instruction));
     }
     if (choice?.finish_reason === "error" || (data.error && choice?.finish_reason !== "length"))
       throw new Error(data.error?.message || "Vaelo stopped before finishing.");
   }, undefined, signal);
-  const revised = cleanRevision(normalizeReplySpacing(text));
+  const revised = cleanRevision(normalizeReplySpacing(text, instruction));
   if (!completed || !revised) throw new Error("Vaelo didn’t send a revision back. Try again.");
   return revised;
 }

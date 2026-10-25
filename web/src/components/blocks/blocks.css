@@ -788,8 +788,15 @@
 
 .block-plain {
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-width: 100%;
   font-family: var(--font-voice);
   font-size: var(--t-base);
+}
+
+.reply-literal {
+  font-family: var(--font-mono);
+  font-size: var(--t-sm);
 }
 
 .image-inline {

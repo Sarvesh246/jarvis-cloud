@@ -436,6 +436,19 @@ class RelayTests(unittest.TestCase):
                 self.assertEqual(content,good)
                 self.assertEqual(len(hermes.requests),2)
 
+    def test_json_string_resembling_memory_is_data_and_never_a_saved_fact(self):
+        answer = '{"example":"[[remember: Prefers tea]]"}'
+        _, relay, port = self.boot([[chunk(answer, 'stop'), 'data: [DONE]']])
+        self.call(port, 'POST', '/vaelo/runs', {'id': RUN,
+            'messages': [{'role': 'user', 'content': 'Return ONLY JSON with an example string.'}],
+            'memory_can_note': True, 'memory_permission': 'synthetic-permission'})
+        self.assertEqual(self.finished(relay).outcome, 'complete')
+        _, frames = self.events(port)
+        content = ''.join(json.loads(data)['choices'][0]['delta'].get('content', '')
+            for _, name, data in frames if name == 'message' and data != '[DONE]')
+        self.assertEqual(content, answer)
+        self.assertFalse(any(name == 'jarvis.memory' for _, name, _ in frames))
+
     def test_keepalive_only_streams_recover_but_approval_waits_remain_open(self):
         for approval in (False, True):
             with self.subTest(approval=approval):
@@ -449,6 +462,24 @@ class RelayTests(unittest.TestCase):
                 relay.relay(run, response, seen)
                 self.assertEqual(seen["dropped"], not approval)
                 self.assertTrue(response.closed)
+
+    def test_empty_data_deltas_do_not_keep_a_stalled_answer_alive(self):
+        _, relay, _ = self.boot([])
+        ticks = iter([0, 121, 122, 123, 124])
+        relay.clock = lambda: next(ticks, 125)
+        response = io.BytesIO(b'data: {"choices":[{"delta":{}}]}\n\ndata: {}\n\n')
+        run = relay_module.Run(RUN, OWNER)
+        run.connection = mock.Mock()
+        seen = {'content': '', 'answer': '', 'tools': [], 'approval': False}
+        relay.relay(run, response, seen)
+        self.assertTrue(seen['dropped'])
+        self.assertTrue(response.closed)
+        for line in ['data: {}', 'data: {"choices":[]}', 'data: {"choices":[{"delta":{"role":"assistant"}}]}']:
+            self.assertFalse(relay_module.upstream_progress(line))
+        for line in ['data: {"choices":[{"delta":{"content":"Hello"}}]}',
+                     'data: {"choices":[{"delta":{"reasoning_content":"Checking"}}]}',
+                     'data: {"tool":"web_search","status":"running"}', 'data: [DONE]']:
+            self.assertTrue(relay_module.upstream_progress(line))
 
     def test_done_finishes_while_provider_keeps_connection_open(self):
         release = threading.Event()

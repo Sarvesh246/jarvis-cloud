@@ -34,6 +34,18 @@ test('private identifier corrections use supplied history while public lookups r
   assert.equal(freshnessQuery('What is my current booking number?',['My booking number is ABC-482.']),null);
 });
 
+test('private project name corrections stay in conversation context', () => {
+  const history = ['Our fictional project is called Amber.'];
+  const ask = 'Correction: it is now called Cedar. What is its current name? Reply with just its name.';
+  assert.equal(freshnessQuery(ask, history), null);
+  assert.match(freshnessQuery('Search the web for its current name.', history), /Search the web/);
+  assert.match(freshnessQuery('What is the current price of Apple stock?', history), /Apple stock/);
+  const input = chatInput({ conversationId, messages: [
+    { role: 'user', content: history[0] }, { role: 'assistant', content: 'Understood.' }, { role: 'user', content: ask },
+  ] });
+  assert.ok(!input.freshness);
+});
+
 test("public data requests fetch evidence while private transformations stay offline", () => {
   for (const text of ["Define serendipity", "Find books about astronomy", "Find research papers on battery recycling", "npm package react", "Food barcode 3017620422003", "Air quality in Chicago", "top Hacker News stories", "Product Hunt launches", "search One Piece on MangaDex", "pokemon pikachu", "UK postcode SW1A 1AA"]) assert.equal(freshnessQuery(text), text);
   for (const text of ["Rewrite: Define serendipity", "Don't browse. Find books about astronomy", "Only use my provided text. Define serendipity", "Translate: Product Hunt launches", "Don't search One Piece on MangaDex"]) assert.equal(freshnessQuery(text), null);

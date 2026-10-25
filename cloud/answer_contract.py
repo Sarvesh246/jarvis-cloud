@@ -13,6 +13,7 @@ POLICY = json.loads(_path.read_text(encoding='utf-8'))
 ONLY_JSON = re.compile(POLICY['json'], re.I)
 LIMIT = re.compile(POLICY['limit'], re.I)
 REPLY_LENGTH = re.compile(POLICY['replyLength'], re.I)
+IN_LENGTH = re.compile(POLICY['inLength'], re.I)
 NUMBERS = {word: i for i, word in enumerate(('zero','one','two','three','four','five','six','seven','eight','nine','ten'))}
 NUMBERS['single'] = 1
 
@@ -53,6 +54,9 @@ def contract_for(messages, tools_available=True):
         if 0 <= count <= 20000:
             limits.append((match[3].lower().rstrip('s'), 'exact' if match[1].lower() == 'exactly' else 'max', count))
     for match in REPLY_LENGTH.finditer(text):
+        limits.append((match[2].lower().rstrip('s'), 'exact', number(match[1])))
+    length_text = re.sub(r"\"[^\"\n]*\"|“[^”\n]*”|(?<!\w)'[^'\n]*'", '', text)
+    for match in IN_LENGTH.finditer(length_text):
         limits.append((match[2].lower().rstrip('s'), 'exact', number(match[1])))
     required=[]
     if ONLY_JSON.search(text):

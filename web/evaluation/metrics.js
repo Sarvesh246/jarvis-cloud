@@ -5,16 +5,20 @@ export function percentile(values, p) {
 
 export function checkAnswer(answer, checks = {}) {
   const text = answer.trim();
+  // Typography varies by provider; straight and curly apostrophes must not
+  // turn an honest "I can’t determine that" into a false failure.
+  const folded = text.toLowerCase().replace(/[‘’]/g, "'");
+  const fold = value => value.toLowerCase().replace(/[‘’]/g, "'");
   const checksRun = [];
   if (checks.exact !== undefined) checksRun.push(text === checks.exact);
   if (checks.maxChars) checksRun.push(text.length <= checks.maxChars);
-  for (const value of checks.includes || []) checksRun.push(text.toLowerCase().includes(value.toLowerCase()));
-  if (checks.any) checksRun.push(checks.any.some(value => text.toLowerCase().includes(value.toLowerCase())));
+  for (const value of checks.includes || []) checksRun.push(folded.includes(fold(value)));
+  if (checks.any) checksRun.push(checks.any.some(value => folded.includes(fold(value))));
   if (checks.source) checksRun.push(/https:\/\/[^\s)]+/.test(text));
   if (checks.maxWords !== undefined) checksRun.push(text.split(/\s+/u).filter(Boolean).length<=checks.maxWords);
   if (checks.exactLines !== undefined) checksRun.push(text.split(/\r?\n/).length===checks.exactLines);
   if (checks.sentences !== undefined) checksRun.push(text.split(/(?<=[.!?。！？])\s+(?=[\p{L}\p{N}"“])/u).filter(Boolean).length===checks.sentences);
-  for (const value of checks.forbidden || []) checksRun.push(!text.toLowerCase().includes(value.toLowerCase()));
+  for (const value of checks.forbidden || []) checksRun.push(!folded.includes(fold(value)));
   if (checks.json !== undefined || checks.jsonEquals !== undefined || checks.requiredKeys) {
     try {
       const value=JSON.parse(text);

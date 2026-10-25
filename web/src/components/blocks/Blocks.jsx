@@ -46,6 +46,7 @@ import { NumberExplorer } from "./LocalTools.jsx";
 import { bestTableCells, timelineLayout } from '../../lib/output-redesign.js';
 import { automaticPresentation } from '../../lib/automatic-presentation.js';
 import { cleanAnswer } from '../../../shared/answer-cleanup.js';
+import { literalAnswerRequested } from '../../../shared/answer-contract.js';
 import { weatherForecast, weatherMarkdown } from '../../lib/weather.js';
 import { Weather } from './Weather.jsx';
 import { SourceIcon } from "./SourceIcon.jsx";
@@ -1002,17 +1003,18 @@ export function useSources(content) {
 }
 
 export function Rendered({ content, sources = [], onOpen, onAnswer, mapped = false, live = false, stateKey, requestText = "", attached }) {
-  content = cleanAnswer(content);
+  const literal = !mapped && literalAnswerRequested(requestText);
+  if (!literal) content = cleanAnswer(content);
   const preference = useContext(PresentationContext);
-  const presentation = wantsPlainReply(requestText) ? "minimal" : preference;
+  const presentation = literal || wantsPlainReply(requestText) ? "minimal" : preference;
   const mathy = useMemo(() => hasMath(content), [content]);
   const audio = useMemo(() => !mapped && !live && presentation !== 'minimal' ? audioLinks(content) : [], [mapped, live, presentation, content]);
   const weather = useMemo(() => !mapped && !live && presentation !== 'minimal' ? weatherForecast(content, requestText) : null, [mapped, live, presentation, content, requestText]);
   const automaticView = useMemo(() => !weather && !mapped && !live && !mathy && presentation !== 'minimal' ? automaticPresentation(content, requestText, attached) : null, [weather, mapped, live, mathy, presentation, requestText, content, attached]);
   const shaped = automaticView?.markdown ?? weatherMarkdown(content);
   const { text: displayContent, pending } = useMemo(
-    () => (mapped ? { text: shaped, pending: null } : live ? prepareLive(shaped) : { text: normalizeMath(shaped), pending: null }),
-    [mapped, live, shaped],
+    () => (mapped || literal ? { text: shaped, pending: null } : live ? prepareLive(shaped) : { text: normalizeMath(shaped), pending: null }),
+    [mapped, literal, live, shaped],
   );
   const value = useMemo(
     () => ({
@@ -1034,6 +1036,7 @@ export function Rendered({ content, sources = [], onOpen, onAnswer, mapped = fal
   return (
     <BlockContext.Provider value={value}>
       <BlockBoundary content={content}>
+        {literal ? <pre className={`block-plain${wantsPlainReply(requestText) ? '' : ' reply-literal'}`}>{content}</pre> : <>
         {weather && <Weather forecast={weather} />}
         {weather?.notes && <Markdown remarkPlugins={remarkPlugins} components={components} urlTransform={urlTransform}>{weather.notes}</Markdown>}
         {automaticView?.block && <RichUI source={JSON.stringify(automaticView.block)} enabled stateKey={stateKey} onAnswer={onAnswer} />}
@@ -1043,6 +1046,7 @@ export function Rendered({ content, sources = [], onOpen, onAnswer, mapped = fal
         {weather ? <details className="weather-details"><summary>Forecast details and sources</summary>{markdown}</details> : markdown}
         {audio.map(item => <AudioCard key={item.src} {...item} />)}
         {pending && <p className="math-pending" role="status">{pending === "math" ? "Typesetting…" : "Building the table…"}</p>}
+        </>}
       </BlockBoundary>
     </BlockContext.Provider>
   );

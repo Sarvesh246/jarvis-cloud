@@ -51,6 +51,11 @@ export function freshnessQuery(content, previous = "") {
   if (!LOOKUP.test(text) && !/https?:\/\//i.test(text) &&
       /\b(?:from|using|use|based on)\s+(?:(?:only|solely)\s+)?(?:(?:the|my|this|these)\s+)?(?:selected|saved|attached|uploaded|provided)\s+(?:(?:project|source)\s+)?(?:workspace|workroom|brief|document|file|text)\b|\b(?:use|using)\s+(?:only|solely)\s+(?:(?:the|this)\s+)?(?:source|image|document|file|text)\b/i.test(text)) return null;
   const history = (Array.isArray(previous) ? previous : [previous]).map(requestText);
+  // "Its current name" in a supplied fictional project is conversation
+  // recall. Do not leak that correction into an unrelated public lookup.
+  if (!LOOKUP.test(text) && !/https?:\/\//i.test(text) &&
+      /\b(?:its|(?:my|our|the) project's?)\s+(?:current\s+)?(?:name|owner|budget|deadline)\b/i.test(text) &&
+      [text, ...history].some(value => /\b(?:my|our|fictional|synthetic)\s+(?:fictional\s+|synthetic\s+)?project\b/i.test(value))) return null;
   // A "current" private identifier is resolved from account/conversation
   // evidence, not a public web search. Explicit external lookups still win.
   if (!LOOKUP.test(text) && !/https?:\/\//i.test(text) &&

@@ -3,6 +3,16 @@ from cloud.answer_contract import contract_for, validate_answer, constrained, re
 
 
 class AnswerContractTests(unittest.TestCase):
+    def test_natural_explanation_length_is_checked_after_a_compound_request(self):
+        contract = self.contract('Find the official Python documentation and explain json.loads in two sentences. Link the official documentation.')
+        self.assertIn(('sentence', 'exact', 2), contract['limits'])
+        self.assertTrue(constrained(contract))
+        self.assertEqual(validate_answer('It parses JSON. It returns a Python value.', contract)[1], [])
+        self.assertIn('sentence_exact_2', validate_answer('Here are the docs. It parses JSON. It returns a value.', contract)[1])
+        supplied = self.contract('Explain this document.\n\nAttached file: source.txt\nDescribe it in three lines.')
+        self.assertEqual(supplied['limits'], [])
+        self.assertEqual(self.contract('Translate "Explain this in two sentences" into Spanish.')['limits'], [])
+
     def test_translation_only_does_not_publish_ambiguity_or_usage_notes(self):
         contract=self.contract('Translate "Good morning" into French. Return only the conventional translation with no punctuation.')
         self.assertTrue(constrained(contract))

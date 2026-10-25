@@ -13,7 +13,10 @@
    or emphasis marker that has not finished arriving, so the page never shows
    half a command or a broken equation. */
 
-const FENCE_OPEN = /^ {0,3}(`{3,}|~{3,})/;
+// Container prefixes belong to Markdown, not TeX. A quoted or list-nested
+// code example may contain an unmatched math delimiter with no effect on
+// the answer that follows it.
+const FENCE_OPEN = /^\s*(`{3,}|~{3,})/;
 const LIST_ITEM = /^ {0,3}(?:[-*+]|\d{1,9}[.)])\s/;
 const SEARCH_LIMIT = 1500;
 
@@ -26,10 +29,14 @@ function lineKinds(lines) {
   let previousBlank = true;
   let previousCode = false;
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
+    const original = lines[i];
+    const quotes = original.match(/^(?: {0,3}>[ \t]?)+/)?.[0] || '';
+    const line = original.slice(quotes.length);
+    const depth = (quotes.match(/>/g) || []).length;
+    if (fence && depth !== fence.depth) fence = null;
     if (fence) {
       code[i] = true;
-      const close = line.match(/^ {0,3}(`{3,}|~{3,})\s*$/);
+      const close = line.match(/^\s*(`{3,}|~{3,})\s*$/);
       if (close && close[1][0] === fence.char && close[1].length >= fence.length) fence = null;
       previousBlank = false;
       previousCode = true;
@@ -37,7 +44,7 @@ function lineKinds(lines) {
     }
     const open = line.match(FENCE_OPEN);
     if (open && !(open[1][0] === "`" && line.slice(open[0].length).includes("`"))) {
-      fence = { char: open[1][0], length: open[1].length };
+      fence = { char: open[1][0], length: open[1].length, depth };
       code[i] = true;
       previousBlank = false;
       previousCode = true;

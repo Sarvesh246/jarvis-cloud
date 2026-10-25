@@ -6,6 +6,7 @@ import { readEvents } from '../src/stream.js';
 import { checkAnswer, summarize } from '../evaluation/metrics.js';
 import { comprehensiveCases } from '../evaluation/comprehensive.js';
 import { visualCases } from '../evaluation/visual-cases.js';
+import { chatCases } from '../evaluation/chat-cases.js';
 
 export async function runCase(item, { origin, headers, request = fetch, timeoutMs = 90000, captureAnswers = false }) {
   const runId = randomUUID();
@@ -122,10 +123,10 @@ export async function main() {
   const timeoutMs = Number(option('--timeout-ms', '90000'));
   if (!Number.isInteger(repeat) || repeat < 1 || repeat > 20 || !Number.isFinite(timeoutMs) || timeoutMs < 100 || timeoutMs > 900000) throw new Error('Invalid repeat or timeout.');
   const suite=option('--suite','smoke');
-  if(!['smoke','comprehensive','visual'].includes(suite)) throw Error('Unknown evaluation suite.');
+  if(!['smoke','comprehensive','visual','chat'].includes(suite)) throw Error('Unknown evaluation suite.');
   const seed=Number(option('--seed','731'));
   if(!Number.isInteger(seed)||seed<0||seed>4294967295) throw Error('Seed must be an unsigned 32-bit integer.');
-  const cases = suite==='visual'?await visualCases():suite==='comprehensive'?comprehensiveCases(seed):
+  const cases = suite==='chat'?chatCases:suite==='visual'?await visualCases():suite==='comprehensive'?comprehensiveCases(seed):
     JSON.parse(await readFile(new URL('../evaluation/cases.json', import.meta.url), 'utf8'));
   const chosen=option('--cases',suite!=='smoke'?cases.slice(0,4).map(item=>item.id).join(','):'greeting,arithmetic,rewrite,context-recall');
   const ids = chosen==='all'?cases.map(item=>item.id):chosen.split(',');

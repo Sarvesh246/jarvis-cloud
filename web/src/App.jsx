@@ -17,6 +17,7 @@ import { ArrowDown, FileArrowUp, IconContext, Quotes } from "@phosphor-icons/rea
 import { readEvents } from "./stream.js";
 import { cleanAnswer } from "../shared/answer-cleanup.js";
 import { normalizeReplySpacing, normalizeSavedReplySpacing } from "./lib/reply-spacing.js";
+import { literalAnswerRequested } from '../shared/answer-contract.js';
 import { requestForReply, imagesForReply } from "./lib/adaptive-ui.js";
 import { fullImages } from "./lib/image-store.js";
 import { cachedPlace, needsPlace, placeFor } from "./lib/location.js";
@@ -1590,6 +1591,11 @@ export function App() {
     const generated = new Map();
     let fromScratch = Boolean(resumeFrom);
     const startedAt = resumeFrom?.startedAt || Date.now();
+    const replyMessages = chatsRef.current.find(chat => chat.id === chatId)?.messages || [];
+    const replyIndex = replyMessages.findIndex(message => message.id === id);
+    const replyRequest = start?.messages?.findLast(message => message.role === 'user')?.content
+      ?? replyMessages[replyIndex - 1]?.text ?? replyMessages[replyIndex - 1]?.content ?? '';
+    const literalReply = literalAnswerRequested(replyRequest);
     const updateMessage = (patch) => {
       if (runs.current.get(chatId) === slot) updateChatMessage(chatId, id, patch);
     };
@@ -1606,8 +1612,8 @@ export function App() {
     const flush = () => {
       frame = 0;
       if (received.trim()) trace.mark("first_render_commit");
-      received = normalizeReplySpacing(received);
-      updateMessage({ content: placeImages(cleanAnswer(stripMemoryNotes(received)), generated, succeeded), ...(reasoning && { reasoning }) });
+      received = normalizeReplySpacing(received, replyRequest);
+      updateMessage({ content: literalReply ? received : placeImages(cleanAnswer(stripMemoryNotes(received)), generated, succeeded), ...(reasoning && { reasoning }) });
     };
     const schedule = () => {
       if (!frame) frame = requestAnimationFrame(flush);
@@ -1995,8 +2001,8 @@ export function App() {
          The marker is never shown. The note is saved here, on the device that
          ran the reply, and the reply says truthfully what happened. Replies
          that used tools (the web, files) never save anything. */
-      const noted = !mirror && !guest && memoryPermit ? serverNotes : [];
-      received = stripMemoryNotes(received);
+      const noted = !literalReply && !mirror && !guest && memoryPermit ? serverNotes : [];
+      if (!literalReply) received = stripMemoryNotes(received);
       if (noted.length) {
         const ranTools = Boolean(chatsRef.current.find((chat) => chat.id === chatId)?.messages.find((m) => m.id === id)?.activity?.length);
         let line = "";

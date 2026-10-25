@@ -105,6 +105,34 @@ RUN_BYTES = 6 * 1024 * 1024
 RUN_MAX_BYTES = 10 * 1024 * 1024
 TOTAL_BYTES = 32 * 1024 * 1024
 KEEPALIVE_SECONDS = 10
+
+
+def upstream_progress(line):
+    """Transport keepalives, including empty JSON deltas, are not model work."""
+    if not line.startswith('data:'):
+        return False
+    value = line[5:].strip()
+    if value == '[DONE]':
+        return True
+    try:
+        payload = json.loads(value)
+        if not isinstance(payload, dict):
+            return False
+        if any(payload.get(key) for key in ('tool', 'tool_name', 'toolCallId', 'tool_call_id', 'todos', 'request_id', 'error')):
+            return True
+        for choice in payload.get('choices', []):
+            if not isinstance(choice, dict):
+                continue
+            if choice.get('finish_reason'):
+                return True
+            delta = choice.get('delta')
+            if isinstance(delta, dict) and any(delta.get(key) for key in ('content', 'reasoning_content', 'reasoning', 'tool_calls', 'function_call')):
+                return True
+    except (ValueError, TypeError):
+        pass
+    return False
+
+
 # A device listening for changes is let go after this long and simply asks again.
 FEED_SECONDS = 270
 BODY_LIMIT = 8 * 1024 * 1024
@@ -1064,7 +1092,7 @@ class Relay:
                 if frame_bytes > FRAME_BYTES:
                     raise ValueError("Upstream stream frame exceeded its limit")
                 line = raw.decode("utf-8").rstrip("\r\n")
-                if line.startswith("data:"):
+                if upstream_progress(line):
                     progressed_at = self.clock()
                 elif not seen["approval"] and self.clock() - progressed_at > UPSTREAM_PROGRESS_SECONDS:
                     seen["dropped"] = True
@@ -1571,7 +1599,8 @@ class Relay:
                     return run.finish("error")
                 if (constrained(seen['contract']) and answered(seen) and seen['finished']
                         and not seen['failed'] and not seen['truncated'] and not run.stopped):
-                    checked, errors = validate_answer(split_notes(seen['answer'])[0], seen['contract'],run.trace.executed_tools)
+                    candidate = seen['answer'] if seen['contract'].get('json') else split_notes(seen['answer'])[0]
+                    checked, errors = validate_answer(candidate, seen['contract'],run.trace.executed_tools)
                     if not errors and seen['contract'].get('verify_returned_python'):
                         arguments=returned_python(checked,seen['contract'].get('preserve_input'))
                         progress={'tool':'python_verify','toolCallId':'returned_python_'+str(attempt),'status':'running','label':'Checking the returned code and tests'}
@@ -1718,7 +1747,9 @@ class Relay:
                 tail = seen['note_filter'].feed('', final=True)
                 if tail:
                     run.emit('data: ' + json.dumps({'choices': [{'delta': {'content': tail}}]}))
-            _, notes = split_notes(seen['answer'])
+            # Raw output is data, including strings that happen to resemble a
+            # memory directive. Never persist those strings as personal facts.
+            _, notes = split_notes(seen['answer']) if not constrained(seen['contract']) else ('', [])
             if notes and body.get('memory_can_note') is True and isinstance(body.get('memory_permission'), str) and not run.trace.counts.get('tool_starts'):
                 run.event('jarvis.memory', {'notes': notes, 'permission': body['memory_permission']})
             original = body["messages"]
