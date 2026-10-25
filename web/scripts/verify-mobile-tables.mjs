@@ -117,6 +117,28 @@ for (const engine of ['chromium', 'webkit']) {
           if (profile.phone) {
             assert.ok(geometry.header < 120, `${id}: compact caption`);
             if (profile.width < 768) assert.ok(geometry.table > geometry.viewport, `${id}: long prose scrolls horizontally`);
+            if (profile.width < 768) {
+              assert.ok(geometry.cells.slice(1).every(width => width >= 144 && width <= 200), `${id}: prose columns have balanced reading widths`);
+              const splitWords = await tables.evaluateAll(elements => {
+                const split = [];
+                for (const table of elements) {
+                  const walker = document.createTreeWalker(table.querySelector('table'), NodeFilter.SHOW_TEXT);
+                  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+                    if (node.parentElement.closest('a,code,.sr-only')) continue;
+                    for (const match of node.textContent.matchAll(/[\p{L}\p{N}]+/gu)) {
+                      const range = document.createRange();
+                      range.setStart(node, match.index);
+                      range.setEnd(node, match.index + match[0].length);
+                      if (range.getClientRects().length > 1) split.push(match[0]);
+                    }
+                  }
+                }
+                return split;
+              });
+              assert.deepEqual(splitWords, [], `${id}: whole words stay on a single line`);
+              const referenceWidth = await tables.nth(3).locator('table').evaluate(element => element.offsetWidth);
+              assert.ok(referenceWidth < profile.width * 2, `${id}: long URLs do not widen the table excessively`);
+            }
             assert.ok(geometry.contentHeight <= geometry.height + 1, `${id}: no nested vertical scrolling`);
             assert.equal(await first.getByRole('checkbox').count(), 0);
             assert.equal(await first.getByRole('searchbox').count(), 0);
