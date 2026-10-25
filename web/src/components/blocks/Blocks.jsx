@@ -17,6 +17,8 @@ import {
   DownloadSimple,
   Eye,
   MagnifyingGlass,
+  SlidersHorizontal,
+  ArrowsDownUp,
   Columns,
   FileCode,
   TextAlignLeft,
@@ -58,6 +60,7 @@ import "./output-polish.css";
 import "./after.css";
 import "./math.css";
 import "./finish.css";
+import "./mobile-tables.css";
 import '@fontsource/jetbrains-mono/400.css';
 import '@fontsource/jetbrains-mono/500.css';
 import { copyText } from "../../lib/desktop.js";
@@ -571,7 +574,8 @@ function TableBlock({ node, "data-src": src }) {
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState([]);
   const [onlySelected, setOnlySelected] = useState(false);
-  const toolsOpen = true;
+  const [mobileToolsOpen, setMobileToolsOpen] = useState(false);
+  const toolsOpen = !phone || mobileToolsOpen;
   const [highlight, setHighlight] = useState(false);
   const [differenceAxis, setDifferenceAxis] = useState(() => comparisonAxis(data.columns));
   const enhance = presentation !== "minimal" && !live && interactive && data.rows.length >= 2 && data.rows.length <= 200 && data.columns.length <= 20;
@@ -611,13 +615,14 @@ function TableBlock({ node, "data-src": src }) {
     </div>;
   if (enhance && suggested.explore && !asTable && chosenView === null) return <figure className="table-block" data-src={src}><NumberExplorer columns={data.columns} rows={data.rows.filter(row => !isSectionRow(row))} /><footer className="after-footer"><span>What-if calculations stay on this device</span><button className="block-tool" onClick={() => setAsTable(true)}><Table size={15} />Show original table</button></footer></figure>;
   return (
-    <figure className="table-block" data-src={src}>
+    <figure className="table-block" data-src={src} data-phone={phone || undefined}>
       <figcaption className="block-bar">
         <span className="label">{context && context.length < 80 && !context.includes('\n') ? context : 'Table'}</span>
         <span className="block-count">
           {displayed.total} {displayed.total === 1 ? "row" : "rows"}
         </span>
         <span className="block-tools">
+          {phone && enhance && view === 'table' && <button className="block-tool" aria-label="Table tools" aria-expanded={mobileToolsOpen} onClick={() => setMobileToolsOpen(value => !value)}><SlidersHorizontal size={16} /><span>Tools</span></button>}
           {plan && (
             <span className="segmented" role="group" aria-label="View as">
               <button
@@ -671,7 +676,7 @@ function TableBlock({ node, "data-src": src }) {
           </button>
         </span>
       </figcaption>
-      {enhance && view === 'table' && <div className="local-table-tools">
+      {enhance && toolsOpen && view === 'table' && <div className="local-table-tools">
         <div className="local-controls">
           <label className="after-table-filter"><MagnifyingGlass size={16}/><input aria-label="Filter rows" type="search" maxLength={200} value={query} onChange={e => setQuery(e.target.value)} placeholder="Filter rows…" /></label>
           <button className="block-tool after-table-compare" aria-pressed={onlySelected} disabled={!selected.length && !onlySelected} onClick={() => setOnlySelected(v => !v)}><Columns size={16}/>{onlySelected ? 'Show all rows' : `Compare (${selected.length})`}</button>
@@ -686,7 +691,7 @@ function TableBlock({ node, "data-src": src }) {
           <table style={{ "--table-min-width": `${Math.min(38, data.columns.length * 7 + (enhance && toolsOpen ? 3.5 : 0))}rem` }}>
             <thead>
               <tr>
-                {enhance && toolsOpen && <th scope="col"><span className="sr-only">Compare</span></th>}
+                {enhance && toolsOpen && <th scope="col" className="table-selection"><span className="sr-only">Compare</span></th>}
                 {data.heads.map((head, i) => (
                   <th
                     key={i}
@@ -702,7 +707,7 @@ function TableBlock({ node, "data-src": src }) {
                   >
                     <button onClick={() => toggle(i)} aria-label={`Sort by ${data.columns[i]}`} data-tip="Sort by this column">
                       {inline(head, i)}
-                      <span className="sort-mark" aria-hidden="true">{sort.column === i ? sort.direction === "asc" ? "↑" : "↓" : "↕"}</span>
+                      <span className="sort-mark" aria-hidden="true">{sort.column === i ? sort.direction === "asc" ? "↑" : "↓" : <ArrowsDownUp size={12} />}</span>
                     </button>
                   </th>
                 ))}
@@ -714,8 +719,8 @@ function TableBlock({ node, "data-src": src }) {
                   <th scope="rowgroup" colSpan={data.columns.length + (enhance && toolsOpen ? 1 : 0)}>{inline(data.cells[r][0], 0)}</th>
                 </tr>
               ) : (
-                <tr key={r} data-selected={selected.includes(r) || undefined} onClick={enhance ? event => { if (event.target.closest('a,button,input')) return; setSelected(items => items.includes(r) ? items.filter(i => i !== r) : [...items, r]); } : undefined}>
-                  {enhance && toolsOpen && <td><input type="checkbox" aria-label={`Compare row ${rowNumbers.get(r)}: ${data.rows[r][0]}`} checked={selected.includes(r)} onChange={e => setSelected(items => e.target.checked ? [...items, r] : items.filter(i => i !== r))} /></td>}
+                <tr key={r} data-selected={toolsOpen && selected.includes(r) || undefined} onClick={enhance && toolsOpen ? event => { if (event.target.closest('a,button,input')) return; setSelected(items => items.includes(r) ? items.filter(i => i !== r) : [...items, r]); } : undefined}>
+                  {enhance && toolsOpen && <td className="table-selection"><input type="checkbox" aria-label={`Compare row ${rowNumbers.get(r)}: ${data.rows[r][0]}`} checked={selected.includes(r)} onChange={e => setSelected(items => e.target.checked ? [...items, r] : items.filter(i => i !== r))} /></td>}
                   {data.cells[r].map((cell, i) => (
                     <td key={i} data-numeric={numeric[i] || undefined} data-different={differences.has(`${r}:${i}`) || undefined}>
                       {best.has(`${r}:${i}`) && <span className="table-best" aria-label="Best value">★</span>}
@@ -730,7 +735,7 @@ function TableBlock({ node, "data-src": src }) {
         </TableScroll>
       )}
       {enhance && visible.length === 0 && <p className="local-note">No matching rows. Reset the view to see the full table.</p>}
-      {enhance && view === 'table' && <footer className="after-footer"><b>{selected.length ? `${selected.length} selected` : `${displayed.count} rows`}</b><span>{onlySelected ? 'Comparing selection' : 'Select rows to compare'}</span>{selected.length > 0 && <button className="block-tool" onClick={() => { setSelected([]); setOnlySelected(false); setHighlight(false); }}>Clear</button>}{(query || sort.column !== null) && <button className="block-tool" onClick={() => { setQuery(''); setSort({column:null,direction:'asc'}); }}>Reset view</button>}<span className="sr-only" role="status">{displayed.count} of {displayed.total} rows. Copy and CSV include the original table.</span></footer>}
+      {enhance && (toolsOpen || query || selected.length > 0 || sort.column !== null) && view === 'table' && <footer className="after-footer"><b>{selected.length ? `${selected.length} selected` : `${displayed.count} rows`}</b><span>{onlySelected ? 'Comparing selection' : 'Select rows to compare'}</span>{selected.length > 0 && <button className="block-tool" onClick={() => { setSelected([]); setOnlySelected(false); setHighlight(false); }}>Clear</button>}{(query || sort.column !== null) && <button className="block-tool" onClick={() => { setQuery(''); setSort({column:null,direction:'asc'}); }}>Reset view</button>}<span className="sr-only" role="status">{displayed.count} of {displayed.total} rows. Copy and CSV include the original table.</span></footer>}
       {enhance && suggested.explore && visible.length > 0 && <NumberExplorer defaultOpen columns={data.columns} rows={displayed.rows.filter(row => !isSectionRow(row))} />}
     </figure>
   );
