@@ -20,6 +20,16 @@
   white-space: nowrap;
 }
 
+/* A table already has a keyboard-accessible sideways scroller. Let the
+   equation size its cell instead of creating a second, unfocusable scroller. */
+.prose .table-block .katex-display {
+  overflow: visible;
+}
+
+.prose.prose .table-block[data-phone] :is(th, td):has(.math-block) {
+  max-width: none;
+}
+
 .math-block {
   position: relative;
   display: block;

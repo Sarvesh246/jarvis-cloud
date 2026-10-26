@@ -11,4 +11,5 @@ export const tableRenderingFixtures = [
   { id: 'table-partial', running: true, content: '| Expression | Value |\n| --- | --- |\n| $x^2$ | 4 |\n| $y_' },
   { id: 'table-wide-math', mathCount: 1, content: '| Formula | Description |\n| --- | --- |\n| $a_1+a_2+a_3+a_4+a_5+a_6+a_7+a_8+a_9+a_{10}+a_{11}+a_{12}$ | A wide inline expression |' },
   { id: 'table-display-math', mathCount: 2, content: '| $$x^2$$ | Meaning |\n| --- | --- |\n| $$\\frac{1}{2}$$ | Half |' },
+  { id: 'table-wide-display', mathCount: 1, content: '| Formula | Meaning |\n| --- | --- |\n| $$a_1+a_2+a_3+a_4+a_5+a_6+a_7+a_8+a_9+a_{10}+a_{11}+a_{12}$$ | A wide display expression |' },
 ];
