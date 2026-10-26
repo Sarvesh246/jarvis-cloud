@@ -269,7 +269,11 @@
     transition: background var(--dur-1) var(--ease), transform var(--dur-1) var(--ease);
   }
 
-  .round-action:active {
+  .round-action:disabled {
+    opacity: 0.45;
+  }
+
+  .round-action:active:not(:disabled) {
     background: var(--gilt-wash);
     transform: scale(0.92);
   }

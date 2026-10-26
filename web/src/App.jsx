@@ -2648,6 +2648,7 @@ export function App() {
                       requestImages={imagesForReply(messages, index)}
                       fresh={fresh.current.has(message.id)}
                       busy={busy}
+                      offline={!online || !!session.offline}
                       phase={live ? livePhase : undefined}
                       live={live}
                       streaming={live && !!message.content}

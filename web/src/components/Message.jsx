@@ -687,7 +687,7 @@ function SourcesPill({ sources, onOpen }) {
   );
 }
 
-function MessageView({ message, requestText = "", requestImages, fresh, busy, live, streaming, phase, isLast, edited, onAction, phone = false }) {
+function MessageView({ message, requestText = "", requestImages, fresh, busy, live, streaming, phase, isLast, edited, onAction, phone = false, offline = false }) {
   const [copied, copy] = useCopy();
   const [editing, setEditing] = useState(false);
   const [menu, setMenu] = useState(false);
@@ -806,7 +806,7 @@ function MessageView({ message, requestText = "", requestImages, fresh, busy, li
               ? "You stopped this reply."
               : "You stopped this before Vaelo answered."}
             {canAct && message.content && (
-              <button className="text-button" onClick={() => act("continue")}>
+              <button className="text-button" disabled={offline} onClick={() => act("continue")}>
                 Continue <ArrowRight size={14} />
               </button>
             )}
@@ -816,7 +816,7 @@ function MessageView({ message, requestText = "", requestImages, fresh, busy, li
           <p className="message-note">
             This reply reached its length limit.
             {canAct && (
-              <button className="text-button" onClick={() => act("continue")}>
+              <button className="text-button" disabled={offline} onClick={() => act("continue")}>
                 Continue <ArrowRight size={14} />
               </button>
             )}
@@ -827,10 +827,10 @@ function MessageView({ message, requestText = "", requestImages, fresh, busy, li
             <p>{message.note}</p>
             {canAct && (
               <span className="message-error-actions">
-                <button className="text-button" onClick={() => act("continue")}>
+                <button className="text-button" disabled={offline} onClick={() => act("continue")}>
                   Continue from here <ArrowRight size={14} />
                 </button>
-                <button className="text-button" onClick={() => act("retry")}>
+                <button className="text-button" disabled={offline} onClick={() => act("retry")}>
                   <ArrowClockwise size={15} /> Start over
                 </button>
               </span>
@@ -841,7 +841,7 @@ function MessageView({ message, requestText = "", requestImages, fresh, busy, li
           <div className="message-error" role="alert">
             <p>{message.note}</p>
             {(canAct || action.type === "signin") && (
-              <button className="text-button" onClick={() => act(action.type)}>
+              <button className="text-button" disabled={offline && action.type === "retry"} onClick={() => act(action.type)}>
                 <action.icon size={15} />
                 {action.label}
               </button>
@@ -882,7 +882,7 @@ function MessageView({ message, requestText = "", requestImages, fresh, busy, li
               {copied ? <Check size={19} /> : <Copy size={19} />}
             </button>
             {isLast && !busy && !message.failed && !message.interrupted && (
-              <button className="round-action" aria-label="Try again" onClick={() => act("retry")}>
+              <button className="round-action" aria-label="Try again" disabled={offline} onClick={() => act("retry")}>
                 <ArrowClockwise size={19} />
               </button>
             )}
@@ -953,7 +953,7 @@ function MessageView({ message, requestText = "", requestImages, fresh, busy, li
               </button>
             )}
             {!mine && isLast && !busy && !message.failed && !message.interrupted && (
-              <button className="text-button" onClick={() => act("retry")}>
+              <button className="text-button" disabled={offline} onClick={() => act("retry")}>
                 <ArrowClockwise size={15} />
                 Try again
               </button>
@@ -991,6 +991,7 @@ function MessageView({ message, requestText = "", requestImages, fresh, busy, li
             {!mine && isLast && !busy && !message.failed && !message.interrupted && (
               <button
                 className="sh-row"
+                disabled={offline}
                 onClick={() => {
                   setMenu(false);
                   act("retry");

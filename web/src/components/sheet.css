@@ -157,6 +157,10 @@
   background: var(--gilt-wash);
 }
 
+.sh-row:disabled {
+  opacity: 0.45;
+}
+
 .sh-row > svg {
   flex: none;
 }
