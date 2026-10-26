@@ -59,3 +59,4 @@ test-results/
 coverage/
 traces/
 
+.codex/worktree/
