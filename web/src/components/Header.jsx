@@ -122,7 +122,7 @@ export function Header({ title, kicker, meta, canRename, onRename, onOpenRail, o
         )}
         </div>
       </div>
-      {onFind && <button className="block-tool header-find" onClick={onFind} aria-label="Find actions, conversations and saved outputs" aria-keyshortcuts="Control+k Meta+k">Find <kbd>⌘/Ctrl K</kbd></button>}
+      {onFind && <button className="block-tool header-find" onClick={onFind} aria-description="Find actions, conversations and saved outputs" aria-keyshortcuts="Control+k Meta+k">Find <kbd>⌘/Ctrl K</kbd></button>}
       {onSaveAsWorkspace && (
         <button
           className="icon-button header-save-work"

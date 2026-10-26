@@ -482,10 +482,10 @@ export function SourceStrip({ sources, onOpen, arriving = false }) {
       className="source-strip"
       data-arriving={arriving || undefined}
       onClick={onOpen}
-      aria-label={`Show ${sources.length} sources`}
+      aria-description={`Show all ${sources.length} sources`}
     >
       <span className="label">Sources</span>
-      <span className="source-stack" aria-hidden="true">
+      <span className="source-stack">
         {shown.map((source) => (
           <span key={source.id} className="source-pip" data-kind={source.kind}>
             <SourceIcon kind={source.kind} size={12} />
