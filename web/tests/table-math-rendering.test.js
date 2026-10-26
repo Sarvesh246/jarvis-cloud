@@ -16,6 +16,7 @@ test('table formulas retain generated math and use one TeX value for table data'
       assert.equal((html.match(/class="katex-mathml"/g) || []).length, fixture.mathCount);
       assert.equal((html.match(/class="katex-html" aria-hidden="true"/g) || []).length, fixture.mathCount);
       assert.doesNotMatch(html, /block-fallback/);
+      assert.doesNotMatch(html, /math-copy/, 'table controls own copying; equation controls must not nest inside sortable header buttons');
     }
     const html = render(tableRenderingFixtures.find(f => f.id === 'table-math').content);
     assert.match(html, /aria-label="Sort by x\^2"/);

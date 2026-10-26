@@ -526,7 +526,7 @@ function inline(node, key, wrapDimensions = false) {
   if (node.properties?.className?.some(name => ['katex', 'katex-error', 'math-block'].includes(name))) {
     // Keep the generated HTML and MathML together, including their styles and
     // accessibility attributes. Walking them as prose duplicates the equation.
-    return <React.Fragment key={key}>{toJsxRuntime(node, { Fragment: React.Fragment, jsx, jsxs, components, passNode: true })}</React.Fragment>;
+    return <React.Fragment key={key}>{toJsxRuntime(node, { Fragment: React.Fragment, jsx, jsxs })}</React.Fragment>;
   }
   const kids = (node.children || []).map((child, i) => inline(child, i, wrapDimensions && node.tagName !== "code"));
   switch (node.tagName) {
