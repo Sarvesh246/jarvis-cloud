@@ -19,7 +19,9 @@ test('table formulas retain generated math and use one TeX value for table data'
       assert.doesNotMatch(html, /math-copy/, 'table controls own copying; equation controls must not nest inside sortable header buttons');
     }
     const html = render(tableRenderingFixtures.find(f => f.id === 'table-math').content);
-    assert.match(html, /aria-label="Sort by x\^2"/);
+    assert.match(html, /<span class="sr-only">Sort by x\^2<\/span>/);
+    assert.match(html, /class="table-header-label" aria-hidden="true"/);
+    assert.doesNotMatch(html, /aria-label="Sort by x\^2"/, 'the formula supplies its own accessible name instead of a mismatched TeX label');
     assert.doesNotMatch(html, /Sort by x2x\^2x2/);
     const malformed = render(tableRenderingFixtures.find(f => f.id === 'table-malformed').content);
     assert.match(malformed, /class="katex-error"/);

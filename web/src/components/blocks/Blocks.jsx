@@ -557,6 +557,11 @@ function inline(node, key, wrapDimensions = false) {
   }
 }
 
+function hasTypesetMath(node) {
+  return node.properties?.className?.some(name => ['katex', 'katex-error', 'math-block'].includes(name)) ||
+    (node.children || []).some(hasTypesetMath);
+}
+
 function tableData(node) {
   const rows = [];
   const walk = (n) => {
@@ -569,6 +574,7 @@ function tableData(node) {
   return {
     columns: head.map(hastText).map(cellText),
     heads: head,
+    mathHeads: head.map(hasTypesetMath),
     rows: body.map((row) => row.map(hastText)),
     cells: body,
   };
@@ -733,8 +739,9 @@ function TableBlock({ node, "data-src": src }) {
                         : undefined
                     }
                   >
-                    <button onClick={() => toggle(i)} aria-label={`Sort by ${data.columns[i]}`} data-tip="Sort by this column">
-                      <span className="table-header-label">{inline(head, i, phone)}</span>
+                    <button onClick={() => toggle(i)} aria-label={data.mathHeads[i] ? undefined : `Sort by ${data.columns[i]}`} data-tip="Sort by this column">
+                      <span className="table-header-label" aria-hidden={data.mathHeads[i] || undefined}>{inline(head, i, phone)}</span>
+                      {data.mathHeads[i] && <span className="sr-only">Sort by {data.columns[i]}</span>}
                       <span className="sort-mark" aria-hidden="true">{sort.column === i ? sort.direction === "asc" ? "↑" : "↓" : <ArrowsDownUp size={12} />}</span>
                     </button>
                   </th>
