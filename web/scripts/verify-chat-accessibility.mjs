@@ -191,6 +191,8 @@ try {
         await activate(page.locator(options.isMobile ? '#m-answer .sources-pill' : '#m-answer .source-strip'));
         if (options.isMobile) {
           await page.getByRole('dialog', { name: 'Sources', exact: true }).waitFor();
+          assert.equal(await page.getByRole('dialog', { name: 'Sources', exact: true }).evaluate(el => el.contains(document.activeElement)), true,
+            'a visible Sources sheet owns focus before the first keyboard action');
           await page.keyboard.press('Escape');
           await page.locator('.sheet[aria-label="Sources"]').waitFor({ state: 'hidden' });
         } else {

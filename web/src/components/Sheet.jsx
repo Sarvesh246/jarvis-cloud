@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { containSheetFocus } from "../lib/sheet-focus.js";
 import "./sheet.css";
@@ -37,7 +37,7 @@ export function Sheet({ open, onClose, label, tall = false, children }) {
     return () => clearTimeout(timer);
   }, [open]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!open || !mounted || !panel.current) return;
     return containSheetFocus(panel.current, () => close.current());
   }, [open, mounted]);

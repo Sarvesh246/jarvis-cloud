@@ -104,13 +104,20 @@ function lifecycle() {
   useState(initial){const i=cursor++; if(!(i in slots)) slots[i]=initial; return [slots[i],v=>{slots[i]=v;}];},
   useRef(initial){const i=cursor++; return slots[i]??={current:initial===null?fakePanel:initial};},
   useEffect(effect,deps){const i=cursor++, old=slots[i]; if(!old||deps.some((d,j)=>d!==old.deps[j])) pending.push(()=>{old?.cleanup?.(); slots[i]={deps,cleanup:effect()};});},
+  useLayoutEffect(effect,deps){const i=cursor++, old=slots[i]; if(!old||deps.some((d,j)=>d!==old.deps[j])) {old?.cleanup?.(); slots[i]={deps,cleanup:effect()};}},
   requestAnimationFrame(fn){frames.set(++frameId,fn); return frameId;}, cancelAnimationFrame(id){frames.delete(id);},
   setTimeout(fn){timers.set(++timerId,fn); return timerId;}, clearTimeout(id){timers.delete(id);},
   containSheetFocus(){activations++; return ()=>{releases++;};},
  });
- function render(value=open){open=value; cursor=0; const result=renderSheet({open,onClose(){},children:'content'}); const work=pending;pending=[];work.forEach(fn=>fn());return result;}
+ function render(value=open,beforeEffects=()=>{}){open=value; cursor=0; const result=renderSheet({open,onClose(){},children:'content'}); beforeEffects(); const work=pending;pending=[];work.forEach(fn=>fn());return result;}
  return {render,frames,timers, frame(){const work=[...frames.values()];frames.clear();work.forEach(fn=>fn());},unmount(){slots.forEach(slot=>slot?.cleanup?.());},get activations(){return activations;},get releases(){return releases;}};
 }
+
+test('a mounted open sheet contains focus before passive effects run',()=>{
+ const f=lifecycle();
+ f.render(true,()=>assert.equal(f.activations,1));
+ f.unmount(); assert.equal(f.releases,1);
+});
 
 test('closing between animation frames cancels the delayed rise and releases focus once',()=>{
  const f=lifecycle(); f.render(); f.render(true); f.render(); f.frame();
