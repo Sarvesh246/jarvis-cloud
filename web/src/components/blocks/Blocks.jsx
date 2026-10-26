@@ -1,4 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { jsx, jsxs } from 'react/jsx-runtime';
+import { toJsxRuntime } from 'hast-util-to-jsx-runtime';
 import { createPortal } from 'react-dom';
 import Markdown, { defaultUrlTransform } from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -109,6 +111,13 @@ export function textOf(node) {
 function hastText(node) {
   if (!node) return "";
   if (node.type === "text") return node.value;
+  const classes = node.properties?.className || [];
+  if (classes.includes('math-block') && typeof node.properties?.dataTex === 'string') return node.properties.dataTex;
+  if (classes.includes('katex')) {
+    const math = node.children?.find(child => child.properties?.className?.includes('katex-mathml'))?.children?.find(child => child.tagName === 'math');
+    const annotation = math?.children?.find(child => child.tagName === 'semantics')?.children?.find(child => child.tagName === 'annotation' && child.properties?.encoding === 'application/x-tex');
+    if (annotation) return (annotation.children || []).map(hastText).join('');
+  }
   if (node.tagName === "img") return node.properties?.alt || "";
   if (node.tagName === "br") return "\n";
   return (node.children || []).map(hastText).join("");
@@ -514,6 +523,11 @@ function inline(node, key, wrapDimensions = false) {
     return parts.map((part, i) => <React.Fragment key={i}>{i > 0 && <wbr />}{part}</React.Fragment>);
   }
   if (node.type !== "element") return null;
+  if (node.properties?.className?.some(name => ['katex', 'katex-error', 'math-block'].includes(name))) {
+    // Keep the generated HTML and MathML together, including their styles and
+    // accessibility attributes. Walking them as prose duplicates the equation.
+    return <React.Fragment key={key}>{toJsxRuntime(node, { Fragment: React.Fragment, jsx, jsxs, components, passNode: true })}</React.Fragment>;
+  }
   const kids = (node.children || []).map((child, i) => inline(child, i, wrapDimensions && node.tagName !== "code"));
   switch (node.tagName) {
     case "pre": {

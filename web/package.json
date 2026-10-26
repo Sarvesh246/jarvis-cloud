@@ -47,6 +47,7 @@
     "diff": "^9.0.0",
     "fast-xml-parser": "^5.11.2",
     "fflate": "^0.8.3",
+    "hast-util-to-jsx-runtime": "2.3.6",
     "jose": "6.2.12",
     "katex": "0.16.22",
     "micromark-util-decode-string": "2.0.1",
