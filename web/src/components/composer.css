@@ -1,6 +1,7 @@
 /* The writing slip: a quiet ruled field, not a chat bubble. Words on top,
    a single line of instruments beneath. */
 .composer {
+  container-type: inline-size;
   display: flex;
   flex-direction: column;
   gap: var(--s-1);
@@ -336,14 +337,22 @@
 
 
 @media (hover: hover) and (min-width: 48rem) {
-  .composer:focus-within .composer-hint {
-    display: inline;
-    animation: hint-in var(--dur-3) var(--ease) both;
-  }
+  /* A focus change must not resize the composer beneath a reply action. */
+  @container (min-width: 38rem) {
+    .composer-hint {
+      display: inline;
+      visibility: hidden;
+    }
 
-  /* A chosen role or research needs the room more than the reminder does */
-  .composer:has(.mode-chip) .composer-hint {
-    display: none;
+    .composer:focus-within .composer-hint {
+      visibility: visible;
+      animation: hint-in var(--dur-3) var(--ease) both;
+    }
+
+    /* A chosen role or research needs the room more than the reminder does */
+    .composer:has(.mode-chip) .composer-hint {
+      display: none;
+    }
   }
 }
 

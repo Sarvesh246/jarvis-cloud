@@ -41,6 +41,7 @@ try {
     if (process.env.CHAT_TEST_PROFILE && process.env.CHAT_TEST_PROFILE !== profile) continue;
     for (const fixture of accessibilityFixtures) {
       if (process.env.CHAT_TEST_FIXTURE && process.env.CHAT_TEST_FIXTURE !== fixture.id) continue;
+      if (process.env.CHAT_TEST_FIXTURES && !process.env.CHAT_TEST_FIXTURES.split(',').includes(fixture.id)) continue;
       console.log(`${phase}: checking ${profile}/${theme}/${fixture.id}`);
       const context = await browser.newContext({ ...options, serviceWorkers: 'block', reducedMotion: 'reduce' });
       const page = await context.newPage();
@@ -68,7 +69,7 @@ try {
         if (url.pathname === '/api/session') return json({ user: { sub: 'accessibility-review', name: 'User' }, csrf: 'a'.repeat(64), configured: true });
         if (url.pathname === '/api/status') return json({ ready: true });
         if (url.pathname === '/api/chat') {
-          sent.push(route.request().postDataJSON());
+          if (route.request().method() === 'POST') sent.push(route.request().postDataJSON());
           const respond = () => route.fulfill({ contentType: 'text/event-stream', body: 'data: {"choices":[{"delta":{"content":"Mocked reply."}}]}\n\nevent: jarvis.complete\ndata: {"ok":true}\n\n' });
           if (!holdReply) return respond();
           return new Promise(resolve => { releaseReply = () => respond().then(resolve, resolve); });
@@ -92,7 +93,7 @@ try {
         Date.now = () => now;
         const chat = { id: '123e4567-e89b-12d3-a456-426614174000', title: 'Accessibility review', updated: now, messages: [
           { id: 'question', role: 'user', content: fixture.user || 'Please explain this example.', ...(fixture.user ? { text: 'A saved multipart question.' } : {}) },
-          { id: 'answer', role: 'assistant', content: fixture.content, completedAt: now, ...(fixture.running ? { running: true } : {}), ...(fixture.versionCount ? { version: 1, versions: Array.from({ length: fixture.versionCount }, (_, i) => ({ content: i === 1 ? fixture.content : `Saved version ${i + 1}.` })) } : {}) },
+          { id: 'answer', role: 'assistant', content: fixture.content, completedAt: now, ...fixture.state, ...(fixture.running ? { running: true } : {}), ...(fixture.versionCount ? { version: 1, versions: Array.from({ length: fixture.versionCount }, (_, i) => ({ content: i === 1 ? fixture.content : `Saved version ${i + 1}.` })) } : {}) },
         ] };
         localStorage.setItem('vaelo-sync:accessibility-review', JSON.stringify({ chats: [chat], base: {} }));
         localStorage.setItem('vaelo-onboarding', 'done');
@@ -118,6 +119,11 @@ try {
       await page.addScriptTag({ content: axe });
       const accessibility = await page.evaluate(async () => (await axe.run(document, { rules: { 'color-contrast': { enabled: true } } })).violations.map(v => ({ id: v.id, count: v.nodes.length, nodes: v.nodes.map(n => ({ html: n.html, target: n.target })) })));
       const targets = await page.locator('#m-answer .message-actions-phone button').evaluateAll(buttons => buttons.map(button => { const r = button.getBoundingClientRect(); return { label: button.getAttribute('aria-label') || button.textContent.trim(), x: r.x, y: r.y, width: r.width, height: r.height }; }));
+      const composer = await page.locator('.composer').evaluate(el => ({
+        width: el.getBoundingClientRect().width,
+        height: el.getBoundingClientRect().height,
+        overflow: el.scrollWidth > el.clientWidth + 1,
+      }));
       const geometry = await page.evaluate(() => ({
         overflow: document.documentElement.scrollWidth > innerWidth,
         shift: window.shifts,
@@ -128,6 +134,7 @@ try {
       }));
       assert.equal(geometry.overflow, false, `${profile}/${fixture.id} page overflow`);
       if (!recordOnly) {
+        assert.equal(composer.overflow, false, 'composer tools fit inside the writing surface');
         for (const violation of accessibility) {
           assert.ok(violation.nodes.every(node => !node.target.some(target => /header-find|source-strip/.test(target))),
             'Find and the source strip include their visible text in their accessible names');
@@ -140,6 +147,7 @@ try {
       assert.deepEqual(errors, []);
       await page.screenshot({ path: join(output, `${profile}-${theme}-${fixture.id}.png`), animations: 'disabled', caret: 'hide' });
       let copyFailure = false;
+      let composerAfterCopy;
       if (!fixture.running) {
         if (options.isMobile) {
           await page.locator('#m-answer .message-actions-phone').getByRole('button', { name: 'Copy', exact: true }).tap();
@@ -153,6 +161,9 @@ try {
           copyFailure = true;
         }
         if (!copyFailure) assert.equal(await page.evaluate(() => window.copiedText), fixture.content, 'copy preserves source Markdown');
+        await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+        composerAfterCopy = (await page.locator('.composer').boundingBox()).height;
+        if (!recordOnly) assert.equal(composerAfterCopy, composer.height, 'leaving the composer cannot move a reply action during its click');
       }
       if (!recordOnly && fixture.id === 'sources-versions') {
         const answer = page.locator('#m-answer');
@@ -244,7 +255,7 @@ try {
         await page.locator('#m-question').waitFor();
         assert.deepEqual(errors, []);
       }
-      results.push({ profile, theme, fixture: fixture.id, targets, copyFailure, ...geometry, accessibility });
+      results.push({ profile, theme, fixture: fixture.id, targets, composer, composerAfterCopy, copyFailure, ...geometry, accessibility });
       await context.close();
     }
     console.log(`${phase}: ${profile}/${theme} complete`);
