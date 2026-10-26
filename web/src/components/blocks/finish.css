@@ -8,6 +8,18 @@
   justify-content: flex-start;
 }
 
+/* An explicit Markdown column alignment takes precedence over numeric inference. */
+.prose.prose .table-block [data-align="left"],
+.prose.prose .table-block th[data-align="left"] button { text-align: left; }
+.prose.prose .table-block [data-align="center"],
+.prose.prose .table-block th[data-align="center"] button { text-align: center; }
+.prose.prose .table-block [data-align="right"],
+.prose.prose .table-block th[data-align="right"] button { text-align: right; }
+.prose.prose .table-block th[data-align] button { flex-direction: row; }
+.prose.prose .table-block th[data-align="left"] button { justify-content: flex-start; }
+.prose.prose .table-block th[data-align="center"] button { justify-content: center; }
+.prose.prose .table-block th[data-align="right"] button { justify-content: flex-end; }
+
 /* A short phase keeps enough room to name itself. */
 .prose.prose .timeline-phases > button { min-width: 4.5rem; }
 

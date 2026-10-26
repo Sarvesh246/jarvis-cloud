@@ -574,6 +574,11 @@ function tableData(node) {
   };
 }
 
+function tableAlignment(node) {
+  const align = node.properties?.align;
+  return ['left', 'center', 'right'].includes(align) ? align : undefined;
+}
+
 function TableView(props) {
   const { live, stateKey, content } = useContext(BlockContext);
   const position = props.node.position;
@@ -718,6 +723,7 @@ function TableBlock({ node, "data-src": src }) {
                   <th
                     key={i}
                     scope="col"
+                    data-align={tableAlignment(head)}
                     data-numeric={numeric[i] || undefined}
                     aria-sort={
                       sort.column === i
@@ -744,7 +750,7 @@ function TableBlock({ node, "data-src": src }) {
                 <tr key={r} data-selected={toolsOpen && selected.includes(r) || undefined} onClick={enhance && toolsOpen ? event => { if (event.target.closest('a,button,input')) return; setSelected(items => items.includes(r) ? items.filter(i => i !== r) : [...items, r]); } : undefined}>
                   {enhance && toolsOpen && <td className="table-selection"><input type="checkbox" aria-label={`Compare row ${rowNumbers.get(r)}: ${data.rows[r][0]}`} checked={selected.includes(r)} onChange={e => setSelected(items => e.target.checked ? [...items, r] : items.filter(i => i !== r))} /></td>}
                   {data.cells[r].map((cell, i) => (
-                    <td key={i} data-numeric={numeric[i] || undefined} data-different={differences.has(`${r}:${i}`) || undefined}>
+                    <td key={i} data-align={tableAlignment(cell)} data-numeric={numeric[i] || undefined} data-different={differences.has(`${r}:${i}`) || undefined}>
                       {best.has(`${r}:${i}`) && <span className="table-best" aria-label="Best value">★</span>}
                       {differences.has(`${r}:${i}`) && <span className="sr-only">Different: </span>}
                       {/\b(?:score|rating)\b/i.test(data.columns[i]) && Number.isFinite(toNumber(data.rows[r][i])) ? <span className="table-score"><i aria-hidden="true"><b style={{width:`${Math.max(0, toNumber(data.rows[r][i])) / Math.max(1, ...data.rows.map(row => toNumber(row[i])).filter(Number.isFinite)) * 100}%`}} /></i>{inline(cell, i, phone)}</span> : inline(cell, i, phone)}
