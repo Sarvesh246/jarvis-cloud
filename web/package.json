@@ -19,6 +19,7 @@
     "test:editing-ui": "node scripts/verify-message-editing.mjs",
     "test:backup-ui": "node scripts/verify-backup-status.mjs",
     "test:offline-ui": "node scripts/verify-offline-retry.mjs",
+    "test:accessibility-ui": "node scripts/verify-chat-accessibility.mjs",
     "baseline": "node scripts/baseline.mjs",
     "evaluate": "node scripts/evaluate-capabilities.mjs",
     "benchmark:compare": "node scripts/compare-benchmarks.mjs",

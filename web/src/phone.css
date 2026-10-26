@@ -207,14 +207,22 @@
 
   /* After a reply: its sources, then copy, retry and more as round buttons */
   .message-actions-phone {
-    flex-wrap: nowrap;
-    gap: 2px;
+    flex-wrap: wrap;
+    gap: 4px 2px;
     margin: 10px 0 0 -10px;
     opacity: 1;
   }
 
   .message-actions-phone .versions {
-    margin: 0 4px 0 10px;
+    flex: 0 0 100%;
+    margin: 0;
+    white-space: nowrap;
+  }
+
+  .message-actions-phone .versions .icon-button {
+    flex: none;
+    width: 44px;
+    height: 44px;
   }
 
   .sources-pill {
@@ -222,7 +230,7 @@
     align-items: center;
     flex: none;
     gap: 8px;
-    height: 36px;
+    height: 44px;
     margin: 0 6px 0 10px;
     padding: 0 12px 0 6px;
     border: 1px solid var(--hairline);
@@ -262,8 +270,8 @@
     display: grid;
     flex: none;
     place-items: center;
-    width: 40px;
-    height: 40px;
+    width: 44px;
+    height: 44px;
     border-radius: 50%;
     color: var(--muted);
     transition: background var(--dur-1) var(--ease), transform var(--dur-1) var(--ease);
