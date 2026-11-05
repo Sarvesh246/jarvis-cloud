@@ -57,10 +57,10 @@ export class DeviceRegistry {
     this.cache.set(sub, {});
   }
 
-  async read(sub) {
+  async read(sub, { fresh = false } = {}) {
     for (let attempt = 0; attempt < 5; attempt++) {
       const hit = this.cache.get(sub);
-      if (hit?.data && this.now() - hit.at < CACHE_MS) return hit.data;
+      if (!fresh && hit?.data && this.now() - hit.at < CACHE_MS) return hit.data;
       const { data } = await this.record.read(sub);
       if (this.cache.get(sub) !== hit) continue;
       return this.remember(sub, data);
@@ -98,6 +98,10 @@ export class DeviceRegistry {
     if (!this.enabled()) return true;
     let data = await this.read(sub);
     if (id === undefined) return issuedAt > data.legacyBefore;
+    // This instance's cached list can predate a sign-in handled by another
+    // instance, so an unknown device is confirmed against storage before it's
+    // refused. Otherwise a fresh desktop sign-in gets 401s for up to CACHE_MS.
+    if (!data.devices[id]) data = await this.read(sub, { fresh: true });
     const entry = data.devices[id];
     if (!entry || entry.audience !== audience) return false;
     if (this.now() - entry.seen > TOUCH_MS) {

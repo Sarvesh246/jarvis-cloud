@@ -62,6 +62,19 @@ test("signing out the other devices keeps this one and ends older tokens without
   assert.equal(await sessionUser(asWeb(legacy), cfg), null);
 });
 
+test("a device signed in through another instance is accepted by one holding an older cached list", async () => {
+  const { store, cfg, clock, advance } = world();
+  const warm = { ...cfg, devices: new DeviceRegistry(store, clock) };
+  const laptop = await signIn(cfg, "Chrome on Windows");
+  assert.ok(await sessionUser(asWeb(laptop), warm), "the warm instance caches the list before the app signs in");
+  const app = await signIn(cfg, "Windows app", "vaelo-desktop");
+  assert.equal((await sessionUser(asDesktop(app), warm)).sub, owner.sub);
+  const listed = await cfg.devices.list(owner.sub);
+  await cfg.devices.revoke(owner.sub, listed.find(d => d.label === "Windows app").id);
+  advance(10_001);
+  assert.equal(await sessionUser(asDesktop(app), warm), null, "revocation still reaches the warm instance once its cache ages out");
+});
+
 test("an unreadable device record refuses the session instead of trusting it", async () => {
   const { cfg, store } = world();
   const token = await signIn(cfg, "Chrome on Windows");
