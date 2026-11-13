@@ -59,7 +59,7 @@ jobs:
       - run: npm test --prefix ../deploy/freellmapi
       - run: npm run build
       - run: npm run check:bundle
-      - run: npx playwright install --with-deps chromium
+      - run: npx playwright install --with-deps chromium webkit
       - run: npm run test:editing-ui
       - run: npm run test:offline-ui
       - run: npm run test:table-ui
