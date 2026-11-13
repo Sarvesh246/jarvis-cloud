@@ -84,6 +84,8 @@ class RunJournal:
                 deadline = time.monotonic() + 0.25
                 while time.monotonic() < deadline:
                     self.condition.wait(timeout=max(0, deadline - time.monotonic()))
+                if not self.pending:
+                    continue
                 key = next(iter(self.pending))
                 entry = self.pending.pop(key)
                 self.pending_bytes -= entry["bytes"]

@@ -56,6 +56,21 @@ class JournalRecoveryTests(unittest.TestCase):
         self.assertNotIn((second.id, second.owner), journal.pending)
         self.assertEqual(journal.pending_bytes, 8)
 
+    def test_worker_survives_queue_removal_during_its_batch_window(self):
+        import threading
+        import time
+        delivered = threading.Event()
+        journal = RunJournal("https://example.test", "s" * 40, max_pending_bytes=12)
+        journal.request = lambda method, value: delivered.set() or {}
+        first = Run("discarded", "web:owner")
+        journal.append(first, 0, b"12345678")
+        time.sleep(0.05)
+        journal.append(first, 1, b"abcdefgh")
+        time.sleep(0.3)
+        self.assertTrue(journal.worker.is_alive())
+        journal.append(Run("later", "web:owner"), 0, b"new")
+        self.assertTrue(delivered.wait(2), "a later run must still be checkpointed")
+
     def test_frames_and_completion_are_submitted_in_order(self):
         journal = Mock()
         run = Run("id", "web:owner", journal)
