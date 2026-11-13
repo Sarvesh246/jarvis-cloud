@@ -37,7 +37,7 @@ Source: the November 13 audit supplied for revision `0d8c131`. This document dis
 ## Required deployment configuration
 
 - Set independent `USAGE_INGEST_KEY` and `USAGE_READ_KEY`. The relay also requires `USAGE_INGEST_KEY`; neither service accepts the relay authentication key for usage access.
-- To enable restart recovery, set the same independent `RUN_STORE_KEY` on web and relay, and set relay `VAELO_RUN_STORE_URL` to the web `/api/feed` URL. Run events contain private reply content and are account-scoped; temporary and guest replies stay out of shared storage. Set a separate `CRON_SECRET` on web to authorize the daily expiry job. Expired events become unreadable after an hour and are deleted by the next daily cleanup. The journal batches events; a hard crash can lose the most recent unacknowledged batch. It preserves answers, not a resumable provider execution. Live durable storage has not been exercised here.
+- To enable restart recovery, set the same independent `RUN_STORE_KEY` on web and relay, and set relay `VAELO_RUN_STORE_URL` to the web `/api/feed` URL. Run events contain private reply content and are account-scoped; temporary and guest replies stay out of shared storage. Set a separate `CRON_SECRET` on web to authorize the daily expiry job. Expired events become unreadable after an hour and are deleted by the next daily cleanup. The journal batches events and caps pending frame bytes at 16 MB during storage outages; a hard crash can lose the most recent unacknowledged batch. It preserves answers, not a resumable provider execution. Live durable storage has not been exercised here.
 - Run `npm run db:migrate` in `web` against the intended database using `MIGRATION_DATABASE_URL`, then set `VAELO_SCHEMA_MANAGED=1`. A separate runtime role can then have DDL removed by the database owner. No production migration, privilege change, database deletion or hosting-plan purchase was performed.
 - Native features require a new desktop build. Compilation does not verify operating-system tray behavior, signing, autostart or deep-link installation on each platform.
 
@@ -65,7 +65,7 @@ These items are still open; they must not be inferred complete from passing unit
 
 ## Verification
 
-- Web suite: 1,067 tests passed. Focused storage/streaming follow-up: 37 passed.
+- Web suite: 1,067 tests passed. Focused storage/streaming follow-up: 37 passed; eight recovery/pool checks also passed after bounding the outbox.
 - Python suite: 373 tests completed, 13 Linux-confinement cases skipped on Windows.
 - Native: Cargo check, Clippy with warnings denied, and three native tests passed on Windows.
 - Browser: 24 message-editing cases, 20 table checks, 12 desktop offline cases, 12 iPhone-layout offline cases, and the keyboard confirmation check passed with mocked APIs.

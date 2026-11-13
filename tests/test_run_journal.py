@@ -1,6 +1,7 @@
 import unittest
 from unittest.mock import Mock
 from cloud.relay import Relay, Run
+from cloud.run_journal import RunJournal
 
 
 class JournalRecoveryTests(unittest.TestCase):
@@ -35,6 +36,25 @@ class JournalRecoveryTests(unittest.TestCase):
             self.assertIsNone(run.journal)
             relay.journal.create.assert_not_called()
             relay.journal.load.assert_not_called()
+
+    def test_outage_queue_is_bounded_and_cannot_publish_false_completion(self):
+        import threading
+        journal = object.__new__(RunJournal)
+        journal.condition = threading.Condition()
+        journal.pending = {}
+        journal.pending_bytes = 0
+        journal.max_pending_bytes = 12
+        journal.disabled = {}
+        first = Run("first", "web:owner")
+        second = Run("second", "web:owner")
+        journal.append(first, 0, b"12345678")
+        journal.append(second, 0, b"abcdefgh")
+        self.assertEqual(journal.pending_bytes, 8)
+        self.assertNotIn((second.id, second.owner), journal.pending)
+        journal.append(second, 1, b"x")
+        journal.finish(second)
+        self.assertNotIn((second.id, second.owner), journal.pending)
+        self.assertEqual(journal.pending_bytes, 8)
 
     def test_frames_and_completion_are_submitted_in_order(self):
         journal = Mock()
