@@ -1,6 +1,6 @@
 {
-  "name": "jarvis-web",
-  "version": "1.0.0",
+  "name": "vaelo-web",
+  "version": "0.1.7",
   "private": true,
   "type": "module",
   "scripts": {
@@ -12,11 +12,11 @@
     "icons": "node scripts/generate-icons.mjs",
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
-    "test": "node --test tests/*.test.js",
+    "test": "node --test --test-concurrency=4 tests/*.test.js",
     "test:slash-ui": "node scripts/verify-slash-commands.mjs",
     "test:typing-ui": "node scripts/verify-typing-performance.mjs",
-    "test:table-ui": "node scripts/verify-mobile-tables.mjs",
-    "test:editing-ui": "node scripts/verify-message-editing.mjs",
+    "test:table-ui": "node scripts/run-browser-check.mjs verify-mobile-tables.mjs",
+    "test:editing-ui": "node scripts/run-browser-check.mjs verify-message-editing.mjs",
     "test:backup-ui": "node scripts/verify-backup-status.mjs",
     "test:offline-ui": "node scripts/verify-offline-retry.mjs",
     "test:table-rendering-ui": "node scripts/verify-table-rendering.mjs",
@@ -25,12 +25,14 @@
     "evaluate": "node scripts/evaluate-capabilities.mjs",
     "benchmark:compare": "node scripts/compare-benchmarks.mjs",
     "benchmark:export": "node scripts/export-reviewed.mjs",
-    "preview": "vite preview --host 127.0.0.1"
+    "preview": "vite preview --host 127.0.0.1",
+    "lint": "eslint src server api shared && node scripts/check-styles.mjs",
+    "check:bundle": "node scripts/check-bundle.mjs",
+    "evaluate:models": "node scripts/evaluate-models.mjs",
+    "db:migrate": "node scripts/migrate.mjs"
   },
   "dependencies": {
     "@fontsource-variable/newsreader": "^5.3.0",
-    "@fontsource-variable/source-sans-3": "^5.3.1",
-    "@fontsource-variable/source-serif-4": "^5.3.1",
     "@fontsource/jetbrains-mono": "^5.3.0",
     "@google/model-viewer": "^4.4.0",
     "@neondatabase/serverless": "^1.2.0",
@@ -44,13 +46,12 @@
     "@tauri-apps/plugin-opener": "^2.7.2",
     "@tauri-apps/plugin-process": "^2.4.0",
     "@tauri-apps/plugin-updater": "^2.14.0",
-    "@vercel/blob": "^2.8.2",
     "diff": "^9.0.0",
     "fast-xml-parser": "^5.11.2",
     "fflate": "^0.8.3",
     "hast-util-to-jsx-runtime": "2.3.6",
     "jose": "6.2.12",
-    "katex": "0.16.22",
+    "katex": "0.18.2",
     "micromark-util-decode-string": "2.0.1",
     "pdfjs-dist": "^6.4.299",
     "prism-react-renderer": "^2.4.1",
@@ -67,8 +68,18 @@
     "@tauri-apps/cli": "^2.12.3",
     "@vitejs/plugin-react": "6.1.2",
     "axe-core": "^4.14.0",
+    "eslint": "^10.15.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "fake-indexeddb": "^6.2.8",
+    "globals": "17.14.0",
     "playwright": "^1.64.1",
     "sharp": "^0.35.5",
     "vite": "8.3.4"
+  },
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "overrides": {
+    "katex": "$katex"
   }
 }

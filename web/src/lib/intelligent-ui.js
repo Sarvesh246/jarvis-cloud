@@ -35,10 +35,10 @@ export function visibleRows(rows, query = '', selected = [], onlySelected = fals
 
 // Units must match before values can be compared. Percentages stay percentage
 // points, currencies cannot mix, and all results must be finite.
-export function numberSeries(rows, column) {
+export function numberSeries(rows, column, header = "") {
   const values = rows.map(row => cellText(row[column]));
   const units = values.map(text => `${text.match(/[$€£¥₹]/)?.[0] || ''}${/%\)?$/.test(text) ? '%' : ''}`);
-  const numbers = values.map(toNumber);
+  const numbers = values.map(value => toNumber(value, header));
   if (!numbers.length || !numbers.every(Number.isFinite) || new Set(units).size !== 1) return null;
   return { numbers, unit: units[0] };
 }

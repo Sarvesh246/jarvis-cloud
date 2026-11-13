@@ -1,3 +1,4 @@
+import { cachedChats, saveChatCache } from "./chat-cache.js";
 const PART_SIZE = 500_000;
 const MAX_PARTS = 128;
 export const syncKey = (sub) => `vaelo-sync:${sub}`;
@@ -15,6 +16,7 @@ export function fingerprint(chat) {
 
 export function readSyncCache(sub, storage = localStorage) {
   try {
+    if (storage === globalThis.localStorage && cachedChats(sub)) return cachedChats(sub);
     const saved = JSON.parse(storage.getItem(syncKey(sub)) || "null");
     return Array.isArray(saved?.chats) && saved?.base ? saved : null;
   } catch { return null; }
@@ -114,8 +116,16 @@ export class ChatSync {
   persist() {
     clearTimeout(this.saveTimer);
     this.saveTimer = null;
+    const snapshot = { chats: [...this.current.values()], base: { ...this.base }, deleted: [...this.deleted] };
+    if (this.storage === globalThis.localStorage && globalThis.indexedDB) {
+      // Serialize asynchronous transactions so an older save cannot finish last.
+      this.saving = (this.saving || Promise.resolve()).catch(() => {}).then(() => saveChatCache(this.sub, snapshot)).then(() => {
+        this.backupFailed = false; this.status(this.syncIssue);
+      }, () => { this.backupFailed = true; this.status(this.syncIssue); });
+      return;
+    }
     try {
-      this.storage.setItem(syncKey(this.sub), JSON.stringify({ chats: [...this.current.values()], base: this.base, deleted: [...this.deleted] }));
+      this.storage.setItem(syncKey(this.sub), JSON.stringify(snapshot));
       this.storage.removeItem(`jarvis-chats:${this.sub}`);
       if (this.backupFailed) {
         this.backupFailed = false;

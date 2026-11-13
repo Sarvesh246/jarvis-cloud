@@ -2,7 +2,7 @@ import test from "node:test";
 import { devices } from "../server/devices.js";
 import { memoryStorage as registryStorage } from "./helpers-storage.js";
 import assert from "node:assert/strict";
-import { BlobPreconditionFailedError } from "@vercel/blob";
+import { PreconditionFailedError as BlobPreconditionFailedError } from "../server/kv-storage.js";
 import { ChatStore, accountPath } from "../server/chat-store.js";
 import { ChatSync, liveReply, mergeChats, readSyncCache } from "../src/lib/chat-sync.js";
 import handler from "../api/chats.js";

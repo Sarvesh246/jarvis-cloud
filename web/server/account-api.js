@@ -24,9 +24,9 @@ export async function memoryApi(req, res, cfg, user, store = memories) {
   if (body?.action === "add" || body?.action === "note") {
     const texts = body.action === "add" ? [body.text] : body.notes;
     if (!Array.isArray(texts) || !texts.length || texts.length > 10) throw new HttpError(400, "Invalid note.");
-    if (body.action === 'note' && !await verifyMemoryPermission(cfg, user.sub, body.permission))
+    if (body.action === 'note' && (typeof body.run !== 'string' || !await verifyMemoryPermission(cfg, user.sub, body.permission, body.run)))
       throw new HttpError(403, 'This reply is not allowed to save memories.');
-    const result = await store.add(user.sub, texts, body.action === "add" ? "you" : "vaelo");
+    const result = await store.add(user.sub, texts, body.action === "add" ? "you" : "vaelo", body.action === "note" ? body.run : null);
     if (body.action === "add" && !result.added.length)
       throw new HttpError(409, result.full ? "Memory is full. Delete a note to make room." : "You already have that note.");
     return json(res, 200, { ...view(result), saved: result.added, full: result.full > 0 });

@@ -30,7 +30,7 @@ import { useComposerSize } from '../lib/use-composer-size.js';
 import { usePhone } from "../lib/use-phone.js";
 import { buzz } from "../lib/haptics.js";
 import "./composer.css";
-import { ActivityIsland } from "./UITools.jsx";
+import { ActivityIsland } from "./ActivityWidgets.jsx";
 import { DESKTOP } from "../lib/desktop.js";
 import { DesktopRecognition } from "../lib/dictation.js";
 import { PasteCard, VoiceOrb } from './EverydayUI.jsx';
@@ -975,7 +975,7 @@ export const Composer = memo(forwardRef(function Composer(
           )}
           <div className="composer-end">
             {!draft && !note && (
-              <span className="composer-hint">{sendKey === "mod-enter" ? "Ctrl+Enter to send · Enter for a new line" : "Enter to send · Shift+Enter for a new line"}</span>
+              <span className="composer-hint" data-focus-only>{sendKey === "mod-enter" ? "Ctrl+Enter to send · Enter for a new line" : "Enter to send · Shift+Enter for a new line"}</span>
             )}
             {dictation.supported && !guest && (
               <button

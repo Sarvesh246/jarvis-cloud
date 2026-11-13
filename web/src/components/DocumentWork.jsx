@@ -1,4 +1,4 @@
-import { ReadingProgress } from "./UITools.jsx";
+import { ReadingProgress } from "./ActivityWidgets.jsx";
 import { CodeCompare } from "./blocks/AfterUI.jsx";
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {

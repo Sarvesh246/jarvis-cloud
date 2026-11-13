@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useRef, useState } from "react";
 import "./mark.css";
 import { markGeometry as geometry } from "./markGeometry.js";
 
@@ -12,8 +12,20 @@ import { markGeometry as geometry } from "./markGeometry.js";
    you; everywhere else the mark simply is. */
 export function Mark({ state = "idle", size = 64, className = "", inked = false }) {
   const g = geometry(size);
+  const element = useRef(null);
+  const [visible, setVisible] = useState(true);
+  const [foreground, setForeground] = useState(() => typeof document === "undefined" || !document.hidden);
+  useEffect(() => {
+    const update = () => setForeground(!document.hidden);
+    document.addEventListener("visibilitychange", update);
+    const observer = typeof IntersectionObserver === "undefined" ? null : new IntersectionObserver(([entry]) => setVisible(entry.isIntersecting));
+    if (element.current) observer?.observe(element.current);
+    return () => { observer?.disconnect(); document.removeEventListener("visibilitychange", update); };
+  }, []);
   return (
     <span
+      ref={element}
+      data-paused={!visible || !foreground || undefined}
       className={`mark ${className}`}
       data-state={state}
       data-inked={inked || undefined}

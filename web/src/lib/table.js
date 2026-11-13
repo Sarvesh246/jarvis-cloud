@@ -12,11 +12,11 @@ export function isSectionRow(row) {
     row.slice(1).every(value => !cellText(value));
 }
 
-export function tableRowOrder(rows, column, direction = "asc") {
+export function tableRowOrder(rows, column, direction = "asc", header = "") {
   const order = [];
   let group = [];
   const flush = () => {
-    order.push(...sortRows(group.map(i => [...rows[i], i]), column, direction).map(row => row.at(-1)));
+    order.push(...sortRows(group.map(i => [...rows[i], i]), column, direction, header).map(row => row.at(-1)));
     group = [];
   };
   rows.forEach((row, i) => {
@@ -44,9 +44,9 @@ export function visibleTableRows(rows, query = "", selected = [], onlySelected =
   return visible;
 }
 
-export function tableView(rows, { query = "", selected = [], onlySelected = false, column = null, direction = "asc" } = {}) {
+export function tableView(rows, { query = "", selected = [], onlySelected = false, column = null, direction = "asc", header = "" } = {}) {
   const visible = new Set(visibleTableRows(rows, query, selected, onlySelected));
-  const indices = tableRowOrder(rows, column, direction).filter(i => visible.has(i));
+  const indices = tableRowOrder(rows, column, direction, header).filter(i => visible.has(i));
   return {
     indices,
     rows: indices.map(i => rows[i]),
@@ -65,23 +65,40 @@ export function isBlank(value) {
 }
 
 /* "1,234.5", "$12", "-3%", "4.2k", "(1,200)", "~40" -> number; anything else -> NaN */
-export function toNumber(value) {
-  let text = cellText(value).replace(/[,\s]/g, "").replace(/^[~≈]/, "");
+export function toNumber(value, header = "") {
+  const numericPart = cellText(value).match(/\d[\d\s.,]*/)?.[0]?.trim();
+  if (numericPart && /\d\s+\d/.test(numericPart) && !/^\d{1,3}(?:\s\d{3})+(?:[.,]\d+)?$/.test(numericPart)) return NaN;
+  let text = cellText(value).replace(/\s/g, "").replace(/^[~≈]/, "");
   // Accounting style: "(1,200)" and "$(50)" are negative.
   const bracketed = text.match(/^([$€£¥₹]?)\(([^()]+)\)$/);
   if (bracketed) {
     // Parentheses already supply the sign. An inner sign, including one
     // after a currency symbol, must not be negated into a different amount.
     if (/[-+−]/.test(bracketed[2])) return NaN;
-    const n = toNumber(bracketed[1] + bracketed[2]);
+    const n = toNumber(bracketed[1] + bracketed[2], header);
     return n === 0 ? 0 : -n;
   }
-  const match = text.match(/^([-+−]?)[$€£¥₹]?([-+−]?)(\d+(?:\.\d+)?|\.\d+)([kmb%])?$/i);
+  const match = text.match(/^([-+−]?)[$€£¥₹]?([-+−]?)([\d.,]+)([kmb%])?$/i);
   // A sign may precede or follow the currency, but never occupy both slots.
   if (!match || (match[1] && match[2])) return NaN;
   const negative = /^[-−]|^[$€£¥₹][-−]/.test(text);
-  let n = parseFloat(match[3]);
+  let digits = match[3];
+  const comma = digits.lastIndexOf(","), dot = digits.lastIndexOf(".");
+  if (comma >= 0 && dot >= 0) {
+    const decimal = comma > dot ? "," : ".";
+    const group = decimal === "," ? "." : ",";
+    const [whole, fraction, ...rest] = digits.split(decimal);
+    if (rest.length || !/^\d+$/.test(fraction) || !new RegExp(`^\\d{1,3}(?:\\${group}\\d{3})+$`).test(whole)) return NaN;
+    digits = whole.split(group).join("") + "." + fraction;
+  } else if (comma >= 0) {
+    if (/^\d{1,3}(?:,\d{3})+$/.test(digits)) digits = digits.replace(/,/g, "");
+    else if (/^\d+,\d+$/.test(digits)) digits = digits.replace(",", ".");
+    else return NaN;
+  } else if (!/^(?:\d+(?:\.\d+)?|\.\d+)$/.test(digits)) return NaN;
+  let n = Number(digits);
   const suffix = (match[4] || "").toLowerCase();
+  if (/[kmb]/.test(suffix) && !/[$€£¥₹]/.test(text) &&
+      !/\b(?:money|cost|price|revenue|profit|sales|budget|amount|count|users|views|visits|population|subscribers|followers|downloads|units|total)\b/i.test(String(header))) return NaN;
   if (suffix === "k") n *= 1e3;
   if (suffix === "m") n *= 1e6;
   if (suffix === "b") n *= 1e9;
@@ -133,9 +150,9 @@ function filled(rows, column) {
   return rows.map((row) => row[column]).filter((value) => !isBlank(value));
 }
 
-export function isNumericColumn(rows, column) {
+export function isNumericColumn(rows, column, header = "") {
   const values = filled(rows, column);
-  return values.length > 0 && values.every((value) => !Number.isNaN(toNumber(value)));
+  return values.length > 0 && values.every((value) => !Number.isNaN(toNumber(value, header)));
 }
 
 export function isDateColumn(rows, column) {
@@ -150,13 +167,13 @@ export function isDateColumn(rows, column) {
 /* "Item 2" before "Item 10", and "Émile" beside "Emile". */
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
 
-export function sortRows(rows, column, direction = "asc") {
+export function sortRows(rows, column, direction = "asc", header = "") {
   if (column == null) return rows;
-  const kind = isNumericColumn(rows, column) ? "number" : isDateColumn(rows, column) ? "date" : "text";
+  const kind = isNumericColumn(rows, column, header) ? "number" : isDateColumn(rows, column) ? "date" : "text";
   const sign = direction === "desc" ? -1 : 1;
   const key = (row) => {
     if (isBlank(row[column])) return null;
-    if (kind === "number") return toNumber(row[column]);
+    if (kind === "number") return toNumber(row[column], header);
     if (kind === "date") return toDate(row[column]);
     return cellText(row[column]);
   };
@@ -205,7 +222,7 @@ function isYearColumn(columns, rows, column) {
    column and at least one numeric column, with a handful of rows. */
 export function chartable(columns, rows) {
   if (rows.length < 2 || rows.length > 200 || columns.length < 2) return null;
-  const numeric = columns.map((_, i) => i).filter((i) => isNumericColumn(rows, i));
+  const numeric = columns.map((_, i) => i).filter((i) => isNumericColumn(rows, i, columns[i]));
   const years = numeric.filter((i) => isYearColumn(columns, rows, i));
   const values = numeric.filter((i) => !years.includes(i));
   if (!values.length) return null;

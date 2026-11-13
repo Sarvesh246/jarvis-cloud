@@ -55,13 +55,18 @@ export class MemoryStore {
 
   /* Adds notes that aren't already there. Anything that doesn't fit is
      reported, never dropped silently. */
-  async add(sub, texts, source = "you") {
+  async add(sub, texts, source = "you", runId = null) {
     if (!SOURCES.includes(source)) throw new HttpError(400, "Invalid note.");
     const wanted = (source === "vaelo" ? texts.slice(0, NOTES_PER_REPLY) : texts).map(readText);
     const result = { added: [], duplicate: 0, full: 0 };
     const data = await this.record.update(sub, record => {
       result.added = []; result.duplicate = 0; result.full = 0;
       if (source === "vaelo" && !record.enabled) throw new HttpError(409, "Memory is turned off.");
+      if (source === "vaelo" && runId) {
+        record.usedRuns = Object.fromEntries(Object.entries(record.usedRuns || {}).filter(([, at]) => this.now() - at < 16 * 60000));
+        if (record.usedRuns[runId]) throw new HttpError(409, "This reply already saved its memories.");
+        record.usedRuns[runId] = this.now();
+      }
       for (const text of wanted) {
         if (source === 'vaelo' && record.forgotten?.includes(terms(text).join(' '))) { result.duplicate++; continue; }
         if (record.items.some(item => same(item.text, text)) || result.added.some(done => same(done, text))) result.duplicate++;
@@ -71,7 +76,7 @@ export class MemoryStore {
           result.added.push(text);
         }
       }
-      return result.added.length ? record : undefined;
+      return result.added.length || source === "vaelo" && runId ? record : undefined;
     });
     return { ...result, ...data };
   }
@@ -133,16 +138,16 @@ export async function withMemory(input, user, store = memories, search = searchC
   if (user.guest || input.temporary || !store.enabled()) return input;
   try {
     const query=plainContext(input.messages.at(-1)?.content).slice(0,4000);
-    const { enabled, notes, recallEnabled, forgotten } = await within(1000,signal=>store.forPrompt(user.sub,query,{signal}));
+    const recalled = !input.fast && terms(query).length
+      ? within(1200, signal => search(user.sub, query, { exclude: input.conversationId, signal })).catch(() => [])
+      : Promise.resolve([]);
+    const [preferences, candidates] = await Promise.all([
+      within(1000, signal => store.forPrompt(user.sub, query, { signal })), recalled,
+    ]);
+    const { enabled, notes, recallEnabled, forgotten = [] } = preferences;
     if (!enabled) return input;
-    // Notes are only invited on turns that read nothing from the web or tools, where
-    // a hostile page could otherwise plant a "fact".
-    let recall=[];
-    // Keep quick self-contained answers free of history-search overhead. Never
-    // share another account's history or promote a recalled quote to a fact.
-    if(recallEnabled && !input.fast && terms(query).length) {
-      try { recall=await within(1200,signal=>search(user.sub,query,{exclude:input.conversationId,forgotten,signal})); } catch { /* no invented recall */ }
-    }
+    const { suppresses } = await import('./recall-store.js');
+    const recall = recallEnabled ? candidates.filter(item => !suppresses(item.text, forgotten, item.title)) : [];
     return { ...input, memory: { notes, ...(recall.length && {recall}), canNote: permitsMemory(input) } };
   } catch { return input; }
 }

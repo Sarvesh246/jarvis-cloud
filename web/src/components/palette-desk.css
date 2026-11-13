@@ -16,10 +16,10 @@
 .command-dialog[open] {
   display: flex;
   flex-direction: column;
-  animation: command-in 340ms var(--ease-rail, var(--ease)) both;
+  animation: palette-command-in 340ms var(--ease-rail, var(--ease)) both;
 }
 
-@keyframes command-in {
+@keyframes palette-command-in {
   from {
     opacity: 0;
     transform: translateY(-10px) scale(0.985);

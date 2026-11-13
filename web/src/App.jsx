@@ -1,9 +1,12 @@
+import { loadChatCache } from "./lib/chat-cache.js";
 import { withGeneratedImageContext } from './lib/attachments.js';
 import { openingChat } from "./lib/chat-opening.js";
 import { replyTrace } from "./lib/reply-trace.js";
 import { completedTiming } from './lib/reply-timing.js';
 import { replyRegistry } from './lib/reply-registry.js';
 import React, {
+  lazy,
+  Suspense,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -24,27 +27,35 @@ import { cachedPlace, needsPlace, placeFor } from "./lib/location.js";
 import { chatTitle, displayChatTitle, withGeneratedTitle } from './lib/titles.js';
 import { liveReply, readSyncCache } from "./lib/chat-sync.js";
 import { useChatSync } from "./lib/use-chat-sync.js";
-import { CommandPalette } from "./components/CommandPalette.jsx";
-import { UITools, useInterfaceKeys } from "./components/UITools.jsx";
+function deferred(load) {
+  const Component = lazy(load);
+  return function DeferredSurface(props) {
+    return <Suspense fallback={<p className="surface-loading" role="status">Opening…</p>}><Component {...props} /></Suspense>;
+  };
+}
+const CommandPalette = deferred(() => import("./components/CommandPalette.jsx").then(module => ({ default: module.CommandPalette })));
+import { useInterfaceKeys } from "./lib/use-interface-keys.js";
+const UITools = deferred(() => import("./components/UITools.jsx").then(module => ({ default: module.UITools })));
 import { Rail } from "./components/Rail.jsx";
 import { Header } from "./components/Header.jsx";
 import { Welcome } from "./components/Welcome.jsx";
 import { Message, liveLine } from "./components/Message.jsx";
 import { Composer } from "./components/Composer.jsx";
-import { SlashPanel } from './components/SlashPanel.jsx';
+const SlashPanel = deferred(() => import("./components/SlashPanel.jsx").then(module => ({ default: module.SlashPanel })));
 import { useSlashCommands } from './lib/use-slash-commands.js';
 import { compactedHistory } from './lib/slash-history.js';
-import { Workspace } from "./components/Workspace.jsx";
-import { Settings } from "./components/Settings.jsx";
+const Workspace = deferred(() => import("./components/Workspace.jsx").then(module => ({ default: module.Workspace })));
+const Settings = deferred(() => import("./components/Settings.jsx").then(module => ({ default: module.Settings })));
 import { useSettingsPage } from "./lib/use-settings-page.js";
-import { Workroom } from "./components/Workroom.jsx";
-import { SavedWork } from "./components/SavedWork.jsx";
+const Workroom = deferred(() => import("./components/Workroom.jsx").then(module => ({ default: module.Workroom })));
+const SavedWork = deferred(() => import("./components/SavedWork.jsx").then(module => ({ default: module.SavedWork })));
 import { refreshWorkReferences, workContextFor, proposalDraft, chatToWorkspace, readWorkCache } from "./lib/workroom.js";
 import { getWorkspace } from "../shared/workspaces.js";
 import { memoryNotes, stripMemoryNotes } from "../shared/memory-notes.js";
 import { expiredChatIds } from "../shared/retention.js";
 import { useRetention } from "./lib/use-retention.js";
 import { getCheck } from "../shared/checks.js";
+import { Sheet } from "./components/Sheet.jsx";
 import { Mark } from "./components/Mark.jsx";
 import { PresentationContext } from "./components/blocks/Blocks.jsx";
 import { speak } from "./lib/speech.js";
@@ -65,7 +76,7 @@ import { mergePlan, readPlan } from "./lib/plan.js";
 import { classifyError } from "./lib/errors.js";
 import { JOIN_WINDOW, continueRequest, joinOnto, retryRequest } from "./lib/continuation.js";
 import { PHONE, usePhone } from "./lib/use-phone.js";
-import { DESKTOP, allowNotifications, desktopSignIn, desktopSignOut, desktopGuest, desktopLeaveGuest, desktopNotification, cancelDesktopSignIn } from "./lib/desktop.js";
+import { DESKTOP, checkDesktopUpdate, allowNotifications, desktopSignIn, desktopSignOut, desktopGuest, desktopLeaveGuest, desktopNotification, cancelDesktopSignIn } from "./lib/desktop.js";
 import { readDesktopHandoff, markDesktopHandoffStarted } from "./lib/desktop-handoff.js";
 import { DesktopHandoff } from "./components/DesktopHandoff.jsx";
 import {
@@ -83,6 +94,7 @@ import "./shell.css";
 import "./design/refinements.css";
 import "./drawer.css";
 import "./phone.css";
+import "./design/audit.css";
 
 const freshChat = () => ({
   id: crypto.randomUUID(),
@@ -430,6 +442,7 @@ export function App() {
      conversation's own menu, and the sources behind a reply. */
   const [sheet, setSheet] = useState(null);
   const [onboarding, setOnboarding] = useState(readOnboarding);
+  const [welcomeReady, setWelcomeReady] = useState(false);
   const [shell, setShell] = useState(null);
   useDrawer({ phone, open: menu, setOpen: setMenu, shell });
   /* Nothing left to show (already on the home screen, notifications not
@@ -535,25 +548,44 @@ export function App() {
 
   const announce = (text) => setAnnouncement((current) => ({ id: current.id + 1, text }));
 
-  const request = async (path, body) => {
-    const response = await fetch(
-      path,
-      body === undefined
-        ? {}
-        : {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "X-CSRF-Token": session?.csrf || "",
-            },
-            body: JSON.stringify(body),
-          },
-    );
-    const result = await response.json();
-    if (!response.ok)
-      throw new Error(result.error || "That request could not be completed.");
-    return result;
+  const sessionRequest = useRef(null);
+  const request = (path, body) => {
+    if (path === "/api/session" && body === undefined && sessionRequest.current) return sessionRequest.current;
+    const operation = (async () => {
+      const response = await fetch(path, body === undefined ? {} : {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-CSRF-Token": session?.csrf || "" },
+        body: JSON.stringify(body),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        const error = new Error(result.error || "That request could not be completed.");
+        error.status = response.status;
+        throw error;
+      }
+      return result;
+    })();
+    if (path !== "/api/session" || body !== undefined) return operation;
+    const pending = operation.finally(() => { if (sessionRequest.current === pending) sessionRequest.current = null; });
+    sessionRequest.current = pending;
+    return pending;
   };
+
+  useEffect(() => {
+    if (!DESKTOP) return;
+    let active = true;
+    const check = async () => {
+      if (document.hidden) return;
+      try {
+        const update = await checkDesktopUpdate();
+        if (active && update) showToast({ text: `Vaelo ${update.version} is available.`, action: "View update", onAction: () => setSettingsOpen(true) });
+        await update?.close();
+      } catch { /* Silent checks never interrupt work. */ }
+    };
+    void check();
+    const timer = setInterval(check, 24 * 60 * 60 * 1000);
+    return () => { active = false; clearInterval(timer); };
+  }, []);
 
   function showToast(next) {
     /* The toast keeps its own time, pausing while it is being read. Only
@@ -585,7 +617,7 @@ export function App() {
         /* No signal: open the saved conversations to read, and pick the
            session back up as soon as the connection returns. */
         const last = readLastUser();
-        if (!last || (navigator.onLine !== false && err.name !== "TypeError")) throw err;
+        if (!last || (navigator.onLine !== false && err.name !== "TypeError" && err.status !== 503)) throw err;
         result = { user: last, csrf: "", configured: true, offline: true };
       }
       if ((!result.user || result.user.guest) && googleReturn) {
@@ -617,6 +649,7 @@ export function App() {
         }
         let saved = [];
         try {
+          if (!guest) await loadChatCache(result.user.sub).catch(() => null);
           /* A guest's chats live only in this tab (sessionStorage). */
           saved = guest
             ? JSON.parse(sessionStorage.getItem(GUEST_CHATS_KEY) || "[]")
@@ -707,11 +740,14 @@ export function App() {
   /* Guests are never synced or stored on a device; their chats follow the tab. */
   useEffect(() => {
     if (!guest) return;
-    try {
-      sessionStorage.setItem(GUEST_CHATS_KEY, JSON.stringify(chats.filter(chat => !chat.temporary)));
-    } catch {
-      /* a full tab store just means a reload starts fresh */
-    }
+    const save = () => {
+      try {
+        sessionStorage.setItem(GUEST_CHATS_KEY, JSON.stringify(chats.filter(chat => !chat.temporary)));
+      } catch { /* a full tab store just means a reload starts fresh */ }
+    };
+    const timer = setTimeout(save, 400);
+    addEventListener("pagehide", save);
+    return () => { clearTimeout(timer); removeEventListener("pagehide", save); };
   }, [guest, chats]);
 
   const { issue: syncIssue, push: pushChat } = useChatSync({
@@ -921,8 +957,7 @@ export function App() {
     return () => observer.disconnect();
   }, [activeId, messages.length > 0]);
 
-  useEffect(() => {
-    function onKey(event) {
+  const onKey = useEventCallback((event) => {
       if (event.defaultPrevented || event.isComposing) return;
       if (!phone && settingsOpen) return;
       const typing = /^(INPUT|TEXTAREA)$/.test(document.activeElement?.tagName);
@@ -944,10 +979,11 @@ export function App() {
         event.preventDefault();
         textarea.current?.focus();
       }
-    }
+  });
+  useEffect(() => {
     addEventListener("keydown", onKey);
     return () => removeEventListener("keydown", onKey);
-  });
+  }, [onKey]);
 
   /* Following only ever moves the view down, so any move up that leaves
      the end of the conversation is the reader's own (wheel, touch, keys,
@@ -1672,6 +1708,7 @@ export function App() {
       if (name === "jarvis.complete") {
         trace.mark("complete_event");
         completed = true;
+        setWelcomeReady(true);
         releaseHeld();
         updateMessage(message => ({ truncated: false, ...completedTiming(message, data.timing) }));
       }
@@ -2008,7 +2045,7 @@ export function App() {
         let line = "";
         if (!ranTools) {
           try {
-            const result = await request("/api/chats?resource=memory", { action: "note", notes: noted, permission: memoryPermit });
+            const result = await request("/api/chats?resource=memory", { action: "note", notes: noted, permission: memoryPermit, run });
             line = result.saved.length
               ? `*Saved to memory: ${result.saved.map((text) => `“${text}”`).join(" · ")}. You can change this in Settings.*`
               : result.full ? "*Memory is full, so I didn’t save that. You can delete notes in Settings.*" : "";
@@ -2348,6 +2385,22 @@ export function App() {
   const composerClearWork = useEventCallback(() => setChats(current => current.map(chat => chat.id === activeId
     ? { ...chat, updated: Date.now(), workContext: undefined } : chat)));
 
+  const railCache = useRef(new Map());
+  const railList = useRef([]);
+  const railChats = useMemo(() => {
+    const next = chats.filter(chat => !chat.archived).map(chat => {
+      if (!liveReply(chat)) return chat;
+      const previous = railCache.current.get(chat.id);
+      if (previous && previous.title === chat.title && previous.pinned === chat.pinned && previous.workContext === chat.workContext) return previous;
+      return { ...chat, messages: chat.messages.filter(message => !message.running) };
+    });
+    const prior = railList.current;
+    if (prior.length === next.length && next.every((chat, index) => chat === prior[index])) return prior;
+    railCache.current = new Map(next.map(chat => [chat.id, chat]));
+    railList.current = next;
+    return next;
+  }, [chats]);
+
   if (loading || autoDesktopSignIn) return <Opening />;
   /* A guest has no account to hand to the desktop app, so a pending handoff
      still needs a real Google sign-in. */
@@ -2382,9 +2435,9 @@ export function App() {
   /* Right after signing in on a phone: keep Vaelo on the home screen, and
      say when a reply is ready. Shown once, or again from Settings. */
   const welcomeSteps = phone && onboarding ? onboardingSteps(onboarding) : [];
-  if (welcomeSteps.length)
-    return (
-      <Onboarding
+  const welcomeSheet = welcomeSteps.length > 0 && (onboarding === "replay" || welcomeReady) ? (
+    <Sheet open label="Keep Vaelo close" onClose={() => { writeOnboarding("done"); setOnboarding(null); }}>
+<Onboarding
         steps={welcomeSteps}
         replay={onboarding === "replay"}
         onAllow={async () => {
@@ -2399,7 +2452,8 @@ export function App() {
           setOnboarding(null);
         }}
       />
-    );
+    </Sheet>
+  ) : null;
 
   /* The message box and what travels with it. Under a conversation it sits at
      the foot; on the desk it sits inside the page, under the greeting. */
@@ -2457,9 +2511,8 @@ export function App() {
               </Notice>
             )}
             {(!online || session.offline) && (
-              <Notice tone="brass">
-                You’re offline. Your conversations are here to read; sending
-                comes back with the connection.
+              <Notice tone="brass" {...(online ? { action: "Try again", onAction: loadSession } : {})}>
+                {online ? "Can’t reach Vaelo right now. Your conversations are here to read." : "You’re offline. Your conversations are here to read; sending comes back with the connection."}
               </Notice>
             )}
             {storageIssue && (
@@ -2505,7 +2558,7 @@ export function App() {
         data-menu={phone ? menu : undefined}
       >
         <Rail
-          chats={chats.filter(chat => !chat.archived)}
+          chats={railChats}
           activeId={activeId}
           busy={anyBusy}
           running={live}
@@ -2635,7 +2688,7 @@ export function App() {
                 }}
               />
             ) : (
-              <div className="thread">
+              <div className="thread" aria-busy={busy || undefined}>
                 {messages.map((message, index) => {
                   const last = index === messages.length - 1;
                   const mine = message.role === "user";
@@ -2749,17 +2802,18 @@ export function App() {
           options={options} onOptions={patch => setOptions(current => ({ ...current, ...patch }))}
           cloud={cloud} online={online} onRun={slash.run} onSelect={selectChat} onBranch={branchFrom}
           onArchive={slash.archive} onDraft={setDraft} />}
-        <CommandPalette open={commandOpen} onClose={() => setCommandOpen(false)} chats={chats} onSelect={selectChat} onOpenWork={openWork} actions={[
+        {commandOpen && <CommandPalette open={commandOpen} onClose={() => setCommandOpen(false)} chats={chats} onSelect={selectChat} onOpenWork={openWork} actions={[
           { id: "new", label: "New conversation", run: newChat },
           { id: "settings", label: "Settings and appearance", run: () => setSettingsOpen(true) },
           ...(!guest ? [{ id: "workroom", label: "Open Workroom", run: () => { setWorkDraft(null); setWorkroomOpen(true); } }] : []),
           { id: "tools", label: "QR link and interface guide", run: () => setUIToolsOpen(true) },
           { id: "adaptive", label: "Use Adaptive replies", run: () => setPrefs(p => ({ ...p, presentation: "adaptive" })) },
           { id: "minimal", label: "Use Minimal replies", run: () => setPrefs(p => ({ ...p, presentation: "minimal" })) },
-        ]} />
-        <UITools open={uiToolsOpen} onClose={() => setUIToolsOpen(false)} />
+        ]} />}
+        {uiToolsOpen && <UITools open={uiToolsOpen} onClose={() => setUIToolsOpen(false)} />}
         <Tips />
-        <Settings
+        {welcomeSheet}
+        {settingsOpen && <Settings
           open={settingsOpen}
           user={session.user}
           onTools={() => { setSettingsOpen(false); setUIToolsOpen(true); }}
@@ -2770,7 +2824,7 @@ export function App() {
           prefs={prefs}
           onChange={(patch) => setPrefs((current) => ({ ...current, ...patch }))}
           onClose={() => setSettingsOpen(false)}
-        />
+        />}
         {phone && (
           <>
             <ChatMenuSheet

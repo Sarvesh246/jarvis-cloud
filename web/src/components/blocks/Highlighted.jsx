@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import { Highlight } from "prism-react-renderer";
 import { Prism } from "./prism.js";
 import "prismjs/components/prism-bash";
+import "prismjs/components/prism-diff";
 import "prismjs/components/prism-powershell";
 import "prismjs/components/prism-java";
 import "prismjs/components/prism-csharp";
@@ -49,7 +50,7 @@ export function grammarFor(language) {
 }
 
 /* Highlighted lines for a <pre>. Unknown languages stay plain ink. */
-export function Highlighted({ source, language, lineNumbers = false, foldAll = false }) {
+export const Highlighted = React.memo(function Highlighted({ source, language, lineNumbers = false, foldAll = false }) {
   const grammar = grammarFor(language);
   if (!grammar) return <code>{lineNumbers ? source.split('\n').map((line, i, lines) => <span key={i} className="code-line"><span className="code-line-number" aria-hidden="true">{i + 1}</span>{line}{i < lines.length - 1 ? '\n' : ''}</span>) : source}</code>;
   return (
@@ -69,11 +70,16 @@ export function Highlighted({ source, language, lineNumbers = false, foldAll = f
       )}
     </Highlight>
   );
-}
+});
 
 function CodeLines({ tokens, getTokenProps, grammar, foldAll }) {
   const [toggled, setToggled] = useState(new Set());
   const ranges = useMemo(() => { const stack = [], result = new Map(); tokens.forEach((line, i) => line.forEach(token => { if (!token.types.includes('punctuation')) return; for (const char of token.content) { if ('{['.includes(char)) stack.push(i); else if ('}]'.includes(char)) { const start = stack.pop(); if (start !== undefined && i > start + 1) result.set(start, i); } } })); return result; }, [tokens]);
   const folded = [...ranges].filter(([start]) => foldAll !== toggled.has(start));
-  return <code className={`language-${grammar}`}>{tokens.map((line, i) => folded.some(([start, end]) => i > start && i < end) ? null : <span className="code-line" key={i}><span className="code-line-number" aria-hidden="true">{i + 1}</span>{ranges.has(i) && <button aria-label={`${folded.some(([start]) => start === i) ? 'Expand' : 'Fold'} block on line ${i + 1}`} aria-expanded={!folded.some(([start]) => start === i)} onClick={() => setToggled(prev => { const next = new Set(prev); next.has(i) ? next.delete(i) : next.add(i); return next; })}>{folded.some(([start]) => start === i) ? '▸' : '▾'}</button>}{line.map((part, j) => { const { key: _key, ...props } = getTokenProps({ token: part }); return <span key={j} {...props} />; })}{folded.some(([start]) => start === i) && <span className="code-fold-count"> … {ranges.get(i) - i - 1} lines</span>}{i < tokens.length - 1 ? '\n' : ''}</span>)}</code>;
+  const foldedStarts = new Set(folded.map(([start]) => start));
+  const changes = new Int32Array(tokens.length + 1);
+  for (const [start, end] of folded) { changes[start + 1]++; changes[end]--; }
+  const hidden = new Uint8Array(tokens.length);
+  for (let i = 0, depth = 0; i < tokens.length; i++) { depth += changes[i]; hidden[i] = depth > 0 ? 1 : 0; }
+  return <code className={`language-${grammar}`}>{tokens.map((line, i) => hidden[i] ? null : <span className="code-line" key={i}><span className="code-line-number" aria-hidden="true">{i + 1}</span>{ranges.has(i) && <button aria-label={`${foldedStarts.has(i) ? 'Expand' : 'Fold'} block on line ${i + 1}`} aria-expanded={!foldedStarts.has(i)} onClick={() => setToggled(prev => { const next = new Set(prev); next.has(i) ? next.delete(i) : next.add(i); return next; })}>{foldedStarts.has(i) ? '▸' : '▾'}</button>}{line.map((part, j) => { const { key: _key, ...props } = getTokenProps({ token: part }); return <span key={j} {...props} />; })}{foldedStarts.has(i) && <span className="code-fold-count"> … {ranges.get(i) - i - 1} lines</span>}{i < tokens.length - 1 ? '\n' : ''}</span>)}</code>;
 }

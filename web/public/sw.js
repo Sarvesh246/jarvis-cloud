@@ -5,6 +5,7 @@
    cached. */
 const SHELL = "vaelo-shell-v7";
 const PRECACHE = ["/", "/prefs.js"];
+const CURRENT_ASSETS = null;
 
 // Storage is optional at runtime (private browsing, eviction and quota errors).
 // Keep writes alive after delivering the network response, but never turn a
@@ -38,7 +39,15 @@ self.addEventListener("activate", (event) => {
       .keys()
       .then((keys) => Promise.all(keys.filter((key) => key.startsWith("vaelo-shell-") && key !== SHELL).map((key) => caches.delete(key))))
       .catch(() => { /* Cache cleanup is optional; online loading must still work. */ })
-      .then(() => self.clients.claim()),
+      .then(async () => {
+        if (CURRENT_ASSETS) {
+          const keep = new Set([...PRECACHE, ...CURRENT_ASSETS]);
+          const cache = await caches.open(SHELL);
+          const keys = await cache.keys();
+          await Promise.all(keys.filter(key => !keep.has(new URL(key.url).pathname)).map(key => cache.delete(key)));
+        }
+        return self.clients.claim();
+      }),
   );
 });
 
@@ -72,7 +81,7 @@ self.addEventListener("fetch", (event) => {
           }
           return response;
         })
-        .catch(() => savedResponse("/")),
+        .catch(async () => (await savedResponse("/")) || new Response("Vaelo is offline. Reconnect and try again.", { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" } })),
     );
     return;
   }
@@ -86,7 +95,7 @@ self.addEventListener("fetch", (event) => {
           saveResponse(event, "/prefs.js", response);
           return response;
         })
-        .catch(() => savedResponse("/prefs.js")),
+        .catch(async () => (await savedResponse("/prefs.js")) || new Response("", { status: 503, headers: { "Content-Type": "text/javascript; charset=utf-8" } })),
     );
     return;
   }
@@ -94,7 +103,7 @@ self.addEventListener("fetch", (event) => {
   // Hashed build files never change, so the saved copy is always right.
   // Icons and the manifest are left to the network: iOS reads them when the
   // app is added to the home screen and falls back to a letter if that fails.
-  if (url.pathname.startsWith("/assets/")) {
+  if (url.pathname.startsWith("/assets/") && (!CURRENT_ASSETS || CURRENT_ASSETS.includes(url.pathname))) {
     event.respondWith(
       savedResponse(request).then(
         (hit) =>

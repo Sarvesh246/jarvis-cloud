@@ -16,16 +16,16 @@ export function permitsMemory(input) {
 export async function memoryPermission(cfg, sub, runId) {
   if (!cfg.secret) return null;
   return new SignJWT({ run: runId }).setProtectedHeader({ alg: 'HS256' }).setSubject(sub)
-    .setAudience('vaelo-memory-write').setIssuedAt().setExpirationTime('1h')
+    .setAudience('vaelo-memory-write').setIssuedAt().setExpirationTime('15m')
     .sign(new TextEncoder().encode(cfg.secret));
 }
 
-export async function verifyMemoryPermission(cfg, sub, token) {
+export async function verifyMemoryPermission(cfg, sub, token, runId) {
   if (!cfg.secret || typeof token !== 'string') return false;
   try {
     const { payload } = await jwtVerify(token, new TextEncoder().encode(cfg.secret), {
       algorithms: ['HS256'], audience: 'vaelo-memory-write', subject: sub,
     });
-    return typeof payload.run === 'string';
+    return typeof payload.run === 'string' && (!runId || payload.run === runId);
   } catch { return false; }
 }

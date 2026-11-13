@@ -13,6 +13,7 @@ import {
 import { Rendered, download, looksLikeSvg, useCopy, useSources } from "./blocks/Blocks.jsx";
 import { SourceIcon } from "./blocks/SourceIcon.jsx";
 import { Highlighted } from "./blocks/Highlighted.jsx";
+import { previewDocument } from "./blocks/InlinePreview.jsx";
 import { SOURCE_KINDS, kindLabel } from "../lib/sources.js";
 import { isNumericColumn, isSectionRow, tableView, toCSV, toTSV } from "../lib/table.js";
 import { currentContent, docTitle, isLongReply, parseTables } from "../lib/library.js";
@@ -40,12 +41,6 @@ function readWidth() {
   }
 }
 
-function previewDoc(language, source) {
-  const body = looksLikeSvg(language, source)
-    ? `<body style="margin:0;min-height:100vh;display:grid;place-items:center;background:#fff">${source}</body>`
-    : source;
-  return /<html[\s>]/i.test(body) ? body : `<!doctype html><meta charset="utf-8">${body}`;
-}
 
 function CodeView({ item }) {
   const canPreview = item.language === "html" || looksLikeSvg(item.language, item.source);
@@ -77,7 +72,7 @@ function CodeView({ item }) {
             tabIndex={-1}
             sandbox=""
             referrerPolicy="no-referrer"
-            srcDoc={previewDoc(item.language, item.source)}
+            srcDoc={previewDocument(item.source)}
           />
           <p className="ws-note">Scripts don’t run in previews. Download the file to run it.</p>
         </div>

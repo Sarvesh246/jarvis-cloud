@@ -39,8 +39,8 @@
     transform: translateX(calc((var(--p) - 1) * 90px));
     opacity: calc(0.25 + 0.75 * var(--p));
     transition:
-      transform 560ms var(--ease),
-      opacity 560ms var(--ease);
+      transform var(--dur-drawer) var(--ease),
+      opacity var(--dur-drawer) var(--ease);
   }
 
   .shell > .stage {
@@ -52,12 +52,12 @@
     background: var(--canvas);
     transform-origin: left center;
     transform: translateX(calc(var(--p) * var(--drawer-w))) scale(calc(1 - 0.08 * var(--p)));
-    border-radius: calc(var(--p) * 40px);
-    box-shadow: -16px 0 50px rgb(0 0 0 / calc(0.08 + 0.14 * var(--p)));
+    border-radius: var(--r-xl);
+    box-shadow: var(--lift-2);
     transition:
-      transform 560ms var(--ease),
-      border-radius 560ms var(--ease),
-      box-shadow 560ms var(--ease);
+      transform var(--dur-drawer) var(--ease),
+
+      opacity var(--dur-drawer) var(--ease);
     /* Sideways drags are the drawer's; vertical ones are scrolling */
     touch-action: pan-y;
   }
@@ -81,11 +81,11 @@
     opacity: calc(var(--p) * 0.55);
     transform-origin: left center;
     transform: translateX(calc(var(--p) * var(--drawer-w))) scale(calc(1 - 0.08 * var(--p)));
-    border-radius: calc(var(--p) * 40px);
+    border-radius: var(--r-xl);
     transition:
-      transform 560ms var(--ease),
-      border-radius 560ms var(--ease),
-      opacity 560ms var(--ease);
+      transform var(--dur-drawer) var(--ease),
+
+      opacity var(--dur-drawer) var(--ease);
     pointer-events: none;
     touch-action: none;
     cursor: pointer;

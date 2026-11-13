@@ -18,7 +18,7 @@
   background: transparent;
 }
 .prose.prose {
-  font-size: 18px;
+  font-size: 1.125rem;
   line-height: 1.72;
   color: var(--ink-soft);
   text-wrap: pretty;
@@ -31,7 +31,7 @@
   margin: 30px 0 12px;
 }
 .prose.prose > h1 {
-  font-size: 36px;
+  font-size: 2.25rem;
 }
 .prose.prose > h3 {
   display: flex;
@@ -67,7 +67,7 @@
 .prose.prose > ul:not([class]) > li::marker {
   content: "◆  ";
   color: var(--gilt);
-  font-size: 10px;
+  font-size: 0.8125rem;
 }
 .prose.prose > blockquote {
   margin: 0 0 20px;
@@ -694,7 +694,7 @@
 .after-image figcaption small {
   display: block;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 0.8125rem;
   margin-top: 3px;
 }
 .after-image-tools {
@@ -1000,7 +1000,7 @@
 }
 .after-receipt dt small {
   display: block;
-  font-size: 12px;
+  font-size: 0.8125rem;
   color: var(--muted);
 }
 .after-receipt dd {
@@ -1047,7 +1047,7 @@
 .after-receipt .local-note {
   border-top: 1px dashed var(--hairline);
   padding-top: 12px;
-  font-size: 12px;
+  font-size: 0.8125rem;
   margin: 0;
 }
 .after-qr {
@@ -1411,7 +1411,7 @@
 .table-best {
   color: var(--sage);
   margin-right: 4px;
-  font-size: 12px;
+  font-size: 0.8125rem;
 }
 .prose.prose .metrics-lead {
   padding: 18px 24px 24px;
@@ -1985,7 +1985,7 @@
     min-height: 200px;
   }
   .after-overview-lead dd {
-    font-size: 52px;
+    font-size: 3.25rem;
   }
   .after-masonry {
     columns: 2;
@@ -2014,7 +2014,7 @@
   .after-step-number {
     width: 40px;
     height: 40px;
-    font-size: 26px;
+    font-size: 1.625rem;
   }
   .after-code-split {
     grid-template-columns: 1fr;
@@ -2153,11 +2153,11 @@
   align-items: start;
 }
 .prose.prose .metric-delta {
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 .prose.prose .metrics-lead .metric-delta {
   margin-top: 8px;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 .prose.prose .local-checklist > .local-checklist-bar {
   background: transparent;
@@ -2296,7 +2296,7 @@
 }
 .series-chart > .local-note {
   grid-column: 1 / -1;
-  font-size: 12px;
+  font-size: 0.8125rem;
 }
 @media (max-width: 600px) {
   .series-chart {
@@ -2337,12 +2337,12 @@
   margin-top: 0;
 }
 .prose.prose > h2 + p {
-  font-size: 19px;
+  font-size: 1.1875rem;
   color: var(--ink-soft);
 }
 .after-block .after-head strong {
   font-weight: 500;
-  font-size: 18px;
+  font-size: 1.125rem;
 }
 .after-block .after-share ul {
   margin: 8px 0 0;
@@ -2379,7 +2379,7 @@
   padding: 0;
 }
 .prose.prose .block-heading > strong {
-  font-size: 18px;
+  font-size: 1.125rem;
   font-weight: 500;
 }
 .after-overview-part {
@@ -3304,7 +3304,7 @@
     padding: 12px 8px;
   }
   .explorer-totals dd {
-    font-size: 20px;
+    font-size: 1.25rem;
   }
   .explorer-foot {
     flex-wrap: wrap;

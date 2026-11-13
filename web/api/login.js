@@ -12,6 +12,7 @@ import {
   fail,
   HttpError,
 } from "../server/security.js";
+import { issueGuest } from "../server/guest-limit.js";
 import { deviceLabel } from "../server/devices.js";
 
 export default async function handler(req, res) {
@@ -24,10 +25,10 @@ export default async function handler(req, res) {
        desktop app has no cookies, so it asks for the token itself. Nothing is
        set or read for that request, so there is nothing for CSRF to protect. */
     if (body?.guest === true && body.desktop === true)
-      return json(res, 200, { guest: true, token: await signGuest(cfg) });
+      return json(res, 200, { guest: true, token: await issueGuest(req, cfg) });
     sameOrigin(req, cfg);
     if (body?.guest === true) {
-      res.setHeader("Set-Cookie", guestCookie(await signGuest(cfg), cfg));
+      res.setHeader("Set-Cookie", guestCookie(await issueGuest(req, cfg), cfg));
       return json(res, 200, { guest: true });
     }
     if (typeof body?.credential !== "string")

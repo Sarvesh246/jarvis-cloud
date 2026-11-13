@@ -6,7 +6,18 @@ import { CopyButton, SaveButton } from "./AfterUI.jsx";
 // A separate CSP inside a sandbox with no capabilities: no scripts, resource fetches,
 // forms, parent access or storage, including CSS URLs and nested documents.
 export function previewDocument(source) {
-  return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; media-src 'none'; frame-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body>${source}</body></html>`;
+  if (typeof DOMParser === "undefined") {
+    const escaped = String(source).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    return `<!doctype html><meta http-equiv="Content-Security-Policy" content="default-src 'none'"><pre>${escaped}</pre>`;
+  }
+  const doc = new DOMParser().parseFromString(String(source), "text/html");
+  // A sandbox does not prevent a refresh from navigating its own frame.
+  doc.querySelectorAll("meta[http-equiv]").forEach(meta => meta.remove());
+  const policy = doc.createElement("meta");
+  policy.httpEquiv = "Content-Security-Policy";
+  policy.content = "default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; media-src 'none'; frame-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'";
+  doc.head.prepend(policy);
+  return `<!doctype html>${doc.documentElement.outerHTML}`;
 }
 export function InlinePreview({ source, language, src }) {
   const [view, setView] = useState("preview"),

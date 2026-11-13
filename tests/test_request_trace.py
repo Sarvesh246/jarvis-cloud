@@ -34,7 +34,7 @@ class TraceTests(unittest.TestCase):
                 import json
                 result=json.loads(response.read())
                 self.assertIsNone(result['revision'])
-                self.assertEqual(result['fast_connect_deadline_seconds'],18)
+                self.assertEqual(result['fast_connect_deadline_seconds'],4)
                 self.assertIn('python_verify',result['tools'])
                 connection.close()
         finally:

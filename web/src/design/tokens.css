@@ -7,12 +7,12 @@
 :root {
   color-scheme: light dark;
 
-  /* Newsreader carries the identity; Source Serif and Source Sans carry
-     sustained reading and dense controls. All are self-hosted. */
+  /* Newsreader carries reading and interface text. Fonts are self-hosted;
+     code loads its monospace face with the reply renderer. */
   --font-voice: "Newsreader Variable", "Newsreader", "Iowan Old Style",
     Georgia, serif;
-  --font-read: "Source Serif 4 Variable", "Iowan Old Style", Georgia, serif;
-  --font-ui: "Source Sans 3 Variable", "Segoe UI", system-ui, sans-serif;
+  --font-read: var(--font-voice);
+  --font-ui: var(--font-voice);
   --font-mono: ui-monospace, "Cascadia Code", Consolas, monospace;
 
   /* Nothing functional goes under 14px; a fine serif needs the room. */
@@ -44,13 +44,17 @@
   --r-sm: 6px;
   --r-md: 10px;
   --r-lg: 16px;
+  --r-xl: 26px;
+  --z-toast: 120;
+  --z-sheet: 80;
+  --dur-drawer: 300ms;
   --r-pill: 999px;
 
   /* Motion: slow, eased, never bouncy */
   --ease: cubic-bezier(0.22, 0.8, 0.24, 1);
   --dur-1: 180ms;
   --dur-2: 340ms;
-  --dur-3: 700ms;
+  --dur-3: 300ms;
   /* How long a hold-to-confirm takes: long enough to be deliberate */
   --dur-hold: 1100ms;
 

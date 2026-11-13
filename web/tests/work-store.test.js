@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { BlobPreconditionFailedError } from "@vercel/blob";
+import { PreconditionFailedError as BlobPreconditionFailedError } from "../server/kv-storage.js";
 import { WorkStore, workAccountPath, workDocumentPath, readWorkContext, MAX_WORK_INPUT_BYTES } from "../server/work-store.js";
 import { HttpError } from "../server/security.js";
 import { WORK_LIMITS } from "../shared/work-records.js";

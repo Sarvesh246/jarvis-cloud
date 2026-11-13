@@ -1,10 +1,8 @@
 import React, { useEffect, useId, useRef, useState } from "react";
 
-/* For the few answers that reach further than a click should: press and
-   hold, and gilt ink fills the button from the left. Let go early and it
-   drains away; nothing happens. Space or Enter held down does the same, so
-   it never needs a pointer. */
+/* Confirm by holding the pointer, or by activating twice within three seconds. */
 function holdTime() {
+  if (typeof document === "undefined" || typeof getComputedStyle === "undefined") return 1100;
   const value = getComputedStyle(document.documentElement).getPropertyValue("--dur-hold");
   return parseFloat(value) || 1100;
 }
@@ -15,6 +13,7 @@ export function HoldButton({ className = "", disabled, onConfirm, children, hold
   const timer = useRef(0);
   const live = useRef(false);
   const began = useRef(0);
+  const armed = useRef(false);
   const hintTimer = useRef(0);
   const hintId = useId();
 
@@ -28,33 +27,48 @@ export function HoldButton({ className = "", disabled, onConfirm, children, hold
 
   /* If the answer didn't go through, the button is ready to be held again */
   useEffect(() => {
-    if (!disabled) setState((current) => (current === "done" ? "rest" : current));
+    if (disabled) {
+      clearTimeout(timer.current); clearTimeout(hintTimer.current);
+      live.current = false; armed.current = false; setHint(false); setState("rest");
+    } else setState((current) => (current === "done" ? "rest" : current));
   }, [disabled]);
 
   function start() {
-    if (disabled || state !== "rest" || live.current) return;
+    if (disabled || state === "done" || live.current) return;
     live.current = true;
-    clearTimeout(hintTimer.current);
-    setHint(false);
     began.current = performance.now();
     setState("holding");
     timer.current = setTimeout(() => {
       live.current = false;
+      armed.current = false;
+      clearTimeout(hintTimer.current);
+      setHint(false);
       setState("done");
       onConfirm();
     }, holdTime());
   }
 
-  function release() {
+  function activate() {
+    if (disabled || state === "done") return;
+    if (armed.current) {
+      armed.current = false;
+      clearTimeout(hintTimer.current);
+      setHint(false);
+      setState("done");
+      onConfirm();
+      return;
+    }
+    armed.current = true;
+    setHint(true);
+    hintTimer.current = setTimeout(() => { armed.current = false; setHint(false); }, 3000);
+  }
+
+  function release(cancelled = false) {
     if (!live.current) return;
     live.current = false;
     clearTimeout(timer.current);
     setState("rest");
-    /* A quick tap gets told how this one works */
-    if (performance.now() - began.current < 400) {
-      setHint(true);
-      hintTimer.current = setTimeout(() => setHint(false), 2600);
-    }
+    if (!cancelled && performance.now() - began.current < 400) activate();
   }
 
   return (
@@ -69,19 +83,11 @@ export function HoldButton({ className = "", disabled, onConfirm, children, hold
         event.currentTarget.setPointerCapture(event.pointerId);
         start();
       }}
-      onPointerUp={release}
-      onPointerCancel={release}
-      onLostPointerCapture={release}
-      onKeyDown={(event) => {
-        if ((event.key === " " || event.key === "Enter") && !event.repeat) {
-          event.preventDefault();
-          start();
-        }
-      }}
-      onKeyUp={(event) => {
-        if (event.key === " " || event.key === "Enter") release();
-      }}
-      onBlur={release}
+      onPointerUp={() => release()}
+      onPointerCancel={() => release(true)}
+      onLostPointerCapture={() => release(true)}
+      onClick={(event) => { if (event.detail === 0) activate(); }}
+      onBlur={() => release(true)}
       onContextMenu={(event) => event.preventDefault()}
       style={{ "--hold": `${holdTime()}ms` }}
     >
@@ -90,10 +96,10 @@ export function HoldButton({ className = "", disabled, onConfirm, children, hold
       <span className="hold-label">
         <span data-on={state !== "holding" && !hint ? true : undefined}>{children}</span>
         <span data-on={state === "holding" ? true : undefined}>{holding}</span>
-        <span data-on={state !== "holding" && hint ? true : undefined}>Press and hold</span>
+        <span data-on={state !== "holding" && hint ? true : undefined}>Press again to confirm</span>
       </span>
       <span id={hintId} className="sr-only">
-        Press and hold to confirm.
+        Press and hold, or activate twice within three seconds, to confirm.
       </span>
     </button>
   );

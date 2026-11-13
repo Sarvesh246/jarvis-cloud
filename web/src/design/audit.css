@@ -1,0 +1,44 @@
+/* Motion and access rules shared by desktop and phone. */
+h1, h2, h3 { text-wrap: balance; }
+.mark[data-state="idle"] .mark-v, .mark[data-state="idle"] .mark-glow { animation: none; }
+.mark[data-paused] *, .mark[data-paused]::after { animation-play-state: paused; }
+.mark[data-state="idle"] .mark-v { opacity: 1; transform: none; }
+.edge-blur { display: none; }
+.surface-loading { position: fixed; inset: 40% 20% auto; padding: 1rem; background: var(--surface); z-index: var(--z-sheet); }
+.composer:not(:focus-within) .composer-hint[data-focus-only] { visibility: hidden; }
+.message:not([data-live="true"]) { content-visibility: auto; contain-intrinsic-size: auto 15rem; }
+.process-time { color: var(--muted); }
+@media (hover: hover) and (pointer: fine) {
+  .message-actions { opacity: .6; }
+  .rail-row .rail-link { padding-right: 0; }
+  .rail-row .rail-act { position: absolute; right: 0; background: var(--rail); }
+  .rail-row .rail-act:not(:last-child) { right: 2rem; }
+  .rail-row:hover .rail-title, .rail-row:focus-within .rail-title { mask-image: linear-gradient(to right, #000 calc(100% - 5rem), transparent calc(100% - 4rem)); }
+}
+@media (pointer: coarse) {
+  body::before { mix-blend-mode: normal; opacity: 0; }
+  .icon-button, .send, .mode-button, .sh-close { min-width: 44px; min-height: 44px; }
+  .source-strip, .block-tool, .sh-action, .after-image-tools a, .after-image-tools button { min-height: 44px; }
+  .after-image-tools { opacity: 1; transform: none; }
+  .toast-region { bottom: calc(var(--dock-h, 4.5rem) + 1rem + env(safe-area-inset-bottom)); }
+}
+@media (forced-colors: active) {
+  [data-on], [aria-current], [aria-selected="true"], [aria-pressed="true"] { outline: 2px solid Highlight; outline-offset: 2px; }
+  button, a, input, select, textarea { forced-color-adjust: auto; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mark *, .mark::after { animation: none !important; transform: none; }
+  .mark-v { opacity: 1; }
+  .mark-trace { opacity: 0; }
+}
+:root[data-motion="reduce"] .mark * { animation: none !important; transform: none; }
+:root[data-motion="reduce"] .mark-v { opacity: 1; }
+:root[data-motion="reduce"] .mark-trace { opacity: 0; }
+
+.sheet .onb { min-height: 0; height: auto; padding: 1rem; }
+.sheet .onb-body { min-height: 0; }
+
+@media (pointer: coarse) {
+  .cite-mark { position: relative; }
+  .cite-mark::after { content: ""; position: absolute; left: 50%; top: 50%; width: max(100%, 44px); height: max(100%, 44px); transform: translate(-50%, -50%); }
+}

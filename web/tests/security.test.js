@@ -232,7 +232,7 @@ test("a session is refused, not trusted, when its sign-out record can't be read"
   const { Revocations } = await import("../server/revocation.js");
   const broken = new Revocations({ async get() { throw new Error("database down"); } }, { enabled: () => true });
   const token = await signSession(user, cfg);
-  assert.equal(await sessionUser(request(token), { ...cfg, revocations: broken }), null);
+  await assert.rejects(sessionUser(request(token), { ...cfg, revocations: broken }), { status: 503 });
   const off = new Revocations({ async get() { throw new Error("never read"); } }, { enabled: () => false });
   assert.deepEqual(await sessionUser(request(token), { ...cfg, revocations: off }), user);
 });

@@ -60,3 +60,5 @@ coverage/
 traces/
 
 .codex/worktree/
+
+/audit-*.json

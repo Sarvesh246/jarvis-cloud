@@ -183,7 +183,10 @@ test("waking is only announced when the server is actually asleep", async () => 
   const run = async (healthy) => {
     const { req, res, events } = fakeExchange();
     let probes = 0;
-    const { request } = fakeRelay({ health: () => probes++ || healthy });
+    const relay = fakeRelay({ health: () => probes++ || healthy });
+    let starts = 0;
+    const request = (url, options) => !healthy && url.endsWith('/vaelo/runs') && starts++ === 0
+      ? Promise.resolve(new Response('', { status: 503 })) : relay.request(url, options);
     await streamChat(req, res, cfg, user, input, request);
     return events().filter((e) => e.name === "jarvis.status").map((e) => e.data.message);
   };
@@ -441,7 +444,7 @@ test("a backend that just answered is not health-checked again before the next m
     await streamChat(req, res, cfg, user, input, request);
     assert.equal(events().at(-1).name, "jarvis.complete");
   }
-  assert.equal(calls.filter((call) => call.url.endsWith("/health")).length, 1);
+  assert.equal(calls.filter((call) => call.url.endsWith("/health")).length, 0);
 });
 
 test("after a failed start the backend is checked again", async () => {
@@ -453,11 +456,11 @@ test("after a failed start the backend is checked again", async () => {
   };
   const first = fakeExchange();
   await streamChat(first.req, first.res, cfg, user, input, request);
-  assert.equal(first.events().at(-1).name, "jarvis.error");
+  assert.equal(first.events().at(-1).name, "jarvis.complete");
   const second = fakeExchange();
   await streamChat(second.req, second.res, cfg, user, input, request);
   assert.equal(second.events().at(-1).name, "jarvis.complete");
-  assert.equal(relay.calls.filter((call) => call.url.endsWith("/health")).length, 2);
+  assert.equal(relay.calls.filter((call) => call.url.endsWith("/health")).length, 1);
 });
 
 test("a reply is named by the page's own id, or given one by older pages", () => {
@@ -492,4 +495,34 @@ test("devices listen for account changes through the relay, as the signed-in per
     { status: 503 },
   );
   assert.throws(() => feedInput({ after: "soon" }), { status: 400 });
+});
+
+test('a streaming start forwards numbered events without a second relay request', async () => {
+  const { req, res } = fakeExchange();
+  const calls = [];
+  const request = async (url, options = {}) => {
+    calls.push(url);
+    if (url.endsWith('/health')) return Response.json({ status: 'ok' });
+    assert.ok(url.endsWith('/vaelo/runs'));
+    assert.equal(options.headers.Accept, 'text/event-stream');
+    return new Response('id: 0\nevent: jarvis.complete\ndata: {"ok":true}\n\n: end\n\n', { headers: { 'Content-Type': 'text/event-stream' } });
+  };
+  await streamChat(req, res, cfg, user, input, request);
+  assert.equal(calls.filter(url => url.includes('/events')).length, 0);
+  assert.match(res.chunks.join(''), /id: 0\nevent: jarvis.complete/);
+});
+
+test('the start timeout stops at response headers and cannot cut a healthy reply body', async t => {
+  const { startRun } = await import('../server/chat.js');
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const parent = new AbortController();
+  let signal;
+  const response = new Response('still streaming', { headers: { 'Content-Type': 'text/event-stream' } });
+  const result = await startRun(cfg, user, input, parent.signal, async (_, options) => { signal = options.signal; return response; });
+  t.mock.timers.tick(21000);
+  assert.equal(signal.aborted, false);
+  assert.equal(result, response);
+  parent.abort();
+  assert.equal(signal.aborted, true);
+  await result.body.cancel();
 });

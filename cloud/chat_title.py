@@ -41,7 +41,7 @@ def fallback_title(messages):
             return 'Image discussion'
     else:
         text = first if isinstance(first, str) else ''
-    text = re.split(r'\n\n(?:Attached file: |\[Vaelo request:|\[Selected Vaelo workspace:)', text, maxsplit=1)[0]
+    text = re.split(r'\n\n(?:Attached file: |\[Vaelo [^\]]*:|\[Selected Vaelo workspace:)', text, maxsplit=1)[0]
     text = text.strip()
     for _ in range(4):
         text = re.sub(r"^(?:(?:can|could|would|will) you\s+|please\s+|help me\s+(?:(?:to|with)\s+)?|(?:i want|i need|i would like|i'd like)\s+(?:you\s+)?to\s+|what(?:'s| is)\s+(?:the\s+)?)", '', text, flags=re.I)

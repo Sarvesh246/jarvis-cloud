@@ -31,18 +31,18 @@ test('accounting brackets cannot reverse an already signed amount', () => {
 test('valid signed currencies and accounting values retain their exact interpretation', () => {
   for (const currency of currencies) {
     for (const [body, amount] of [['0', 0], ['.5', .5], ['1,200.25', 1200.25], ['4.2k', 4200], ['2M', 2e6], ['3b', 3e9], ['12%', 12]]) {
-      assert.equal(toNumber(`${currency}${body}`), amount);
+      assert.equal(toNumber(`${currency}${body}`, "count"), amount);
       for (const sign of signs) {
         const expected = sign === '+' ? amount : -amount;
-        assert.equal(toNumber(`${sign}${currency}${body}`), expected);
-        assert.equal(toNumber(`${currency}${sign}${body}`), expected);
+        assert.equal(toNumber(`${sign}${currency}${body}`, "count"), expected);
+        assert.equal(toNumber(`${currency}${sign}${body}`, "count"), expected);
       }
-      assert.equal(toNumber(`(${currency}${body})`), amount === 0 ? 0 : -amount);
-      assert.equal(toNumber(`${currency}(${body})`), amount === 0 ? 0 : -amount);
+      assert.equal(toNumber(`(${currency}${body})`, "count"), amount === 0 ? 0 : -amount);
+      assert.equal(toNumber(`${currency}(${body})`, "count"), amount === 0 ? 0 : -amount);
     }
   }
-  assert.equal(toNumber('≈ − ₹ 1\u202f200.25'), -1200.25);
-  assert.equal(toNumber('~ € (50.5)'), -50.5);
+  assert.equal(toNumber('≈ − ₹ 1\u202f200.25', "count"), -1200.25);
+  assert.equal(toNumber('~ € (50.5)', "count"), -50.5);
 });
 
 test('malformed figures cannot silently determine table order or a chart plan', () => {
@@ -85,4 +85,22 @@ test('local calculations and stacked breakdowns cannot reuse a reversed accounti
   assert.deepEqual(numberSeries(rows, 1), { numbers: [500, 10], unit: '$' });
   assert.deepEqual(scaleSeries(numberSeries(rows, 1), 2), { numbers: [1000, 20], unit: '$' });
   assert.deepEqual(stackedSeries(columns, rows, [1, 2], 0).points.map(point => point.values), [[500, 20], [10, 30]]);
+});
+
+
+test('decimal comma and grouped locale values retain their magnitude', () => {
+  assert.equal(toNumber('1,5'), 1.5);
+  assert.equal(toNumber('1.234,56'), 1234.56);
+  assert.equal(toNumber('1 234,5'), 1234.5);
+  assert.equal(toNumber('1,234.56'), 1234.56);
+  assert.ok(Number.isNaN(toNumber('1,2,3')));
+});
+
+test('ambiguous unit suffixes require a money or count column', () => {
+  for (const value of ['5m', '3b', '4k']) assert.ok(Number.isNaN(toNumber(value)), value);
+  assert.equal(toNumber('5m', 'Revenue'), 5e6);
+  assert.equal(toNumber('3b', 'Users'), 3e9);
+  assert.equal(toNumber('$5m'), 5e6);
+  assert.ok(Number.isNaN(toNumber('5m', 'Duration')));
+  assert.equal(chartData(['Item', 'Duration'], [['A','5m']], 1, 0).finite.length, 0);
 });

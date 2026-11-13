@@ -1,11 +1,14 @@
 import { isTauri, invoke } from "@tauri-apps/api/core";
-import { fetch as nativeFetch } from "@tauri-apps/plugin-http";
-import { openUrl } from "@tauri-apps/plugin-opener";
-import { save } from "@tauri-apps/plugin-dialog";
-import { writeFile } from "@tauri-apps/plugin-fs";
-import { writeText } from "@tauri-apps/plugin-clipboard-manager";
-import { isPermissionGranted, requestPermission, sendNotification } from "@tauri-apps/plugin-notification";
 import { createDesktopFetch, CLOUD_ORIGIN } from "./desktop-transport.js";
+
+const nativeFetch = async (...args) => (await import("@tauri-apps/plugin-http")).fetch(...args);
+const openUrl = async (...args) => (await import("@tauri-apps/plugin-opener")).openUrl(...args);
+const save = async (...args) => (await import("@tauri-apps/plugin-dialog")).save(...args);
+const writeFile = async (...args) => (await import("@tauri-apps/plugin-fs")).writeFile(...args);
+const writeText = async (...args) => (await import("@tauri-apps/plugin-clipboard-manager")).writeText(...args);
+const isPermissionGranted = async (...args) => (await import("@tauri-apps/plugin-notification")).isPermissionGranted(...args);
+const requestPermission = async (...args) => (await import("@tauri-apps/plugin-notification")).requestPermission(...args);
+const sendNotification = async (...args) => (await import("@tauri-apps/plugin-notification")).sendNotification(...args);
 
 export const DESKTOP = isTauri();
 export const STORE_BUILD = import.meta.env?.VITE_VAELO_STORE === "1";
@@ -16,6 +19,10 @@ const browserFetch = globalThis.fetch.bind(globalThis);
 // on one transport. Credentials are scoped to this fixed HTTPS API only.
 export function installDesktopTransport() {
   if (!DESKTOP) return;
+  requestAnimationFrame(() => requestAnimationFrame(() => invoke("window_ready").catch(() => {})));
+  import("@tauri-apps/api/event").then(({ listen }) => listen("vaelo-summon", () => {
+    document.querySelector(".composer textarea")?.focus();
+  })).catch(() => {});
   globalThis.fetch = createDesktopFetch({ nativeFetch, browserFetch,
     loadToken: async () => token ??= await invoke("session_token"),
     clearToken: async (expired) => {
@@ -101,4 +108,9 @@ export async function allowNotifications() {
 export async function desktopNotification(title, body) {
   if (STORE_BUILD) return invoke("store_notification", { title, body });
   if (await isPermissionGranted()) sendNotification({ title, body });
+}
+
+export async function checkDesktopUpdate() {
+  if (!DESKTOP || STORE_BUILD) return null;
+  return (await import("@tauri-apps/plugin-updater")).check();
 }

@@ -1,3 +1,4 @@
+import { saveChatCache } from "./chat-cache.js";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ChatSync, readSyncCache, syncKey } from "./chat-sync.js";
 import { readEvents } from "../stream.js";
@@ -5,7 +6,7 @@ import { persistentChats, withLocalDrafts } from './slash-history.js';
 
 /* Storage is checked this often while the live feed is down, and only this
    rarely while it is up: then the feed says the moment anything changes. */
-const POLL_MS = 5000;
+const POLL_MS = 25000;
 const SAFETY_MS = 60000;
 /* A page nobody has touched for this long stops listening, so an open tab
    doesn't keep the free cloud awake all day. Any touch resumes it. */
@@ -18,14 +19,11 @@ export function useChatSync({ session, chats, setChats, busyId, onConflict }) {
   latest.current = { chats, busyId, onConflict };
   useLayoutEffect(() => {
     if (engine.current && engine.current.sub === session?.user?.sub) engine.current.observe(persistentChats(chats));
-    else if (session?.user) {
-      try {
-        localStorage.setItem(syncKey(session.user.sub), JSON.stringify({
-          chats: persistentChats(chats), base: readSyncCache(session.user.sub)?.base || {},
-          deleted: readSyncCache(session.user.sub)?.deleted || [],
-        }));
-        localStorage.removeItem(`jarvis-chats:${session.user.sub}`);
-      } catch { setIssue("Local backup is full. Keep this tab open until sync completes."); }
+    else if (session?.user && !session.user.guest) {
+      const sub = session.user.sub;
+      const saved = readSyncCache(sub);
+      void saveChatCache(sub, { chats: persistentChats(chats), base: saved?.base || {}, deleted: saved?.deleted || [] })
+        .catch(() => setIssue("Local backup is unavailable. Keep this tab open until sync completes."));
     }
   }, [chats, session?.user?.sub]);
   useEffect(() => {
@@ -111,11 +109,16 @@ export function useChatSync({ session, chats, setChats, busyId, onConflict }) {
       poll();
       if (usable()) void listen();
     };
+    const channel = typeof BroadcastChannel === "undefined" ? null : new BroadcastChannel(`vaelo-sync:${session.user.sub}`);
+    if (channel) channel.onmessage = () => { if (usable()) check(); };
+    const changed = () => channel?.postMessage("changed");
+    addEventListener("vaelo-cache-saved", changed);
     wake();
     const timer = setInterval(poll, 1000);
     const events = ["visibilitychange", "focus", "online", "pointerdown", "keydown"];
     for (const name of events) addEventListener(name, wake, { passive: true });
     return () => {
+      channel?.close(); removeEventListener("vaelo-cache-saved", changed);
       sync.stop(); controller.abort(); clearInterval(timer);
       for (const name of events) removeEventListener(name, wake);
       engine.current = null;

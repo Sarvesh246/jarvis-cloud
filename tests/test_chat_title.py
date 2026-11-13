@@ -27,6 +27,7 @@ class ChatTitleTests(unittest.TestCase):
         ]:
             self.assertEqual(fallback_title([{'role': 'user', 'content': prompt}]), expected)
         self.assertEqual(fallback_title([{'role': 'user', 'content': [{'type': 'image_url'}]}]), 'Image discussion')
+        self.assertEqual(fallback_title([{'role': 'user', 'content': 'Weather today\n\n[Vaelo place: approximate location Dallas]'}]), 'Weather today')
         private = fallback_title([{'role': 'user', 'content': 'Help me email alice@example.com about invoice 123456789.'}])
         self.assertNotIn('alice', private)
         self.assertNotIn('123456789', private)

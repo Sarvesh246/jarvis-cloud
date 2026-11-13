@@ -2,6 +2,7 @@ mod sign_in;
 
 use std::sync::{atomic::AtomicBool, Mutex};
 use tauri::Manager;
+mod desktop_shell;
 
 const CLOUD: &str = "https://vaelochat.vercel.app";
 const CREDENTIAL_SERVICE: &str = "app.vaelo.desktop";
@@ -111,18 +112,6 @@ fn title_bar(window: tauri::WebviewWindow, dark: bool, caption: String, text: St
     Ok(())
 }
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn title_bar_colors_become_colorref_and_reject_anything_else() {
-        assert_eq!(super::rgb("#16110f"), Some(0x000f1116));
-        assert_eq!(super::rgb("#f7f2ea"), Some(0x00eaf2f7));
-        assert_eq!(super::rgb("16110f"), None);
-        assert_eq!(super::rgb("#fff"), None);
-        assert_eq!(super::rgb("#zzzzzz"), None);
-    }
-}
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -134,6 +123,25 @@ pub fn run() {
                 let _ = window.set_focus();
             }
         }))
+        .plugin(tauri_plugin_window_state::Builder::default()
+            .with_state_flags(tauri_plugin_window_state::StateFlags::all() & !tauri_plugin_window_state::StateFlags::VISIBLE)
+            .build())
+        .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, Some(vec!["--background"])))
+        .plugin(tauri_plugin_deep_link::init())
+        .plugin(tauri_plugin_global_shortcut::Builder::new().with_handler(|app, _, event| {
+            if event.state() == tauri_plugin_global_shortcut::ShortcutState::Pressed {
+                desktop_shell::summon(app);
+            }
+        }).build())
+        .setup(desktop_shell::setup)
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if window.app_handle().try_state::<desktop_shell::TrayReady>().is_some_and(|ready| ready.0) {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+            }
+        })
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
@@ -143,6 +151,9 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .invoke_handler(tauri::generate_handler![
+            desktop_shell::window_ready,
+            desktop_shell::autostart_enabled,
+            desktop_shell::set_autostart,
             session_token,
             clear_session,
             cancel_sign_in,
@@ -152,4 +163,16 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("Could not start Vaelo");
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn title_bar_colors_become_colorref_and_reject_anything_else() {
+        assert_eq!(super::rgb("#16110f"), Some(0x000f1116));
+        assert_eq!(super::rgb("#f7f2ea"), Some(0x00eaf2f7));
+        assert_eq!(super::rgb("16110f"), None);
+        assert_eq!(super::rgb("#fff"), None);
+        assert_eq!(super::rgb("#zzzzzz"), None);
+    }
 }

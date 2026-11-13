@@ -87,6 +87,11 @@ export function SeriesChart({ data }) {
           )}
         </dl>
       )}
+      <table className="sr-only">
+        <caption>Stacked breakdown data</caption>
+        <thead><tr><th scope="col">Category</th>{data.columns.map((name, i) => <th scope="col" key={i}>{name}</th>)}</tr></thead>
+        <tbody>{data.points.map((p, i) => <tr key={i}><th scope="row">{p.label}</th>{p.original.map((value, j) => <td key={j}>{value}</td>)}</tr>)}</tbody>
+      </table>
       <p className="local-note">
         Stacked totals use the visible series. Scale starts at zero.
       </p>

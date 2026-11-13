@@ -1,0 +1,19 @@
+name: Wake relay
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+permissions: {}
+concurrency:
+  group: relay-wake
+  cancel-in-progress: true
+
+jobs:
+  wake:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Wake the free relay
+        run: curl --fail --silent --show-error --retry 2 --retry-delay 10 --max-time 90 https://jarvis-cloud-m2kk.onrender.com/health > /dev/null

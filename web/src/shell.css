@@ -13,7 +13,7 @@
   width: var(--rail-w);
   margin-left: 0;
   transition:
-    margin-left var(--dur-3) var(--ease),
+    margin-left 0s,
     visibility var(--dur-3);
 }
 

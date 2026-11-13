@@ -1,3 +1,4 @@
+import { runJournalApi, cleanupRunJournal } from "../server/run-journal.js";
 import { settings, authorize, fail, HttpError } from "../server/security.js";
 import { feedInput, followFeed } from "../server/chat.js";
 
@@ -5,6 +6,8 @@ import { feedInput, followFeed } from "../server/chat.js";
    conversation is saved or a reply starts or ends anywhere on the account. */
 export default async function handler(req, res) {
   try {
+    if (req.method === "POST") return await runJournalApi(req, res);
+    if (req.method === "GET" && new URL(req.url, "https://local").searchParams.get("cleanup") === "1") return await cleanupRunJournal(req, res);
     if (req.method !== "GET") throw new HttpError(405, "Method not allowed.");
     const cfg = settings();
     const user = await authorize(req, cfg);

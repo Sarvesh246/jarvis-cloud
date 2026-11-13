@@ -77,7 +77,7 @@ class UsageTests(unittest.TestCase):
 
     def test_optional_reporter_startup_storage_failure_does_not_abort_relay(self):
         with tempfile.TemporaryDirectory() as folder:
-            settings = {"USAGE_LEDGER_URL": "https://example.test", "API_SERVER_KEY": "s" * 40,
+            settings = {"USAGE_LEDGER_URL": "https://example.test", "USAGE_INGEST_KEY": "s" * 40,
                         "HERMES_HOME": folder}
             failures = (mock.patch.object(usage.Path, "mkdir", side_effect=PermissionError("private path")),
                         mock.patch.object(usage, "UsageReporter", side_effect=usage.sqlite3.OperationalError("private database")))
@@ -124,7 +124,7 @@ class UsageTests(unittest.TestCase):
 
     def test_startup_failure_isolated_from_later_healthy_initialization(self):
         with tempfile.TemporaryDirectory() as folder:
-            settings = {"USAGE_LEDGER_URL": "https://example.test", "API_SERVER_KEY": "s" * 40,
+            settings = {"USAGE_LEDGER_URL": "https://example.test", "USAGE_INGEST_KEY": "s" * 40,
                         "HERMES_HOME": folder}
             path = Path(folder) / "usage-outbox.sqlite"
             path.mkdir()  # A real SQLite open failure, without permission assumptions.

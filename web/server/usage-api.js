@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { timingSafeEqual } from "node:crypto";
 import { UsageStore, validateUsage } from "./usage-store.js";
 import { readJson, json, fail, HttpError, settings, authorize } from "./security.js";
 
@@ -20,9 +20,7 @@ export default async function handler(req, res) {
       store ??= new UsageStore();
       return json(res, 200, await store.accountSummary(user.sub, range));
     }
-    const ingest = process.env.USAGE_INGEST_KEY || process.env.JARVIS_API_KEY;
-    const key = req.method === "POST" ? ingest : (process.env.USAGE_READ_KEY ||
-      (ingest ? createHmac("sha256", ingest).update("usage-dashboard-read-v1").digest("hex") : ""));
+    const key = req.method === "POST" ? process.env.USAGE_INGEST_KEY : process.env.USAGE_READ_KEY;
     if (!usageAuthorized(req.headers.authorization, key)) throw new HttpError(401, "Authentication required.");
     store ??= new UsageStore();
     if (req.method === "POST") {

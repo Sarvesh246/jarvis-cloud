@@ -13,10 +13,10 @@ export default async function handler(req, res) {
   try {
     if (req.method !== "POST") throw new HttpError(405, "Method not allowed.");
     const cfg = settings();
-    await authorize(req, cfg);
+    const user = await authorize(req, cfg);
     sameOrigin(req, cfg);
     const input = approvalInput(await readJson(req, 4000));
-    json(res, 200, await answerApproval(cfg, input));
+    json(res, 200, await answerApproval(cfg, { ...input, owner: user }));
   } catch (error) {
     fail(
       res,

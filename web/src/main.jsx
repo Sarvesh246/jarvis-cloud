@@ -1,11 +1,12 @@
-import React from "react";
+import React, { lazy, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import "@fontsource-variable/newsreader/opsz.css";
 import "@fontsource-variable/newsreader/opsz-italic.css";
 import "./design/tokens.css";
 import "./design/base.css";
 import "./design/personal.css";
-import { App } from "./App.jsx";
+import { Opening } from "./components/SignIn.jsx";
+const App = lazy(() => import("./App.jsx").then(module => ({ default: module.App })));
 import { DESKTOP, installDesktopTransport } from "./lib/desktop.js";
 import { trackViewport } from "./lib/viewport.js";
 
@@ -23,7 +24,7 @@ addEventListener("keydown", (event) => {
     document.documentElement.dataset.input = "keyboard";
 }, { capture: true });
 
-createRoot(document.getElementById("root")).render(<App />);
+createRoot(document.getElementById("root")).render(<Suspense fallback={<Opening />}><App /></Suspense>);
 
 /* Home-screen installs open instantly and survive a lost connection. Only in
    production builds, so development never serves stale files. */

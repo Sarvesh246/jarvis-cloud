@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "@fontsource-variable/newsreader/opsz.css";
-import "@fontsource-variable/source-serif-4/standard.css";
-import "@fontsource-variable/source-sans-3";
+import "@fontsource-variable/newsreader/opsz.css";
+
 import "../../src/design/tokens.css";
 import "../../src/design/base.css";
 import { Message } from "../../src/components/Message.jsx";

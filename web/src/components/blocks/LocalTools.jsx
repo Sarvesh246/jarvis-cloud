@@ -8,7 +8,7 @@ import { numberSeries, scaleSeries } from "../../lib/intelligent-ui.js";
 
 export function NumberExplorer({ columns, rows, initialFactor = 1 }) {
   const available = useMemo(
-    () => columns.map((_, i) => i).filter((i) => numberSeries(rows, i)),
+    () => columns.map((_, i) => i).filter((i) => numberSeries(rows, i, columns[i])),
     [columns, rows],
   );
   const [choice, setColumn] = useState(available[0] ?? 0);
@@ -20,7 +20,7 @@ export function NumberExplorer({ columns, rows, initialFactor = 1 }) {
         : 1,
     ),
   );
-  const original = numberSeries(rows, column);
+  const original = numberSeries(rows, column, columns[column]);
   const series = scaleSeries(original, factor);
   if (!available.length) return null;
   const total = series?.numbers.reduce((sum, value) => sum + value, 0);

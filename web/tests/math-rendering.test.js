@@ -71,15 +71,16 @@ test('live formatting leaves nested closing code fences intact', () => {
   }
 });
 
-test('relative links and nested code keep their source through the real renderer', async () => {
+test('relative links remain text and nested code keeps its source through the real renderer', async () => {
   const server = await createServer({ server: { middlewareMode: true }, appType: 'custom' });
   try {
-    const { Rendered } = await server.ssrLoadModule('/src/components/blocks/Blocks.jsx');
+    const { Rendered } = await server.ssrLoadModule('/src/components/blocks/ReplyRenderer.jsx');
     const render = (content, live) => renderToStaticMarkup(React.createElement(Rendered,
       { content, sources: [], onOpen() {}, live, requestText: 'No widgets.' }));
     for (const live of [false, true]) {
       const html = render('[cost](/cost/$a_b$/view) and \\(x^2\\).', live);
-      assert.match(html, /href="\/cost\/\$a_b\$\/view"/);
+      assert.doesNotMatch(html, /href="\/cost\/\$a_b\$\/view"/);
+      assert.match(html, />cost</);
       assert.equal((html.match(/class="katex"/g) || []).length, 1);
       const code = render('> ```tex\n> \\(x\\) and $a_b$\n> ```', live);
       assert.match(code, /\\\(x\\\) and \$a_b\$/);
@@ -138,7 +139,7 @@ const ode = [
 test('a differential-equation answer renders as typeset math through the real pipeline', async () => {
   const server = await createServer({ server: { middlewareMode: true }, appType: 'custom' });
   try {
-    const { Rendered, PresentationContext } = await server.ssrLoadModule('/src/components/blocks/Blocks.jsx');
+    const { Rendered, PresentationContext } = await server.ssrLoadModule('/src/components/blocks/ReplyRenderer.jsx');
     const render = (content, props = {}) => renderToStaticMarkup(React.createElement(PresentationContext.Provider, { value: 'adaptive' }, React.createElement(Rendered, { content, sources: [], onOpen() {}, ...props })));
 
     const html = render(ode);
@@ -173,7 +174,7 @@ test('a differential-equation answer renders as typeset math through the real pi
 test('malformed math falls back to readable source instead of breaking the reply', async () => {
   const server = await createServer({ server: { middlewareMode: true }, appType: 'custom' });
   try {
-    const { Rendered, PresentationContext } = await server.ssrLoadModule('/src/components/blocks/Blocks.jsx');
+    const { Rendered, PresentationContext } = await server.ssrLoadModule('/src/components/blocks/ReplyRenderer.jsx');
     const render = (content, props = {}) => renderToStaticMarkup(React.createElement(PresentationContext.Provider, { value: 'adaptive' }, React.createElement(Rendered, { content, sources: [], onOpen() {}, ...props })));
     const html = render('Before\n\n$$\\frac{1}{\n$$\n\nAfter the bad one, \\(\\undefinedcommand{x}\\) too.');
     assert.match(html, /Before/);
@@ -188,7 +189,7 @@ test('malformed math falls back to readable source instead of breaking the reply
 test('hostile content in formulas and prose cannot run script or load remote resources', async () => {
   const server = await createServer({ server: { middlewareMode: true }, appType: 'custom' });
   try {
-    const { Rendered, PresentationContext } = await server.ssrLoadModule('/src/components/blocks/Blocks.jsx');
+    const { Rendered, PresentationContext } = await server.ssrLoadModule('/src/components/blocks/ReplyRenderer.jsx');
     const render = (content) => renderToStaticMarkup(React.createElement(PresentationContext.Provider, { value: 'adaptive' }, React.createElement(Rendered, { content, sources: [], onOpen() {} })));
     const hostile = [
       '$$\\href{javascript:alert(1)}{click}$$',
@@ -212,7 +213,7 @@ test('hostile content in formulas and prose cannot run script or load remote res
 test('very long answers with many formulas, tables and code render without error', async () => {
   const server = await createServer({ server: { middlewareMode: true }, appType: 'custom' });
   try {
-    const { Rendered, PresentationContext } = await server.ssrLoadModule('/src/components/blocks/Blocks.jsx');
+    const { Rendered, PresentationContext } = await server.ssrLoadModule('/src/components/blocks/ReplyRenderer.jsx');
     const render = (content) => renderToStaticMarkup(React.createElement(PresentationContext.Provider, { value: 'adaptive' }, React.createElement(Rendered, { content, sources: [], onOpen() {} })));
     const table = '| Language | Typed | Notes |\n|:--|:-:|--:|\n' + Array.from({ length: 60 }, (_, i) => `| Row ${i} | ${i % 2 ? 'yes' : 'no'} | $${i * 3} |`).join('\n');
     const code = '```python\n' + Array.from({ length: 800 }, (_, i) => `value_${i} = ${i} * 2  # line ${i}`).join('\n') + '\n```';
@@ -231,7 +232,7 @@ test('very long answers with many formulas, tables and code render without error
 test('code in several languages and nested lists keep their form', async () => {
   const server = await createServer({ server: { middlewareMode: true }, appType: 'custom' });
   try {
-    const { Rendered, PresentationContext } = await server.ssrLoadModule('/src/components/blocks/Blocks.jsx');
+    const { Rendered, PresentationContext } = await server.ssrLoadModule('/src/components/blocks/ReplyRenderer.jsx');
     const render = (content) => renderToStaticMarkup(React.createElement(PresentationContext.Provider, { value: 'adaptive' }, React.createElement(Rendered, { content, sources: [], onOpen() {} })));
     const html = render([
       '```python\ndef f(x):\n    return x ** 2  # costs $5 \\(not math\\)\n```',

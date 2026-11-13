@@ -1011,3 +1011,9 @@
 .table-scroll-note { margin: 0; padding: var(--s-2) var(--s-3); font-size: var(--t-xs); line-height: 1.5; color: var(--muted); }
 .ws-grid-wrap { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .ws-grid-wrap .table-scroll-note { padding-inline: var(--s-5); }
+
+/* A completed presentation settles at its existing reading position. */
+.reply-transition { position: relative; min-width: 0; }
+.reply-transition > :first-child { margin-top: 0; }
+.reply-transition > :last-child { margin-bottom: 0; }
+.reply-before { position: absolute; inset: 0; pointer-events: none; user-select: none; background: var(--canvas); overflow: hidden; }

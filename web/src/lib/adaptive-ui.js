@@ -48,7 +48,7 @@ export function safeChartPlan(columns, rows) {
   if (!plan) return null;
   const time = columns.findIndex(header => TIME_COLUMN.test(header));
   const label = time >= 0 ? time : plan.label;
-  const values = plan.values.filter(i => i !== label && numberSeries(rows.filter(row => !isBlank(row[i])), i));
+  const values = plan.values.filter(i => i !== label && numberSeries(rows.filter(row => !isBlank(row[i])), i, columns[i]));
   return values.length ? { label, values } : null;
 }
 
@@ -100,7 +100,7 @@ const SUMMARY_CONTEXT = /\b(?:summary|overview|snapshot|at a glance|key (?:numbe
 export function overviewItems(columns, rows, max = 8) {
   rows = rows.filter(row => !isSectionRow(row));
   if (columns.length < 2 || columns.length > 3 || rows.length < 2 || rows.length > max) return null;
-  if (TIME_COLUMN.test(String(columns[0])) || !numberSeries(rows, 1)) return null;
+  if (TIME_COLUMN.test(String(columns[0])) || !numberSeries(rows, 1, columns[1])) return null;
   const items = rows.map(row => ({ label: cellText(row[0]), value: cellText(row[1]), detail: columns.length === 3 ? cellText(row[2]) : '' }));
   if (items.some(item => !item.label || !item.value || item.label.length > 60 || item.value.length > 40 || item.detail.length > 120 || Number.isFinite(toNumber(item.label)))) return null;
   if (rows.every(row => DATE_LABEL.test(cellText(row[0])))) return null;
@@ -116,7 +116,7 @@ export function tablePresentation(columns, rows, context = '', request = '') {
   const result = { view: 'table', explore: false };
   if (rows.length < 2 || rows.length > 200 || columns.length > 20) return result;
   const headers = columns.map(value => String(value).toLowerCase());
-  const numeric = headers.map((_, i) => i).filter(i => numberSeries(rows, i));
+  const numeric = headers.map((_, i) => i).filter(i => numberSeries(rows, i, headers[i]));
   if (!numeric.length) return result;
   const label = safeChartPlan(columns, rows)?.label ?? -1;
   const ingredients = headers.some(h => /\bingredient\b/.test(h)) && headers.some(h => /\b(?:quantity|amount|grams|weight)\b/.test(h));

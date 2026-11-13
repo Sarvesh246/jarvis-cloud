@@ -8,7 +8,7 @@ function database() {
   const url = process.env.DATABASE_URL || process.env.POSTGRES_URL;
   if (!url) throw new Error('Recall storage is unavailable.');
   client ??= neon(url);
-  ready ??= client.query(`CREATE TABLE IF NOT EXISTS conversation_recall (
+  ready ??= process.env.VAELO_SCHEMA_MANAGED === "1" ? Promise.resolve() : client.query(`CREATE TABLE IF NOT EXISTS conversation_recall (
     account text NOT NULL, chat_id text NOT NULL, version text NOT NULL,
     title text NOT NULL, excerpts jsonb NOT NULL, document tsvector NOT NULL,
     updated bigint NOT NULL, PRIMARY KEY(account,chat_id))`).then(() =>

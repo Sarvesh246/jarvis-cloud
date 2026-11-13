@@ -363,7 +363,7 @@ const PLAN_WORDS = {
   pending: { spoken: ", to do" },
   in_progress: { shown: "now" },
   completed: { spoken: ", done" },
-  cancelled: { shown: "dropped" },
+  cancelled: { shown: "cancelled" },
 };
 
 /* Hermes's plan for this reply, kept as a ledger. Finished items are struck
@@ -726,6 +726,8 @@ function MessageView({ message, requestText = "", requestImages, fresh, busy, li
     <article
       id={`m-${message.id}`}
       className="message"
+      data-live={live || undefined}
+      aria-busy={live || undefined}
       data-role={message.role}
       data-fresh={fresh || undefined}
       data-last={isLast || undefined}

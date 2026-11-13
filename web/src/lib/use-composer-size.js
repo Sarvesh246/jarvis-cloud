@@ -44,5 +44,14 @@ export function useComposerSize(textarea, draft, phone) {
     };
   }, [fit]);
 
+  useEffect(() => {
+    const dock = textarea.current?.closest(".dock");
+    if (!dock || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(([entry]) => {
+      document.documentElement.style.setProperty("--dock-h", `${entry.borderBoxSize?.[0]?.blockSize || entry.contentRect.height}px`);
+    });
+    observer.observe(dock);
+    return () => { observer.disconnect(); document.documentElement.style.removeProperty("--dock-h"); };
+  }, [textarea, phone]);
   return nativeSizing;
 }

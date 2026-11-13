@@ -1,6 +1,6 @@
 import { memoryApi, retentionApi } from "../server/account-api.js";
 import { ChatStore } from "../server/chat-store.js";
-import { notifyFeed } from "../server/chat.js";
+import { notifyFeed } from "../server/feed-notify.js";
 import { storageConfigured } from "../server/kv-storage.js";
 import { recallApi } from '../server/recall-api.js';
 import { commandDataApi } from '../server/command-data.js';

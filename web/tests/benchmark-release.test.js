@@ -73,7 +73,7 @@ test('memory API checks account-bound server permission at the write boundary', 
     const res = reply();
     await memoryApi({ method:'POST', headers: { origin:cfg.origin, 'x-csrf-token':csrf,
       cookie:`jarvis-csrf=${csrf}`, 'content-type':'application/json' },
-      body:{action:'note',notes:['Prefers tea'],permission} },res,cfg,user,memory);
+      body:{action:'note',notes:['Prefers tea'],permission,run:'run-id'} },res,cfg,user,memory);
     return res;
   };
   await assert.rejects(call(undefined),error=>error.status===403);

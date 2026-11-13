@@ -15,7 +15,7 @@ test('chat controls retain their visible labels in their accessible names', asyn
     assert.doesNotMatch(find, /aria-label=/, 'the name comes from Find and the visible shortcut');
     assert.match(find, /aria-keyshortcuts="Control\+k Meta\+k"/);
     assert.match(find, /aria-description="Find actions, conversations and saved outputs"/);
-    assert.match(find, /Find <kbd>⌘\/Ctrl K<\/kbd>/);
+    assert.match(find, /Find <kbd>Ctrl K<\/kbd>/);
 
     for (const count of [1, 4, 7]) {
       const sources = Array.from({ length: count }, (_, id) => ({ id, domain: `site${id}.example`, kind: 'web' }));

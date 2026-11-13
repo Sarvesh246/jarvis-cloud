@@ -186,10 +186,10 @@
   border-radius: 50%;
   background: var(--gilt);
   vertical-align: 0.1em;
-  animation: ember 1.6s ease-in-out infinite;
+  animation: message-ember 1.6s ease-in-out infinite;
 }
 
-@keyframes ember {
+@keyframes message-ember {
   0%,
   100% {
     opacity: 0.3;
@@ -414,7 +414,7 @@
 }
 
 .steps li[data-state="running"] .steps-mark {
-  animation: ember 1.8s ease-in-out infinite;
+  animation: message-ember 1.8s ease-in-out infinite;
 }
 
 .steps li {
@@ -528,7 +528,7 @@
 }
 
 .attachment[data-state="reading"] .attachment-meta {
-  animation: ember 1.6s ease-in-out infinite;
+  animation: message-ember 1.6s ease-in-out infinite;
 }
 
 .attachment:is([data-state="unsupported"], [data-state="too-large"], [data-state="empty"]) {
@@ -877,7 +877,7 @@
   height: 0.375rem;
   border-radius: 50%;
   background: var(--gilt);
-  animation: ember 1.8s ease-in-out infinite;
+  animation: message-ember 1.8s ease-in-out infinite;
 }
 
 .plan-list li[data-state="completed"] .plan-mark {

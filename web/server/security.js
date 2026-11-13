@@ -126,28 +126,28 @@ export async function sessionUser(req, cfg) {
     ? req.headers.authorization.slice(7)
     : cookies(req)[cookieNames(cfg).session];
   if (!token) return null;
+  let payload;
   try {
-    const { payload } = await jwtVerify(token, sessionKey(cfg), {
+    ({ payload } = await jwtVerify(token, sessionKey(cfg), {
       issuer: cfg.origin,
       audience,
       algorithms: ["HS256"],
-    });
-    if (!payload.sub || !cfg.email || payload.email !== cfg.email) return null;
-    const signedOut = await (cfg.revocations || revocations).epoch(payload.sub, audience);
-    if ((payload.iat || 0) <= signedOut) return null;
-    if (payload.did !== undefined && !DEVICE_ID.test(payload.did)) return null;
-    // A signed-out device is refused; an unreadable registry throws into the catch below.
-    if (!(await (cfg.devices || devices).verify(payload.sub, audience, payload.did, payload.iat || 0))) return null;
-    if (payload.did) req[currentDevice] = payload.did;
-    if (desktop) req[desktopAuth] = true;
-    return {
-      sub: payload.sub,
-      email: payload.email,
-      name: displayName(payload.name),
-    };
+    }));
   } catch {
     return null;
   }
+  if (!payload.sub || !cfg.email || payload.email !== cfg.email) return null;
+  if (payload.did !== undefined && !DEVICE_ID.test(payload.did)) return null;
+  try {
+    const signedOut = await (cfg.revocations || revocations).epoch(payload.sub, audience);
+    if ((payload.iat || 0) <= signedOut) return null;
+    if (!(await (cfg.devices || devices).verify(payload.sub, audience, payload.did, payload.iat || 0))) return null;
+  } catch {
+    throw new HttpError(503, "Vaelo cannot check your session right now. Please retry.");
+  }
+  if (payload.did) req[currentDevice] = payload.did;
+  if (desktop) req[desktopAuth] = true;
+  return { sub: payload.sub, email: payload.email, name: displayName(payload.name) };
 }
 
 /* A guest is a throwaway identity for trying Vaelo without signing in. It has
@@ -156,10 +156,10 @@ export async function sessionUser(req, cfg) {
 const guestDuration = 24 * 60 * 60;
 export const GUEST_PREFIX = "guest:";
 
-export async function signGuest(cfg) {
+export async function signGuest(cfg, subject = randomUUID()) {
   return new SignJWT({})
     .setProtectedHeader({ alg: "HS256" })
-    .setSubject(`${GUEST_PREFIX}${randomUUID()}`)
+    .setSubject(`${GUEST_PREFIX}${subject}`)
     .setIssuer(cfg.origin)
     .setAudience("vaelo-guest")
     .setIssuedAt()

@@ -117,7 +117,15 @@ try {
     assert.equal(await copy.isEnabled(), true);
     await copy.click();
     assert.equal(await page.evaluate(() => window.copiedText), source);
-    const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('vaelo-sync:offline-review')).chats[0].messages[1].content);
+    const stored = await page.evaluate(() => new Promise((resolve, reject) => {
+      const open = indexedDB.open('vaelo-chat-cache', 1);
+      open.onerror = () => reject(open.error);
+      open.onsuccess = () => {
+        const db = open.result, request = db.transaction('chats').objectStore('chats').index('account').getAll('offline-review');
+        request.onsuccess = () => { resolve(request.result.find(row => row.chat)?.chat.messages[1].content); db.close(); };
+        request.onerror = () => { reject(request.error); db.close(); };
+      };
+    }));
     assert.equal(stored, source);
     if (options.isMobile && ['finished', 'offline-session'].includes(fixture.id)) {
       await message.getByRole('button', { name: 'More', exact: true }).tap();

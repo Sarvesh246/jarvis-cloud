@@ -92,7 +92,7 @@
 }
 
 @media (max-width: 47.9375rem), (pointer: coarse) and (max-height: 31.25rem) {
-@keyframes mark-bow {
+@keyframes mark-bow-phone {
   0% {
     transform: translateY(-1.5px);
   }
@@ -113,7 +113,7 @@
 }
 
 @media (min-width: 48rem) and (min-height: 31.3125rem), (min-width: 48rem) and (pointer: fine) {
-@keyframes mark-bow {
+@keyframes mark-bow-desktop {
   0% {
     opacity: 0;
     transform: translateY(-22%);
@@ -315,7 +315,7 @@
 @media (max-width: 47.9375rem), (pointer: coarse) and (max-height: 31.25rem) {
 /* settling: one small bow, then still */
 .mark[data-state="settling"] .mark-v {
-  animation: mark-bow 900ms var(--ease) both;
+  animation: mark-bow-phone 900ms var(--ease) both;
 }
 
 /* concern: earthen and steady, never alarming */
@@ -347,7 +347,7 @@
 /* settling: it lowers into place from above, then a faint light flashes once
    and is gone */
 .mark[data-state="settling"] .mark-v {
-  animation: mark-bow 900ms var(--ease) both;
+  animation: mark-bow-desktop 900ms var(--ease) both;
 }
 
 .mark[data-state="settling"] .mark-glow {

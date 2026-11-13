@@ -117,7 +117,17 @@ function languageName(language) {
 
 /* Everything worth keeping, newest conversation first. Each entry carries
    the workspace item that opens it. */
+const workByChat = new WeakMap();
+
 export function collectWork(chats) {
+  return [...chats].sort((a, b) => (b.updated || 0) - (a.updated || 0)).flatMap(chat => {
+    let items = workByChat.get(chat);
+    if (!items) { items = collectWorkUncached([chat]); workByChat.set(chat, items); }
+    return items;
+  });
+}
+
+function collectWorkUncached(chats) {
   const items = [];
   const ordered = [...chats].sort((a, b) => (b.updated || 0) - (a.updated || 0));
   for (const chat of ordered) {

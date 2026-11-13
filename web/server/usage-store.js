@@ -28,7 +28,7 @@ export class UsageStore {
     this.ready = null;
   }
   async initialize() {
-    this.ready ??= this.sql.query(`CREATE TABLE IF NOT EXISTS usage_events (
+    this.ready ??= process.env.VAELO_SCHEMA_MANAGED === "1" ? Promise.resolve() : this.sql.query(`CREATE TABLE IF NOT EXISTS usage_events (
       id text PRIMARY KEY, route text NOT NULL, reported boolean NOT NULL,
       input_tokens bigint NOT NULL, output_tokens bigint NOT NULL, cached_tokens bigint NOT NULL,
       happened_at timestamptz NOT NULL, received_at timestamptz NOT NULL DEFAULT now())`)

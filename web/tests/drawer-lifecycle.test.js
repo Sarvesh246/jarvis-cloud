@@ -21,6 +21,7 @@ function fixture(open = false) {
   const plain = { closest: () => null };
   const window = target('window');
   const hook = runInNewContext(`${source}\nuseDrawer`, {
+    performance: { now: (() => { let at = 0; return () => at += 1000; })() },
     useRef(value) { return slots[cursor++] ??= { current: value }; },
     useEffect(effect, deps) {
       const at = cursor++, old = slots[at];

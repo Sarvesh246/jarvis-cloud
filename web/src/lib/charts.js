@@ -6,7 +6,7 @@ export function chartData(columns, rows, column, labelColumn) {
   rows.forEach((row, index) => {
     if (isSectionRow(row)) { section = cellText(row[0]); return; }
     points.push({ index, section, label: labelColumn == null ? `Row ${index + 1}` : cellText(row[labelColumn]),
-      text: cellText(row[column]), value: toNumber(row[column]) });
+      text: cellText(row[column]), value: toNumber(row[column], columns[column]) });
   });
   const finite = points.filter(point => Number.isFinite(point.value));
   if (!finite.length) return { points, finite, max: 1, signed: false, summary: 'No numeric values in the current view.' };

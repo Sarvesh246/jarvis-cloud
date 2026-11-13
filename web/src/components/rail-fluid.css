@@ -12,7 +12,7 @@
   --rail-mini: 4.25rem;
   /* A long, soft landing: quick off the mark, then settles. Never bounces. */
   --ease-rail: cubic-bezier(0.32, 0.72, 0, 1);
-  --dur-rail: 560ms;
+  --dur-rail: 300ms;
 }
 
 .shell > .rail.rail-wide {
@@ -26,7 +26,7 @@
   overflow: hidden;
   contain: layout paint style;
   will-change: width;
-  transition: width var(--dur-rail) var(--ease-rail);
+  transition: width 0s;
 }
 
 .shell[data-collapsed="true"] > .rail.rail-wide {

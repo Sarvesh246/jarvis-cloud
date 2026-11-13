@@ -1,6 +1,6 @@
 import { usePinnedReorder } from "../lib/use-pinned-reorder.js";
 import { movePinned } from "../lib/rich-ui.js";
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import React, { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   BookmarkSimple,
   GearSix,
@@ -170,8 +170,16 @@ function Row({ chat, active, busy, running, excerpt, openId, setOpenId, onSelect
 
 /* On a phone the index is a drawer of its own design (RailPhone.jsx); on
    anything wider it is the rail beside the conversation. */
-export function Rail(props) {
+const RailView = memo(function RailView(props) {
   return props.phone ? <PhoneRail {...props} /> : <WideRail {...props} />;
+}, (previous, next) => Object.keys(previous).length === Object.keys(next).length && Object.keys(next).every(key =>
+  key === "projects" ? JSON.stringify(previous[key]) === JSON.stringify(next[key]) : previous[key] === next[key]));
+export function Rail(props) {
+  const latest = useRef(props);
+  useLayoutEffect(() => { latest.current = props; });
+  const keys = Object.keys(props).filter(key => typeof props[key] === "function").join(",");
+  const handlers = useMemo(() => Object.fromEntries(keys.split(",").filter(Boolean).map(key => [key, (...args) => latest.current[key]?.(...args)])), [keys]);
+  return <RailView {...props} {...handlers} />;
 }
 
 function WideRail({

@@ -1,4 +1,5 @@
-import { spotlight } from './blocks/RichUI.jsx';
+import { spotlight } from './blocks/spotlight.js';
+import './blocks/rich-ui.css';
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { X, Plus, Trash, DownloadSimple, UploadSimple, ArrowClockwise, ArrowLeft, ArrowRight, ChatCircle, Calculator, FolderOpen, FileText, ClipboardText, Sparkle, Check as Tick } from '@phosphor-icons/react';
 import { WORKSPACES, AUDIENCES, getWorkspace } from '../../shared/workspaces.js';

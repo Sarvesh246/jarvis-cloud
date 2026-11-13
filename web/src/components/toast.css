@@ -4,7 +4,7 @@
      centres on the conversation whether or not the rail is open */
   left: var(--toast-x, 50%);
   bottom: calc(var(--s-6) + env(safe-area-inset-bottom));
-  z-index: 50;
+  z-index: var(--z-toast);
   transform: translateX(-50%);
   pointer-events: none;
 }

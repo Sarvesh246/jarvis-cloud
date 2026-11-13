@@ -69,7 +69,7 @@ test("accounting negatives and approximate figures read as numbers", () => {
   assert.equal(toNumber("(12%)"), -12);
   assert.equal(toNumber("(0)"), 0);
   assert.equal(toNumber("~40"), 40);
-  assert.equal(toNumber("≈ 3.5k"), 3500);
+  assert.equal(toNumber("≈ 3.5k", "count"), 3500);
   assert.ok(Number.isNaN(toNumber("(-5)")));
   assert.ok(Number.isNaN(toNumber("(see note)")));
   const rows = [["Q1", "$1,000"], ["Q2", "($250)"], ["Q3", "$40"]];

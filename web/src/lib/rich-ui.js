@@ -198,7 +198,7 @@ export function movePinned(ids, id, direction) {
 
 export function stackedSeries(columns, rows, values, label) {
   if (values.length < 2 || values.length > 8 || rows.length > 100) return null;
-  const series = values.map((index) => numberSeries(rows, index));
+  const series = values.map((index) => numberSeries(rows, index, columns[index]));
   if (
     series.some((x) => !x || x.numbers.some((n) => n < 0)) ||
     !series.every((x) => x.unit === series[0].unit) ||

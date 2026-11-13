@@ -3,7 +3,9 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "functions": {
-    "api/transcribe.js": { "maxDuration": 90 },
+    "api/transcribe.js": {
+      "maxDuration": 90
+    },
     "api/work.js": {
       "maxDuration": 60
     },
@@ -15,7 +17,7 @@
       "supportsCancellation": true
     },
     "api/feed.js": {
-      "maxDuration": 300,
+      "maxDuration": 35,
       "supportsCancellation": true
     },
     "api/approval.js": {
@@ -49,6 +51,14 @@
         {
           "key": "Content-Security-Policy",
           "value": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://accounts.google.com/gsi/client; frame-src 'self' https://accounts.google.com; connect-src 'self' blob: https:; style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style; font-src 'self' data:; img-src 'self' data: blob: https:; media-src 'self' blob: https:; manifest-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+        },
+        {
+          "key": "Cross-Origin-Opener-Policy",
+          "value": "same-origin-allow-popups"
+        },
+        {
+          "key": "Cross-Origin-Resource-Policy",
+          "value": "same-origin"
         }
       ]
     },
@@ -73,6 +83,21 @@
           "value": "application/manifest+json"
         }
       ]
+    },
+    {
+      "source": "/assets/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/feed?cleanup=1",
+      "schedule": "0 8 * * *"
     }
   ]
 }

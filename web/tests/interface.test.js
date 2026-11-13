@@ -94,7 +94,7 @@ test("links become numbered, typed sources; code is never mistaken for a citatio
 test("tables sort numerically, export safely and only offer charts that say something", () => {
   assert.equal(toNumber("$1,250"), 1250);
   assert.equal(toNumber("-3.5%"), -3.5);
-  assert.equal(toNumber("4.2k"), 4200);
+  assert.equal(toNumber("4.2k", "count"), 4200);
   assert.ok(Number.isNaN(toNumber("n/a")));
   const rows = [
     ["Oslo", "1,200"],
@@ -364,7 +364,7 @@ test("approvals accept only the web-safe choices and reach the exact run", async
   let sent;
   const result = await answerApproval(
     { backend: "https://backend.example", apiKey: "k" },
-    input,
+    { ...input, owner: { sub: "owner" } },
     async (url, options) => {
       sent = { url, body: JSON.parse(options.body) };
       return new Response("{}", { status: 200 });
@@ -374,7 +374,7 @@ test("approvals accept only the web-safe choices and reach the exact run", async
   assert.deepEqual(sent.body, { choice: "session", request_id: "r1" });
   assert.equal(result.choice, "session");
   await assert.rejects(
-    answerApproval({ backend: "https://backend.example", apiKey: "k" }, input, async () => new Response("{}", { status: 409 })),
+    answerApproval({ backend: "https://backend.example", apiKey: "k" }, { ...input, owner: {sub:"owner"} }, async () => new Response("{}", { status: 409 })),
     /no longer waiting/,
   );
 });

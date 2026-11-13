@@ -23,6 +23,14 @@ import threading
 import time
 import uuid
 try:
+    from connection_pool import ConnectionPool
+except ModuleNotFoundError:
+    from cloud.connection_pool import ConnectionPool
+try:
+    from run_journal import configured_journal
+except ModuleNotFoundError:
+    from cloud.run_journal import configured_journal
+try:
     from chat_title import TitleFilter, TITLE_GUIDANCE, title_messages, fallback_title
 except ModuleNotFoundError:
     from cloud.chat_title import TitleFilter, TITLE_GUIDANCE, title_messages, fallback_title
@@ -167,7 +175,7 @@ WEATHER_GUIDANCE = ("\n\nFor current weather or forecasts, use weather_forecast 
 # Anything that goes wrong on that route falls back
 # to Hermes, so it can only ever save time, never lose a reply.
 FAST_MAX_TOKENS = 4000
-FAST_SECONDS = 18
+FAST_SECONDS = 4
 CODE_IMAGE_SECONDS = 60  # These pools may reason before sending HTTP headers.
 FAST_SYSTEM_CHARS = CONTEXT_POLICY['fastSystemChars']
 # Effort levels sent to a provider directly. "none" is rejected by models whose reasoning is
@@ -512,8 +520,9 @@ class RunTrace:
 class Run:
     """One reply: its numbered frames, who may read them, and how it ended."""
 
-    def __init__(self, run_id, owner):
+    def __init__(self, run_id, owner, journal=None):
         self.id, self.owner = run_id, owner
+        self.journal = journal
         self.trace = RunTrace()
         self.frames, self.size = [], 0
         self.done = self.stopped = False
@@ -563,6 +572,8 @@ class Run:
                 self.overflowed = overflow = True
             else:
                 self.frames.append(data)
+                if self.journal:
+                    self.journal.append(self, len(self.frames) - 1, data)
                 self.size += len(data)
                 self.updated = time.time()
                 self.cond.notify_all()
@@ -601,6 +612,8 @@ class Run:
             if not self.done:
                 self.trace.ended = self.trace.clock()
                 self.done, self.outcome, self.updated = True, outcome, time.time()
+                if self.journal:
+                    self.journal.finish(self)
                 self.cond.notify_all()
 
     def wait(self, after, timeout):
@@ -616,6 +629,8 @@ class Run:
     def stop(self):
         self.stopped = True
         connection = self.connection
+        if connection is not None and hasattr(connection, "discard"):
+            connection.discard()
         if connection is not None and connection.sock is not None:
             try:
                 connection.sock.shutdown(
@@ -659,15 +674,13 @@ class Relay:
         self.host, self.port, self.key = upstream_host, upstream_port, api_key
         self.runs, self.lock = {}, threading.Lock()
         self.feeds = {}
+        self.journal = configured_journal()
         self.early_stops = {}
         self.clock, self.sleep = clock, sleep
         self.guest_active, self.guest_log = 0, {}
-        self.guest_connect = lambda: http.client.HTTPSConnection(
-            "openrouter.ai", timeout=FAST_SECONDS
-        )
-        self.fast_connect = lambda host, port: http.client.HTTPSConnection(
-            host, port, timeout=FAST_SECONDS
-        )
+        self.provider_connections = ConnectionPool()
+        self.guest_connect = lambda: self.provider_connections.acquire("openrouter.ai", timeout=FAST_SECONDS)
+        self.fast_connect = lambda host, port: self.provider_connections.acquire(host, port, timeout=FAST_SECONDS)
         self.report = lambda line: print(line, flush=True)
         self.fast_health = RouteHealth()
         self.usage_reporter = configured_reporter()
@@ -872,8 +885,11 @@ class Relay:
     def start(self, run_id, owner, body):
         """Start a reply, or hand back the one already running under this id."""
         self.tidy()
+        journal = self.journal if not body.get("temporary") and not owner.startswith(GUEST_OWNER) else None
         with self.lock:
             existing = self.runs.get(run_id)
+            if existing is None and journal:
+                existing = self.restore(run_id, owner)
             if existing is not None and existing.owner != owner:
                 return None
             # A lost start response can be retried after the answer finished.
@@ -883,7 +899,10 @@ class Relay:
             if existing is not None and (not existing.done or existing.model_started
                                          or existing.outcome in ("complete", "stopped")):
                 return existing
-            run = self.runs[run_id] = Run(run_id, owner)
+            run = Run(run_id, owner, journal)
+            if journal:
+                journal.create(run)
+            self.runs[run_id] = run
             stopped_at = self.early_stops.pop((owner, run_id), None)
         self.feed(owner).bump()
         if stopped_at is not None and self.clock() - stopped_at <= EARLY_STOP_SECONDS:
@@ -902,9 +921,26 @@ class Relay:
         with self.lock:
             return self.feeds.setdefault(owner, Feed())
 
+    def restore(self, run_id, owner):
+        saved = self.journal.load(run_id, owner) if self.journal else None
+        if not saved:
+            return None
+        run = Run(run_id, owner)
+        run.frames = saved["frames"]
+        run.size = sum(map(len, run.frames))
+        run.created = saved["created"]
+        run.model_started = True  # Never repeat an accepted run or its side effects.
+        if not saved["done"]:
+            run.event("jarvis.error", {"code": "run_interrupted", "message": "Vaelo restarted. Your saved partial reply is kept; continue or retry when ready."})
+        run.finish(saved["outcome"] if saved["done"] else "error")
+        self.runs[run_id] = run
+        return run
+
     def find(self, run_id, owner):
         with self.lock:
             run = self.runs.get(run_id)
+            if run is None and self.journal:
+                run = self.restore(run_id, owner)
         return (
             run if run is not None and hmac.compare_digest(run.owner, owner) else None
         )
@@ -1165,6 +1201,8 @@ class Relay:
         if not isinstance(payload, dict):
             seen["failed"] = True
             return
+        if isinstance(payload.get("id"), str) and re.fullmatch(r"chatcmpl-[A-Za-z0-9]{8,40}", payload["id"]):
+            run.upstream_id = payload["id"]
         reported = payload.get("usage")
         if isinstance(reported, dict):
             details = reported.get("prompt_tokens_details")
@@ -1183,6 +1221,9 @@ class Relay:
             frame = 'event: hermes.tool.progress\ndata: ' + json.dumps(payload)
             run.trace.tool(payload)
         if name == "approval.request":
+            upstream_id = payload.get("run_id") or payload.get("runId")
+            if isinstance(upstream_id, str) and re.fullmatch(r"chatcmpl-[A-Za-z0-9]{8,40}", upstream_id):
+                run.upstream_id = upstream_id
             seen["approval"] = True
         if name == "hermes.tool.progress" and payload.get("status") != "completed":
             label = str(
@@ -1932,6 +1973,8 @@ def make_handler(relay):
                         )
             except (ValueError, KeyError, TypeError):
                 return self.send_json(400, {"error": "invalid request"})
+            except OSError:
+                return self.send_json(503, {"error": "run storage unavailable"})
             return self.send_json(404, {"error": "not found"})
 
         def start(self, owner):
@@ -1968,6 +2011,8 @@ def make_handler(relay):
             )
             if run is None:
                 return self.send_json(409, {"error": "run belongs to another session"})
+            if 'text/event-stream' in self.headers.get('Accept', ''):
+                return self.follow(run)
             return self.send_json(202, {"run_id": run.id})
 
         def follow(self, run):
@@ -2038,6 +2083,14 @@ def make_handler(relay):
             headers = {
                 k: v for k, v in self.headers.items() if k.lower() not in HOP_HEADERS
             }
+            if method == "POST" and re.fullmatch(r"/v1/runs/chatcmpl-[A-Za-z0-9]{8,40}/approval", urlsplit(self.path).path):
+                if not self.authorized() or not self.owner():
+                    return self.send_json(401, {"error": "unauthorized"})
+                upstream_id = urlsplit(self.path).path.split("/")[3]
+                with relay.lock:
+                    owned = any(run.owner == self.owner() and getattr(run, "upstream_id", None) == upstream_id for run in relay.runs.values())
+                if not owned:
+                    return self.send_json(404, {"error": "run not found"})
             connection = http.client.HTTPConnection(relay.host, relay.port, timeout=600)
             try:
                 connection.request(

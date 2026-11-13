@@ -18,7 +18,7 @@ const EDGE = 22;
 const SLOP = 5;
 const OPENS_AT = 0.3;
 const STAYS_AT = 0.7;
-const SETTLE = 620;
+const SETTLE = 320;
 
 const clamp = (n) => Math.max(0, Math.min(1, n));
 
@@ -82,11 +82,14 @@ export function useDrawer({ phone, open, setOpen, shell }) {
       clearRelease();
       el.style.removeProperty("--p");
       g = { kind, id, generation: latest.current.generation,
-        mode: isOpen ? "close" : "open", x0: x, y0: y, moved: false, p: isOpen ? 1 : 0 };
+        at: performance.now(), lastAt: performance.now(), lastX: x, velocity: 0, mode: isOpen ? "close" : "open", x0: x, y0: y, moved: false, p: isOpen ? 1 : 0 };
     }
 
     function move(x, y, event) {
       if (!g) return;
+      const now = performance.now();
+      g.velocity = (x - g.lastX) / Math.max(1, now - g.lastAt);
+      g.lastAt = now; g.lastX = x;
       const dx = x - g.x0;
       const dy = y - g.y0;
       if (!g.moved) {
@@ -108,7 +111,8 @@ export function useDrawer({ phone, open, setOpen, shell }) {
       const done = g;
       g = null;
       if (!done?.moved) return;
-      const next = done.mode === "open" ? done.p > OPENS_AT : done.p > STAYS_AT;
+      const velocity = performance.now() - done.lastAt < 100 ? done.velocity : 0;
+      const next = Math.abs(velocity) > 0.5 ? velocity > 0 : done.mode === "open" ? done.p > OPENS_AT : done.p > STAYS_AT;
       delete el.dataset.dragging;
       /* Hold the dragged-to value until React has the new state, so the
          release glides to rest instead of flashing back first */

@@ -78,7 +78,7 @@ export function Sheet({ open, onClose, label, tall = false, children }) {
       pull.current = null;
       panel.current?.removeAttribute("data-dragging");
       panel.current?.style.removeProperty("--pull");
-      if (p && p.dy > CLOSE_PULL) close.current();
+      if (p && (p.dy > CLOSE_PULL || p.dy > 20 && p.dy / Math.max(1, performance.now() - p.at) > 0.6)) close.current();
     },
     onPointerCancel() {
       pull.current = null;

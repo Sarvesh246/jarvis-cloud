@@ -142,10 +142,10 @@
   font-size: var(--t-sm);
   font-weight: var(--w-ui);
   color: var(--muted);
-  animation: ember 1.8s ease-in-out infinite;
+  animation: entry-ember 1.8s ease-in-out infinite;
 }
 
-@keyframes ember {
+@keyframes entry-ember {
   50% {
     opacity: 0.6;
   }
@@ -250,4 +250,13 @@
   .entry-body .mark {
     display: none;
   }
+}
+
+.entry-body > * { animation-duration: 300ms; animation-delay: 0ms; }
+.entry-body .google-slot, .entry-body .google-own { animation: none; opacity: 1; }
+@media (min-width: 64rem) {
+  .entry:has(.google-slot) .entry-body { max-width: 62rem; width: 100%; display: grid; grid-template-columns: 1fr 1fr; column-gap: 5rem; text-align: left; }
+  .entry-body > .mark, .entry-body > .wordmark, .entry-body > h1, .entry-body > .entry-line { grid-column: 1; }
+  .entry-body > .google-slot { grid-column: 2; grid-row: 1 / span 4; align-self: center; }
+  .entry-body > .guest-entry, .entry-body > .entry-error, .entry-body > .entry-quiet { grid-column: 2; }
 }

@@ -83,9 +83,9 @@ test("an unreadable device record refuses the session instead of trusting it", a
   const path = [...store.rows.keys()].find(key => key.startsWith("devices/"));
   store.rows.set(path, { text: "{\"devices\":[]}", etag: "bad" });
   const broken = { ...cfg, devices: new DeviceRegistry(store, { enabled: () => true }) };
-  assert.equal(await sessionUser(asWeb(token), broken), null);
+  await assert.rejects(sessionUser(asWeb(token), broken), { status: 503 });
   const down = { ...cfg, devices: new DeviceRegistry({ async get() { throw new Error("storage down"); }, async put() { assert.fail("must not write"); } }, { enabled: () => true }) };
-  assert.equal(await sessionUser(asWeb(token), down), null);
+  await assert.rejects(sessionUser(asWeb(token), down), { status: 503 });
 });
 
 test("a sign-in fails when the device cannot be recorded, and a token with a bad id is refused", async () => {
@@ -284,6 +284,6 @@ test("repeated registry changes fail closed without looping indefinitely", async
     if (path.startsWith("devices/")) { reads++; cfg.devices.invalidate(owner.sub); }
     return result;
   };
-  assert.equal(await sessionUser(asWeb(token), cfg), null);
+  await assert.rejects(sessionUser(asWeb(token), cfg), { status: 503 });
   assert.equal(reads, 5);
 });

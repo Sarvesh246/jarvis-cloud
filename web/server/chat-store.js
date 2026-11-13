@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { get, put, del, isConflict } from "./kv-storage.js";
+import { get, getMany, put, del, isConflict } from "./kv-storage.js";
 import { HttpError } from "./security.js";
 import { indexConversation } from './recall-store.js';
 
@@ -17,7 +17,7 @@ export function accountPath(sub) {
 export class ChatStore {
   constructor(sub, storage, { index = storage ? null : indexConversation } = {}) {
     this.prefix = accountPath(sub);
-    this.storage = storage || {get,put,del};
+    this.storage = storage || {get,getMany,put,del};
     this.sub = sub;
     this.index = index;
   }
@@ -65,8 +65,10 @@ export class ChatStore {
     if (!deleted) {
       if (!Number.isInteger(parts) || parts < 1 || parts > MAX_PARTS)
         throw new HttpError(400, "Invalid conversation size.");
-      const chunks = [];
-      for (let i = 0; i < parts; i++) chunks.push(await this.part(id, version, i));
+      const chunks = this.storage.getMany
+        ? await this.storage.getMany(Array.from({ length: parts }, (_, i) => this.partPath(id, version, i)))
+        : await Promise.all(Array.from({ length: parts }, (_, i) => this.part(id, version, i)));
+      if (chunks.some(chunk => typeof chunk !== "string")) throw new HttpError(404, "Conversation part was not found.");
       try { chat = JSON.parse(chunks.join("")); } catch {
         throw new HttpError(400, "Invalid conversation data.");
       }
