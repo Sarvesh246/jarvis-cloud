@@ -915,6 +915,9 @@ function remarkCodeFilename() {
    charts read that source). A mapped document is not rewritten at all, since
    its selections are traced back to the original; there only $$ … $$ is math. */
 const remarkPlugins = [remarkGfm, [remarkMath, { singleDollarTextMath: false }], remarkMathDisplay, remarkCodeFilename];
+
+/* Fenced code or a markdown table: the reply has a structure worth seeing as written */
+const structuredMarkup = /^(```|~~~)|^\s*\|?\s*:?-{3,}:?\s*\|/m;
 const mappedRemarkPlugins = remarkPlugins;
 const rehypeMath = [rehypeMathBlock, [rehypeKatex, KATEX_OPTIONS]];
 
@@ -989,6 +992,8 @@ export function Rendered({ content, sources = [], onOpen, onAnswer, mapped = fal
   const audio = useMemo(() => !mapped && !live && presentation !== 'minimal' ? audioLinks(content) : [], [mapped, live, presentation, content]);
   const weather = useMemo(() => !mapped && !live && presentation !== 'minimal' ? weatherForecast(content, requestText) : null, [mapped, live, presentation, content, requestText]);
   const automaticView = useMemo(() => !weather && !mapped && !live && !mathy && presentation !== 'minimal' ? automaticPresentation(content, requestText, attached) : null, [weather, mapped, live, mathy, presentation, requestText, content, attached]);
+  /* "Show as written" only earns its place when the reply was shaped into something else */
+  const hasStructure = Boolean(weather || automaticView || mathy || audio.length || structuredMarkup.test(content));
   const shaped = automaticView?.markdown ?? weatherMarkdown(content);
   const { text: displayContent, pending } = useMemo(
     () => (mapped || literal ? { text: shaped, pending: null } : live ? prepareLive(shaped) : { text: normalizeMath(shaped), pending: null }),
@@ -1028,7 +1033,7 @@ export function Rendered({ content, sources = [], onOpen, onAnswer, mapped = fal
 
         {pending && <p className="math-pending" role="status">{pending === "math" ? "Typesetting…" : "Building the table…"}</p>}
         </>}
-        {!live && !mapped && !literal && preference !== "minimal" && <button className="text-button reply-original" aria-pressed={asWritten} onClick={() => setAsWritten(value => !value)}>{asWritten ? "Show formatted reply" : "Show as written"}</button>}
+        {!live && !mapped && !literal && preference !== "minimal" && (asWritten || hasStructure) && <button className="text-button reply-original" aria-pressed={asWritten} onClick={() => setAsWritten(value => !value)}>{asWritten ? "Show formatted reply" : "Show as written"}</button>}
       </BlockBoundary></ReplyTransition>
     </BlockContext.Provider>
   );
