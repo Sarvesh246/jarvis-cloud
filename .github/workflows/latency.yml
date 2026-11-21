@@ -1,0 +1,71 @@
+name: Latency benchmark
+
+# Manual only. Runs the guest-mode production benchmark from a neutral network
+# and keeps the raw results as an artifact, so a speed change can be compared
+# against the same prompts before and after it ships. Guest mode never touches
+# the owner's account, memory or saved work.
+on:
+  workflow_dispatch:
+    inputs:
+      label:
+        description: Name for this run (for example before or after)
+        required: true
+        default: before
+      cases:
+        description: Comma-separated case ids from web/evaluation/cases.json
+        required: true
+        default: greeting,arithmetic,rewrite,weather,table,math
+      repeat:
+        description: Runs per case (guest batches stay under 19 requests)
+        required: true
+        default: '3'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: latency-benchmark
+  cancel-in-progress: false
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Time the relay's first response (a cold start shows here)
+        run: |
+          curl --silent --output /dev/null --max-time 180 \
+            --write-out 'relay_health_first_ms=%{time_total}\n' https://jarvis-cloud-m2kk.onrender.com/health \
+            | awk -F= '{printf "%s=%d\n", $1, $2*1000}' | tee relay-wake.txt
+      - name: Run the benchmark
+        working-directory: web
+        env:
+          LABEL: ${{ inputs.label }}
+          CASES: ${{ inputs.cases }}
+          REPEAT: ${{ inputs.repeat }}
+        run: |
+          node scripts/baseline.mjs --mode guest --cases "$CASES" --repeat "$REPEAT" \
+            --revision "$GITHUB_SHA" --include-answers --out "evaluation-results/latency-$LABEL.json" || true
+          node -e '
+            const r = require(process.argv[1]);
+            const rows = r.rows.filter(x => x.outcome === "complete");
+            const med = a => { a = a.filter(Number.isFinite).sort((x, y) => x - y); return a.length ? a[Math.floor((a.length - 1) / 2)] : null; };
+            console.log(JSON.stringify({ label: process.env.LABEL, deployed: r.deployed_revision, backend: r.backend_revision,
+              completed: rows.length, of: r.rows.length, passed: r.rows.filter(x => x.quality?.passed).length,
+              first_answer_median_ms: med(rows.map(x => x.first_answer_ms)), total_median_ms: med(rows.map(x => x.total_ms)),
+              by_case: Object.fromEntries([...new Set(r.rows.map(x => x.case))].map(c => [c, {
+                first: r.rows.filter(x => x.case === c).map(x => x.first_answer_ms),
+                total: r.rows.filter(x => x.case === c).map(x => x.total_ms),
+                passed: r.rows.filter(x => x.case === c).map(x => Boolean(x.quality?.passed)) }])) }, null, 1));
+          ' "$PWD/evaluation-results/latency-$LABEL.json" | tee "evaluation-results/latency-$LABEL-summary.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: latency-${{ inputs.label }}
+          path: |
+            relay-wake.txt
+            web/evaluation-results/latency-*.json
+          retention-days: 30
