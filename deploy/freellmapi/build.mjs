@@ -1,5 +1,6 @@
 import { mkdirSync, existsSync, readFileSync, writeFileSync, mkdtempSync } from 'node:fs';
 import { patchImageReferences } from './image-reference-patch.mjs';
+import { patchLiveThinking } from './live-thinking-patch.mjs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { execSync, execFileSync } from 'node:child_process';
@@ -18,7 +19,7 @@ if (!existsSync('vendor/package-lock.json')) {
 const proxyPath = 'vendor/server/src/routes/proxy.ts';
 const mediaPath = 'vendor/server/src/services/media.ts';
 const patched = patchImageReferences(readFileSync(proxyPath, 'utf8'), readFileSync(mediaPath, 'utf8'));
-writeFileSync(proxyPath, patched.proxy);
+writeFileSync(proxyPath, patchLiveThinking(patched.proxy));
 writeFileSync(mediaPath, patched.media);
 const manifest = JSON.parse(readFileSync('vendor/package.json', 'utf8'));
 manifest.overrides = {...manifest.overrides, 'proxy-addr':'2.0.8'};

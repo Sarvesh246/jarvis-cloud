@@ -780,6 +780,40 @@
   animation: fade var(--dur-2) var(--ease) both;
 }
 
+/* The sentence Vaelo is thinking right now, under the live line. Two lines at
+   most, set back with a hairline like a margin note; each finished thought
+   eases in, and the words of the one in progress simply extend it. */
+.process-thought {
+  flex-basis: 100%;
+  min-width: 0;
+  margin: var(--s-1) 0 0 0.3rem;
+  padding-left: var(--s-3);
+  border-left: 1px solid var(--hairline-strong);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  font-size: var(--t-sm);
+  font-style: italic;
+  line-height: 1.5;
+  color: var(--muted);
+  animation: thought-in var(--dur-2) var(--ease) both;
+}
+
+@keyframes thought-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.3em);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .process-thought { animation: none; }
+}
+:root[data-motion="reduce"] .process-thought { animation: none; }
+
 .process-notes {
   margin: 0 0 0 0.3rem;
   padding: 0 0 0 var(--s-4);

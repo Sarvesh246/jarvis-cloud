@@ -33,6 +33,7 @@ import { Rolling } from "./Rolling.jsx";
 import { Rendered, SourceStrip, imageTiles, useCopy, useSources } from "./blocks/Blocks.jsx";
 import { summarizeSteps, toolDetail, toolInfo } from "../lib/tools.js";
 import { LONG_QUIET_MS, QUIET_MS, afterStep, clock, stillLine } from "../lib/live.js";
+import { thoughtGlimpse, thoughtStep } from "../lib/thought-glimpse.js";
 import { formatSize } from "../lib/attachments.js";
 import { isLongReply } from "../lib/library.js";
 import { orderPlan, planSummary } from "../lib/plan.js";
@@ -295,18 +296,29 @@ function Process({ message, live, phase }) {
   const quietMs = useQuiet(signature, now);
 
   if (live) {
-    const line = liveLine(message, phase, quietMs);
+    /* While the model thinks, its newest heading is the status and the
+       sentence it is on shows beneath, so the wait reads as work happening
+       rather than a label and a clock. Tools, approvals and waking keep
+       their own plainer status. */
+    const glimpse = thoughtGlimpse(message.reasoning);
+    const thinking = !running && !message.content && phase !== "waking" &&
+      message.approval?.state !== "pending";
+    // The agent's own status note, when it sends one, still names the step.
+    const line = thinking && !message.live && glimpse.heading ? glimpse.heading : liveLine(message, phase, quietMs);
     const sub =
       running && message.live
         ? message.live
         : (quietMs >= LONG_QUIET_MS && phase !== "waking" && message.approval?.state !== "pending"
             ? "Some steps take a minute or two on the free models. Vaelo is still connected and working."
             : "");
+    const thought = thinking && !sub && !open ? glimpse.line : "";
     return (
       <div className="process" data-live="true">
         <button className="process-head process-toggle" aria-expanded={open} onClick={() => setOpen(value => !value)}>
           <LiveLine text={line} />
-          {elapsed >= 3 && <span className="process-time">{clock(elapsed)}</span>}
+          {/* A ticking clock makes a short wait feel longer; it appears only
+              once the work is long enough that the time is reassuring. */}
+          {elapsed >= 10 && <span className="process-time">{clock(elapsed)}</span>}
           <CaretDown size={13} />
         </button>
         {sub && (
@@ -314,8 +326,13 @@ function Process({ message, live, phase }) {
             {sub}
           </span>
         )}
+        {thought && (
+          <span className="process-thought" key={thoughtStep(message.reasoning)} aria-hidden="true">
+            {thought}
+          </span>
+        )}
         {open && <div className="process-detail">
-          {message.reasoning ? <LiveReasoning text={message.reasoning} /> : <p className="process-sub">Waiting for thinking updates…</p>}
+          {message.reasoning ? <LiveReasoning text={message.reasoning} /> : <p className="process-sub">This model works without sharing its thinking. The answer appears here as it is written.</p>}
           {steps.length > 0 && <Steps items={steps} now={now} />}
         </div>}
       </div>
