@@ -18,7 +18,7 @@ test('startup requires separate credentials and a protected dashboard', () => {
 test('the cloud chain selects supported models and stays stable across restarts', () => {
   const db = new DatabaseSync(':memory:');
   db.exec(`CREATE TABLE profiles (id INTEGER PRIMARY KEY, name TEXT, auto_include_new_models INTEGER);
-    CREATE TABLE models (id INTEGER PRIMARY KEY, platform TEXT, enabled INTEGER, supports_tools INTEGER, context_window INTEGER, intelligence_rank INTEGER, paid_input_per_m REAL DEFAULT 0, paid_output_per_m REAL DEFAULT 0);
+    CREATE TABLE models (id INTEGER PRIMARY KEY, platform TEXT, enabled INTEGER, supports_tools INTEGER, context_window INTEGER, intelligence_rank INTEGER, paid_input_per_m REAL DEFAULT 0, paid_output_per_m REAL DEFAULT 0, model_id TEXT DEFAULT 'model');
     CREATE TABLE api_keys (platform TEXT, enabled INTEGER);
     CREATE TABLE profile_models (profile_id INTEGER, model_db_id INTEGER, priority INTEGER, enabled INTEGER);
     CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT);
@@ -26,7 +26,7 @@ test('the cloud chain selects supported models and stays stable across restarts'
     INSERT INTO models (id,platform,enabled,supports_tools,context_window,intelligence_rank) VALUES (1,'nvidia',1,1,128000,1),(2,'nvidia',1,1,64000,2),
       (3,'nvidia',1,0,200000,3),(4,'nvidia',1,1,NULL,4),(5,'google',1,1,1000000,1),
       (6,'custom',1,1,128000,1),(7,'nvidia',0,1,128000,5);
-    INSERT INTO models VALUES (8,'nvidia',1,1,1000000,1,1,0);`);
+    INSERT INTO models VALUES (8,'nvidia',1,1,1000000,1,1,0,'paid');`);
   const wrapped = {prepare:sql=>db.prepare(sql),transaction:fn=>()=>{
     db.exec('BEGIN'); try {const result=fn();db.exec('COMMIT');return result;} catch(error){db.exec('ROLLBACK');throw error;}
   }};
@@ -38,6 +38,32 @@ test('the cloud chain selects supported models and stays stable across restarts'
   db.exec('UPDATE models SET enabled=0');
   assert.throws(()=>selectCloudModels(wrapped),/No configured/);
   assert.equal(db.prepare('SELECT COUNT(*) AS count FROM profile_models').get().count,1,'a failed update retains the working chain');
+  db.close();
+});
+
+test('retired routes and single-purpose models stay out of the chat chain', () => {
+  const db = new DatabaseSync(':memory:');
+  db.exec(`CREATE TABLE profiles (id INTEGER PRIMARY KEY, name TEXT, auto_include_new_models INTEGER);
+    CREATE TABLE models (id INTEGER PRIMARY KEY, platform TEXT, model_id TEXT, enabled INTEGER, supports_tools INTEGER, context_window INTEGER, intelligence_rank INTEGER, paid_input_per_m REAL DEFAULT 0, paid_output_per_m REAL DEFAULT 0);
+    CREATE TABLE api_keys (platform TEXT, enabled INTEGER);
+    CREATE TABLE profile_models (profile_id INTEGER, model_db_id INTEGER, priority INTEGER, enabled INTEGER);
+    CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT);
+    INSERT INTO api_keys VALUES ('nvidia',1),('openrouter',1),('kilo',1),('ovh',1),('cohere',1);
+    INSERT INTO models (id,platform,model_id,enabled,supports_tools,context_window,intelligence_rank) VALUES
+      (1,'nvidia','openai/gpt-oss-20b',1,1,128000,1),
+      (2,'openrouter','nvidia/nemotron-nano-12b-v2-vl:free',1,1,128000,1),
+      (3,'kilo','cohere/north-mini-code:free',1,1,128000,1),
+      (4,'kilo','dots-studio/dots-3-note-preview:free',1,1,128000,1),
+      (5,'ovh','Mistral-Small-3.2-24B-Instruct-2506',1,1,128000,1),
+      (6,'cohere','command-r7b-arabic-02-2025',1,1,128000,1),
+      (7,'cohere','command-a-translate-08-2025',1,1,128000,1),
+      (8,'nvidia','nvidia/nemotron-3-ultra-550b-a55b',1,1,128000,2),
+      (9,'ovh','gpt-oss-20b',1,1,128000,3),
+      (10,'openrouter','openai/gpt-oss-20b:free',1,1,128000,4);`);
+  const wrapped = {prepare:sql=>db.prepare(sql),transaction:fn=>()=>fn()};
+  assert.equal(selectCloudModels(wrapped), 3);
+  assert.deepEqual(db.prepare('SELECT model_db_id FROM profile_models ORDER BY priority').all().map(r=>r.model_db_id), [8, 9, 10],
+    'the same model on a provider that still serves it is kept');
   db.close();
 });
 

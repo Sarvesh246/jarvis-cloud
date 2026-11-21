@@ -85,9 +85,9 @@ try:
 except ModuleNotFoundError:
     from cloud.image_gen import REFERENCE as IMAGE_REFERENCE, data_uri, image_context, image_creation_request
 try:
-    from weather import SCHEMA as WEATHER_SCHEMA, REFERENCE as WEATHER_REFERENCE, weather_tool, read_forecast, widget_reference
+    from weather import SCHEMA as WEATHER_SCHEMA, REFERENCE as WEATHER_REFERENCE, weather_tool, read_forecast, widget_reference, prefetch as prefetch_weather
 except ModuleNotFoundError:
-    from cloud.weather import SCHEMA as WEATHER_SCHEMA, REFERENCE as WEATHER_REFERENCE, weather_tool, read_forecast, widget_reference
+    from cloud.weather import SCHEMA as WEATHER_SCHEMA, REFERENCE as WEATHER_REFERENCE, weather_tool, read_forecast, widget_reference, prefetch as prefetch_weather
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 
@@ -180,6 +180,8 @@ CODE_IMAGE_SECONDS = 60  # These pools may reason before sending HTTP headers.
 FAST_SYSTEM_CHARS = CONTEXT_POLICY['fastSystemChars']
 # Effort levels sent to a provider directly. "none" is rejected by models whose reasoning is
 # mandatory, and the free routes pick the model themselves, so it is sent as "minimal".
+# Only the deployed service looks forecasts up ahead (Render sets RENDER).
+WEATHER_PREFETCH = lambda: os.environ.get("RENDER") == "true" or os.environ.get("VAELO_WEATHER_PREFETCH") == "1"
 DIRECT_EFFORTS = {"none": "minimal", "minimal": "minimal", "low": "low", "medium": "medium", "high": "high"}
 NO_ANSWER = "Vaelo finished working but the model didn’t write an answer. Try again; a second go usually works."
 HOP_HEADERS = {
@@ -1500,6 +1502,13 @@ class Relay:
             # Search snippets here tempt it to write a table without fetching
             # the day/hour data needed by the weather widgets.
             forecast_question = weather_intent(request_text(messages)) or weather_followup(messages)
+            if forecast_question and not body.get("no_weather_tools") and WEATHER_PREFETCH():
+                # Start the provider lookup while the model chooses its tool call.
+                # The call then reuses the identical result instead of waiting for it.
+                ask = weather_ask(request_text(messages), body, messages)
+                if ask:
+                    run.trace.counts["weather_prefetches"] = 1
+                    prefetch_weather(ask, {"lat": ask.get("latitude"), "lon": ask.get("longitude")})
             if isinstance(query, str) and query.strip() and len(query) <= 600 and not forecast_question:
                 run.event("jarvis.status", {"message": "Checking current sources…"})
                 # The evidence rides inside the person's own newest message. Hermes

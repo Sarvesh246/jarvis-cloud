@@ -10,6 +10,8 @@ import secrets
 import time
 from pathlib import Path
 from contextvars import ContextVar
+import copy
+import threading
 
 try:
     from .data_sources import get, geocode, meteo_config
@@ -34,6 +36,57 @@ SCHEMA = {
 # accept any bracketing of the exact 24-hex token. The token is the credential.
 REFERENCE = re.compile(r"\[{0,2}vaelo-weather:([0-9a-f]{24})\]{0,2}")
 _diagnostics = ContextVar('weather_diagnostics', default=None)
+
+
+# One forecast request can be asked for twice within seconds: the relay starts
+# the lookup as soon as a weather question arrives, while the model is still
+# choosing its tool call, and the model's call then asks for the same data.
+# Identical provider requests share one in-flight or recent result, so the
+# model gets exactly the same forecast without waiting for it again. Failures
+# are never shared; each caller then tries for itself.
+SHARED_SECONDS = 90
+_shared_results = {}
+_shared_lock = threading.Lock()
+
+
+def shared(fn, *args):
+    key = (id(fn), json.dumps(args, sort_keys=True, default=str))
+    now = time.monotonic()
+    with _shared_lock:
+        for stale in [k for k, (at, _, _) in _shared_results.items() if now - at > SHARED_SECONDS]:
+            del _shared_results[stale]
+        entry = _shared_results.get(key)
+        owner = entry is None
+        if owner:
+            entry = _shared_results[key] = (now, threading.Event(), {})
+    _, done, box = entry
+    if owner:
+        try:
+            box["value"] = fn(*args)
+        except Exception as error:
+            box["error"] = error
+            with _shared_lock:
+                if _shared_results.get(key) is entry:
+                    del _shared_results[key]
+        finally:
+            done.set()
+        if "error" in box:
+            raise box["error"]
+    elif not done.wait(60) or "value" not in box:
+        return fn(*args)
+    return copy.deepcopy(box["value"])
+
+
+def prefetch(ask, place=None):
+    """Start fetching a forecast in the background; the real tool call reuses it."""
+    def run():
+        try:
+            weather_reply({k: v for k, v in ask.items() if k in SCHEMA["parameters"]["properties"]}, place)
+        except Exception:
+            pass  # the tool call fetches for itself
+    thread = threading.Thread(target=run, name="weather-prefetch", daemon=True)
+    thread.start()
+    return thread
 
 
 def diagnose(stage, error):
@@ -198,7 +251,7 @@ def meteo_reply(ask, place=None, now=None):
         validate(ask)
         if ask.get("location"):
             stage = 'geocoding'
-            rows = geocode(ask["location"])
+            rows = shared(geocode, ask["location"])
             if not rows:
                 return None
             point = rows[0]
@@ -219,7 +272,7 @@ def meteo_reply(ask, place=None, now=None):
                   "daily": "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max,uv_index_max,sunrise,sunset"}
         if key: params["apikey"] = key
         stage = 'open_meteo'
-        data = get("https://" + ("customer-api" if key else "api") + ".open-meteo.com/v1/forecast", params)
+        data = shared(get, "https://" + ("customer-api" if key else "api") + ".open-meteo.com/v1/forecast", params)
         current = data.get("current", {})
         instant = now or datetime.now(timezone.utc)
         local = (instant + timedelta(seconds=int(data["utc_offset_seconds"]))).replace(tzinfo=None)
@@ -351,7 +404,7 @@ def weather_reply(ask, place=None, now=None):
     if reply is None:
         if ask.get('location'):
             try:
-                points = geocode(ask['location'])
+                points = shared(geocode, ask['location'])
                 point = points[0] if points else {}
                 # A named US destination deserves the same provider fallback
                 # as shared coordinates; never substitute the user's location.

@@ -21,6 +21,25 @@ export function cloudSeed(env) {
   return config;
 }
 
+/* Routes the pinned catalog still lists but providers no longer serve, seen in
+   production logs on 21 Nov 2026. They fail every attempt (410 end of life,
+   404 removed, 400 on every request), and each failure spends part of the
+   relay's four-second window for a first word. When that window runs out the
+   relay abandons the direct route and starts the slower full agent from
+   scratch. A serverless router forgets its cooldowns on every cold start, so
+   it kept retrying them. Excluding a route that never answers cannot change
+   what a reply says. */
+export const RETIRED_ROUTES = [
+  ['nvidia', 'openai/gpt-oss-20b'], // 410: end of life 2026-11-18
+  ['openrouter', 'nvidia/nemotron-nano-12b-v2-vl:free'], // 404: no provider serves it
+  ['kilo', 'cohere/north-mini-code:free'], // 404
+  ['kilo', 'dots-studio/dots-3-note-preview:free'], // 404
+  ['ovh', 'Mistral-Small-3.2-24B-Instruct-2506'], // 400 on every request
+];
+/* Single-purpose models (translation, one language) were being chosen to
+   answer ordinary chat in any language. They stay out of the general chain. */
+const SPECIALIST = ['%translate%', '%arabic%'];
+
 export function selectCloudModels(db, contextTokens = 128000) {
   // The dedicated chain excludes small windows, non-tool models and unconfigured
   // providers. New catalog entries cannot silently widen this chain between boots.
@@ -36,7 +55,9 @@ export function selectCloudModels(db, contextTokens = 128000) {
         AND m.platform != 'custom'
         AND COALESCE(m.paid_input_per_m, 0) = 0 AND COALESCE(m.paid_output_per_m, 0) = 0
         AND EXISTS (SELECT 1 FROM api_keys k WHERE k.platform = m.platform AND k.enabled = 1)
-      ORDER BY m.intelligence_rank, m.id`).all(contextTokens);
+        AND (m.platform || '/' || m.model_id) NOT IN (${RETIRED_ROUTES.map(() => '?').join(', ')})
+        ${SPECIALIST.map(() => 'AND LOWER(m.model_id) NOT LIKE ?').join(' ')}
+      ORDER BY m.intelligence_rank, m.id`).all(contextTokens, ...RETIRED_ROUTES.map(([platform, model]) => `${platform}/${model}`), ...SPECIALIST);
     if (!models.length) throw new Error('No configured tool models meet the cloud context requirement.');
     db.prepare('DELETE FROM profile_models WHERE profile_id = ?').run(profile.id);
     const add = db.prepare('INSERT INTO profile_models (profile_id, model_db_id, priority, enabled) VALUES (?, ?, ?, 1)');

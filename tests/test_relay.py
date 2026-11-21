@@ -2,6 +2,7 @@ import http.client
 import io
 import importlib.util
 import json
+import os
 from pathlib import Path
 import threading
 import time
@@ -1988,6 +1989,31 @@ class RelayTests(unittest.TestCase):
             self.call(port, 'POST', '/vaelo/runs', {'id': RUN, 'messages': [{'role': 'user', 'content': 'whats the weather today?'}], 'fast': 'You are Vaelo.', 'place': {'lat': 30.6, 'lon': -96.3}})
             self.assertEqual(self.finished(relay).outcome, 'complete')
         tool.assert_called_once_with({'latitude': 30.6, 'longitude': -96.3})
+
+    def test_deployed_relay_starts_the_forecast_while_the_model_picks_its_tool(self):
+        _, relay, port = self.boot([])
+        call = 'data: ' + json.dumps({'choices': [{'delta': {'tool_calls': [{'index': 0, 'function': {
+            'name': 'weather_forecast', 'arguments': json.dumps({'output': 'widget'})}}]}, 'finish_reason': 'tool_calls'}]})
+        self.fast_provider(relay, [[call, 'data: [DONE]'], [chunk('Forecast checked.', 'stop'), 'data: [DONE]']])
+        result = json.dumps({'success': True, 'reference': '[[vaelo-weather:' + 'a9' * 12 + ']]'})
+        env = {'FREELLMAPI_URL': 'https://router.example', 'FREELLMAPI_API_KEY': 'test', 'RENDER': 'true'}
+        with mock.patch.dict('os.environ', env), mock.patch.object(relay_module, 'weather_tool', return_value=result) as tool, \
+                mock.patch.object(relay_module, 'read_forecast', return_value='WIDGET'), \
+                mock.patch.object(relay_module, 'prefetch_weather') as prefetch:
+            self.call(port, 'POST', '/vaelo/runs', {'id': RUN, 'messages': [{'role': 'user', 'content': 'whats the weather today?'}], 'fast': 'You are Vaelo.', 'place': {'lat': 30.6, 'lon': -96.3}})
+            self.assertEqual(self.finished(relay).outcome, 'complete')
+        prefetch.assert_called_once_with({'latitude': 30.6, 'longitude': -96.3}, {'lat': 30.6, 'lon': -96.3})
+        tool.assert_called_once()
+
+    def test_relay_does_not_prefetch_outside_the_deployed_service(self):
+        _, relay, port = self.boot([])
+        self.fast_provider(relay, [[chunk('Sunny.', 'stop'), 'data: [DONE]']])
+        with mock.patch.dict('os.environ', {'FREELLMAPI_URL': 'https://router.example', 'FREELLMAPI_API_KEY': 'test'}), \
+                mock.patch.object(relay_module, 'prefetch_weather') as prefetch:
+            os.environ.pop('RENDER', None)
+            self.call(port, 'POST', '/vaelo/runs', {'id': RUN, 'messages': [{'role': 'user', 'content': 'whats the weather today?'}], 'fast': 'You are Vaelo.', 'place': {'lat': 30.6, 'lon': -96.3}})
+            self.finished(relay)
+        prefetch.assert_not_called()
 
     def test_failed_forecast_for_a_known_city_cannot_be_replaced_by_invented_temperatures(self):
         _, relay, port = self.boot([])

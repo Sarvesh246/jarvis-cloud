@@ -4,6 +4,9 @@ from datetime import date, datetime, timezone
 from unittest.mock import patch
 from cloud.weather import validate, weather_reply, weather_tool, shared_location_label, us_city, keep, read_forecast, REFERENCE
 import tempfile
+import threading
+import time
+import cloud.weather as weather_module
 import os
 from pathlib import Path
 
@@ -187,3 +190,57 @@ class NationalWeatherServiceFallbackTests(unittest.TestCase):
                 self.assertEqual(data['periods'][0]['high'], 29.44)
                 self.assertIn('National Weather Service', reply)
         us_city.cache_clear()
+
+
+class SharedForecastTests(unittest.TestCase):
+    """The relay starts a forecast lookup while the model picks its tool call;
+    the call must then get exactly the same data, never a stale or failed one."""
+
+    def setUp(self):
+        weather_module._shared_results.clear()
+
+    def test_identical_requests_share_one_lookup_and_copies(self):
+        calls = []
+        def lookup(url, params):
+            calls.append(url)
+            return {"daily": {"temperature_2m_max": [70]}}
+        first = weather_module.shared(lookup, "https://api.open-meteo.com/v1/forecast", {"latitude": 1})
+        first["daily"]["temperature_2m_max"][0] = 0
+        second = weather_module.shared(lookup, "https://api.open-meteo.com/v1/forecast", {"latitude": 1})
+        self.assertEqual(calls, ["https://api.open-meteo.com/v1/forecast"])
+        self.assertEqual(second["daily"]["temperature_2m_max"], [70], "callers never share a mutable result")
+        weather_module.shared(lookup, "https://api.open-meteo.com/v1/forecast", {"latitude": 2})
+        self.assertEqual(len(calls), 2, "different coordinates are a different lookup")
+
+    def test_failures_are_not_shared_and_old_results_expire(self):
+        attempts = []
+        def flaky(url):
+            attempts.append(url)
+            if len(attempts) == 1:
+                raise TimeoutError()
+            return {"ok": True}
+        with self.assertRaises(TimeoutError):
+            weather_module.shared(flaky, "u")
+        self.assertEqual(weather_module.shared(flaky, "u"), {"ok": True})
+        with patch.object(weather_module.time, "monotonic", return_value=time.monotonic() + weather_module.SHARED_SECONDS + 1):
+            weather_module.shared(flaky, "u")
+        self.assertEqual(len(attempts), 3)
+
+    def test_a_concurrent_caller_waits_for_the_running_lookup(self):
+        started, release, calls = threading.Event(), threading.Event(), []
+        def slow(url):
+            calls.append(url)
+            started.set()
+            release.wait(5)
+            return {"value": 1}
+        results = []
+        worker = threading.Thread(target=lambda: results.append(weather_module.shared(slow, "u")))
+        worker.start()
+        started.wait(5)
+        waiter = threading.Thread(target=lambda: results.append(weather_module.shared(slow, "u")))
+        waiter.start()
+        release.set()
+        worker.join(5)
+        waiter.join(5)
+        self.assertEqual(calls, ["u"])
+        self.assertEqual(results, [{"value": 1}, {"value": 1}])
