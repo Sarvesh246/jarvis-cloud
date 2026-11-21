@@ -113,17 +113,20 @@ function WideSignIn({
 }) {
   const own = googleState !== "ready";
   return (
-    <main className="entry">
+    <main className="entry entry--wide">
       <div className="entry-body">
-        <Mark size={84} inked />
-        <Wordmark size={44} />
-        <h1>
-          Good to see <em>you.</em>
-        </h1>
-        <p className="entry-line">
-          Sign in to pick up where you left off.
-        </p>
+        <div className="entry-intro">
+          <Mark size={84} inked />
+          <Wordmark size={44} />
+          <h1>
+            Good to see <em>you.</em>
+          </h1>
+          <p className="entry-line">
+            Sign in to pick up where you left off.
+          </p>
+        </div>
 
+        <div className="entry-actions">
         {configured ? (
           <div className="google-slot" data-state={googleState}>
             <div className="google-button" ref={buttonRef} />
@@ -165,7 +168,7 @@ function WideSignIn({
         )}
         {onGuest && (
           <>
-            <button className="text-button guest-entry" onClick={onGuest}>
+            <button className="guest-entry" onClick={onGuest}>
               Continue as guest
             </button>
             <p className="entry-quiet">
@@ -174,6 +177,7 @@ function WideSignIn({
           </>
         )}
         <p className="entry-quiet">Private to your Google account.</p>
+        </div>
       </div>
       <footer className="entry-foot">
         <a href="/privacy">Privacy</a>

@@ -72,6 +72,15 @@
   margin-top: var(--s-2);
 }
 
+/* Intro and actions are the two groups of the sign-in screen */
+.entry-intro,
+.entry-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
 .google-button {
   display: flex;
   justify-content: center;
@@ -254,9 +263,83 @@
 
 .entry-body > * { animation-duration: 300ms; animation-delay: 0ms; }
 .entry-body .google-slot, .entry-body .google-own { animation: none; opacity: 1; }
+/* Desktop: an editorial intro on the left, one grouped sign-in panel on the right */
 @media (min-width: 64rem) {
-  .entry:has(.google-slot) .entry-body { max-width: 62rem; width: 100%; display: grid; grid-template-columns: 1fr 1fr; column-gap: 5rem; text-align: left; }
-  .entry-body > .mark, .entry-body > .wordmark, .entry-body > h1, .entry-body > .entry-line { grid-column: 1; }
-  .entry-body > .google-slot { grid-column: 2; grid-row: 1 / span 4; align-self: center; }
-  .entry-body > .guest-entry, .entry-body > .entry-error, .entry-body > .entry-quiet { grid-column: 2; }
+  .entry--wide {
+    padding: var(--s-7) clamp(3rem, 7vw, 7rem) var(--s-6);
+  }
+
+  .entry--wide .entry-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 26rem);
+    align-items: center;
+    column-gap: clamp(4rem, 9vw, 9rem);
+    width: min(100%, 76rem);
+    max-width: none;
+    text-align: left;
+  }
+
+  .entry--wide .entry-intro {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .entry--wide .entry-intro .mark {
+    margin-bottom: var(--s-5);
+  }
+
+  .entry--wide .entry-body h1 {
+    margin: var(--s-5) 0 var(--s-3);
+    font-size: clamp(3.5rem, 2.2rem + 3.6vw, 6.25rem);
+    line-height: 0.98;
+  }
+
+  .entry--wide .entry-line {
+    margin: 0;
+    font-size: var(--t-lg);
+  }
+
+  .entry--wide .entry-actions {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--s-3);
+    padding: var(--s-6);
+    border: 1px solid var(--hairline);
+    border-radius: var(--r-xl);
+    background: var(--surface);
+    box-shadow: var(--lift-1);
+  }
+
+  .entry--wide .google-slot {
+    align-items: stretch;
+    gap: var(--s-3);
+    min-height: 3.25rem;
+  }
+
+  .entry--wide .google-own {
+    width: 100%;
+    min-height: 3.25rem;
+    font-size: var(--t-md);
+  }
+
+  .entry--wide .google-alt,
+  .entry--wide .google-why {
+    margin: 0;
+    text-align: center;
+  }
+
+  .entry--wide .guest-entry {
+    width: 100%;
+    min-height: 3.25rem;
+    margin: var(--s-3) 0 0;
+    font-size: var(--t-md);
+  }
+
+  .entry--wide .entry-actions > .entry-quiet,
+  .entry--wide .entry-actions > .entry-error {
+    margin: 0;
+    text-align: center;
+  }
 }
