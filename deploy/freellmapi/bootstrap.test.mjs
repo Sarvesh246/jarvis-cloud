@@ -48,7 +48,7 @@ test('retired routes and single-purpose models stay out of the chat chain', () =
     CREATE TABLE api_keys (platform TEXT, enabled INTEGER);
     CREATE TABLE profile_models (profile_id INTEGER, model_db_id INTEGER, priority INTEGER, enabled INTEGER);
     CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT);
-    INSERT INTO api_keys VALUES ('nvidia',1),('openrouter',1),('kilo',1),('ovh',1),('cohere',1);
+    INSERT INTO api_keys VALUES ('nvidia',1),('openrouter',1),('kilo',1),('ovh',1),('cohere',1),('llm7',1);
     INSERT INTO models (id,platform,model_id,enabled,supports_tools,context_window,intelligence_rank) VALUES
       (1,'nvidia','openai/gpt-oss-20b',1,1,128000,1),
       (2,'openrouter','nvidia/nemotron-nano-12b-v2-vl:free',1,1,128000,1),
@@ -59,7 +59,10 @@ test('retired routes and single-purpose models stay out of the chat chain', () =
       (7,'cohere','command-a-translate-08-2025',1,1,128000,1),
       (8,'nvidia','nvidia/nemotron-3-ultra-550b-a55b',1,1,128000,2),
       (9,'ovh','gpt-oss-20b',1,1,128000,3),
-      (10,'openrouter','openai/gpt-oss-20b:free',1,1,128000,4);`);
+      (10,'openrouter','openai/gpt-oss-20b:free',1,1,128000,4),
+      (11,'ovh','Mistral-Nemo-Instruct-2407',1,1,128000,1),
+      (12,'openrouter','poolside/laguna-s-2.1:free',1,1,128000,1),
+      (13,'llm7','mistral-Nemo-Instruct-2407',1,1,128000,1);`);
   const wrapped = {prepare:sql=>db.prepare(sql),transaction:fn=>()=>fn()};
   assert.equal(selectCloudModels(wrapped), 3);
   assert.deepEqual(db.prepare('SELECT model_db_id FROM profile_models ORDER BY priority').all().map(r=>r.model_db_id), [8, 9, 10],

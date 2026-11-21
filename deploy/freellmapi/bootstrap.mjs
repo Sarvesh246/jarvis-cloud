@@ -35,6 +35,9 @@ export const RETIRED_ROUTES = [
   ['kilo', 'cohere/north-mini-code:free'], // 404
   ['kilo', 'dots-studio/dots-3-note-preview:free'], // 404
   ['ovh', 'Mistral-Small-3.2-24B-Instruct-2506'], // 400 on every request
+  ['ovh', 'Mistral-Nemo-Instruct-2407'], // 404: "does not exist"
+  ['openrouter', 'poolside/laguna-s-2.1:free'], // 404: no provider serves it
+  ['llm7', 'mistral-Nemo-Instruct-2407'], // 400: rejects every request that offers tools
 ];
 /* Single-purpose models (translation, one language) were being chosen to
    answer ordinary chat in any language. They stay out of the general chain. */
