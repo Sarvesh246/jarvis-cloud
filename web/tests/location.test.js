@@ -263,7 +263,107 @@ test('weather sends handle browser failure promptly and respect disabled locatio
   }
 });
 
-import { needsPlace } from '../src/lib/location.js';
+/* An installed iPhone app is closed in the background and relaunched often.
+   Each launch used to start with no place, so the first local question went
+   out without one while iOS's permission dialogs were still on screen. */
+function storage(t) {
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+  const data = new Map();
+  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: {
+    getItem: key => data.has(key) ? data.get(key) : null,
+    setItem: (key, value) => data.set(key, String(value)),
+    removeItem: key => data.delete(key),
+  } });
+  t.after(() => {
+    if (descriptor) Object.defineProperty(globalThis, 'localStorage', descriptor);
+    else delete globalThis.localStorage;
+  });
+  return data;
+}
+
+function permission(state) {
+  navigator.permissions = { query: async () => ({ state }) };
+}
+
+test('a found place is remembered across launches and forgotten when sharing stops', async t => {
+  const data = storage(t);
+  const b = browser(t);
+  const waiting = locate(); b.grant(); await waiting;
+  assert.match(data.get('vaelo-place'), /"lat":41.88/);
+  // A relaunch starts with empty memory; restorePlace reads what was kept.
+  assert.equal(restorePlace().place.lat, 41.88);
+  assert.equal((await placeFor({location:true}, {needed:true})).lat, 41.88, 'no new position needed');
+  assert.equal(b.positions.length, 1);
+  forgetPlace();
+  assert.equal(data.has('vaelo-place'), false);
+  assert.equal(restorePlace(), null);
+});
+
+test('a remembered place older than twelve hours is dropped', t => {
+  const data = storage(t);
+  data.set('vaelo-place', JSON.stringify({ at: Date.now() - 13 * 60 * 60 * 1000, place: { lat: 1, lon: 2 } }));
+  assert.equal(restorePlace(), null);
+  assert.equal(data.has('vaelo-place'), false);
+  data.set('vaelo-place', JSON.stringify({ at: Date.now(), place: { lat: 'x', lon: 2 } }));
+  assert.equal(restorePlace(), null, 'damaged entries are ignored');
+});
+
+test('an everyday message never raises a permission dialog', async t => {
+  storage(t);
+  const b = browser(t);
+  permission('prompt');
+  assert.equal(await placeFor({location:true}, {needed:false}), null);
+  assert.equal(b.positions.length, 0);
+});
+
+test('a local question waits while the permission dialog is answered', async t => {
+  storage(t);
+  const b = browser(t);
+  permission('prompt');
+  t.mock.timers.enable({apis:['setTimeout']});
+  let settled = false;
+  const waiting = placeFor({location:true}, {needed:true});
+  waiting.then(() => { settled = true; });
+  await new Promise(resolve => setImmediate(resolve));
+  t.mock.timers.tick(20000);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(settled, false, 'two iOS dialogs can take longer than the old 10.5-second window');
+  b.grant();
+  assert.equal((await waiting).lat, 41.88);
+});
+
+test('a refused permission sends without asking again', async t => {
+  storage(t);
+  const b = browser(t);
+  permission('denied');
+  assert.equal(await placeFor({location:true}, {needed:true}), null);
+  assert.equal(b.positions.length, 0);
+});
+
+test('launch warm-up finds the place only when it is already allowed', async t => {
+  storage(t);
+  const b = browser(t);
+  permission('prompt');
+  await warmPlace({location:true});
+  assert.equal(b.positions.length, 0);
+  permission('granted');
+  await warmPlace({location:false});
+  assert.equal(b.positions.length, 0);
+  await warmPlace({location:true});
+  assert.equal(b.positions.length, 1);
+});
+
+test('the model is told when sharing is on but no position could be read', () => {
+  const conversationId = '0ef3a063-f0d0-44f7-b9dc-774137b1d86c';
+  const ask = content => ({ conversationId, messages: [{ role: 'user', content }], placeMissing: true });
+  assert.equal(chatInput(ask('what is the weather today?')).placeMissing, true);
+  assert.equal(chatInput(ask('hi')).placeMissing, undefined, 'small talk needs no location note');
+  assert.equal(chatInput(ask('what is the weather today?'), { guest: true }).placeMissing, undefined);
+  const withPlace = chatInput({ ...ask('what is the weather today?'), place: { lat: 1, lon: 2 } });
+  assert.equal(withPlace.placeMissing, undefined, 'a real place wins');
+});
+
+import { needsPlace, restorePlace, warmPlace } from '../src/lib/location.js';
 test('only place-dependent questions are worth waiting for', () => {
   assert.equal(needsPlace('what is the weather today'), true);
   assert.equal(needsPlace('good coffee near me'), true);

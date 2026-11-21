@@ -1,7 +1,7 @@
 import React, { useEffect } from "react";
 import { GoogleLogo } from "@phosphor-icons/react";
 import { Mark, Wordmark } from "./Mark.jsx";
-import { OnboardingFrame, WelcomeStep, onboardingSteps, readOnboarding, writeOnboarding } from "./Onboarding.jsx";
+import { OnboardingFrame, WelcomeStep, onboardingSteps, startOnboarding } from "./Onboarding.jsx";
 import { usePhone } from "../lib/use-phone.js";
 import { buzz } from "../lib/haptics.js";
 import "./entry.css";
@@ -37,7 +37,7 @@ function GoogleG() {
 function PhoneSignIn({ configured, error, signingIn, onCancelSignIn, onGoogleRedirect, onGuest }) {
   /* The welcome continues after sign-in, even across Google's redirect */
   useEffect(() => {
-    if (readOnboarding() !== "replay") writeOnboarding("pending");
+    startOnboarding();
   }, []);
   const total = 1 + onboardingSteps("pending").length;
   return (

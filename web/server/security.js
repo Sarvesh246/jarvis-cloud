@@ -11,7 +11,11 @@ const googleKeys = createRemoteJWKSet(
 const duration = 7 * 24 * 60 * 60;
 const desktopAuth = Symbol("verified desktop session");
 const currentDevice = Symbol("device behind this session");
+const sessionIssued = Symbol("when this session's token was issued");
 export const deviceOf = (req) => req[currentDevice];
+/* A browser session that is still being used is re-issued once it is a day
+   old, so it only ends after a week of not opening Vaelo, never mid-use. */
+export const RENEW_AFTER = 24 * 60 * 60;
 
 export function settings(env = process.env) {
   const origin = env.APP_ORIGIN || "https://vaelochat.vercel.app";
@@ -56,7 +60,10 @@ export function csrfToken(req, res, cfg) {
   const token = /^[a-f0-9]{64}$/.test(existing || "")
     ? existing
     : randomBytes(32).toString("hex");
-  if (token !== existing) res.setHeader("Set-Cookie", cookie(name, token, cfg));
+  // Always re-sent, so its week starts again whenever Vaelo is opened. The
+  // session renews the same way; a CSRF cookie that lapsed on its own would
+  // refuse every send with "Refresh the page" while the session still holds.
+  res.setHeader("Set-Cookie", cookie(name, token, cfg));
   return token;
 }
 
@@ -94,7 +101,10 @@ function sessionKey(cfg) {
 export async function signSession(user, cfg, audience = "jarvis-web", device = {}) {
   const signedOut = await (cfg.revocations || revocations).epoch(user.sub, audience);
   // Written before the token exists: a failure here refuses the sign-in.
-  const did = await (cfg.devices || devices).register(user.sub, audience, device.label || deviceLabel("", audience));
+  // A renewal keeps its device entry (and its place in the device list).
+  const did = device.id
+    ? await (cfg.devices || devices).renew(user.sub, audience, device.id)
+    : await (cfg.devices || devices).register(user.sub, audience, device.label || deviceLabel("", audience));
   // NumericDate permits fractional seconds. A new sign-in must be strictly
   // newer than a sign-out even when both happen within the same clock tick.
   const issued = Math.max(Date.now() / 1000, signedOut + 0.001);
@@ -120,6 +130,7 @@ export function sessionAudience(req) {
 export async function sessionUser(req, cfg) {
   delete req[desktopAuth];
   delete req[currentDevice];
+  delete req[sessionIssued];
   const audience = sessionAudience(req);
   const desktop = audience === "vaelo-desktop";
   const token = desktop
@@ -147,7 +158,27 @@ export async function sessionUser(req, cfg) {
   }
   if (payload.did) req[currentDevice] = payload.did;
   if (desktop) req[desktopAuth] = true;
+  req[sessionIssued] = payload.iat || 0;
   return { sub: payload.sub, email: payload.email, name: displayName(payload.name) };
+}
+
+/* A fresh week for a browser session that was just verified by sessionUser,
+   when its token is at least a day old. Returns the Set-Cookie value, or null
+   when nothing needs renewing. Renewal is a courtesy: if it fails, the
+   current token simply stays in place until it expires. */
+export async function renewedSessionCookie(req, user, cfg, now = Date.now()) {
+  if (!user || user.guest || sessionAudience(req) !== "jarvis-web") return null;
+  const issued = req[sessionIssued];
+  if (!Number.isFinite(issued) || now / 1000 - issued < RENEW_AFTER) return null;
+  const id = req[currentDevice];
+  // A token from before the device registry has no entry to carry over.
+  if (!id && (cfg.devices || devices).enabled?.() !== false) return null;
+  try {
+    const token = await signSession(user, cfg, "jarvis-web", id ? { id } : {});
+    return cookie(cookieNames(cfg).session, token, cfg);
+  } catch {
+    return null;
+  }
 }
 
 /* A guest is a throwaway identity for trying Vaelo without signing in. It has

@@ -18,6 +18,18 @@ import { EngravedCard } from './EverydayUI.jsx';
    when this arrived never sees it unasked. */
 const KEY = "vaelo-onboarding";
 
+/* Signing in again (after a sign-out, or a session that lapsed) must not
+   replay a welcome that was already finished: only a first sign-in on this
+   device starts it. */
+export function startOnboarding() {
+  try {
+    const value = localStorage.getItem(KEY);
+    if (value !== "replay" && value !== "done") localStorage.setItem(KEY, "pending");
+  } catch {
+    /* without storage the welcome simply isn't remembered */
+  }
+}
+
 export function readOnboarding() {
   try {
     const value = localStorage.getItem(KEY);
@@ -47,8 +59,10 @@ export function onboardingSteps(mode) {
   const steps = [];
   if (mode === "replay") steps.push("welcome");
   if (!standalone()) steps.push("install");
-  const refused = typeof Notification !== "undefined" && Notification.permission === "denied";
-  if (notifySupport() === "available" && !refused) steps.push("notify");
+  // Only ask while the system has not been asked yet: once allowed or
+  // refused, the step would only show the same system answer again.
+  const undecided = typeof Notification === "undefined" || Notification.permission === "default";
+  if (notifySupport() === "available" && undecided) steps.push("notify");
   return steps;
 }
 

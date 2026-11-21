@@ -91,6 +91,25 @@ export class DeviceRegistry {
     return id;
   }
 
+  /* A renewed token keeps its device entry. Its issue time moves forward so
+     the entry outlives the old token, and a device signed out in the meantime
+     cannot be renewed back to life. */
+  async renew(sub, audience, id) {
+    if (!this.enabled()) return undefined;
+    let renewed = false;
+    await this.record.update(sub, record => {
+      const entry = record.devices[id];
+      if (!entry || entry.audience !== audience) return undefined;
+      entry.issued = this.now() / 1000;
+      entry.seen = this.now();
+      renewed = true;
+      return record;
+    });
+    this.invalidate(sub);
+    if (!renewed) throw new Error("This device was signed out.");
+    return id;
+  }
+
   /* True when this token may be used. Storage errors throw. A token minted
      before the registry existed has no id; it stays valid until it expires
      unless "sign out other devices" has been used since it was issued. */

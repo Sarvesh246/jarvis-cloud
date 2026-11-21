@@ -23,7 +23,7 @@ import { normalizeReplySpacing, normalizeSavedReplySpacing } from "./lib/reply-s
 import { literalAnswerRequested } from '../shared/answer-contract.js';
 import { requestForReply, imagesForReply } from "./lib/adaptive-ui.js";
 import { fullImages } from "./lib/image-store.js";
-import { cachedPlace, needsPlace, placeFor } from "./lib/location.js";
+import { cachedPlace, forgetPlace, needsPlace, placeFor, warmPlace } from "./lib/location.js";
 import { chatTitle, displayChatTitle, withGeneratedTitle } from './lib/titles.js';
 import { liveReply, readSyncCache } from "./lib/chat-sync.js";
 import { useChatSync } from "./lib/use-chat-sync.js";
@@ -557,7 +557,11 @@ export function App() {
         headers: { "Content-Type": "application/json", "X-CSRF-Token": session?.csrf || "" },
         body: JSON.stringify(body),
       });
-      const result = await response.json();
+      // An error page from a proxy or gateway isn't JSON; keep its status.
+      const result = await response.json().catch((error) => {
+        if (response.ok) throw error;
+        return {};
+      });
       if (!response.ok) {
         const error = new Error(result.error || "That request could not be completed.");
         error.status = response.status;
@@ -617,7 +621,10 @@ export function App() {
         /* No signal: open the saved conversations to read, and pick the
            session back up as soon as the connection returns. */
         const last = readLastUser();
-        if (!last || (navigator.onLine !== false && err.name !== "TypeError" && err.status !== 503)) throw err;
+        /* Only a definite answer about the session may end it. A server error,
+           a gateway page that isn't JSON or a cold start that timed out used
+           to drop a signed-in person on the sign-in screen. */
+        if (!last || (err.status >= 400 && err.status < 500)) throw err;
         result = { user: last, csrf: "", configured: true, offline: true };
       }
       if ((!result.user || result.user.guest) && googleReturn) {
@@ -704,6 +711,12 @@ export function App() {
     savePrefs(prefs);
   }, [prefs]);
 
+  /* With location sharing on and already allowed, find the place at launch so
+     the first local question doesn't go out without one. */
+  useEffect(() => {
+    if (prefs.location && session?.user && !session.user.guest) void warmPlace(prefs);
+  }, [prefs.location, session?.user]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     if (!activeId) return;
     try {
@@ -734,6 +747,21 @@ export function App() {
   useEffect(() => {
     if (online && session?.offline) loadSession();
   }, [online, session?.offline]);
+
+  /* Reached Vaelo's server but it couldn't answer: try again when the app is
+     brought back to the front, and every half minute while it is open. */
+  useEffect(() => {
+    if (!online || !session?.offline) return;
+    const retry = () => { if (!document.hidden) loadSession(); };
+    const timer = setInterval(retry, 30000);
+    addEventListener("visibilitychange", retry);
+    addEventListener("focus", retry);
+    return () => {
+      clearInterval(timer);
+      removeEventListener("visibilitychange", retry);
+      removeEventListener("focus", retry);
+    };
+  }, [online, session?.offline]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const guest = Boolean(session?.user?.guest);
 
@@ -1547,7 +1575,7 @@ export function App() {
       title: active.messages.length
         ? active.title
         : chatTitle(messages[0].text || messages[0].content),
-      start: { conversationId: chatId, runId: id, messages: input, ...(active.temporary && { temporary: true }), tz: Intl.DateTimeFormat().resolvedOptions().timeZone, ...(place && { place }), ...(!active.temporary && profileOf(prefsRef.current) && { profile: profileOf(prefsRef.current) }),
+      start: { conversationId: chatId, runId: id, messages: input, ...(active.temporary && { temporary: true }), tz: Intl.DateTimeFormat().resolvedOptions().timeZone, ...(place ? { place } : prefsRef.current.location && { placeMissing: true }), ...(!active.temporary && profileOf(prefsRef.current) && { profile: profileOf(prefsRef.current) }),
         ...(lastUser.workContext && {work:{id:lastUser.workContext.id,revision:lastUser.workContext.revision}}) },
     });
   }
@@ -2353,6 +2381,7 @@ export function App() {
       } catch {
         /* nothing to forget */
       }
+      forgetPlace();
       setChats([]);
       setActiveId(null);
       drafts.current.clear();
