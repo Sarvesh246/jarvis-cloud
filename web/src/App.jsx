@@ -1575,7 +1575,7 @@ export function App() {
       title: active.messages.length
         ? active.title
         : chatTitle(messages[0].text || messages[0].content),
-      start: { conversationId: chatId, runId: id, messages: input, ...(active.temporary && { temporary: true }), tz: Intl.DateTimeFormat().resolvedOptions().timeZone, ...(place ? { place } : prefsRef.current.location && { placeMissing: true }), ...(!active.temporary && profileOf(prefsRef.current) && { profile: profileOf(prefsRef.current) }),
+      start: { conversationId: chatId, runId: id, messages: input, ...(active.temporary && { temporary: true }), tz: Intl.DateTimeFormat().resolvedOptions().timeZone, ...(place && { place }), locationSharing: Boolean(prefsRef.current.location), ...(!active.temporary && profileOf(prefsRef.current) && { profile: profileOf(prefsRef.current) }),
         ...(lastUser.workContext && {work:{id:lastUser.workContext.id,revision:lastUser.workContext.revision}}) },
     });
   }
@@ -1605,7 +1605,7 @@ export function App() {
     const { messages } = wireHistory(chat.messages.slice(0, at), chat);
     const selectedWork = chat.messages.slice(0, at).findLast(message => message.role === "user")?.workContext;
     return messages.length && messages.at(-1).role === "user"
-      ? { conversationId: chatId, runId: id, messages, ...(chat.temporary && { temporary: true }), ...(cachedPlace(prefsRef.current) && { place: cachedPlace(prefsRef.current) }), ...(!chat.temporary && profileOf(prefsRef.current) && { profile: profileOf(prefsRef.current) }),
+      ? { conversationId: chatId, runId: id, messages, ...(chat.temporary && { temporary: true }), ...(cachedPlace(prefsRef.current) && { place: cachedPlace(prefsRef.current) }), locationSharing: Boolean(prefsRef.current.location), ...(!chat.temporary && profileOf(prefsRef.current) && { profile: profileOf(prefsRef.current) }),
           ...(selectedWork && {work:{id:selectedWork.id,revision:selectedWork.revision}}) }
       : null;
   }

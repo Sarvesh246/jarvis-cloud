@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { locate, placeFor, cachedPlace, forgetPlace, cityNames } from '../src/lib/location.js';
-import { chatInput } from '../server/chat.js';
+import { chatInput, placeNote } from '../server/chat.js';
 
 test('greetings omit shared-location context without losing the local timezone or disabling later weather', () => {
   const base = { conversationId: '0ef3a063-f0d0-44f7-b9dc-774137b1d86c', place: { lat: 41.88, lon: -87.63, city: 'Chicago', tz: 'America/Chicago' } };
@@ -353,14 +353,59 @@ test('launch warm-up finds the place only when it is already allowed', async t =
   assert.equal(b.positions.length, 1);
 });
 
-test('the model is told when sharing is on but no position could be read', () => {
+test('the model always knows whether location is shared, on but unreadable, or off', () => {
   const conversationId = '0ef3a063-f0d0-44f7-b9dc-774137b1d86c';
-  const ask = content => ({ conversationId, messages: [{ role: 'user', content }], placeMissing: true });
-  assert.equal(chatInput(ask('what is the weather today?')).placeMissing, true);
-  assert.equal(chatInput(ask('hi')).placeMissing, undefined, 'small talk needs no location note');
-  assert.equal(chatInput(ask('what is the weather today?'), { guest: true }).placeMissing, undefined);
-  const withPlace = chatInput({ ...ask('what is the weather today?'), place: { lat: 1, lon: 2 } });
-  assert.equal(withPlace.placeMissing, undefined, 'a real place wins');
+  const ask = (content, extra) => chatInput({ conversationId, messages: [{ role: 'user', content }], ...extra });
+  const weather = 'what is the weather today?';
+  assert.equal(ask(weather, { place: { lat: 1, lon: 2 }, locationSharing: true }).locationStatus, 'shared');
+  assert.equal(ask(weather, { locationSharing: true }).locationStatus, 'unavailable');
+  assert.equal(ask(weather, { placeMissing: true }).locationStatus, 'unavailable', 'the first version of the field still works');
+  assert.equal(ask(weather, { locationSharing: false }).locationStatus, 'off');
+  assert.equal(ask(weather, {}).locationStatus, undefined, 'older pages say nothing, so nothing is claimed');
+  assert.equal(ask('hi', { locationSharing: true }).locationStatus, undefined, 'small talk needs no location note');
+  assert.equal(chatInput({ conversationId, messages: [{ role: 'user', content: weather }], locationSharing: true }, { guest: true }).locationStatus, undefined);
+});
+
+test('each location state tells the model plainly what is true', () => {
+  const shared = placeNote({ lat: 30.62, lon: -96.33, city: 'College Station', region: 'Texas' });
+  assert.match(shared, /Location sharing is ON and working/);
+  assert.match(shared, /College Station, Texas/);
+  assert.match(shared, /Never say you cannot access their location/);
+  assert.match(shared, /include the city in the query/);
+  const unreadable = placeNote(undefined, 'unavailable');
+  assert.match(unreadable, /Location sharing is ON/);
+  assert.match(unreadable, /Never say location is off/);
+  const off = placeNote(undefined, 'off');
+  assert.match(off, /Location sharing is OFF/);
+  assert.match(off, /Use my location/);
+  assert.equal(placeNote(undefined, undefined), '');
+});
+
+test('everyday local questions are worth waiting for; unrelated ones are not', () => {
+  for (const question of ['is it hot outside', 'should I bring an umbrella', 'do I need a jacket today', 'how windy is it',
+    "what's the air quality", 'coffee shops around me', 'what time does target close', 'how far is the airport',
+    'restaurants open now', 'best tacos close by', 'uv index today'])
+    assert.equal(needsPlace(question), true, question);
+  for (const question of ['explain recursion', 'write a poem about love', 'hello', 'summarize this article', 'fix my python code'])
+    assert.equal(needsPlace(question), false, question);
+});
+
+test('a place whose city lookup failed asks for the name again, at most every two minutes', async t => {
+  storage(t);
+  const b = browser(t);
+  t.mock.timers.enable({apis:['Date'], now: 1_000_000});
+  const waiting = locate(); b.grant(); await waiting;
+  b.requests[0].resolve(new Response('Unavailable', {status:503}));
+  await new Promise(resolve => setImmediate(resolve));
+  await locate();
+  assert.equal(b.requests.length, 1, 'no immediate retry');
+  t.mock.timers.setTime(1_000_000 + 2 * 60 * 1000);
+  await locate();
+  assert.equal(b.requests.length, 2, 'retried once the window passed');
+  b.requests[1].resolve(Response.json({ city: 'College Station' }));
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(cachedPlace({location:true}).city, 'College Station');
+  assert.equal(b.positions.length, 1, 'the coordinates were reused, not looked up again');
 });
 
 import { needsPlace, restorePlace, warmPlace } from '../src/lib/location.js';

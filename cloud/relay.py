@@ -321,11 +321,22 @@ def weather_intent(text):
 
 
 _PLACE = re.compile(r"\b(?i:in|for|at|near|around)\s+([A-Z][\w.'-]*(?:[ ,]+[A-Z][\w.'-]*){0,3})")
+# Words after "in/for/at" that are a time, a day or a unit, never a destination.
+# "Weather for Tuesday" used to look up a place called Tuesday, and "weather at
+# night" or "in celsius" dropped the person's shared location.
+_NOT_PLACE = re.compile(r"(?:\d|(?:the|my|me|today|tomorrow|tonight|this|next|here|a|an|now|later|once|all|some|"
+    r"(?:mon|tues|wednes|thurs|fri|satur|sun)days?|weekends?|weekdays?|"
+    r"(?:morning|afternoon|evening|night|noon|midnight|dawn|dusk|sunrise|sunset|lunch|dinner|breakfast)s?|"
+    r"jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sept?(?:ember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?|"
+    r"celsius|fahrenheit|metric|imperial|centigrade|[cfk]|degrees?|units?|hours?|minutes?|days?|weeks?|months?|"
+    r"plain|text|detail|least|most)\b)", re.I)
 
 
 def named_place(text):
-    found = _PLACE.search(text or "")
-    return found[1].strip(" ,.")[:120] if found else None
+    for found in _PLACE.finditer(text or ""):
+        if not _NOT_PLACE.match(found[1]):
+            return found[1].strip(" ,.")[:120]
+    return None
 
 
 def week_requested(text):
@@ -377,7 +388,8 @@ def weather_ask(asked, body, messages=()):
 
 def names_other_place(text):
     """A destination named in the question, so shared coordinates must not stand in for it."""
-    return bool(re.search(r"\b(?:in|for|at|near|around|to)\s+(?!the\b|my\b|me\b|today\b|tomorrow\b|tonight\b|this\b|next\b|here\b|a\b|an\b|\d)[A-Za-z]", text or "", re.I))
+    return any(not _NOT_PLACE.match(found[1])
+               for found in re.finditer(r"\b(?:in|for|at|near|around|to)\s+([A-Za-z][\w.'-]*)", text or "", re.IGNORECASE))
 
 
 def answered(seen):

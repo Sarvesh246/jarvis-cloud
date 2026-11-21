@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
+  <key>NSLocationWhenInUseUsageDescription</key><string>When you turn on “Use my location” in Settings, Vaelo uses your approximate location (about a kilometre) so questions like the weather or what’s nearby just work.</string>
+  <key>NSLocationUsageDescription</key><string>When you turn on “Use my location” in Settings, Vaelo uses your approximate location (about a kilometre) so questions like the weather or what’s nearby just work.</string>
   <key>NSMicrophoneUsageDescription</key><string>Vaelo uses your microphone to turn your spoken words into a draft. Audio is sent for transcription only when you finish a recording.</string>
 </dict></plist>

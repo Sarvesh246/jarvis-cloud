@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import threading
 import time
+from typing import ClassVar
 import unittest
 from unittest import mock
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -2465,3 +2466,27 @@ if __name__ == "__main__":
 
 
 
+
+
+class SharedPlaceTests(unittest.TestCase):
+    """Days, times and units after "in/for/at" are not destinations. "Weather for
+    Tuesday" looked up a place called Tuesday, and "at night" or "in celsius"
+    dropped the person's shared location."""
+
+    shared: ClassVar[dict] = {'place': {'lat': 30.62, 'lon': -96.33}}
+
+    def test_times_days_and_units_keep_the_shared_location(self):
+        for asked in ('weather for Tuesday', 'forecast for Saturday', 'weather at night', 'how hot is it at noon',
+                      'weather in Fahrenheit', 'weather in celsius please', 'whats the weather in F',
+                      'will it rain this afternoon', 'weather for the weekend', 'weather in March'):
+            with self.subTest(asked=asked):
+                self.assertFalse(relay_module.names_other_place(asked))
+                self.assertEqual(relay_module.weather_ask(asked, self.shared)['latitude'], 30.62)
+
+    def test_named_destinations_still_win(self):
+        for asked, place in (('weather in Paris', 'Paris'), ('weather near Austin', 'Austin'),
+                             ('forecast for Cairo', 'Cairo'), ('weather in Marseille', 'Marseille'),
+                             ('weather on Tuesday in Sunnyvale', 'Sunnyvale')):
+            with self.subTest(asked=asked):
+                self.assertTrue(relay_module.names_other_place(asked))
+                self.assertEqual(relay_module.weather_ask(asked, self.shared), {'location': place})

@@ -119,12 +119,32 @@ async function cityOf(lat, lon, controller) {
   }
 }
 
+/* A place whose city lookup failed (a slow or blocked geocoder) used to stay
+   nameless until the position itself expired, so web searches for "near me"
+   had only coordinates to go on. Try the name again, at most every two
+   minutes, while the coordinates are reused. */
+let cityTried = 0;
+const CITY_RETRY_MS = 2 * 60 * 1000;
+function fillCity(entry) {
+  if (!entry || entry.place.city || Date.now() - cityTried < CITY_RETRY_MS) return;
+  cityTried = Date.now();
+  const { place } = entry;
+  const controller = new AbortController();
+  lookups.add(controller);
+  void cityOf(place.lat, place.lon, controller).then(names => {
+    if (!controller.signal.aborted && names.city && cached?.place === place) remember({ ...cached, place: { ...place, ...names } });
+  }).finally(() => lookups.delete(controller));
+}
+
 /* Resolves to { lat, lon, tz, city?, region?, country? }, or rejects with the
    browser's error (code 1 means permission was refused). */
 export function locate({ force = false } = {}) {
   if (!locationSupport()) return Promise.reject(new Error("unsupported"));
   const known = force ? null : current();
-  if (known && Date.now() - known.at < FRESH_MS) return Promise.resolve(known.place);
+  if (known && Date.now() - known.at < FRESH_MS) {
+    fillCity(known);
+    return Promise.resolve(known.place);
+  }
   if (pending) return pending;
   const controller = new AbortController();
   const { signal } = controller;
@@ -144,6 +164,7 @@ export function locate({ force = false } = {}) {
         tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
       };
       remember({ place, at: Date.now() });
+      cityTried = Date.now();
       // Coordinates are usable immediately. A slow city lookup must never
       // discard a browser permission grant or delay a local weather request.
       void cityOf(lat, lon, controller).then(names => {
@@ -160,8 +181,21 @@ export function locate({ force = false } = {}) {
 }
 
 /* Questions whose answer depends on where the person is. Only these are
-   worth holding a reply for while the browser works out its position. */
-const LOCAL = /\b(?:weather|forecast|temperature|rain(?:ing)?|snow(?:ing)?|humid(?:ity)?|sunrise|sunset|near(?:by| me)|local|around here|my (?:area|location|city|town)|closest|nearest|open now|directions? to)\b/i;
+   worth holding a reply for while the browser works out its position. The
+   list used to cover only "weather", "forecast", "nearby" and a few more, so
+   "is it hot outside", "do I need a jacket" or "what time does Target close"
+   went out after a 0.8-second wait, usually with no place at all. */
+const LOCAL = new RegExp([
+  // Weather in all its everyday forms
+  String.raw`weather|forecast|temperature|degrees|rain(?:ing|y)?|snow(?:ing|y)?|storm(?:s|y|ing)?|thunder|hail|sleet|drizzl\w*|humid(?:ity)?|wind(?:y|s)?|breez\w*|fog(?:gy)?|sunny|cloud(?:y|s)|overcast|heat ?wave|freez(?:e|ing)|frost`,
+  String.raw`(?:hot|cold|warm|chilly|nice) (?:out(?:side)?|today|tonight|tomorrow)|outside|umbrella|jacket|coat|sunscreen|uv(?: index)?|air quality|aqi|pollen|allerg(?:y|ies) (?:today|forecast)|tornado|hurricane|flood(?:ing)?|wildfire|smoke`,
+  String.raw`sunrise|sunset|dawn|dusk|daylight|moon ?rise|tides?`,
+  // Places around them
+  String.raw`near(?:by| me| here)?|close (?:by|to me)|around (?:me|here)|in my (?:area|city|town|neighbou?rhood)|my (?:area|location|city|town|zip|neighbou?rhood)|local(?:ly)?|closest|nearest|within \d+ (?:miles?|km|kilometers?|minutes?)`,
+  String.raw`open (?:now|today|tonight|late|until)|(?:when|what time) (?:does|do|is|are) .{1,40} (?:open|close)|clos(?:e|es|ing) (?:at|time)|hours today`,
+  String.raw`directions?|how (?:far|long) (?:is|to|does it take)|drive to|commute|traffic|gas (?:prices?|stations?)|restaurants?|caf[eé]s?|coffee shops?|bars?|grocer(?:y|ies)|pharmac(?:y|ies)|hospitals?|urgent care|events? (?:this|tonight|today|near)|things to do|what(?:'s| is) (?:on|happening) (?:tonight|today|this weekend)`,
+  String.raw`time zone|what time is it|local time`,
+].map(part => `(?:${part})`).join('|').replace(/^/, String.raw`\b(?:`).concat(String.raw`)\b`), 'i');
 export function needsPlace(text) {
   return LOCAL.test(String(text || ''));
 }
@@ -183,7 +217,10 @@ export async function placeFor(prefs, quick) {
   const known = current();
   if (quick && known) {
     const stale = Date.now() - known.at >= FRESH_MS;
-    if (!stale) return known.place;
+    if (!stale) {
+      fillCity(known);
+      return known.place;
+    }
     if (!quick.needed) {
       locate().catch(() => {});
       return known.place;
@@ -234,6 +271,7 @@ export function forgetPlace() {
   // Browser geolocation cannot be stopped, but its callbacks lose ownership.
   generation++;
   remember(null);
+  cityTried = 0;
   pending = null;
   for (const lookup of lookups) lookup.abort();
   lookups.clear();
